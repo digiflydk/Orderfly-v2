@@ -5,7 +5,7 @@ const instant = revision.max(8.64e15);
 const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 export const directTestScopeSchema = z.object({ brandId: id, locationId: id, printerId: id,
   printerRevision: revision, credentialRevision: revision }).strict();
-export const directTestCommandSchema = directTestScopeSchema.extend({ requestId: token }).strict();
+export const directTestCommandSchema = directTestScopeSchema.extend({ requestId: token, replaceExpiredCreatedAt: instant.optional() }).strict();
 /** An administrator requested fixed test content. This is NOT hardware attestation. */
 export const directTestSessionSchema = directTestScopeSchema.extend({ schemaVersion: z.literal(2),
   sessionId: token, jobId: token, actorId: z.string().min(1).max(256), state: z.literal('consumed'),

@@ -22,7 +22,7 @@ export async function requestDirectTestPrint(input: unknown) {
   if (!parsed.success) return fail('invalid_qualification');
   if (process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED !== 'true' || process.env.ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED !== 'true') return fail('qualification_unavailable');
   try {
-    const { requestId, ...a } = parsed.data, actorId = principalKey(authenticated.identity), db = getAdminDb();
+    const { requestId, replaceExpiredCreatedAt, ...a } = parsed.data, actorId = principalKey(authenticated.identity), db = getAdminDb();
     const locationRef = db.collection('locations').doc(a.locationId);
     const printerRef = locationRef.collection('printers').doc(a.printerId);
     const requestRef = printerRef.collection('testPrintRequests').doc(requestId);
@@ -77,6 +77,8 @@ export async function requestDirectTestPrint(input: unknown) {
       }
       const connection = projectPrinterConnection(contact.data(), credential.data(), a, a.printerRevision, now);
       if (!connection.connected || connection.endpoint !== 'test') return fail('qualification_conflict');
+      let replacedSessionId: string | null = null;
+      if (replaceExpiredCreatedAt !== undefined && !pointer.exists) return fail('qualification_conflict');
       if (pointer.exists) {
         const pid = pointer.data()?.sessionId;
         if (typeof pid !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(pid)) return fail('qualification_conflict');
@@ -88,7 +90,11 @@ export async function requestDirectTestPrint(input: unknown) {
         // Concurrent clicks/tabs reuse current work. Ambiguous downloads never retry.
         const finished = j.data.state === 'confirmed' && now - j.data.confirmedAt! >= 30_000;
         const neverDownloaded = ['queued', 'offered'].includes(j.data.state) && now >= j.data.expiresAt;
-        if (!finished && !neverDownloaded) return remember(pid);
+        if (replaceExpiredCreatedAt !== undefined) {
+          if (j.data.createdAt !== replaceExpiredCreatedAt || now < j.data.expiresAt
+            || !['download_started', 'unknown'].includes(j.data.state)) return fail('qualification_conflict');
+          replacedSessionId = pid;
+        } else if (!finished && !neverDownloaded) return remember(pid);
       }
       const model = p.data.configuration.model, paperWidthMm = p.data.configuration.paperWidthMm;
       const record = createSyntheticPilotJobRecord({ ...a, sessionId: requestId, model, paperWidthMm,
@@ -96,6 +102,11 @@ export async function requestDirectTestPrint(input: unknown) {
       const session = directTestSessionSchema.parse({ schemaVersion: 2, ...a, sessionId: requestId, jobId: requestId,
         actorId, state: 'consumed', trust: 'admin_test_request', issuedAt: now, consumedAt: now,
         expiresAt: record.expiresAt, contentDigest: record.content.sha256, physicalCompatibilityVerified: false });
+      if (replacedSessionId) tx.create(printerRef.collection('pilotRecoveryAudit').doc(requestId), {
+        schemaVersion: 1, ...a, actorId, at: now, action: 'printer.testPrint.replaceExpired',
+        previousSessionId: replacedSessionId, previousCreatedAt: replaceExpiredCreatedAt, newSessionId: requestId,
+        previousDeviceResultChanged: false,
+      });
       tx.create(jobRef, record);
       tx.set(pointerRef, { schemaVersion: 1, sessionId: requestId });
       tx.create(sessionRef, session);

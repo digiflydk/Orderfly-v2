@@ -89,3 +89,23 @@ changed main requires synchronization and renewed gates. Post-deploy health and
 public smoke establish release health, not live invocation of this encoder.
 Physical readability, glyph fidelity, print-area settings, paper feeding, cutting
 and interoperability with Wolt remain unverified until the final hardware pilot.
+
+## Larger physical text (v2, #589)
+
+New kitchen PNGs double the bitmap scale from 2 to 4. Ordinary letter bodies
+increase from 14 to 28 dots (1.75 to 3.5 mm at 8 dots/mm); the full accent-bearing
+glyph grows from 20 to 40 dots (2.5 to 5 mm). Character cells are now 24 dots wide
+and rows 48 dots high. The PNG has no typographic point-size field. At 203 dpi, its 40-dot glyph box
+is equivalent to 14.2 pt (40 * 72 / 203), above the requested 10 pt minimum.
+The visible ordinary body remains 28 dots; do not mislabel ink height as font size.
+The physical 80 mm profile wraps at 24 columns in 576 dots; 58 mm wraps at 16
+columns in 384 dots. Long names and instructions wrap before rendering and remain
+subject to the existing output bounds. The shared glyph alphabet is unchanged.
+
+Synthetic envelopes use orderfly-testbon-v2 / orderfly-kitchen-png-v2. Reading a
+saved v1 envelope reconstructs the exact previous v1 bytes, so existing job tokens,
+digests and status checks survive deployment. Version/payload substitutions reject.
+Previously frozen ordinary payloads likewise keep their stored bytes. No stored job
+is resized, reset or replayed. Physical fit of v2 still requires a new controlled
+print; the user's photo establishes v1 output only. The configurable receipt preview
+is a separate rendering path and is not changed by this physical-font adjustment.

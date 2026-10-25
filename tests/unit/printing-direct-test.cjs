@@ -51,7 +51,7 @@ function fixture() {
     try { return await run(); } finally { names.forEach((n,i)=>old[i]===undefined?delete process.env[n]:process.env[n]=old[i]); }
   }
   return { records, reads, options, commits, consumer, content, get dbCalls() { return dbCalls; },
-    print: (requestId = 'a'.repeat(43), flag = true) => enabled(() => consumer.requestDirectTestPrint({ ...scope, requestId }), flag) };
+    print: (requestId = 'a'.repeat(43), flag = true, replacement = {}) => enabled(() => consumer.requestDirectTestPrint({ ...scope, requestId, ...replacement }), flag) };
 
 }
 
@@ -95,4 +95,40 @@ test('uncertain delivery is never automatically replaced, while an expired undow
   Date.now=()=>j.expiresAt+1;
   try {g.records.get(`${path}/connection/current`).lastSeenAt=Date.now();assert.notEqual((await g.print('d'.repeat(43))).jobId,original.jobId);}
   finally {Date.now=clock;}
+});
+
+test('explicit expired dummy recovery preserves old outcome, audits once and remains idempotent',async()=>{
+ const f=fixture(), original=await f.print(), oldPath=`${path}/pilotJobs/${original.jobId}`, job=f.records.get(oldPath);
+ job.state='download_started';job.tokenDigest='a'.repeat(64);job.offeredAt=job.createdAt;job.downloadStartedAt=job.createdAt;
+ const prior=structuredClone(job), replacement={replaceExpiredCreatedAt:job.createdAt};
+ await assert.rejects(f.print('b'.repeat(43),true,replacement),/qualification_conflict/);
+ const clock=Date.now;Date.now=()=>job.expiresAt+1;
+ try {
+  f.records.get(`${path}/connection/current`).lastSeenAt=Date.now();
+  await assert.rejects(f.print('b'.repeat(43),true,{replaceExpiredCreatedAt:job.createdAt+1}),/qualification_conflict/);
+  f.options.unknownCommit=true;
+  await assert.rejects(f.print('b'.repeat(43),true,replacement),/qualification_unavailable/);
+  f.options.unknownCommit=false;
+  const next=await f.print('b'.repeat(43),true,replacement);
+  assert.equal(next.jobId,'b'.repeat(43));assert.deepEqual(f.records.get(oldPath),prior);
+  const audit=f.records.get(`${path}/pilotRecoveryAudit/${next.jobId}`);
+  assert.equal(audit.previousSessionId,original.jobId);assert.equal(audit.newSessionId,next.jobId);
+  assert.equal(audit.previousDeviceResultChanged,false);assert.equal(audit.actorId,actorId);
+  assert.equal([...f.records.keys()].filter(k=>k.includes('/pilotJobs/')).length,2);
+  await assert.rejects(f.print('c'.repeat(43),true,replacement),/qualification_conflict/);
+ }finally{Date.now=clock;}
+});
+test('recovery does not override confirmed, failed or undownloaded states',async()=>{
+ for(const state of ['queued','offered','confirmed','failed']){
+  const f=fixture(), original=await f.print(), job=f.records.get(`${path}/pilotJobs/${original.jobId}`);
+  job.state=state;
+  if(state!=='queued'){job.tokenDigest='a'.repeat(64);job.offeredAt=job.createdAt;}
+  if(['confirmed','failed'].includes(state))job.downloadStartedAt=job.createdAt;
+  if(state==='confirmed')job.confirmedAt=job.createdAt;
+  const clock=Date.now;Date.now=()=>job.expiresAt+1;
+  try {f.records.get(`${path}/connection/current`).lastSeenAt=Date.now();
+   await assert.rejects(f.print('b'.repeat(43),true,{replaceExpiredCreatedAt:job.createdAt}),/qualification_conflict/);
+   assert.equal([...f.records.keys()].filter(k=>k.includes('/pilotJobs/')).length,1);
+  }finally{Date.now=clock;}
+ }
 });
