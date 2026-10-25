@@ -8,7 +8,7 @@ const TIMEOUT_MS = 12_000;
 // ordering of authorization evidence across foreground and background reads.
 let authorizationRevision = 0;
 let latestAuthorizationDenial = 0;
-export function useTerminalFeed(query: TerminalQuery, enabled = true) {
+export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders') {
   const key = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== '') as [string, string][]).toString();
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +90,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
             visited.add(cursor); params.set('cursor', cursor);
           }
           timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
-          const response = await fetch(`/api/merchant/orders?${params}`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
+          const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
           if (disposed || generation.current !== current) return;
           if (response.status === 401 || response.status === 403) {
             latestAuthorizationDenial = ++authorizationRevision;
@@ -154,7 +154,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
     };
   // Query is serialized so caller object identity does not restart the feed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, beep, enabled]);
+  }, [key, beep, enabled, endpoint]);
   const stale = lastUpdated !== null && (Date.now() - lastUpdated > 45_000 || offline || !!error);
   void tick;
   return { data, loading, error, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound };
