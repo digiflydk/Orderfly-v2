@@ -74,7 +74,8 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     calls.push({ kind: 'read', query: Object.fromEntries(url.searchParams) });
     if (state.boardReadStatus && url.searchParams.get('view') === 'board') return route.fulfill({status:state.boardReadStatus,json:{error:'forbidden'}});
     if (state.readStatus !== 200) return route.fulfill({ status: state.readStatus, json: { error: state.readStatus === 401 ? 'unauthorized' : 'terminal_unavailable', message: 'Ordrene kunne ikke hentes.' } });
-    const locationId = url.searchParams.get('locationId') || 'loc-a', scope = locations.find(l => l.locationId === locationId), view = url.searchParams.get('view') || 'board';
+    if (state.initialRevoked && url.searchParams.get('brandId') === 'brand-a') return route.fulfill({status:403,json:{error:'forbidden'}});
+    const locationId = url.searchParams.get('locationId') || (state.initialRevoked ? 'loc-b' : 'loc-a'), scope = locations.find(l => l.locationId === locationId), view = url.searchParams.get('view') || 'board';
     let rows = state.orders.filter(o => o.locationId === locationId);
     rows = rows.filter(o => view === 'history' ? ['Completed','Delivered','Canceled'].includes(o.status) : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && o.fulfillmentAt < '2026-10-25T23:00:00.000Z');
     const hasMore = state.emptyPage && !url.searchParams.has('cursor');
@@ -206,4 +207,36 @@ test('background board access revocation hides historical customer data without 
   await expect(page.getByRole('alert').first()).toContainText('adgang',{timeout:20000});
   await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
   assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'only background poll detected revocation');
+});
+test('initial automatic restaurant is pinned when its grant is revoked and another remains', async t => {
+  const { page, state, calls } = await fixture(t);
+  await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Historik',exact:true}).click();
+  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  const historyReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history').length;
+  const before=calls.length;
+  state.initialRevoked=true;
+  // A no-scope backend read now legitimately resolves to remaining restaurant B.
+  // The terminal must instead keep its resolved A scope and receive403.
+  await expect.poll(()=>calls.slice(before).some(c=>c.kind==='read'&&c.query.view==='board'),{timeout:20000}).toBe(true);
+  const boardRead=calls.slice(before).find(c=>c.kind==='read'&&c.query.view==='board');
+  assert.equal(boardRead.query.brandId,'brand-a','initial resolution must become explicit authority context');
+  assert.equal(boardRead.query.locationId,'loc-a');
+  await expect(page.getByRole('alert').first()).toContainText('adgang');
+  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'no history refresh hides the bug');
+});
+test('native fullscreen includes the actual Radix order dialog and its controls', async t => {
+  const { page, errors } = await fixture(t);
+  await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>!!document.fullscreenElement)).toBe(true);
+  await page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true}).click();
+  const dialog=page.getByRole('dialog'); await expect(dialog).toBeVisible();
+  assert.equal(await dialog.evaluate(element=>document.fullscreenElement?.contains(element)),true,'body portal must be inside fullscreen top layer');
+  await dialog.getByRole('button',{name:'Start tilberedning',exact:true}).click();
+  await expect(dialog.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();
+  await page.evaluate(()=>document.exitFullscreen());
+  await expect.poll(()=>page.evaluate(()=>document.fullscreenElement===null)).toBe(true);
+  await expect(dialog).toBeVisible(); assert.deepEqual(errors,[]);
 });

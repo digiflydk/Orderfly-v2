@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { TerminalOrder, TerminalQuery, TerminalView } from '@/lib/orders/terminal-types';
 import { TerminalBoard } from './terminal-board';
 import { TerminalDetail } from './terminal-detail';
@@ -15,10 +15,21 @@ export function TerminalClient() {
   const [filters, setFilters] = useState({ search: '', dateFrom: '', dateTo: '' });
   const [selected, setSelected] = useState<TerminalOrder | null>(null);
   const [screenMessage, setScreenMessage] = useState('');
-  const container = useRef<HTMLDivElement>(null);
+  const scopeResolved = !!scope.brandId && !!scope.locationId;
   const query: TerminalQuery = { ...scope, view, ...(view === 'history' ? filters : {}) };
   const boardFeed = useTerminalFeed({ ...scope, view: 'board' });
-  const otherFeed = useTerminalFeed(query, view !== 'board');
+  // The server may choose a default only during initial discovery. Pin that
+  // restaurant for every subsequent read so revoked access fails closed rather
+  // than silently changing the restaurant behind a cached history view.
+  useEffect(() => {
+    const initial = boardFeed.data;
+    if (!scopeResolved && initial?.selectedBrandId && initial.selectedLocationId) {
+      setScope(current => current.brandId && current.locationId ? current : {
+        brandId: initial.selectedBrandId!, locationId: initial.selectedLocationId!,
+      });
+    }
+  }, [scopeResolved, boardFeed.data?.selectedBrandId, boardFeed.data?.selectedLocationId]);
+  const otherFeed = useTerminalFeed(query, view !== 'board' && scopeResolved);
   const feed = view === 'board' ? boardFeed : otherFeed;
   const connectionError = feed.error || boardFeed.error;
   const disconnected = feed.offline || boardFeed.offline;
@@ -33,11 +44,12 @@ export function TerminalClient() {
   async function fullscreen() {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else if (container.current?.requestFullscreen) await container.current.requestFullscreen();
+      // Radix dialogs portal into body; its ancestor must be inside fullscreen.
+      else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
       else setScreenMessage('På iPad kan du føje siden til hjemmeskærmen via Safari → Del.');
     } catch { setScreenMessage('Fuld skærm er ikke tilgængelig her. På iPad kan du bruge Føj til hjemmeskærm i Safari.'); }
   }
-  return <div ref={container} className="min-h-[80dvh] space-y-5 bg-white p-1 text-slate-900 sm:p-3">
+  return <div className="min-h-[80dvh] space-y-5 bg-white p-1 text-slate-900 sm:p-3">
     <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Orderfly · Ordreterminal</p><h1 className="mt-1 text-2xl font-bold">Dagens ordrer</h1><a className="mt-1 inline-block py-2 text-sm text-slate-600 underline" href="/merchant">Tilbage til oversigt</a></div><div className="flex flex-wrap items-center gap-2"><button className="min-h-12 rounded-xl border px-4 font-medium" aria-pressed={boardFeed.sound} onClick={() => void boardFeed.toggleSound()}>{boardFeed.sound ? (boardFeed.soundError ? 'Aktivér lyd igen' : 'Slå lyd fra') : 'Slå lyd til'}</button><button className="min-h-12 rounded-xl border px-4 font-medium" onClick={() => void fullscreen()}>Fuld skærm</button><button className="min-h-12 rounded-xl bg-slate-900 px-5 font-semibold text-white disabled:opacity-50" onClick={refresh} disabled={feed.loading}>Opdater</button></div></header>
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><label className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">Restaurant<select aria-label="Restaurant" className="min-h-12 max-w-full rounded-lg border bg-white px-3 text-base" value={selectedScope} disabled={!data?.locations.length} onChange={event => { const location = data?.locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) { setSelected(null); setScope({ brandId: location.brandId, locationId: location.locationId }); } }}>
       {!data?.locations.length && <option value="">Henter restauranter…</option>}{data?.locations.map(location => <option key={`${location.brandId}/${location.locationId}`} value={`${location.brandId}/${location.locationId}`}>{location.brandName} · {location.locationName}</option>)}</select></label><div className="text-sm"><span className={`inline-block mr-2 h-2.5 w-2.5 rounded-full ${disconnected || outdated || connectionError ? 'bg-amber-500' : 'bg-emerald-600'}`} aria-hidden="true" /><span role="status">{status}</span>{feed.lastUpdated && <span className="ml-2 text-slate-500">Senest {new Date(feed.lastUpdated).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}</div></div>
