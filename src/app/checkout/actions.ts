@@ -369,6 +369,7 @@ export async function newsletterSyncAvailableAction(brandId: string): Promise<bo
 
 export type CheckoutSignupConfig = {
     mode: CheckoutSignupMode;
+    clubSignupSuppressed?: boolean;
     clubProgram?: { active: boolean; name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string; campaignVersion?: string; welcomeStamps?: number; termsUrl: string };
 };
 
@@ -377,12 +378,16 @@ async function checkoutModeForBrand(brandId: string): Promise<CheckoutSignupMode
     return checkoutSignupMode(snapshot.exists() ? snapshot.data() : undefined, brandId);
 }
 
-export async function getCheckoutSignupAction(brandId: string): Promise<CheckoutSignupConfig> {
+export async function getCheckoutSignupAction(brandId: string, locationId?: string): Promise<CheckoutSignupConfig> {
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(brandId)) return {mode:'none'};
     const mode = await checkoutModeForBrand(brandId);
     if (mode !== 'club') return {mode};
     const brand = await getBrandById(brandId);
     if (!brand?.slug) return {mode:'none'};
+    const token = (await cookies()).get(SESSION_COOKIE)?.value;
+    if (locationId && token && await readDiscountCardCheckout(getAdminDb(), {brandId,brandSlug:brand.slug,locationId,token,now:Date.now()})) {
+      return {mode:'none',clubSignupSuppressed:true};
+    }
     const {resolveBrand, programForPortal} = await import('@/lib/loyalty/stamp-card/membership');
     const resolved = await resolveBrand(getAdminDb(), brand.slug);
     if (resolved.brandId !== brandId) return {mode:'none'};
@@ -500,6 +505,10 @@ export async function createStripeCheckoutSessionAction(
       : null;
 
     const checkoutMode = await checkoutModeForBrand(brandId);
+    const discountCardToken = (await cookies()).get(SESSION_COOKIE)?.value;
+    if (customerInfo.subscribeToClub && discountCardToken && await readDiscountCardCheckout(getAdminDb(), {brandId,brandSlug,locationId,token:discountCardToken,now:Date.now()})) {
+      throw new Error('Du har allerede et aktivt rabatkort. Genindlæs kassen uden Club-tilmelding.');
+    }
     if (customerInfo.subscribeToClub && checkoutMode !== 'club') throw new Error('Club-tilmelding er ikke aktiv i checkout. Genindlæs siden.');
     const clubSignupInput = () => ({db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
       newsletterConsent:customerInfo.subscribeToNewsletter,termsAccepted:customerInfo.clubTermsAccepted === true,
@@ -587,7 +596,6 @@ export async function createStripeCheckoutSessionAction(
     const eligibleSubtotal = sumMoney(eligibleLines);
 
     const automaticCartDiscount = bestAutomaticDiscount(activeStandardDiscounts, eligibleSubtotal, quantityLines);
-    const discountCardToken = (await cookies()).get(SESSION_COOKIE)?.value;
     const discountCardInput = {brandId,brandSlug,locationId,token:discountCardToken,customerId:resolvedCustomer.customerRef.id,email:customerInfo.email,now:Date.now()};
     const discountCardEntitlement = discountCardToken ? await readDiscountCardCheckout(getAdminDb(),discountCardInput) : null;
 
