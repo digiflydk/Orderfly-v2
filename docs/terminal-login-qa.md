@@ -30,10 +30,10 @@ Coordination: #635. Independent review/integration QA: #646 (Agent F). Release c
 
 ## Release checklist
 
-- [ ] A–E changes integrated; branch contains current main; exact candidate SHA/tree recorded.
-- [ ] Agent F independently reviews current production code, including credential/session durability, CSRF, throttle, scope and revocation races.
-- [ ] Another agent reviews F-authored documentation/tests.
-- [ ] Independent relevant service and actual-browser tests pass on candidate; typecheck and build pass.
+- [x] A–E changes integrated; branch contains current main; exact candidate SHA/tree recorded.
+- [x] Agent F independently reviews current production code, including credential/session durability, CSRF, throttle, scope and revocation races.
+- [x] Another agent reviews F-authored documentation/tests.
+- [x] Independent relevant service and actual-browser tests pass on candidate; typecheck and build pass.
 - [ ] All required CI checks complete green on current head; current-head independent Codex review complete; no unresolved findings or human stop messages.
 - [ ] Coordinator merges and deploys serially; verify merged base and actually deployed release SHA.
 - [ ] Production read-only QA completed and recorded separately from local tests.
@@ -44,4 +44,12 @@ No manual GitHub Actions dispatch/rerun, production data writes, credential prov
 
 ## Candidate evidence
 
-Pending A–E integration. Starting baseline: `15d0bc2` (deployed terminal PR #634). No new login tests or release checks are claimed passed by this initial checklist.
+Pre-release candidate: local `8c78302276c959f317cf8a405fadaa51722fcdaa`, published PR #656 head `3d96d076b6b8e61bc011c9850959f53a2e35d7a5`, identical tree `91ac659b83502b10718309df8fa8415b7ce806da`, based on main `15d0bc2`. Agent F independently reviewed the integrated code and final legacy reprint route-context fix clean; evidence: PR #656 comment `6403186495`. D independently reviewed this checklist's initial content in PR #652 comment `6403097517`.
+
+F independently ran integrated authentication/business services 29/29, B dedicated operations 7/7 plus final route-context/canonical payment cases 2/2, actual Chromium portal 6 plus existing terminal 17 (23/23), settings browser 5/5 and routing 19/19. The browser run preceded only the final legacy reprint wrapper production delta, which received its own regression test. Root separately verified final build/typecheck, 38 new service tests, 66 legacy regressions and 30 browser cases. These local results meet the first four preparation gates; they do not claim CI completion or deployment.
+
+Release remains pending: existing Funnel CI failed in the unchanged storefront combo-upgrade browser test while waiting for “Vælg menu” after Escape. Local diagnosis and current-head CI resolution are required before merge. A passing local rerun does not erase that failed CI result. Merge, deployed SHA, production read-only acceptance, authorized credential configuration and physical iPad evidence remain unclaimed and must be tracked by the coordinator. Any subsequent source or test changes require renewed assessment on the new head.
+
+### Existing storefront regression synchronization
+
+The unchanged combo-upgrade CI scenario sent Escape immediately after selecting “Vælg menu”, without establishing that the replacement combo dialog was ready. A timing race is inferred, not reproduced as a production bug: the unmodified candidate passed all 94 cases in the three browser suites locally, the baseline isolated case passed, and ten instrumented baseline repeats passed. The regression now waits for the actual combo heading and drink choice before Escape and explicitly verifies that the product heading returns. Existing basket/cancel/save assertions and timeouts are unchanged. The failed CI gate still requires a new successful current-head run.
