@@ -14,11 +14,13 @@ export async function getWoltConnectionHealth(scope: WoltHealthScope, deps: {
   readEvidence: (scope: WoltHealthScope) => Promise<WoltHealthEvidence | null>;
   now: () => number;
 }) {
-  if (!validScope(scope) || !(await deps.authorize(scope))) throw new Error('WOLT_FORBIDDEN');
-  const evidence = await deps.readEvidence(scope);
+  if (!validScope(scope)) throw new Error('WOLT_FORBIDDEN');
+  const authorizedScope = Object.freeze({ brandId: scope.brandId, locationId: scope.locationId });
+  if (!(await deps.authorize(authorizedScope))) throw new Error('WOLT_FORBIDDEN');
+  const evidence = await deps.readEvidence(authorizedScope);
   const now = deps.now();
   if (!Number.isSafeInteger(now) || now < 0) throw new Error('WOLT_INVALID_CLOCK');
-  if (evidence && (evidence.brandId !== scope.brandId || evidence.locationId !== scope.locationId)) {
+  if (evidence && (evidence.brandId !== authorizedScope.brandId || evidence.locationId !== authorizedScope.locationId)) {
     throw new Error('WOLT_SCOPE_MISMATCH');
   }
   const recent = evidence && Number.isSafeInteger(evidence.checkedAt) && evidence.checkedAt >= 0 &&

@@ -18,6 +18,13 @@ test('health authorizes before read and rejects foreign evidence without leaking
    assert.equal((await getWoltConnectionHealth(scope,{...deps,readEvidence:async()=>({...evidence,...changes})})).state,state);
  }
 });
+test('authorization uses immutable scope snapshot even across async mutation',async()=>{
+ const mutable={...scope};let readScope;
+ const result=await getWoltConnectionHealth(mutable,{authorize:async checked=>{
+   assert.equal(Object.isFrozen(checked),true);mutable.brandId='foreign';await Promise.resolve();return true;
+ },readEvidence:async checked=>{readScope=checked;return evidence},now:()=>1001});
+ assert.equal(result.state,'configured');assert.deepEqual(readScope,scope);
+});
 const desired={callbackUrl:'https://hooks.example.com/wolt',exponentBase:5,maxRetryCount:3};
 const hook={id:'hook-one',callback_url:desired.callbackUrl,disabled:false,subscribed_events:[...WOLT_REQUIRED_EVENTS],callback_config:{exponential_retry_backoff:{exponent_base:5,max_retry_count:3}}};
 test('webhook reconciliation never creates duplicates and preserves unknown merchant ownership',()=>{
@@ -38,8 +45,9 @@ test('diagnostics correlate without raw personal data and ignore arbitrary nativ
  assert.doesNotMatch(JSON.stringify(result),/customer@|provider-id|secret body/);
 });
 test('elapsed time alone never makes pickup ETA reliable',()=>{
- const base={source:'initial_response',eta:'2026-10-26T12:00:00Z',eventOccurredAt:'2026-10-26T11:00:00Z'};
+ const base={source:'initial_response',eta:'2026-10-26T12:00:00Z',eventDispatchedAt:'2026-10-26T11:00:00Z'};
  assert.equal(woltPickupEtaReliability(base).reliableForKitchenTiming,false);
  assert.equal(woltPickupEtaReliability({...base,source:'verified_pickup_eta_update'}).reliableForKitchenTiming,true);
- assert.equal(woltPickupEtaReliability({...base,source:'verified_pickup_eta_update',eventOccurredAt:null}).reliableForKitchenTiming,false);
+ assert.equal(woltPickupEtaReliability({...base,source:'verified_pickup_eta_update',eventDispatchedAt:null}).reliableForKitchenTiming,false);
+ for(const eta of ['2026-02-30T12:00:00Z','2026-10-26T24:00:00Z','2026-10-26T12:00:00+14:30']) assert.equal(woltPickupEtaReliability({...base,source:'verified_pickup_eta_update',eta}).reliableForKitchenTiming,false);
 });

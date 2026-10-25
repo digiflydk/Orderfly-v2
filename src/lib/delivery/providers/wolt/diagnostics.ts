@@ -27,9 +27,19 @@ export function woltDiagnostic(input: {
 
 /** Input must come from verified, durably accepted, ordered webhook state, never request bodies. */
 export function woltPickupEtaReliability(input: { source: 'initial_response' | 'verified_pickup_eta_update';
-  eta: string | null; eventOccurredAt: string | null }) {
-  const instant = (value: string | null) => typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
-  const reliable = input.source === 'verified_pickup_eta_update' && instant(input.eta) && instant(input.eventOccurredAt);
+  eta: string | null; eventDispatchedAt: string | null }) {
+  const instant = (value: string | null) => {
+    if (typeof value !== 'string') return false;
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+    if (!m) return false;
+    const [, y, month, day, hour, minute, second, zone, , zh, zm] = m;
+    const days = new Date(Date.UTC(Number(y), Number(month), 0)).getUTCDate();
+    return Number(y) >= 2000 && Number(y) <= 2100 && Number(month) >= 1 && Number(month) <= 12 &&
+      Number(day) >= 1 && Number(day) <= days && Number(hour) < 24 && Number(minute) < 60 && Number(second) < 60 &&
+      (zone === 'Z' || (Number(zh) <= 14 && Number(zm) < 60 && (Number(zh) < 14 || Number(zm) === 0))) && Number.isFinite(Date.parse(value));
+  };
+  // Wolt supplies dispatch time, not an event-occurrence timestamp. Never invent the latter.
+  const reliable = input.source === 'verified_pickup_eta_update' && instant(input.eta) && instant(input.eventDispatchedAt);
   return { reliableForKitchenTiming: reliable, pickupEta: reliable ? input.eta : null,
     reason: reliable ? 'optimized_event' as const : 'awaiting_optimized_event' as const };
 }
