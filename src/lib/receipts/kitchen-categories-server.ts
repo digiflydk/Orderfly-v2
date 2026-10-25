@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError } from '@/lib/access/authority';
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { kitchenCatalogLabelApplies as applicable } from './kitchen-category-scope';
 
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;
 // checkoutRequestSchema accepts at most 97 merchandise lines. An oversized
@@ -11,15 +12,6 @@ const identifier = /^[A-Za-z0-9_-]{1,128}$/;
 const MAX_LINES = 97;
 function validId(value: unknown): value is string {
   return typeof value === 'string' && identifier.test(value);
-}
-function applicable(row: FirebaseFirestore.DocumentData | undefined, docId: string, brandId: string, locationId: string, product: boolean): boolean {
-  if (!row || row.brandId !== brandId || (row.id !== undefined && row.id !== docId) || row.isActive !== true
-    || row.deleted === true || row.isDeleted === true || row.deletedAt != null || row.isTestData === true) return false;
-  const locations = row.locationIds;
-  // Native products may be brand-wide; categories must name this location.
-  if (product && locations === undefined) return true;
-  if (!Array.isArray(locations) || locations.length > 500 || !locations.every(validId)) return false;
-  return product && locations.length === 0 || locations.includes(locationId);
 }
 
 /** Current catalog headings only; never replace the saved order's food/details.

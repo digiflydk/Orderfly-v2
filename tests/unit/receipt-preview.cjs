@@ -57,6 +57,7 @@ function loadPage(mocks) {
   new Function('require', 'module', 'exports', code)(name => {
     if (name in mocks) return mocks[name];
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === '@/components/receipts/reprint-controls') return { ReprintControls: 'reprint-controls' };
     if (name === '@/lib/receipts/preview') return { projectReceipt };
     if (name === '@/components/receipts/receipt-preview') return { ReceiptPreview: 'receipt' };
     if (name === '@/components/ui/button') return { Button: 'button' };

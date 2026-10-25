@@ -7,7 +7,9 @@ import { storedManifestSchema } from './outbox';
 import { storedPrinterSchema } from './storage';
 import { projectNativePrintCatalog } from './catalog-line-projection';
 import { kitchenPrintEligibility, type KitchenOrder } from './domain';
-import { encodeKitchenPng } from './kitchen-png';
+import { prepareKitchenPrintSnapshot } from './receipt-print-content';
+import { renderKitchenReceiptSvg } from '@/lib/receipts/print-layout';
+import { rasterizeReceipt } from '@/lib/receipts/print-raster';
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const invalid = (): never => { throw new Error('ordinary_content_unavailable'); };
@@ -36,18 +38,10 @@ export async function prepareOrdinaryJobContent(context: NativeTransactionContex
   const target = manifest.data.targets.find(row => row.printerId === job.printerId);
   if (!target || target.printerRevision !== job.printerRevision || !target.kinds.includes('kitchen')
     || target.configurationHash !== hash(printer.data.configuration) || new Set(target.lineIds).size !== target.lineIds.length) return invalid();
-  const lines = target.lineIds.map(lineId => catalog.lines.find(row => row.lineId === lineId) ?? invalid());
-  const orderReference = job.orderId.length <= 32 ? job.orderId : job.orderId.slice(-32);
-  // Existing native order field records the chosen pickup/delivery label; no
-  // browser timestamp, customer identity, payment data or current product text.
-  if (typeof data.deliveryTime !== 'string' || !data.deliveryTime.trim() || data.deliveryTime.length > 64) return invalid();
-  const note = data.customerDetails?.deliveryInstructions;
-  if (note !== undefined && (typeof note !== 'string' || note.length > 400)) return invalid();
-  const encoded = encodeKitchenPng({ orderReference,
-    fulfillmentLabel: catalog.deliveryType === 'Pickup' ? 'Afhentning' : 'Levering', fulfillmentTime: data.deliveryTime,
-    ...(typeof note === 'string' && note.trim() ? { kitchenNote: note } : {}),
-    items: lines.map(line => ({ name: line.name, quantity: line.quantity,
-      ...(line.modifiers?.length ? { literalModifiers: [...line.modifiers] } : {}) })),
-  }, profile);
-  return { payload: encoded.payload, sha256: createHash('sha256').update(encoded.payload).digest('hex') };
+  target.lineIds.forEach(lineId => { if (!catalog.lines.some(row => row.lineId === lineId)) return invalid(); });
+  const snapshot = await prepareKitchenPrintSnapshot(context, { orderId: job.orderId, brandId: job.brandId,
+    locationId: job.locationId, printerId: job.printerId, lineIds: target.lineIds });
+  // Pure local raster work, no network inside this transaction. Same design,
+  // settings and saved food selections as the order's online kitchen preview.
+  return rasterizeReceipt(renderKitchenReceiptSvg(snapshot.settings, snapshot.order));
 }

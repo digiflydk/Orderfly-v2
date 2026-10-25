@@ -43,6 +43,7 @@
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
+    "@resvg/resvg-js": "^2.6.2",
     "@stripe/react-stripe-js": "^2.9.0",
     "@stripe/stripe-js": "^4.10.0",
     "class-variance-authority": "^0.7.1",

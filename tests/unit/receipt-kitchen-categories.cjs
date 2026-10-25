@@ -61,7 +61,7 @@ test('authentication is first; revoked native ownership and scope deny before ca
 });
 test('missing, inactive, foreign, deleted and mismatched product/category records yield no label', async () => {
   for (const path of ['products/pizza', 'categories/pizza-cat']) {
-    for (const patch of [null, { brandId: 'other' }, { locationIds: ['other'] }, { locationIds: null }, { locationIds: ['../bad'] }, { isActive: false }, { deleted: true }, { isDeleted: true }, { deletedAt: 123 }, { isTestData: true }, { id: 'other' }]) {
+    for (const patch of [null, ...(path.startsWith('products/') ? [{ brandId: 'other' }] : []), { locationIds: ['other'] }, { locationIds: null }, { locationIds: ['../bad'] }, { isActive: false }, { deleted: true }, { isDeleted: true }, { deletedAt: 123 }, { isTestData: true }, { id: 'other' }]) {
       const f = fixture(); if (patch === null) f.records.delete(path); else Object.assign(f.records.get(path), patch);
       assert.deepEqual(await f.read(order()), {}, `${path}: ${JSON.stringify(patch)}`);
     }
@@ -123,4 +123,17 @@ test('transaction retry resets successful scope verification before revoked or u
     await assert.rejects(f.read(order()), error => error.message === 'kitchen_categories_unavailable');
     assert.equal(f.reads.filter(read => read === 'products/pizza').length, 1);
   }
+});
+
+// Native category writers omit brandId or preserve a former primary brand on
+// shared categories. Authorized native location membership is their ownership.
+test('category ownership follows native location membership; product brand ownership stays mandatory', async () => {
+  for (const brandId of [undefined, 'former-primary-brand']) {
+    const f = fixture(); f.records.get('categories/pizza-cat').brandId = brandId;
+    assert.deepEqual(await f.read(order()), { pizza: 'Pizza' });
+    f.records.get('categories/pizza-cat').locationIds = ['other-location'];
+    assert.deepEqual(await f.read(order()), {});
+  }
+  const f = fixture(); delete f.records.get('products/pizza').brandId;
+  assert.deepEqual(await f.read(order()), {});
 });

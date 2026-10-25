@@ -1,3 +1,4 @@
+import { ReprintControls } from '@/components/receipts/reprint-controls';
 import { notFound } from 'next/navigation';
 import Link from '@/components/superadmin/admin-link';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ export default async function OrderReceiptPage({ params }: { params: Promise<{ o
     </div>
     <div><h1 className="text-2xl font-bold">Vis kvittering</h1><p className="text-muted-foreground">Forhåndsvisning med det aktuelle layout. Visningen opretter ingen printjob og er ikke en kopi af en tidligere papirudskrift.</p></div>
     {!order.invoice && <p className="rounded border p-3 text-sm">Der findes endnu ikke et gemt fakturabilag. Visningen viser ordrens registrerede oplysninger og betalingsstatus.</p>}
+    {access.superuser && <ReprintControls orderId={order.id} brandId={order.brandId} locationId={order.locationId} kind="customer" />}
     <div className="rounded-lg bg-muted p-3 sm:p-6"><ReceiptPreview settings={settings} order={projectReceipt(order, brandIdentity)} /></div>
   </div>;
 }

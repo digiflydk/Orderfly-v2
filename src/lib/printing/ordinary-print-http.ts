@@ -8,6 +8,8 @@ import { CLOUDPRNT_MAX_POLL_BYTES, validCloudPrntPollQuery, parseCloudPrntPoll, 
 import { OrdinaryPrintError, pollOrdinaryPrint, downloadOrdinaryPrint,
   recordOrdinaryPrintResult } from './ordinary-print-native';
 import { OrdinaryOutputPolicyError } from './ordinary-output-policy';
+import { pollManualPrint, downloadManualPrint, recordManualPrintResult } from './manual-print-native';
+import { ManualPrintError } from './manual-print-schema';
 
 const invalid = (): never => { throw new Error('invalid_order_print_request'); };
 const id = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(v);
@@ -75,7 +77,7 @@ export async function handleOrdinaryPrintHttp(request: Request, params: Promise<
       const parsed = await poll(request);
       const ready = parsed.status.kind === 'online' && parsed.printingInProgress !== true && parsed.jobToken === null;
       nativeStarted = true;
-      const result = await pollOrdinaryPrint({ ...command, ready });
+      const result = await pollManualPrint({ ...command, ready }) ?? await pollOrdinaryPrint({ ...command, ready });
       if (!('jobReady' in result)) throw new OrdinaryPrintError('ordinary_print_unavailable');
       if (result.jobReady === false) return reply(200, { jobReady: false });
       if (!('jobToken' in result) || !token(result.jobToken)
@@ -89,7 +91,8 @@ export async function handleOrdinaryPrintHttp(request: Request, params: Promise<
       const query = parseCloudPrntJobQuery(url.search);
       if (!token(query.token) || (query.mediaType !== null && query.mediaType !== 'image/png')) return invalid();
       nativeStarted = true;
-      const result = await downloadOrdinaryPrint({ ...command, token: query.token });
+      const result = await downloadManualPrint({ ...command, token: query.token })
+        ?? await downloadOrdinaryPrint({ ...command, token: query.token });
       if (!('payload' in result) || !Buffer.isBuffer(result.payload) || result.payload.length < 8 || result.payload.length > 524_288
         || !('contentType' in result) || result.contentType !== 'image/png' || !('sha256' in result)
         || result.sha256 !== createHash('sha256').update(result.payload).digest('hex')) throw new OrdinaryPrintError('ordinary_print_unavailable');
@@ -100,7 +103,9 @@ export async function handleOrdinaryPrintHttp(request: Request, params: Promise<
     const query = parseCloudPrntConfirmation(url.search);
     if (!token(query.token)) return invalid();
     nativeStarted = true;
-    await recordOrdinaryPrintResult({ ...command, query: url.search });
+    if (await recordManualPrintResult({ ...command, query: url.search }) === null) {
+      await recordOrdinaryPrintResult({ ...command, query: url.search });
+    }
     return reply(200, {});
   } catch (error) {
     if (error instanceof CloudPrntHttpAuthenticationError) return error.code === 'device_unavailable'
@@ -111,6 +116,8 @@ export async function handleOrdinaryPrintHttp(request: Request, params: Promise<
       ? reply(200, { jobReady: false }) : reply(409, { error: 'order_test_unavailable' });
     if (error instanceof OrdinaryPrintError) return reply(error.code === 'ordinary_print_unavailable' ? 503 : 409,
       { error: error.code === 'ordinary_print_unavailable' ? 'ordinary_print_unavailable' : 'ordinary_print_conflict' });
+    if (error instanceof ManualPrintError) return reply(error.code === 'manual_print_unavailable' ? 503 : 409,
+      { error: error.code });
     return reply(nativeStarted ? 503 : 400, { error: nativeStarted ? 'ordinary_print_unavailable' : 'invalid_order_print_request' });
   } finally { release?.(); }
 }

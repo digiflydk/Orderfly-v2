@@ -108,7 +108,7 @@ export function KitchenEditor({ brands, initialBrandId }: {
       <a className={`${buttonClass} bg-primary text-primary-foreground`} aria-current="page" href={`/superadmin/receipts?type=kitchen&brandId=${encodeURIComponent(brandId)}`}>Køkkenbon</a>
     </nav>
     <header><h1 className="text-2xl font-semibold">Køkkenbon</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Tilpas køkkenbonnen pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Layoutet gælder onlinevisningen og er endnu ikke koblet til fysisk print.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Tilpas køkkenbonnen pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Det gemte layout bruges ved nye køkkenudskrifter og genprint.</p>
     </header>
     {!brands.length ? <p>Der er ingen brands tilgængelige.</p> : <>
       <label className="block max-w-md text-sm font-medium">Brand<select aria-label="Brand" className={inputClass} value={brandId} disabled={saving} onChange={event => {

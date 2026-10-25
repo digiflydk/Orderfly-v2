@@ -7,6 +7,8 @@ if (!/^[a-f0-9]{7,40}$/.test(releaseSha)) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  serverExternalPackages: ['@resvg/resvg-js'],
+  outputFileTracingIncludes: { '/*': ['./public/fonts/orderfly/*.ttf'] },
   env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
   async headers() {
     return [

@@ -204,7 +204,7 @@ jobs:
         run: node --test tests/unit/printing-pilot-controls-browser.cjs
 
       - name: Supervised purchase printing regression
-        run: node --test tests/unit/printing-pilot-status.cjs tests/unit/printing-order-test-policy.cjs tests/unit/printing-order-test-control-http.cjs tests/unit/printing-ordinary-native.cjs tests/unit/printing-order-test-controls-browser.cjs
+        run: node --test tests/unit/printing-manual-*.cjs tests/unit/printing-pilot-status.cjs tests/unit/printing-order-test-policy.cjs tests/unit/printing-order-test-control-http.cjs tests/unit/printing-ordinary-native.cjs tests/unit/printing-order-test-controls-browser.cjs
 
       - name: Explicit printer activation browser regression
         run: node --test tests/unit/printing-printer-activation-browser.cjs
