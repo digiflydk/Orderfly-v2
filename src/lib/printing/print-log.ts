@@ -8,8 +8,9 @@ const base = z.object({ ...scope, orderId: printLogId, kind: z.enum(['kitchen', 
 const manual = base.extend({ state, expiresAt: instant, offeredAt: instant.nullable(), downloadedAt: instant.nullable(), completedAt: instant.nullable(), jobId: printLogId });
 const ordinary = z.object({ ...scope, jobId: printLogId, state: state.exclude(['queued', 'expired']), job: base,
   offeredAt: instant, expiresAt: instant, downloadedAt: instant.nullable(), completedAt: instant.nullable() });
+const expired = base.extend({ jobId: printLogId, state: z.literal('expired'), completedAt: instant, reason: z.enum(['unsent_timeout', 'activation_changed', 'offer_timeout']) });
 const queued = base.extend({ id: printLogId, state: z.literal('queued') });
-export type PrintLogSource = 'jobs' | 'ordinaryDispatches' | 'manualPrintRequests';
+export type PrintLogSource = 'jobs' | 'ordinaryDispatches' | 'manualPrintRequests' | 'expiredPrintJobs';
 export type PrintLogScope = { brandId: string; locationId: string; printerId: string; locationName: string; printerName: string };
 export type PrintLogItem = {
   id: string; brandId: string; locationId: string; locationName: string; printerId: string; printerName: string;
@@ -29,6 +30,10 @@ export function projectPrintLog(source: PrintLogSource, id: string, raw: unknown
   if (source === 'jobs') {
     const parsed = queued.safeParse(raw); if (!parsed.success || parsed.data.id !== id) return fail();
     row = parsed.data; status = 'queued'; updatedAt = row.createdAt;
+  } else if (source === 'expiredPrintJobs') {
+    const parsed = expired.safeParse(raw);
+    if (!parsed.success || parsed.data.jobId !== id || parsed.data.completedAt < parsed.data.createdAt) return fail();
+    row = parsed.data; status = 'expired'; updatedAt = parsed.data.completedAt;
   } else {
     const parsed = source === 'manualPrintRequests' ? manual.safeParse(raw) : ordinary.safeParse(raw);
     if (!parsed.success || parsed.data.jobId !== id || !matches(parsed.data, expected)) return fail();
@@ -60,7 +65,7 @@ export function projectPrintLog(source: PrintLogSource, id: string, raw: unknown
 }
 
 const cursorSchema = z.object({ v: z.literal(1), brandId: printLogId, at: instant,
-  path: z.string().regex(/^locations\/[A-Za-z0-9_-]{1,128}\/printers\/[A-Za-z0-9_-]{1,128}\/(?:jobs|ordinaryDispatches|manualPrintRequests)\/[A-Za-z0-9_-]{1,128}$/) }).strict();
+  path: z.string().regex(/^locations\/[A-Za-z0-9_-]{1,128}\/printers\/[A-Za-z0-9_-]{1,128}\/(?:jobs|ordinaryDispatches|manualPrintRequests|expiredPrintJobs)\/[A-Za-z0-9_-]{1,128}$/) }).strict();
 export type PrintLogCursor = z.infer<typeof cursorSchema>;
 export function decodePrintLogCursor(value: string | undefined, brandId: string): PrintLogCursor | null {
   if (!value) return null;

@@ -5,7 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import { verifyCloudPrntHttpDevice } from './cloudprnt-http-auth';
-import { requireOrdinaryOutputPolicy } from './ordinary-output-policy';
+import { requireOrdinaryOutputPolicy, requireOrdinaryResultPolicy } from './ordinary-output-policy';
 import { createCloudPrntClaimAttempt, nativeClaimAttemptTokens, reserveNativePrintClaim,
   nativePrintClaimSchema, type NativePrintClaimAttempt } from './native-claim';
 import { prepareOrdinaryJobContent } from './ordinary-job-content';
@@ -15,6 +15,8 @@ import { storedPrintQueueSchema, storedQueuedPrintJobSchema, PRINT_QUEUE_LIMIT }
 import { printJobId, kitchenPrintEligibility, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
 import { readStoredPrinterActivity } from './activity-metadata';
+import { prepareUnsentPrintExpiry } from './unsent-print-expiry';
+import { prepareExpiredOfferCleanup } from './expired-offer-cleanup';
 import { parseCloudPrntConfirmation } from './cloudprnt-http';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -59,8 +61,9 @@ function payload(record: z.infer<typeof ordinaryDispatchSchema>) {
     || hashBytes(bytes) !== record.contentDigest) return conflict();
   return bytes;
 }
-async function readDispatch(context: NativeTransactionContext, c: Command, value: string) {
-  const auth = await authorized(context, c), { printer, identity, policy } = auth;
+async function readDispatch(context: NativeTransactionContext, c: Command, value: string, resultOnly = false) {
+  const identity = await verifyCloudPrntHttpDevice(context, c);
+  const printer = context.db.collection('locations').doc(c.locationId).collection('printers').doc(c.printerId);
   const index = await context.transaction.get(printer.collection('ordinaryTokens').doc(tokenIndex(c, value)));
   const pointer = ordinaryPointerSchema.safeParse(index.data());
   if (!pointer.success) return conflict();
@@ -68,16 +71,19 @@ async function readDispatch(context: NativeTransactionContext, c: Command, value
   const saved = await context.transaction.get(ref), parsed = ordinaryDispatchSchema.safeParse(saved.data());
   if (!parsed.success) return conflict();
   const record = parsed.data, now = Date.now();
+  const policy = resultOnly ? await requireOrdinaryResultPolicy(context, identity, record) : await requireOrdinaryOutputPolicy(context, identity);
   if (!sameScope(record, c) || record.jobId !== pointer.data.jobId || record.printerRevision !== identity.printerRevision
     || record.credentialRevision !== identity.credentialRevision || record.qualificationId !== policy.qualificationId
     || record.model !== policy.model || record.paperWidthMm !== policy.paperWidthMm
-    || record.job.createdAt < policy.issuedAt || record.offeredAt > now || record.expiresAt > policy.expiresAt
+    || record.job.createdAt < policy.issuedAt || record.offeredAt > now || (policy.expiresAt !== null && record.expiresAt > policy.expiresAt)
+    || record.job.automaticActivationId !== policy.automaticActivationId
     || !equal(record.deliveryDigest, printDeliveryTokenDigest('delivery', value, { ...binding(c), jobId: record.jobId }))) return conflict();
-  return { ...auth, ref, record, now };
+  return { identity, printer, policy, ref, record, now };
 }
 
-/** POST offers at most one fresh original. A lost offer is never silently
- * renewed: its pointer remains visible and requires supervised investigation.
+/** POST offers at most one fresh original. Permanent mode archives an expired
+ * offer only when native evidence proves no download occurred; it never retries
+ * that original. Downloaded, failed or uncertain output remains blocked.
  */
 export async function pollOrdinaryPrint(input: unknown) {
   const parsed = commandSchema.extend({ ready: z.boolean() }).strict().safeParse(input);
@@ -91,16 +97,25 @@ export async function pollOrdinaryPrint(input: unknown) {
     // manual pointer in this transaction conflicts with concurrent enqueue.
     const manual = await transaction.get(printer.collection('manualState').doc('current'));
     if (manual.exists) return { jobReady: false as const };
+    if (policy.automaticActivationId) {
+      const expiredOffer = await prepareExpiredOfferCleanup(context, binding(c));
+      if (expiredOffer.count) { expiredOffer.apply(); return { jobReady: false as const }; }
+    }
     const pointerRef = printer.collection('ordinaryState').doc('current');
     const pointer = await transaction.get(pointerRef);
     if (pointer.exists) {
       if (!ordinaryPointerSchema.safeParse(pointer.data()).success) return conflict();
       return { jobReady: false as const };
     }
+    if (policy.automaticActivationId) {
+      const expiry = await prepareUnsentPrintExpiry(context, binding(c), { automaticActivationId: policy.automaticActivationId, issuedAt: policy.issuedAt });
+      if (expiry.count) { expiry.apply(); return { jobReady: false as const }; }
+    }
     const pending = await queue(context, printer, c), job = pending.jobs[0];
     if (!job) return { jobReady: false as const };
     if (job.printerRevision !== identity.printerRevision || job.createdAt < policy.issuedAt
-      || pending.now - job.createdAt > 300_000 || policy.expiresAt - pending.now < 60_000) return conflict();
+      || job.automaticActivationId !== policy.automaticActivationId
+      || pending.now - job.createdAt > 300_000 || (policy.expiresAt !== null && policy.expiresAt - pending.now < 60_000)) return conflict();
     let attempt = attempts.get(job.id);
     if (!attempt) { attempt = createCloudPrntClaimAttempt({ ...c, jobId: job.id }); attempts.set(job.id, attempt); }
     const tokens = nativeClaimAttemptTokens(attempt), indexRef = printer.collection('ordinaryTokens').doc(tokenIndex(c, tokens.deliveryToken));
@@ -111,7 +126,7 @@ export async function pollOrdinaryPrint(input: unknown) {
     ]);
     if (dispatch.exists || history.exists || index.exists) return conflict();
     const offeredAt = Date.now();
-    if (offeredAt < pending.now || policy.expiresAt - offeredAt < 60_000) return conflict();
+    if (offeredAt < pending.now || (policy.expiresAt !== null && policy.expiresAt - offeredAt < 60_000)) return conflict();
     const { updatedAt: _updatedAt, ...canonicalJob } = job;
     const record = ordinaryDispatchSchema.parse({ schemaVersion: 1, ...binding(c), jobId: job.id, job: canonicalJob,
       printerRevision: identity.printerRevision, credentialRevision: identity.credentialRevision,
@@ -194,7 +209,7 @@ export async function recordOrdinaryPrintResult(input: unknown) {
   if (!token.safeParse(confirmation.token).success) return conflict();
   const db = getAdminDb();
   return db.runTransaction(async transaction => {
-    const context = { db, transaction }, { printer, ref, record, now } = await readDispatch(context, c, confirmation.token);
+    const context = { db, transaction }, { printer, ref, record, now } = await readDispatch(context, c, confirmation.token, true);
     const pointerRef = printer.collection('ordinaryState').doc('current'), pointer = await transaction.get(pointerRef);
     const ptr = ordinaryPointerSchema.safeParse(pointer.data());
     if (confirmation.outcome === 'confirmed') {

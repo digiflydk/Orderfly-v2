@@ -339,3 +339,49 @@ test('direct result preparation rechecks stopped window instead of trusting wrap
   assert.equal(f.rows.has(path('printResults', f.job.id)), false);
   assert.equal(f.rows.get(path('statusMetadata')).printHistory, 'unknown');
 }));
+
+function permanent(f) {
+ const epoch='P'.repeat(43),now=Date.now();
+ f.rows.set('brands/b1/printSettings/automatic',{schemaVersion:1,brandId:'b1',enabled:true,revision:1,enabledAt:now-2000,activationId:epoch,updatedAt:now-2000});
+ f.rows.set('locations/l1/printerRouting/original',{schemaVersion:1,id:'original',brandId:'b1',locationId:'l1',revision:1,deletedAt:null,rules:[{id:'all',brandId:'b1',locationId:'l1',printerId:'p1',effect:'include',match:{type:'all'}}]});
+ f.rows.get(path('jobs',f.job.id)).automaticActivationId=epoch;
+ f.rows.get('orders/o1/printIntents/original').automaticActivationId=epoch;
+ f.rows.get(path('orderTestWindows')).issuedAt=now-3600000;f.rows.get(path('orderTestWindows')).expiresAt=now;
+ return epoch;
+}
+const permanentEnabled=fn=>enabled(async()=>{const before=process.env.ORDERFLY_PRINT_INTENTS_ENABLED;process.env.ORDERFLY_PRINT_INTENTS_ENABLED='true';try{await fn();}finally{if(before===undefined)delete process.env.ORDERFLY_PRINT_INTENTS_ENABLED;else process.env.ORDERFLY_PRINT_INTENTS_ENABLED=before;}});
+test('permanent native purchase prints once after pilot expiry; acknowledgement survives disabling and duplicate ack stays idempotent',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);const offer=await f.poll();assert.equal(offer.jobReady,true);
+ await f.download(offer.jobToken);
+ f.rows.set('brands/b1/printSettings/automatic',{schemaVersion:1,brandId:'b1',enabled:false,revision:2,enabledAt:null,activationId:null,updatedAt:Date.now()});
+ assert.deepEqual(await f.confirm(offer.jobToken),{outcome:'confirmed',duplicate:false});
+ assert.deepEqual(await f.confirm(offer.jobToken),{outcome:'confirmed',duplicate:true});
+ await assert.rejects(f.poll());await assert.rejects(f.download(offer.jobToken));
+ assert.equal(f.rows.get(path('ordinaryDispatches',f.job.id)).state,'confirmed');
+}));
+test('disable between offer and download blocks bytes; changed epoch never authorizes old offer',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);const offer=await f.poll();
+ f.rows.set('brands/b1/printSettings/automatic',{schemaVersion:1,brandId:'b1',enabled:false,revision:2,enabledAt:null,activationId:null,updatedAt:Date.now()});
+ await assert.rejects(f.download(offer.jobToken));assert.equal(f.rows.has(path('originalPrintHistory',f.job.id)),false);
+ f.rows.set('brands/b1/printSettings/automatic',{schemaVersion:1,brandId:'b1',enabled:true,revision:3,enabledAt:Date.now(),activationId:'N'.repeat(43),updatedAt:Date.now()});
+ await assert.rejects(f.download(offer.jobToken));
+}));
+test('old activation queued jobs are archived without offering or blocking new epoch purchases',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);delete f.rows.get(path('jobs',f.job.id)).automaticActivationId;
+ assert.deepEqual(await f.poll(),{jobReady:false});assert.equal(f.rows.has(path('jobs',f.job.id)),false);
+ assert.equal(f.rows.get(path('expiredPrintJobs',f.job.id)).reason,'activation_changed');
+ assert.equal(f.rows.get(path('queue','state')).pendingCount,0);assert.equal(f.rows.has(path('ordinaryDispatches',f.job.id)),false);
+}));
+
+test('expired never-downloaded offer is archived after reenable and cannot be replayed or wedge later purchases',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);const offer=await f.poll();const record=f.rows.get(path('ordinaryDispatches',f.job.id));
+ const clock=Date.now,after=record.expiresAt+1000;Date.now=()=>after;
+ try{
+  f.rows.set('brands/b1/printSettings/automatic',{schemaVersion:1,brandId:'b1',enabled:true,revision:3,enabledAt:after,activationId:'N'.repeat(43),updatedAt:after});
+  assert.deepEqual(await f.poll(),{jobReady:false});
+  assert.equal(f.rows.has(path('ordinaryState')),false);assert.equal(f.rows.has(path('jobs',f.job.id)),false);
+  assert.equal(f.rows.get(path('expiredPrintJobs',f.job.id)).reason,'offer_timeout');
+  await assert.rejects(f.download(offer.jobToken));assert.equal(await f.replay(),false,'archived original is terminal');
+  assert.equal(f.rows.has(path('jobs',f.job.id)),false);
+ }finally{Date.now=clock;}
+}));

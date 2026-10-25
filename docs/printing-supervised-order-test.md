@@ -1,5 +1,10 @@
 # Supervised purchase printing (#549)
 
+> Historical supervised test flow. Issue #613 adds a separate persistent brand
+> setting under **Print indstillinger → Automatisk print**. See
+> [brand automatic printing](printing-automatic-print.md). An explicit saved OFF
+> overrides this legacy test policy; saved ON does not use its 60-minute window.
+
 This release connects original kitchen print intents to CloudPRNT HTTP during an explicitly supervised test window. It does not certify unattended production operation or close the hardware-source work in #485. Target for the first physical acceptance is the PM's Star mC-Print3 with 80 mm paper, no longer used for Wolt.
 
 ## Operator flow

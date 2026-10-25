@@ -168,7 +168,6 @@ export async function prepareCloudPrntPrintConfirmation(context: NativeTransacti
   const { db, transaction: tx } = context;
   const identity = await verifyCloudPrntHttpDevice(context, { brandId: request.brandId, locationId: request.locationId,
     printerId: request.printerId, authorization: request.authorization });
-  const policy = await (await import('./ordinary-output-policy')).requireOrdinaryOutputPolicy(context, identity);
   const printer = db.collection('locations').doc(identity.locationId).collection('printers').doc(identity.printerId);
   const resultRef = printer.collection('printResults').doc(request.jobId), activityRef = printer.collection('statusMetadata').doc('current');
   const [delivery, result, activity, pending, dispatch, history] = await Promise.all([
@@ -180,6 +179,7 @@ export async function prepareCloudPrntPrintConfirmation(context: NativeTransacti
     h = originalPrintHistorySchema.safeParse(history.data()), now = Date.now();
   if (!d.success || !o.success || !h.success || pending.exists || !instant.safeParse(now).success || now === 0) return invalid();
   const envelope = d.data, offered = o.data;
+  const policy = await (await import('./ordinary-output-policy')).requireOrdinaryResultPolicy(context, identity, offered);
   const binding = { brandId: identity.brandId, locationId: identity.locationId, printerId: identity.printerId, jobId: request.jobId };
   const deliveryDigest = printDeliveryTokenDigest('delivery', confirmation.token, binding);
   if (envelope.job.id !== request.jobId || offered.jobId !== request.jobId || h.data.jobId !== request.jobId
@@ -187,7 +187,8 @@ export async function prepareCloudPrntPrintConfirmation(context: NativeTransacti
     || offered.brandId !== identity.brandId || offered.locationId !== identity.locationId || offered.printerId !== identity.printerId
     || h.data.brandId !== identity.brandId || h.data.locationId !== identity.locationId || h.data.printerId !== identity.printerId
     || offered.qualificationId !== policy.qualificationId || offered.model !== policy.model || offered.paperWidthMm !== policy.paperWidthMm
-    || offered.job.createdAt < policy.issuedAt || offered.expiresAt > policy.expiresAt
+    || offered.job.createdAt < policy.issuedAt || (policy.expiresAt !== null && offered.expiresAt > policy.expiresAt)
+    || offered.job.automaticActivationId !== policy.automaticActivationId
     || Object.entries(envelope.job).some(([key, value]) => offered.job[key as keyof typeof offered.job] !== value)
     || envelope.printerRevision !== identity.printerRevision || envelope.credentialRevision !== identity.credentialRevision
     || offered.printerRevision !== identity.printerRevision || offered.credentialRevision !== identity.credentialRevision

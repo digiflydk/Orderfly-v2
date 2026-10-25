@@ -1,5 +1,10 @@
 # Supervised real-purchase CloudPRNT tests (#549)
 
+> Historical supervised test flow. Issue #613 adds a separate persistent brand
+> setting under **Print indstillinger → Automatisk print**. See
+> [brand automatic printing](printing-automatic-print.md). An explicit saved OFF
+> overrides this legacy test policy; saved ON does not use its 60-minute window.
+
 The ordinary `/api/cloudprnt/{brand}/{location}/{printer}` endpoint can deliver
 original kitchen jobs during an explicitly opened supervised order-test window.
 This is not unattended production capability and does not close #485's hardware

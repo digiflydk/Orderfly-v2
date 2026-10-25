@@ -39,7 +39,7 @@ export async function prepareUnpaidAcceptanceOriginals(context: NativeTransactio
   });
   return preparePickupAcceptancePrintIntents(context, capability, { intents, identity: {
     schemaVersion: 1, id: 'original', orderId, ...scope, originalRevision: 0,
-    policyRevision: policy.policyRevision, routingRevision: saved.revision,
+    ...(policy.automaticActivationId ? { automaticActivationId: policy.automaticActivationId } : {}), policyRevision: policy.policyRevision, routingRevision: saved.revision,
     rulesHash: fingerprint(saved.rules), catalogHash: fingerprint(catalog), targets,
   } });
 }

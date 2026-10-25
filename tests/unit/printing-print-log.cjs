@@ -67,3 +67,15 @@ test('authentication service outages stay unavailable and never read print recor
  const http=loadTs('src/lib/printing/print-log-http.ts',mocks);const res=await http.handlePrintLog(new Request('https://test/?brandId=b'));
  assert.equal(res.status,503);assert.deepEqual(await res.json(),{error:'print_log_unavailable'});
 });
+test('archived unsent originals remain visible as expired across cursor pagination',async()=>{
+ const f=fixture();
+ for(const id of ['old1','old2'])f.records.set(f.path+'/expiredPrintJobs/'+id,{...base,jobId:id,state:'expired',completedAt:2000,reason:'activation_changed',payloadBase64:'SECRET'});
+ const first=await f.read.readPrintLog({brandId:'b',limit:1});assert.equal(first.items.length,1);assert.equal(first.items[0].status,'expired');assert.equal(first.items[0].source,'automatic');assert.equal(first.items[0].updatedAt,2000);assert.ok(!JSON.stringify(first).includes('SECRET'));assert.ok(first.nextCursor);
+ const second=await f.read.readPrintLog({brandId:'b',limit:1,cursor:first.nextCursor});assert.equal(second.items.length,1);assert.notEqual(second.items[0].id,first.items[0].id);
+ for(const changes of [{brandId:'foreign'},{jobId:'wrong'},{completedAt:999},{reason:'unverified'}])assert.throws(()=>domain.projectPrintLog('expiredPrintJobs','old1',{...base,jobId:'old1',state:'expired',completedAt:2000,reason:'unsent_timeout',...changes},scope,3000));
+});
+test('archived expired offers retain one dispatch row in print log',async()=>{
+ const f=fixture();f.records.set(f.path+'/expiredPrintJobs/q',{...base,jobId:'q',state:'expired',completedAt:100000,reason:'offer_timeout'});
+ f.records.set(f.path+'/ordinaryDispatches/q',{...base,jobId:'q',job:base,state:'offered',offeredAt:1000,expiresAt:61000,downloadedAt:null,completedAt:null});
+ const result=await f.read.readPrintLog({brandId:'b'});assert.equal(result.items.length,1);assert.equal(result.items[0].status,'expired');assert.ok(result.items[0].id.includes('/ordinaryDispatches/'));
+});

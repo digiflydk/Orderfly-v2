@@ -1,6 +1,7 @@
 
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import { orderflySession } from '@/lib/access/orderfly-session';
 import { BrandFormPage } from '@/components/superadmin/brand-form-page';
 import { getBrandForAdministration } from '@/app/superadmin/brands/actions';
 import { getSubscriptionPlans } from '@/app/superadmin/subscriptions/actions';
@@ -11,6 +12,7 @@ import { getFoodCategories } from '@/app/superadmin/food-categories/actions';
 export default async function Page({ params, searchParams }: AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
+    const access = await orderflySession();
 
     const [brand, foodCategories, plans, users] = await Promise.all([
         getBrandForAdministration(routeParams.brandId),
@@ -29,6 +31,7 @@ export default async function Page({ params, searchParams }: AsyncPageProps) {
         <BrandFormPage
             key={routeParams.brandId} 
             brand={brand}
+            canManageAutomaticPrint={access.superuser}
             foodCategories={foodCategories}
             plans={plans}
             users={users}

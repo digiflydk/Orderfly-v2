@@ -68,7 +68,7 @@ test('missing and explicit OFF policy return no targets, no printer scans and ne
     const f = fixture(); f.rows.set('locations/l1/printIntentPolicies/original', saved);
     const result = await f.read();
     assert.deepEqual(result, { ...scope, policyRevision: saved ? 2 : null, enabled: false, dispatchAuthorized: false, targets: [] });
-    assert.equal(f.reads.length, 3); assert.equal(f.reads.some(path => path.includes('/printers')), false);
+    assert.equal(f.reads.length, 4); assert.equal(f.reads.some(path => path.includes('/printers')), false);
     assert.deepEqual(f.writes, []); assert.ok(Object.isFrozen(result) && Object.isFrozen(result.targets));
   }
 });
@@ -132,23 +132,23 @@ test('missing, disabled, deleted, foreign, stale and corrupt selected printers f
 
 test('any failing fanout target rejects without partial output or mutations', async () => {
   const f = fixture({ saved: policy({ targets: [target(), target('missing')] }) });
-  await rejects(f.read(), 'target_unverified'); assert.equal(f.reads.length, 5); assert.deepEqual(f.writes, []);
+  await rejects(f.read(), 'target_unverified'); assert.equal(f.reads.length, 6); assert.deepEqual(f.writes, []);
 });
 
 test('boundaries accept sixteen explicit printers and reject seventeenth before printer reads', async () => {
   const targets = Array.from({ length: 16 }, (_, i) => target(`p${i}`));
   const f = fixture({ saved: policy({ targets }) });
   for (const t of targets) f.rows.set(`locations/l1/printers/${t.printerId}`, printer(t.printerId));
-  assert.equal((await f.read()).targets.length, 16); assert.equal(f.reads.length, 19);
+  assert.equal((await f.read()).targets.length, 16); assert.equal(f.reads.length, 20);
   const g = fixture({ saved: policy({ targets: [...targets, target('p17')] }) });
-  await rejects(g.read(), 'policy_unverified'); assert.equal(g.reads.length, 3);
+  await rejects(g.read(), 'policy_unverified'); assert.equal(g.reads.length, 4);
 });
 
 test('huge nested arrays and strings reject before traversal or regex/trim', async () => {
   const huge = new Array(1_000_000); Object.defineProperty(huge, '0', { get() { throw Error('TRAVERSED'); } });
   for (const saved of [policy({ targets: huge }), policy({ targets: [target('p1', { kinds: huge })] }),
     policy({ targets: [target('x'.repeat(1000000))] }), policy({ unknown: 'x'.repeat(1000000) })]) {
-    const f = fixture({ saved }); await rejects(f.read(), 'policy_unverified'); assert.equal(f.reads.length, 3);
+    const f = fixture({ saved }); await rejects(f.read(), 'policy_unverified'); assert.equal(f.reads.length, 4);
   }
   const f = fixture(); f.rows.set('locations/l1/printers/p1', printer('p1', { name: 'x'.repeat(1000000) }));
   await rejects(f.read(), 'target_unverified');

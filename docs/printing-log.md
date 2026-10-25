@@ -8,10 +8,11 @@ open the relevant receipt view. Browsing and refresh never create print jobs.
 
 ## Status and scope
 
-The log reads existing `jobs`, `ordinaryDispatches` and `manualPrintRequests`
+The log reads existing `jobs`, `ordinaryDispatches`, `expiredPrintJobs` and `manualPrintRequests`
 under brand-owned location printers. A dispatch supersedes its queued record.
 Disabled and soft-deleted printers remain included while their configuration
-exists. No new persistence, index migration or print transport change is needed.
+exists. The permanent automatic-print policy additionally archives proven unsent stale jobs
+as metadata-only `expiredPrintJobs`, visible as expired. No index migration is needed.
 
 Statuses distinguish queued, offered, download started, protocol-confirmed,
 reported failure, unknown outcome and expired offers. Confirmation means that
@@ -22,7 +23,8 @@ does not invent hardware diagnostics that were never recorded.
 This is a print-job log, not an audit of every checkout: orders suppressed before
 a job was created and synthetic pilot test receipts are outside this view.
 Historical records already deleted cannot be reconstructed. The read endpoint
-does not change the existing automatic-print activation window or menu policy.
+does not change automatic-print activation or menu policy. See
+[brand automatic printing](printing-automatic-print.md) for permanent activation.
 
 ## API and bounded reads
 
