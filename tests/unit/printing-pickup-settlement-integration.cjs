@@ -304,3 +304,21 @@ test('#492 changed native printer revisions on retry cannot replace canonical ac
   assert.deepEqual(f.jobs(), originalJobs); assert.deepEqual(f.ledgers(), originalLedgers);
   assert.equal(f.records.get('orders/' + f.orderId + '/printIntents/original').targets.find(row => row.printerId === 'pizza').printerRevision, 1);
 });
+
+test('permanent mode payment for an accepted order never recreates originals after archival or activation change',async()=>{
+ const before=process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED='true';
+ try{const f=await acceptedFixture(),now=Date.now();
+  f.records.set('brands/b/printSettings/automatic',{schemaVersion:1,brandId:'b',enabled:true,revision:3,enabledAt:now-2000,activationId:'N'.repeat(43),updatedAt:now-2000});
+  f.order().createdAt={seconds:Math.floor((now-1000)/1000),nanoseconds:((now-1000)%1000)*1000000};
+  for(const printerId of ['pizza','packing']){
+   f.records.get(printerPath(printerId)).configuration.state='active';
+   f.records.set(printerPath(printerId)+'/deviceCredentials/current',f.load('src/lib/printing/device-auth.ts').createPrinterDeviceCredentialDraft({brandId:'b',locationId:'l',printerId,printerRevision:1,credentialRevision:1}).record);
+  }
+  for(const [path,job]of f.jobs()){
+   f.records.delete(path);f.records.set(path.replace('/jobs/','/expiredPrintJobs/'),{jobId:job.id,reason:'activation_changed'});
+  }
+  const manifest=structuredClone(f.records.get(`orders/${f.orderId}/printIntents/original`));
+  assert.equal(await f.settle(),true);assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.jobs().length,0);
+  assert.deepEqual(f.records.get(`orders/${f.orderId}/printIntents/original`),manifest);
+ }finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
+});

@@ -57,8 +57,8 @@ async function poll(request: Request) {
 const token = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{43}$/.test(value)
   && Buffer.from(value, 'base64url').toString('base64url') === value;
 
-/** Supervised real-order test window. Ordinary production output stays disabled;
- * every operation checks the current scoped window and device credentials. */
+/** Shared live CloudPRNT transport. Fresh automatic output requires current
+ * brand activation or a legacy supervised window plus verified device identity. */
 export async function handleOrdinaryPrintHttp(request: Request, params: Promise<unknown>, admitted = false): Promise<Response> {
   let release: (() => void) | null = null, nativeStarted = false;
   try {

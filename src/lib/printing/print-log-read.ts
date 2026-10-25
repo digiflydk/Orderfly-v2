@@ -5,7 +5,7 @@ import { decodePrintLogCursor, encodePrintLogCursor, printLogId, PrintLogError, 
 
 // Single-field collection queries only: this reader needs no production indexes or writes.
 const MAX_LOCATIONS = 50, MAX_PRINTERS = 50;
-const fields = ['brandId', 'locationId', 'printerId', 'orderId', 'kind', 'createdAt', 'state', 'expiresAt', 'offeredAt', 'downloadedAt', 'completedAt', 'jobId', 'id',
+const fields = ['brandId', 'locationId', 'printerId', 'orderId', 'kind', 'createdAt', 'state', 'expiresAt', 'offeredAt', 'downloadedAt', 'completedAt', 'jobId', 'id', 'reason',
   'job.brandId', 'job.locationId', 'job.printerId', 'job.orderId', 'job.kind', 'job.createdAt'];
 const safeName = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.slice(0, 160) : fallback;
 export async function readPrintLog(input: { brandId: string; cursor?: string; limit?: number }) {
@@ -26,7 +26,7 @@ export async function readPrintLog(input: { brandId: string; cursor?: string; li
     }
     if (scopes.length > MAX_PRINTERS) throw new PrintLogError('print_log_scope_too_large');
   }
-  const sources: PrintLogSource[] = ['jobs', 'ordinaryDispatches', 'manualPrintRequests'];
+  const sources: PrintLogSource[] = ['jobs', 'ordinaryDispatches', 'manualPrintRequests', 'expiredPrintJobs'];
   if (cursor && !scopes.some(({ ref }) => sources.some(source => cursor.path.startsWith(`${ref.path}/${source}/`)))) throw new PrintLogError('print_log_invalid', 400);
   const batches = await Promise.all(scopes.map(async ({ ref, scope }) => {
     const pages = await Promise.all(sources.map(async source => {
@@ -46,7 +46,7 @@ export async function readPrintLog(input: { brandId: string; cursor?: string; li
   const all = batches.flat().sort((a, b) => b.at - a.at || (a.path < b.path ? 1 : a.path > b.path ? -1 : 0));
   // A dispatch supersedes its queued record even while that queued record still exists.
   // Advance by scanned records (including hidden duplicates), avoiding gaps or loops.
-  const page = all.slice(0, limit), queued = page.filter(item => item.source === 'jobs');
+  const page = all.slice(0, limit), queued = page.filter(item => item.source === 'jobs' || item.source === 'expiredPrintJobs');
   const dispatched = queued.length ? await db.getAll(...queued.map(item => item.doc.ref.parent.parent!.collection('ordinaryDispatches').doc(item.doc.id)), { fieldMask: ['jobId', 'brandId', 'locationId', 'printerId'] }) : [];
   const hidden = new Set<string>();
   dispatched.forEach((doc, index) => {

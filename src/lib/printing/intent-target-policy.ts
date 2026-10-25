@@ -6,6 +6,8 @@ import type { PrinterConfiguration, PrintJobKind } from './domain';
 import { storedPrinterSchema } from './storage';
 import { orderTestWindowSchema } from './order-test-schema';
 import { credentialSchema } from './device-credentials-service';
+import { readBrandAutomaticPrintPolicy } from './brand-automatic-print';
+import { prepareAutomaticOutputTargets } from './automatic-output-policy';
 import { projectNativePrintCatalog, PrintCatalogProjectionError } from './catalog-line-projection';
 
 const identifier = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -30,7 +32,7 @@ export class PrintIntentPolicyError extends Error {
 
 export type PreparedPrintIntentPolicy = Readonly<{
   brandId: string; locationId: string; policyRevision: number | null;
-  enabled: boolean; dispatchAuthorized: false;
+  enabled: boolean; dispatchAuthorized: false; automaticActivationId?: string;
   targets: ReadonlyArray<Readonly<{
     configuration: Readonly<PrinterConfiguration>; printerRevision: number;
     kinds: ReadonlyArray<PrintJobKind>; dispatchAuthorized: false;
@@ -106,6 +108,24 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
       brandId, locationId, policyRevision, enabled: targets.length > 0,
       dispatchAuthorized: false as const, targets: Object.freeze(targets),
     });
+    const automatic = await readBrandAutomaticPrintPolicy(context, brandId);
+    if (automatic) {
+      if (!automatic.enabled || !['active', 'trialing'].includes(String(nativeBrand.status))) return result(automatic.revision, []);
+      if (scope.data.orderId !== undefined) {
+        const order = await transaction.get(db.collection('orders').doc(scope.data.orderId));
+        const row = nativeScopeRecord(order, scope.data.orderId);
+        if (row.brandId !== brandId || row.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');
+        const timestamp = row.createdAt as { toMillis?: () => number; seconds?: number; nanoseconds?: number } | undefined;
+        const createdAt = timestamp && typeof timestamp.toMillis === 'function' ? timestamp.toMillis()
+          : timestamp && Number.isSafeInteger(timestamp.seconds) && Number.isInteger(timestamp.nanoseconds)
+            ? timestamp.seconds! * 1000 + Math.floor(timestamp.nanoseconds! / 1_000_000) : NaN;
+        if (!Number.isSafeInteger(createdAt) || createdAt < automatic.enabledAt! || createdAt > Date.now()) return result(automatic.revision, []);
+        try { await projectNativePrintCatalog(context, { orderId: scope.data.orderId, brandId, locationId }); }
+        catch (error) { if (error instanceof PrintCatalogProjectionError) return result(automatic.revision, []); throw error; }
+      }
+      const targets = await prepareAutomaticOutputTargets(context, { brandId, locationId }, automatic);
+      return Object.freeze({ ...result(automatic.revision, targets), automaticActivationId: automatic.activationId! });
+    }
     if (!saved.exists) return result(null, []); // Explicit default OFF; no fallback.
     const parsed = policySchema.safeParse(boundedSnapshot(saved.data(), 'policy_unverified'));
     if (!parsed.success || saved.id !== 'original' || parsed.data.brandId !== brandId || parsed.data.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');

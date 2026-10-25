@@ -14,6 +14,9 @@ import { syntheticPilotJobSchema } from './synthetic-pilot-job';
 import { testPrintSessionSchema } from './synthetic-pilot-job';
 import { readSyntheticTestBonContent } from './job-content';
 import { prepareSavedPrinterRouting } from './saved-routing';
+import { readBrandAutomaticPrintPolicy } from './brand-automatic-print';
+import { prepareAutomaticOutputTargets } from './automatic-output-policy';
+import { ordinaryDispatchSchema } from './ordinary-print-storage';
 import { orderTestBinding as binding, orderTestScopeSchema, orderTestWindowSchema, ORDER_TEST_WINDOW_MS } from './order-test-schema';
 export { orderTestScopeSchema, orderTestWindowSchema, ORDER_TEST_WINDOW_MS } from './order-test-schema';
 
@@ -37,9 +40,9 @@ const validScope = (snapshot: FirebaseFirestore.DocumentSnapshot, expected: stri
     && (row.isActive === undefined || row.isActive === true);
 };
 
-/** Limited, explicit supervised testing permission, never unattended hardware capability. */
+/** Current permanent brand activation takes precedence; installations without
+ * that setting retain their separately authorized supervised test window. */
 export async function requireOrdinaryOutputPolicy(context: NativeTransactionContext, identity: NativePrinterDeviceIdentitySnapshot) {
-  gates();
   if (context.db !== getAdminDb() || !context.transaction || !orderTestScopeSchema.safeParse({
     brandId: identity.brandId, locationId: identity.locationId, printerId: identity.printerId,
     printerRevision: identity.printerRevision, credentialRevision: identity.credentialRevision }).success
@@ -51,6 +54,20 @@ export async function requireOrdinaryOutputPolicy(context: NativeTransactionCont
     tx.get(ref.collection('deviceCredentials').doc('current')), tx.get(ref.collection('orderTestWindows').doc('current')),
   ]);
   const p = storedPrinterSchema.safeParse(printer.data()), c = credentialSchema.safeParse(credential.data());
+  const automatic = await readBrandAutomaticPrintPolicy(context, identity.brandId);
+  if (automatic) {
+    if (!automatic.enabled || !validScope(brand, identity.brandId) || !['active', 'trialing'].includes(brand.data()!.status)
+      || !validScope(location, identity.locationId) || location.data()!.brandId !== identity.brandId
+      || !p.success || !c.success || !matches(c.data, identity) || c.data.revokedAt !== null || c.data.issuedAt > Date.now()
+      || p.data.revision !== identity.printerRevision || p.data.configuration.id !== identity.printerId
+      || p.data.configuration.brandId !== identity.brandId || p.data.configuration.locationId !== identity.locationId) return fail('order_test_conflict');
+    const targets = await prepareAutomaticOutputTargets(context, { brandId: identity.brandId, locationId: identity.locationId }, automatic);
+    const target = targets.find(row => row.configuration.id === identity.printerId);
+    if (!target) return fail('order_test_conflict');
+    return Object.freeze({ model: target.configuration.model, paperWidthMm: target.configuration.paperWidthMm,
+      issuedAt: automatic.enabledAt!, expiresAt: null, qualificationId: automatic.activationId!, automaticActivationId: automatic.activationId! });
+  }
+  gates();
   const w = orderTestWindowSchema.safeParse(window.data()), now = Date.now();
   if (!time.safeParse(now).success || !validScope(brand, identity.brandId) || !['active', 'trialing'].includes(brand.data()!.status)
     || !validScope(location, identity.locationId) || location.data()!.brandId !== identity.brandId
@@ -62,7 +79,32 @@ export async function requireOrdinaryOutputPolicy(context: NativeTransactionCont
     || p.data.configuration.model !== w.data.model || p.data.configuration.paperWidthMm !== w.data.paperWidthMm
     || w.data.stoppedAt !== null || now < w.data.issuedAt || now >= w.data.expiresAt) return fail('order_test_conflict');
   return Object.freeze({ model: w.data.model, paperWidthMm: w.data.paperWidthMm,
-    issuedAt: w.data.issuedAt, expiresAt: w.data.expiresAt, qualificationId: w.data.qualificationId });
+    issuedAt: w.data.issuedAt, expiresAt: w.data.expiresAt, qualificationId: w.data.qualificationId, automaticActivationId: undefined });
+}
+
+/** An acknowledgement records already-transferred output; disabling future
+ * output must not discard it. Retain native device/config binding and the fixed
+ * dispatch's original 60-second lease, never mint a fresh delivery permission. */
+export async function requireOrdinaryResultPolicy(context: NativeTransactionContext, identity: NativePrinterDeviceIdentitySnapshot, input: unknown) {
+  const parsed = ordinaryDispatchSchema.safeParse(input);
+  if (!parsed.success) return fail('order_test_conflict');
+  const record = parsed.data;
+  if (!record.job.automaticActivationId) return requireOrdinaryOutputPolicy(context, identity);
+  const [brand, location, printer] = await Promise.all([
+    context.transaction.get(context.db.collection('brands').doc(identity.brandId)),
+    context.transaction.get(context.db.collection('locations').doc(identity.locationId)),
+    context.transaction.get(context.db.collection('locations').doc(identity.locationId).collection('printers').doc(identity.printerId)),
+  ]);
+  const p = storedPrinterSchema.safeParse(printer.data());
+  if (context.db !== getAdminDb() || !validScope(brand, identity.brandId) || !['active', 'trialing'].includes(brand.data()!.status)
+    || !validScope(location, identity.locationId) || location.data()!.brandId !== identity.brandId || !p.success
+    || record.brandId !== identity.brandId || record.locationId !== identity.locationId || record.printerId !== identity.printerId
+    || p.data.configuration.brandId !== identity.brandId || p.data.configuration.locationId !== identity.locationId || p.data.configuration.id !== identity.printerId
+    || p.data.revision !== identity.printerRevision || record.printerRevision !== identity.printerRevision || record.credentialRevision !== identity.credentialRevision
+    || record.model !== p.data.configuration.model || record.paperWidthMm !== p.data.configuration.paperWidthMm
+    || record.qualificationId !== record.job.automaticActivationId) return fail('order_test_conflict');
+  return Object.freeze({ model: record.model, paperWidthMm: record.paperWidthMm, issuedAt: record.job.createdAt,
+    expiresAt: record.expiresAt, qualificationId: record.qualificationId, automaticActivationId: record.job.automaticActivationId });
 }
 
 const commandSchema = z.union([

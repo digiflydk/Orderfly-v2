@@ -32,6 +32,7 @@ export async function prepareOrdinaryJobContent(context: NativeTransactionContex
   if (!order.exists || order.id !== job.orderId || !data || !manifest.success || !printer.success
     || manifest.data.orderId !== job.orderId || manifest.data.brandId !== job.brandId || manifest.data.locationId !== job.locationId
     || manifest.data.createdAt > job.createdAt || manifest.data.catalogHash !== hash(catalog)
+    || manifest.data.automaticActivationId !== job.automaticActivationId
     || printer.data.revision !== job.printerRevision || printer.data.configuration.model !== profile.model
     || printer.data.configuration.paperWidthMm !== profile.paperWidthMm
     || !kitchenPrintEligibility({ ...data, id: order.id } as KitchenOrder, printer.data.configuration).eligible) return invalid();

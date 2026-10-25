@@ -521,3 +521,32 @@ test('decimal card rounding to full subtotal settles zero-cost order',async()=>{
  Object.assign(f.session,{payment_status:'no_payment_required',amount_total:0});
  assert.equal(await f.settle(),true);assert.equal(f.order().paymentStatus,'Paid');
 });
+
+function activatePermanent(f) {
+ const now=Date.now(),epoch='A'.repeat(43);
+ f.records.set('brands/b/printSettings/automatic',{schemaVersion:1,brandId:'b',enabled:true,revision:1,enabledAt:now-2000,activationId:epoch,updatedAt:now-2000});
+ f.order().createdAt={seconds:Math.floor((now-1000)/1000),nanoseconds:((now-1000)%1000)*1000000};
+ for(const printerId of ['pizza','packing']){
+  f.records.get(printerPath(printerId)).configuration.state='active';
+  f.records.set(printerPath(printerId)+'/deviceCredentials/current',f.load('src/lib/printing/device-auth.ts').createPrinterDeviceCredentialDraft({brandId:'b',locationId:'l',printerId,printerRevision:1,credentialRevision:1}).record);
+ }
+ return epoch;
+}
+test('permanent Stripe producer commits activation-bound manifest and jobs, without a test window; replay does not recreate',async()=>{
+ const before=process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED='true';
+ try{const f=await fixture(),epoch=activatePermanent(f);f.records.delete(policyPath);
+  assert.equal(await f.settle(),true);assert.equal(f.jobs().length,2);
+  assert.ok(f.jobs().every(([,job])=>job.automaticActivationId===epoch));
+  assert.equal(f.records.get(`orders/${f.orderId}/printIntents/original`).automaticActivationId,epoch);
+  const original=structuredClone([...f.records]);assert.equal(await f.settle(),false);assert.deepEqual([...f.records],original);
+ }finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
+});
+test('permanent policy suppresses old orders, unsupported combos and disabled printing without blocking payment',async()=>{
+ const before=process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED='true';
+ try{for(const mode of ['old','combo','off']){const f=await fixture();activatePermanent(f);
+  if(mode==='old')f.order().createdAt={seconds:1,nanoseconds:0};
+  if(mode==='combo')f.order().productItems.push({...f.order().productItems[0],itemType:'combo',comboSelections:[]});
+  if(mode==='off')Object.assign(f.records.get('brands/b/printSettings/automatic'),{enabled:false,enabledAt:null,activationId:null});
+  assert.equal(await f.settle(),true,mode);assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.jobs().length,0,mode);
+ }}finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
+});

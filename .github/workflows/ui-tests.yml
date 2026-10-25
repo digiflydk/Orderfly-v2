@@ -74,6 +74,9 @@ jobs:
       - name: Receipt settings, online preview and editor regression
         run: node --test tests/unit/receipt-*.cjs
 
+      - name: Brand automatic print and unsent expiry regression
+        run: node --test tests/unit/printing-automatic-print*.cjs tests/unit/printing-unsent-expiry.cjs
+
       - name: Superadmin print log regression
         run: node --test tests/unit/printing-print-log*.cjs
 

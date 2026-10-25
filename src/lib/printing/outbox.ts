@@ -8,6 +8,8 @@ import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './
 import { storedPrinterSchema } from './storage';
 import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
 import { originalPrintHistorySchema } from './ordinary-print-storage';
+import { automaticActivationIdSchema } from './brand-automatic-print-schema';
+import { storedExpiredPrintJobSchema } from './unsent-print-expiry';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const scope = { brandId: id, locationId: id, printerId: id };
@@ -34,12 +36,13 @@ const manifestIdentitySchema = z.object({ schemaVersion: z.literal(1), id: z.lit
   orderId: id, brandId: id, locationId: id, originalRevision: z.literal(0),
   policyRevision: z.number().int().positive().safe(), routingRevision: z.number().int().positive().safe(),
   rulesHash: z.string().regex(/^[a-f0-9]{64}$/), catalogHash: z.string().regex(/^[a-f0-9]{64}$/),
-  targets: z.array(manifestTargetSchema).min(1).max(16) }).strict();
+  targets: z.array(manifestTargetSchema).min(1).max(16), automaticActivationId: automaticActivationIdSchema.optional() }).strict();
 export const storedManifestSchema = manifestIdentitySchema.extend({ createdAt: z.number().int().positive().safe() });
 function boundedManifest(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
-  if (Reflect.ownKeys(row).length > 13 || !Array.isArray(row.targets) || row.targets.length > 16) return false;
+  if (Reflect.ownKeys(row).length > 14 || !Array.isArray(row.targets) || row.targets.length > 16) return false;
+  if (row.automaticActivationId !== undefined && (typeof row.automaticActivationId !== 'string' || row.automaticActivationId.length !== 43)) return false;
   for (const field of ['orderId', 'brandId', 'locationId', 'rulesHash', 'catalogHash']) if (typeof row[field] !== 'string' || (row[field] as string).length > 128) return false;
   return row.targets.every(target => target && typeof target === 'object' && !Array.isArray(target)
     && Reflect.ownKeys(target).length <= 5 && typeof target.printerId === 'string' && target.printerId.length <= 128
@@ -68,7 +71,7 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
 
 type OriginalRead = (requireApplied?: boolean) => Readonly<{ order: Readonly<KitchenOrder>; writeCount: number; replay: boolean }>;
 type OriginalAuthority = { read: OriginalRead; requireExistingJobs: boolean;
-  manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>>; freshOnly?: boolean };
+  manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>>; automaticActivationId?: string; freshOnly?: boolean };
 /** Closed Stripe path: the fixed financial writer alone can mint this capability.
  * Lazy fixed import preserves module identity without an eager circular dependency.
  */
@@ -135,7 +138,7 @@ async function prepareAuthorizedOriginals(context: NativeTransactionContext, rea
   // The private financial capability reserves its own writes plus exactly one
   // manifest create for a fresh transition. Replay can never create a manifest.
   const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents,
-    reservedWriteCount: authority.writeCount - (!authority.replay && reuseManifest ? 1 : 0) }, { read, requireExistingJobs: reuseManifest, manifestTargets: identity.targets, freshOnly });
+    reservedWriteCount: authority.writeCount - (!authority.replay && reuseManifest ? 1 : 0) }, { read, requireExistingJobs: reuseManifest, manifestTargets: identity.targets, automaticActivationId: identity.automaticActivationId, freshOnly });
   return { ...plan, writeCount: plan.writeCount + (reuseManifest ? 0 : 1), apply() {
     read(true);
     if (!reuseManifest) context.transaction.create(manifestRef, { ...identity, createdAt: now });
@@ -162,12 +165,13 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     const command = commands[0];
     const printerRef = db.collection('locations').doc(command.locationId).collection('printers').doc(command.printerId);
     const jobs = printerRef.collection('jobs'), queueRef = printerRef.collection('queue').doc('state');
-    const [brand, location, printer, queue, rows, orders, history] = await Promise.all([
+    const [brand, location, printer, queue, rows, orders, history, expiredHistory] = await Promise.all([
       tx.get(db.collection('brands').doc(command.brandId)),
       tx.get(db.collection('locations').doc(command.locationId)), tx.get(printerRef), tx.get(queueRef),
       tx.get(jobs.limit(PRINT_QUEUE_LIMIT + 1)),
       Promise.all(commands.map(c => tx.get(db.collection('orders').doc(c.orderId)))),
       Promise.all(commands.map(c => tx.get(printerRef.collection('originalPrintHistory').doc(printJobId({ ...c, revision: 0 }))))),
+      Promise.all(commands.map(c => tx.get(printerRef.collection('expiredPrintJobs').doc(printJobId({ ...c, revision: 0 }))))),
     ]);
     const config = storedPrinterSchema.safeParse(printer.data());
     if (!brand.exists || location.data()?.brandId !== command.brandId || !config.success
@@ -215,7 +219,12 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
       if (historyRow?.exists && (!terminal?.success || terminal.data.jobId !== jobId
         || !sameScope(terminal.data) || terminal.data.orderId !== c.orderId || terminal.data.kind !== c.kind
         || terminal.data.transferredAt > now || prior)) throw new PrintOutboxError('job_conflict');
-      const original = prior ?? (terminal?.success ? terminal.data : undefined);
+      const expiredRow = expiredHistory.find(row => row.id === jobId);
+      const expired = expiredRow?.exists ? storedExpiredPrintJobSchema.safeParse(expiredRow.data()) : null;
+      if (expiredRow?.exists && (!expired?.success || expired.data.jobId !== jobId || !sameScope(expired.data)
+        || expired.data.orderId !== c.orderId || expired.data.kind !== c.kind || expired.data.completedAt > now
+        || prior || historyRow?.exists)) throw new PrintOutboxError('job_conflict');
+      const original = prior ?? (terminal?.success ? terminal.data : expired?.success ? expired.data : undefined);
       if (settlement && (settlement.requireExistingJobs || original)) {
         const target = settlement.manifestTargets.find(target => target.printerId === c.printerId);
         if (!original || !target || original.printerRevision !== target.printerRevision
@@ -254,7 +263,8 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
         for (const { identity, jobId } of plan.additions) {
           tx.create(plan.jobs.doc(jobId), { schemaVersion: 1, ...identity, id: jobId,
             printerRevision: plan.printerRevision, state: 'queued', attempts: 0,
-            createdAt: plan.now, updatedAt: FieldValue.serverTimestamp() });
+            createdAt: plan.now, updatedAt: FieldValue.serverTimestamp(),
+            ...(settlement?.automaticActivationId ? { automaticActivationId: settlement.automaticActivationId } : {}) });
         }
         const next = { schemaVersion: 1, brandId: plan.command.brandId, locationId: plan.command.locationId,
           printerId: plan.command.printerId, revision: plan.revision + 1,

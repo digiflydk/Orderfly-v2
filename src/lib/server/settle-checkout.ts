@@ -19,6 +19,7 @@ import type { KitchenOrder } from '@/lib/printing/domain';
 import { verifyStripePrintPayment, prepareStripePrintTransition, stripePrintTransitionProjection,
   type StripePrintPaymentProof, type StripePrintTransition } from '@/lib/printing/stripe-transition-proof';
 import { preparePrintIntentTargetPolicy } from '@/lib/printing/intent-target-policy';
+import { storedManifestSchema } from '@/lib/printing/outbox';
 import { projectNativePrintCatalog } from '@/lib/printing/catalog-line-projection';
 import { prepareSavedPrinterRouting } from '@/lib/printing/saved-routing';
 import { previewPrinterRouting } from '@/lib/printing/routing-preview';
@@ -285,8 +286,20 @@ async function settleOrder(proof: PaymentProof) {
       await authorizeTransaction(transaction, currentActor.identity, currentOrder, 'orderfly.orders:edit', 'location');
       metadata.brandId = currentOrder.brandId; metadata.locationId = currentOrder.locationId;
     }
-    const policy = printIntentsEnabled && !isTerminalPaidReplay(currentOrder)
+    let policy = printIntentsEnabled && !isTerminalPaidReplay(currentOrder)
       ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId, orderId: metadata.orderId }) : null;
+    if (proof.kind === 'pickup' && policy?.automaticActivationId) {
+      // Acceptance is the sole producer of an unpaid order's original ticket.
+      // Later collection of money never backfills or replays it, even after an
+      // activation change or an unsent-job expiry.
+      const prior = await transaction.get(orderRef.collection('printIntents').doc('original'));
+      if (prior.exists) {
+        const manifest = storedManifestSchema.safeParse(prior.data());
+        if (!manifest.success || manifest.data.orderId !== metadata.orderId || manifest.data.brandId !== metadata.brandId
+          || manifest.data.locationId !== metadata.locationId) throw new Error('Original print manifest is invalid');
+      }
+      policy = null;
+    }
     const printTransitionEnabled = policy?.enabled;
     if (printTransitionEnabled && proof.kind === 'stripe' && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
     const transition = printTransitionEnabled ? proof.kind === 'stripe'
@@ -317,7 +330,7 @@ async function settleOrder(proof: PaymentProof) {
       });
       const intentInput = { intents, identity: {
         schemaVersion: 1, id: 'original', orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId,
-        originalRevision: 0, policyRevision: policy.policyRevision, routingRevision: saved.revision,
+        originalRevision: 0, ...(policy.automaticActivationId ? { automaticActivationId: policy.automaticActivationId } : {}), policyRevision: policy.policyRevision, routingRevision: saved.revision,
         rulesHash: fingerprint(saved.rules), catalogHash: fingerprint(catalog), targets: manifestTargets,
       } };
       printPlan = prepared.pickupCapability

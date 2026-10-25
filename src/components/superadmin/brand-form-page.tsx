@@ -31,6 +31,7 @@ import { Separator } from '../ui/separator';
 import Link from '@/components/superadmin/admin-link';
 import { debounce } from 'lodash';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { AutomaticPrintSettings } from './automatic-print-settings';
 import { BrandAppearancesForm } from './brand-appearances-form';
 import { useAdminFormRecovery } from './use-admin-form-recovery';
 
@@ -89,12 +90,13 @@ type BrandFormValues = z.infer<typeof brandSchema>;
 interface BrandFormPageProps {
   brand?: Brand;
   centralAdmin?: boolean;
+  canManageAutomaticPrint?: boolean;
   users: User[];
   plans: SubscriptionPlan[];
   foodCategories: FoodCategory[];
 }
 
-export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmin = false }: BrandFormPageProps) {
+export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmin = false, canManageAutomaticPrint = false }: BrandFormPageProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   
@@ -229,9 +231,10 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
         </div>
 
         <Tabs defaultValue="details">
-            <TabsList>
+            <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="details">Details</TabsTrigger>
                 <TabsTrigger value="settings">Settings</TabsTrigger>
+                {brand && canManageAutomaticPrint && <TabsTrigger value="printing">Print indstillinger</TabsTrigger>}
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
                 <TabsTrigger value="appearances" disabled={!brand}>Appearances</TabsTrigger>
             </TabsList>
@@ -621,6 +624,10 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
                     </form>
                  </Form>
             </TabsContent>
+
+            {brand && canManageAutomaticPrint && <TabsContent value="printing" className="mt-6">
+                <AutomaticPrintSettings key={brand.id} brandId={brand.id} brandName={brand.name} />
+            </TabsContent>}
 
             <TabsContent value="analytics" className="mt-6">
                  <Form {...form}>
