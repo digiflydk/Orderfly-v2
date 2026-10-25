@@ -251,6 +251,10 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         });
     } catch (e: any) {
         console.error('checkout_customer_failed', { code: e?.code || 'unknown' });
+        // Preserve known identity safeguards so the outer checkout boundary can
+        // show its privacy-safe, actionable message. Unknown storage details
+        // stay wrapped and are never returned directly to the customer.
+        if (checkoutCustomerIdentityMessage(e)) throw e;
         throw new Error(`Could not create or update customer profile: ${e.message}`);
     }
 }

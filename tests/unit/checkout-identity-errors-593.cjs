@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { createHash } = require('node:crypto');
 const { loadTs } = require('../helpers/load-ts.cjs');
 const { checkout } = require('../helpers/checkout-fixture.cjs');
 
@@ -29,6 +30,22 @@ test('order checkout explains an identity conflict without exposing internal tex
   assert.equal(result.retryable, true);
   assert.equal(result.error, publicError.CUSTOMER_IDENTITY_CHECKOUT_MESSAGE);
   assert.doesNotMatch(result.error, /scope conflict|different profiles/i);
+  assert.equal(events.includes('stripe'), false);
+});
+
+test('transaction-time identity reservation conflict uses the same public message', async () => {
+  const emailHash = createHash('sha256').update('b\ntest@example.test', 'utf8').digest('hex');
+  const { result, events } = await checkout({
+    beforeCustomerTransaction(records) {
+      records.set(`integrationConsumerCustomerIdentities/${emailHash}`, {
+        brandId: 'b',
+        customerId: 'concurrent-customer',
+      });
+    },
+  });
+  assert.equal(result.success, false);
+  assert.equal(result.retryable, true);
+  assert.equal(result.error, publicError.CUSTOMER_IDENTITY_CHECKOUT_MESSAGE);
   assert.equal(events.includes('stripe'), false);
 });
 
