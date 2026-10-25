@@ -13,7 +13,7 @@ The physical printer must have paper and use **Live URL**. The preview page is n
 - Only `confirmed` is presented as the printer having reported a successful print. Queueing and transfer are not reported as physical success.
 - When an enqueue response is lost, **Prøv samme genprint igen** retains the exact request ID and target; the backend's idempotency prevents a second job. It does not create a new ID on a retry.
 - Failed, expired or unknown output calls for checking the paper. The control does not silently dispatch another copy.
-- After a confirmed result, **Genprint igen** is a separate, explicit extra-copy request with a new identity.
+- After a confirmed, failed, or safely expired result, **Genprint igen** is a separate, explicit extra-copy request with a new identity.
 - An order/scope change aborts reads and ignores obsolete responses. Cross-scope printer lists or result metadata fail closed. Session/access errors disable further requests.
 
 The component keeps request state only in its mounted page; it does not put receipt contents, credentials or print tokens into browser storage.

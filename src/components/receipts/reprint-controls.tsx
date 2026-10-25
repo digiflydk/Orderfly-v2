@@ -19,6 +19,7 @@ const states: Record<PrintState, string> = {
   expired: 'Genprintet er udløbet. Kontrollér papiret før et nyt genprint.',
 };
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;
+const canRequestNewCopy = (state?: PrintState) => state === 'confirmed' || state === 'failed' || state === 'expired';
 
 async function json(response: Response, limit: number): Promise<any> {
   const reader = response.body?.getReader();
@@ -121,7 +122,7 @@ export function ReprintControls(props: Scope) {
   function submit() {
     if (pending.current || loading || sessionLost) return;
     if (retry && command) { void perform('POST', command); return; }
-    if (command && result?.state !== 'confirmed') return;
+    if (command && !canRequestNewCopy(result?.state)) return;
     const printer = printers.find(p => p.id === selected); if (!printer) return;
     const next = { ...props, printerId: printer.id, printerRevision: printer.revision, requestId: crypto.randomUUID() };
     setCommand(next); setResult(null); setRetry(false);
@@ -134,7 +135,7 @@ export function ReprintControls(props: Scope) {
   }, [command, result?.state, sessionLost, scopeKey]);
 
   const printer = printers.find(p => p.id === selected);
-  const unresolved = !!command && result?.state !== 'confirmed';
+  const unresolved = !!command && !canRequestNewCopy(result?.state);
   return <section aria-label="Genprint" className="space-y-3 rounded-lg border p-4">
     <div className="flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm font-medium">Printer
@@ -145,7 +146,7 @@ export function ReprintControls(props: Scope) {
         </select>
       </label>
       <Button type="button" disabled={loading || busy || sessionLost || !printer || unresolved && !retry} onClick={submit}>
-        {busy ? 'Arbejder…' : retry ? 'Prøv samme genprint igen' : result?.state === 'confirmed' ? 'Genprint igen' : props.kind === 'kitchen' ? 'Genprint køkkenbon' : 'Genprint kvittering'}
+        {busy ? 'Arbejder…' : retry ? 'Prøv samme genprint igen' : canRequestNewCopy(result?.state) ? 'Genprint igen' : props.kind === 'kitchen' ? 'Genprint køkkenbon' : 'Genprint kvittering'}
       </Button>
       {command && <Button type="button" variant="outline" disabled={busy || sessionLost} onClick={() => void perform('GET', command)}>Opdater printstatus</Button>}
       {!command && !loading && !sessionLost && <Button type="button" variant="outline" onClick={() => setRefresh(value => value + 1)}>Opdater printere</Button>}

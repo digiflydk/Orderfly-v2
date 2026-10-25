@@ -61,6 +61,19 @@ test('receipt reprint browser: scoped device selection, explicit writes, idempot
   await expect.poll(() => calls.filter(c => c.method === 'POST').length).toBe(2);
   assert.notEqual(calls.filter(c => c.method === 'POST')[1].command.requestId, first.requestId, 'explicit extra copy has new identity');
 
+  for (const terminal of ['failed', 'expired']) {
+    state = terminal; await read.click();
+    await expect(page.getByRole('status')).toContainText('Kontrollér papiret');
+    const count = calls.filter(c => c.method === 'POST').length;
+    const previousId = calls.at(-1).command.requestId;
+    await expect(page.getByRole('button', { name: 'Genprint igen', exact: true })).toBeEnabled();
+    assert.equal(calls.filter(c => c.method === 'POST').length, count, 'terminal status never prints automatically');
+    state = 'queued'; await page.getByRole('button', { name: 'Genprint igen', exact: true }).click();
+    await expect(page.getByRole('status')).toContainText('lagt i kø');
+    assert.equal(calls.filter(c => c.method === 'POST').length, count + 1);
+    assert.notEqual(calls.at(-1).command.requestId, previousId, terminal + ' explicit new copy gets new identity');
+  }
+
   state = 'queued'; lostWrite = true;
   await page.evaluate(value => window.changeScope({ ...value, orderId: 'ORD-2', kind: 'customer' }), scope);
   const customerPrint = page.getByRole('button', { name: 'Genprint kvittering', exact: true });
