@@ -31,3 +31,20 @@ test('logo allows known HTTPS origins only and bounded raster decoding',async t=
  global.fetch=async()=>new Response('<svg/>',{headers:{'content-type':'image/svg+xml'}});await assert.rejects(resolveReceiptLogo('https://firebasestorage.googleapis.com/a'));
  global.fetch=async()=>new Response(Buffer.alloc(524289),{headers:{'content-type':'image/png'}});await assert.rejects(resolveReceiptLogo('https://firebasestorage.googleapis.com/a'));
 });
+
+
+test('paper checkboxes rasterize as empty black outlines at both paper widths', async () => {
+ for (const paperWidthMm of [58, 80]) {
+  const doc = renderKitchenReceiptSvg({ ...DEFAULT_KITCHEN_SETTINGS, paperWidthMm }, SAMPLE_KITCHEN_RECEIPT);
+  const boxes = [...doc.svg.matchAll(/<rect data-paper-checkbox="true" x="(\d+)" y="(\d+)" width="(\d+)" height="(\d+)"/g)].map(match => match.slice(1).map(Number));
+  assert.equal(boxes.length, 9);
+  const { payload } = await rasterizeReceipt(doc);
+  const { data, info } = await sharp(payload).removeAlpha().grayscale().raw().toBuffer({ resolveWithObject: true });
+  for (const [x, y, width, height] of boxes) {
+   const pixel = (px, py) => data[py * info.width + px];
+   assert.equal(pixel(x, y + height / 2), 0, 'left outline is black');
+   assert.equal(pixel(x + width / 2, y), 0, 'top outline is black');
+   assert.equal(pixel(x + width / 2, y + height / 2), 255, 'box remains empty for pen marking');
+  }
+ }
+});

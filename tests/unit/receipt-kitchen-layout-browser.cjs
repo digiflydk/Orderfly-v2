@@ -40,6 +40,13 @@ test('kitchen layout: real Tailwind styles preserve 58/80mm mobile content and l
     assert.equal(await page.evaluate(() => document.fonts.check('30px "Orderfly Receipt"')), true);
     const clippedText = await ticket.evaluate(element => { const svg = element.querySelector('svg'); return Array.from(svg.querySelectorAll('text')).filter(text => { const box = text.getBBox(); return box.x < -1 || box.x + box.width > svg.viewBox.baseVal.width + 1; }).map(text => text.textContent); });
     assert.deepEqual(clippedText, []);
+    const boxes = await ticket.evaluate(element => Array.from(element.querySelectorAll('[data-paper-checkbox]')).map(box => {
+      const rect = box.getBBox(), text = box.nextElementSibling.getBBox();
+      return { width: rect.width, height: rect.height, gap: text.x - rect.x - rect.width, baseline: Number(box.nextElementSibling.getAttribute('y')), bottom: rect.y + rect.height };
+    }));
+    assert.equal(boxes.length, 9, 'one box for each of the two modifiers and seven menu products');
+    assert.ok(boxes.every(box => box.width >= 20 && box.height >= 20 && box.gap >= 8 && box.bottom === box.baseline), JSON.stringify(boxes));
+
     const measurements = await ticket.evaluate(element => ({
       width: element.getBoundingClientRect().width, overflow: element.scrollWidth > element.clientWidth,
       fontSizes: Array.from(element.querySelectorAll('svg text')).map(text => Number(text.getAttribute('font-size'))),
@@ -61,6 +68,16 @@ test('kitchen layout: real Tailwind styles preserve 58/80mm mobile content and l
     const overflow = await ticket.evaluate(element => Array.from(element.querySelectorAll('.orderfly-receipt-svg')).filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.tagName));
     assert.deepEqual(overflow, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    const stressGeometry = await ticket.evaluate(element => {
+      const svg = element.querySelector('svg'), boxes = [...svg.querySelectorAll('[data-paper-checkbox]')];
+      const longBox = boxes[2], rows = [];
+      for (let node = longBox.nextElementSibling; node?.tagName === 'text' && node.getAttribute('x') === longBox.nextElementSibling.getAttribute('x'); node = node.nextElementSibling) rows.push(node.getBBox());
+      return { count: boxes.length, rows: rows.map(row => ({ x: row.x, right: row.x + row.width })), limit: svg.viewBox.baseVal.width };
+    });
+    assert.equal(stressGeometry.count, 7, 'wrapped modifier receives one box, not one per row');
+    assert.ok(stressGeometry.rows.length > 1);
+    assert.ok(stressGeometry.rows.every(row => row.x === stressGeometry.rows[0].x && row.right <= stressGeometry.limit - 15), JSON.stringify(stressGeometry));
+
   }
   assert.deepEqual(errors, []);
 });
