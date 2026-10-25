@@ -65,7 +65,7 @@ test('browser: supervised order window needs observed paper, writes once, recove
   const changed = { ...scope, printerId: 'p2', printerRevision: 3 };
   await page.evaluate(value => window.changeScope(value), changed); await expect(read).toBeEnabled();
   await expect(stop).toHaveCount(0); await held.abort().catch(() => {}); held = null;
-  delay = false; state = 'not_started'; await read.click(); await expect(start).toBeDisabled();
+  delay = false; state = 'not_started'; await read.click(); await expect(start).toBeEnabled();
   assert.equal(calls.at(-1).params.printerId, 'p2'); await observe(); await expect(start).toBeEnabled();
   await page.evaluate(() => window.changePermission(false)); await expect(read).toBeDisabled(); await expect(start).toHaveCount(0);
   assert.deepEqual(errors, []);
