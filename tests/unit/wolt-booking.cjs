@@ -23,6 +23,25 @@ test('creation copies quoted location, stable reference and only supported field
   assert.equal(result.kind, 'accepted'); assert.equal(result.providerDeliveryId, 'delivery_a'); assert.equal(result.woltOrderReferenceId, 'native_a');
   assert.equal(result.providerCost.taxBasis, 'inclusive'); assert.equal(result.pickupEta, null);
 });
+test('sandbox-shaped ASAP and scheduled native quotes preserve microsecond offset timestamps', () => {
+  // Synthetic identities/address, retaining the actual sandbox timestamp formats.
+  // No network call; historical clock intentionally reproduces quote issuance.
+  for (const scheduledDropoffTime of [null, '2026-10-27T10:49:01.045000+00:00']) {
+    const i = input();
+    i.quote.fetchedAt = '2026-10-26T22:49:01.045Z';
+    i.quote.validUntil = '2026-10-26T23:49:07.281635+00:00';
+    i.quote.scheduledDropoffTime = scheduledDropoffTime;
+    const request = buildWoltCreateRequest(i, new Date(i.quote.fetchedAt));
+    assert.deepEqual(request.body.dropoff.location.coordinates, i.quote.dropoff.coordinates);
+    assert.equal(request.body.dropoff.location.formatted_address, i.quote.dropoff.formattedAddress);
+    assert.equal(request.body.dropoff.options.scheduled_time, scheduledDropoffTime ?? undefined);
+    assert.deepEqual(request.body.parcels, [{ count: 1, description: 'Meal', identifier: 'bag_1' }]);
+    // Response-only null dimensions/price/tags are not copied into create parcels.
+    assert.equal('dimensions' in request.body.parcels[0], false);
+    assert.equal('price' in request.body.parcels[0], false);
+    assert.throws(() => buildWoltCreateRequest(i, new Date('2026-10-26T22:54:01.045Z')), /QUOTE_EXPIRED/);
+  }
+});
 test('cross-scope, stale/missing-local-freshness, unsupported flags and invalid phone fail before I/O', async () => {
   const cases = [i => i.binding.brandId = 'brand_b', i => i.quote.venueId = 'foreign', i => i.quote.validUntil = now.toISOString(), i => i.quote.fetchedAt = '2026-10-26T09:54:59Z', i => i.cash = { amount: 10 }, i => i.recipient.phoneNumber = '123'];
   for (const change of cases) { const i = input(); change(i); let calls = 0; await assert.rejects(createWoltDelivery(i, async () => { calls++; return accepted; }, now)); assert.equal(calls, 0); }

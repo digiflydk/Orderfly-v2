@@ -16,3 +16,9 @@ Official sources checked 2026-10-26:
 - https://developer.wolt.com/docs/wolt-drive/endpoints (venueful Deliveries and Order cancellation)
 - https://developer.wolt.com/docs/wolt-drive/error-handling (DUPLICATE_ORDER)
 - https://developer.wolt.com/docs/wolt-drive (cancellation timing and late cancellation agreement)
+
+## Native quote compatibility check (2026-10-26, #689)
+
+The saved real sandbox ASAP and scheduled quote adapter outputs were passed to the creation request builder with their historical `fetchedAt` clock. Both mappings passed without network calls: six-digit fractional seconds and explicit `+00:00` offsets validate, the quoted coordinates/address are preserved, and the scheduled instant is copied unchanged. The regression test uses synthetic identity/address values with those timestamp formats. Real quote parcel responses contain nullable dimensions/value and empty tags; the facade builds creation parcels from validated fulfillment items instead of copying response-only parcel fields.
+
+This is a compatibility check of recorded quote output, not a real delivery creation or cancellation test. No actual create response is available in that evidence set, so response mapping remains fixture-verified only. The cancellation endpoint and acknowledgement were rechecked against the official documentation; no contract drift was found. A verified test recipient and authorized sandbox lifecycle remain prerequisites for live create/cancel acceptance.
