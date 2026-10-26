@@ -13,7 +13,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   'customers/c':{brandId:'b',email:'kunde@example.test',marketingConsent,totalOrders:paid?1:0,totalSpend:paid?100:0},
   'discounts/d':{brandId:'b',usedCount:paid?1:0},
  };
- if(managed){Object.assign(records['orders/ORD-TEST'],{status:'Pending',deliveryType:'Delivery',managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},managedStripeAccount:{accountId:'acct_test',livemode:false}});}
+ if(managed){Object.assign(records['orders/ORD-TEST'],{status:'Pending',deliveryType:'Delivery',psp:{...records['orders/ORD-TEST'].psp,provider:'stripe'},managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},managedStripeAccount:{accountId:'acct_test',livemode:false}});}
  if(paid&&!missingInvoice){
   records['orders/ORD-TEST'].invoice={number:'INV-2026-000001'};
   records['invoiceCounters/b-2026']={brandId:'b',year:2026,lastNumber:1};
@@ -198,4 +198,16 @@ test('managed paid settlement queues dispatch once and withholds order confirmat
  assert.equal(f.records()['orders/ORD-TEST'].deliveryStatus,'awaiting_booking');assert.equal(f.records()['deliveryDispatchJobs/ORD-TEST'].state,'pending');
  assert.equal(f.records()[jobKey],undefined);assert.equal(f.records()[marketingJobKey],undefined);assert.equal(f.records()['customers/c'].totalSpend,100);
  assert.equal(f.records()['deliveryDispatchJobs/ORD-TEST'].requestDigest,'a'.repeat(64));
+});
+
+test('managed settlement rejects missing or changed stored payment provider without side effects',async()=>{
+ for(const provider of [undefined,'other']){
+  const f=fixture({managed:true,marketingConsent:true});
+  if(provider===undefined)delete f.records()['orders/ORD-TEST'].psp.provider;
+  else f.records()['orders/ORD-TEST'].psp.provider=provider;
+  const before=structuredClone(f.records());
+  await assert.rejects(f.settle(),/Managed delivery payment changed/);
+  assert.deepEqual(f.records(),before);
+  assert.deepEqual(f.counters(),{capacity:0,analytics:0});
+ }
 });
