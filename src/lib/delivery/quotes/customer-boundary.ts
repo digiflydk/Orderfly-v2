@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { storedDeliveryQuoteSchema, type StoredDeliveryQuote } from './schema';
 import { validateQuoteAcceptance, type QuoteBindingInput } from './binding';
 
-export type CustomerQuoteDto = {ok:true;quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;currency:string;checkoutTotalMinor:number;deliveryInterval:{earliest:string;latest:string}|null;expiresAtMs:number};
+export type CustomerQuoteDto = {ok:true;quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;currency:string;checkoutTotalMinor:number;deliveryInterval:{earliest:string;latest:string}|null;expiresAtMs:number;routingSource?:string};
 export type CustomerQuoteFailure = {ok:false;code:'delivery_unavailable'|'invalid_request'|'rate_limited'|'quote_changed';message:string};
 export type AuthoritativeDraft = {checkoutKeyHash:string;binding:QuoteBindingInput;requestDigest:string;itemSubtotalAfterDiscountMinor:number;bagFeeMinor:number;adminFeeMinor:number;draftRevision:number;addressRevision:number};
 export type CustomerQuoteProof = {quoteId:string;quoteToken:string;checkoutFingerprint:string;acceptedFeeMinor:number};
@@ -34,7 +34,7 @@ export async function issueCustomerQuote(draft:AuthoritativeDraft, deps:{
     // Native transaction must reload authoritative scope/cart/address/config and compare all supplied revisions/digests.
     if(!await deps.commitIfCurrent(claim))return failure('quote_changed');
     if(deps.now()>=quote.expiresAtMs)return failure('quote_changed');
-    return {ok:true,quoteId:quote.quoteRef,quoteToken:token,checkoutFingerprint:quote.fingerprint,customerFeeMinor:quote.economics.customerFee.amountMinor,currency:quote.economics.customerFee.currency,checkoutTotalMinor:total,deliveryInterval:quote.providerQuote.deliveryInterval,expiresAtMs:quote.expiresAtMs};
+    return {ok:true,quoteId:quote.quoteRef,quoteToken:token,checkoutFingerprint:quote.fingerprint,customerFeeMinor:quote.economics.customerFee.amountMinor,currency:quote.economics.customerFee.currency,checkoutTotalMinor:total,deliveryInterval:quote.providerQuote.deliveryInterval,expiresAtMs:quote.expiresAtMs,routingSource:quote.economics.route.source};
   }catch{return failure('delivery_unavailable');}
 }
 /** Pure proof check invoked inside native final-checkout transaction, followed by one-time atomic claim. */
