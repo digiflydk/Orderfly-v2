@@ -112,6 +112,13 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'delivery',
+      title: 'Levering',
+      items: [
+        { href: merchantPortal ? '/merchant/delivery' : '/superadmin/delivery', label: 'Levering', icon: MapPin },
+      ],
+    },
+    {
       key: 'catalog',
       title: 'Catalog',
       items: [

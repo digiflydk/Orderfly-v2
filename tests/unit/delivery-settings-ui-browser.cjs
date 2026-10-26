@@ -1,0 +1,63 @@
+// Render the actual superadmin React overview with production CSS. Only API data
+// and server-provided authorized selector metadata are synthetic, never a login.
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const http = require('node:http');
+const { execFileSync } = require('node:child_process');
+const { chromium, expect } = require('@playwright/test');
+const webpackModule = require('next/dist/compiled/webpack/webpack');
+webpackModule.init();
+const root = process.cwd();
+let dir, server, browser, origin;
+const brands = [{ id: 'a', name: 'Nord' }, { id: 'b', name: 'Syd' }];
+const locations = [{ id: 'la', name: 'Nord Station', brandId: 'a' }, { id: 'lb', name: 'Syd Torv', brandId: 'b' }];
+before(async () => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'delivery-settings-browser-'));
+  const entry = path.join(dir, 'entry.js');
+  fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
+    import {DeliveryAdmin} from ${JSON.stringify(path.join(root, 'src/components/delivery/delivery-admin.tsx'))};
+    createRoot(document.getElementById('root')).render(React.createElement(DeliveryAdmin,{brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)}}));`);
+  const loader = path.join(dir, 'loader.js');
+  fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
+  await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
+    output: { path: dir, filename: 'bundle.js' },
+    resolve: { alias: { '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
+    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }] },
+  }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
+  execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
+  const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/admin-ui.css'), 'utf8');
+  server = http.createServer((req, res) => {
+    if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
+    if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main><script src="/bundle.js"></script></body></html>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  origin = 'http://127.0.0.1:' + server.address().port;
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CART_CHROMIUM_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+});
+after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
+const defaults={pricingRules:null,enabled:false,providerId:null,timezone:'Europe/Copenhagen',paused:false,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:[]})),exceptions:[],preparationMinutes:20,maxTransportMinutes:60,maxDistanceMeters:10000};
+async function setup(page,{conflict=false,editable=true}={}){
+ const writes=[];let saved;
+ await page.route('**/api/delivery/settings?*',async route=>{const url=new URL(route.request().url()); const brandId=url.searchParams.get('brandId'),locationId=url.searchParams.get('locationId');await route.fulfill({json:saved||{brandId,locationId,brandRevision:0,revision:0,settings:defaults,brandSettings:defaults,overrides:{},inheritedKeys:Object.keys(defaults),editable}});});
+ await page.route('**/api/delivery/settings',async route=>{const body=route.request().postDataJSON();writes.push(body);if(conflict)return route.fulfill({status:409,json:{error:'record_conflict'}});saved={brandId:body.brandId,locationId:body.locationId,brandRevision:body.scope==='brand'?body.expectedRevision+1:body.expectedBrandRevision,revision:body.expectedRevision+1,settings:{...defaults,...body.settings,...body.overrides},brandSettings:defaults,overrides:body.overrides||{},inheritedKeys:[],editable};return route.fulfill({json:saved});});
+ await page.goto(origin);await page.getByRole('combobox',{name:'Brand',exact:true}).selectOption('a');await expect(page.getByText('Kundevendt levering: Ikke aktiveret')).toBeVisible();return writes;
+}
+for(const [width,height] of [[390,844],[768,1024],[1440,900]])test(`real settings edit/save at ${width}px`,async t=>{
+ const context=await browser.newContext({viewport:{width,height}});t.after(()=>context.close());const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));const writes=await setup(page);
+ await page.getByRole('button',{name:'Indstillinger',exact:true}).click();await page.getByRole('spinbutton',{name:/Klargøringstid/}).fill('35');await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('status')).toContainText('Indstillingerne er gemt');assert.equal(writes.length,1);assert.equal(writes[0].settings.preparationMinutes,35);assert.equal(writes[0].settings.enabled,false);assert.equal(writes[0].expectedRevision,0);assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
+ await page.getByRole('button',{name:'Åbningstider',exact:true}).click();await page.getByRole('button',{name:'Tilføj tidsrum mandag',exact:true}).click();await expect(page.getByLabel('Mandag fra 1')).toHaveValue('11:00');await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('status')).toContainText('Indstillingerne er gemt');assert.equal(writes[1].settings.weeklyHours[1].intervals[0].startMinute,660);
+});
+test('location edits use overrides and conflict prevents another save',async t=>{const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage(),writes=await setup(page,{conflict:true});await page.getByRole('combobox',{name:'Restaurant',exact:true}).selectOption('la');await page.getByRole('button',{name:'Indstillinger',exact:true}).click();await expect(page.getByText('Arvet fra brand').first()).toBeVisible();await page.getByRole('spinbutton',{name:/Klargøringstid/}).fill('40');await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('alert')).toContainText('ændret af en anden');assert.deepEqual(writes[0].overrides,{preparationMinutes:40});assert.equal(writes[0].scope,'location');await expect(page.getByRole('button',{name:'Gem indstillinger'})).toBeDisabled();});
+test('read-only settings expose no writes',async t=>{const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage(),writes=await setup(page,{editable:false});await page.getByRole('button',{name:'Indstillinger',exact:true}).click();await expect(page.getByRole('spinbutton',{name:/Klargøringstid/})).toBeDisabled();assert.equal(writes.length,0);});
+test('incomplete pricing cannot save and valid rules preview/save exact minor units',async t=>{const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage(),writes=await setup(page);await page.getByRole('button',{name:'Områder og priser',exact:true}).click();await page.getByRole('button',{name:'Opret prisregler'}).click();await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('alert')).toContainText('Kontrollér indstillingerne');assert.equal(writes.length,0);
+for(const [label,value]of [['Maksimal ruteafstand (meter)','10000'],['Minimumskøb (kr.)','100'],['Maksimal kundepris (kr.)','80'],['Maksimalt tilskud (kr.)','20'],['Grundpris (kr.)','25'],['Inkluderet afstand (meter)','2000'],['Pris pr. ekstra kilometer (kr.)','5'],['Prøveafstand (meter)','4000'],['Prøvekurv efter rabatter (kr.)','150'],['Prøveindkøbspris fra leverandør (kr.)','50']])await page.getByRole('spinbutton',{name:label,exact:true}).fill(value);
+await page.getByRole('button',{name:'Beregn eksempel'}).click();await expect(page.getByText('Kundepris: 35.00 DKK. Tilskud: 15.00 DKK.')).toBeVisible();await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('status').first()).toContainText('Indstillingerne er gemt');assert.equal(writes.length,1);assert.equal(writes[0].settings.pricingRules.tariff.baseMinor,2500);assert.equal(writes[0].settings.pricingRules.maximumSubsidyMinor,2000);
+});
+test('same-scope stale save result is not accepted and blocks blind retry',async t=>{const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await setup(page);await page.route('**/api/delivery/settings',route=>route.fulfill({json:{brandId:'a',locationId:null,brandRevision:0,revision:0,settings:defaults,brandSettings:defaults,overrides:{},inheritedKeys:[],editable:true}}));await page.getByRole('button',{name:'Indstillinger',exact:true}).click();await page.getByRole('spinbutton',{name:/Klargøringstid/}).fill('30');await page.getByRole('button',{name:'Gem indstillinger'}).click();await expect(page.getByRole('alert')).toContainText('Svaret kunne ikke bekræftes');await expect(page.getByRole('button',{name:'Gem indstillinger'})).toBeDisabled();});
+test('provider view distinguishes configured choice from verified connection',async t=>{const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await setup(page);await page.getByRole('button',{name:'Leverandører',exact:true}).click();await expect(page.getByText('Forbindelsesstatus kan endnu ikke kontrolleres her.')).toBeVisible();await expect(page.getByText('Ingen leverandør valgt')).toBeVisible();await expect(page.getByRole('button',{name:/Aktivér/})).toHaveCount(0);});
+test('operational pagination retains empty continuation and renders separate statuses and events',async t=>{const context=await browser.newContext({viewport:{width:390,height:844}});t.after(()=>context.close());const page=await context.newPage();await setup(page);const order={id:'order-a',providerId:'wolt',bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'Paid',kitchenStatus:'Ready',trackingUrl:null};await page.route('**/api/delivery/orders?*',route=>{const url=new URL(route.request().url());return route.fulfill({json:url.searchParams.has('orderId')?{orders:[order],nextCursor:null,hasMore:false,events:[{id:'event-a',status:'picked_up',nativeStatus:'picked_up',occurredAt:'2026-10-25T12:00:00Z',receivedAt:'2026-10-25T12:00:01Z',decision:null,reason:null}],nextEventCursor:null,hasMoreEvents:false}:url.searchParams.has('cursor')?{orders:[order],nextCursor:null,hasMore:false}:{orders:[],nextCursor:'opaque-page-2',hasMore:true}});});await page.getByRole('combobox',{name:'Restaurant',exact:true}).selectOption('la');await page.getByRole('button',{name:'Leveringer',exact:true}).click();await expect(page.getByText('Ingen leveringer på den indlæste side. Der er flere sider at kontrollere.')).toBeVisible();await page.getByRole('button',{name:'Indlæs flere ordrer'}).click();await expect(page.getByRole('cell',{name:'Afhentet af kurér',exact:true})).toBeVisible();await expect(page.getByRole('cell',{name:'Betalt',exact:true})).toBeVisible();await page.getByRole('button',{name:'Vis ordre order-a'}).click();await expect(page.getByRole('heading',{name:'Leveringshændelser'})).toBeVisible();await expect(page.getByText('Leverandørstatus: picked_up')).toBeVisible();await expect(page.getByText('Behandling: Ikke oplyst')).toBeVisible();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);});
