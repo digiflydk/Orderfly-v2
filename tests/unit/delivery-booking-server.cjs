@@ -29,3 +29,38 @@ test('revision compare-and-set prevents simultaneous dispatch transitions',async
  const results=await Promise.allSettled([f.transitionOriginalDeliveryAttempt(scope,command),f.transitionOriginalDeliveryAttempt(scope,command)]);
  assert.equal(results.filter(x=>x.status==='fulfilled').length,1);assert.equal(f.rows.get('orders/o1/deliveryAttempts/original').state,'submitting');
 });
+
+const commandFor=(intent,outcome)=>({scope,intentId:intent.intentId,reference:intent.reference,requestDigest:intent.requestDigest,expectedRevision:intent.revision,now:Date.now(),outcome});
+test('late accepted provider outcome persists after compensation without replaying dispatch',async()=>{
+ const f=fixture(),{intent}=await f.ensureOriginalDeliveryAttempt(scope);
+ const submitting=await f.transitionOriginalDeliveryAttempt(scope,commandFor(intent,{kind:'submit'}));
+ f.rows.get('orders/o1').paymentStatus='Refunded';
+ const booked=await f.transitionOriginalDeliveryAttempt(scope,commandFor(submitting,{kind:'accepted',providerDeliveryId:'provider-1'}));
+ assert.equal(booked.state,'booked');assert.equal(booked.providerDeliveryId,'provider-1');
+ assert.equal(f.rows.get('orders/o1').paymentStatus,'Refunded');
+ assert.deepEqual((await f.ensureOriginalDeliveryAttempt(scope)).intent,booked);
+ assert.deepEqual(await f.transitionOriginalDeliveryAttempt(scope,commandFor(booked,{kind:'accepted',providerDeliveryId:'provider-1'})),booked);
+});
+test('unknown outcome reconciles after refund but pending cannot submit and refunded cannot create',async()=>{
+ const f=fixture(),{intent}=await f.ensureOriginalDeliveryAttempt(scope);
+ const submitting=await f.transitionOriginalDeliveryAttempt(scope,commandFor(intent,{kind:'submit'}));
+ f.rows.get('orders/o1').paymentStatus='Refunded';
+ const unknown=await f.transitionOriginalDeliveryAttempt(scope,commandFor(submitting,{kind:'unknown'}));
+ assert.equal(unknown.state,'unknown');
+ const reconciled=await f.transitionOriginalDeliveryAttempt(scope,commandFor(unknown,{kind:'accepted',providerDeliveryId:'provider-2'}));
+ assert.equal(reconciled.state,'booked');
+ const g=fixture(),pending=(await g.ensureOriginalDeliveryAttempt(scope)).intent;g.rows.get('orders/o1').paymentStatus='Refunded';
+ await assert.rejects(g.transitionOriginalDeliveryAttempt(scope,commandFor(pending,{kind:'submit'})),/ineligible/);
+ assert.equal(g.rows.get('orders/o1/deliveryAttempts/original').state,'pending');
+ const h=fixture({order:{paymentStatus:'Refunded'}});await assert.rejects(h.ensureOriginalDeliveryAttempt(scope),/ineligible/);assert.equal(h.rows.size,1);
+});
+test('post-refund outcome still requires current authorization and immutable scope/digest',async()=>{
+ const f=fixture(),{intent}=await f.ensureOriginalDeliveryAttempt(scope);
+ const submitting=await f.transitionOriginalDeliveryAttempt(scope,commandFor(intent,{kind:'submit'}));
+ f.rows.get('orders/o1').paymentStatus='Refunded';
+ const accepted=commandFor(submitting,{kind:'accepted',providerDeliveryId:'provider-1'});
+ await assert.rejects(f.transitionOriginalDeliveryAttempt({...scope,brandId:'foreign'},accepted),/ineligible/);
+ await assert.rejects(f.transitionOriginalDeliveryAttempt(scope,{...accepted,requestDigest:'b'.repeat(64)}),/scope/);
+ f.revoke();await assert.rejects(f.transitionOriginalDeliveryAttempt(scope,accepted),/denied/);
+ assert.equal(f.rows.get('orders/o1/deliveryAttempts/original').state,'submitting');
+});

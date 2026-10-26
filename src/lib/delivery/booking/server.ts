@@ -13,7 +13,7 @@ const managedSchema = managedDeliveryBindingSchema;
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 export const originalAttemptReference = (scope: z.infer<typeof scopeSchema>) => digest(['delivery-original-v1', scope.brandId, scope.locationId, scope.orderId]);
 function checkOrder(order: FirebaseFirestore.DocumentData | undefined, scope: z.infer<typeof scopeSchema>) {
-  if (!order || order.brandId !== scope.brandId || order.locationId !== scope.locationId || order.deliveryType !== 'Delivery' || order.paymentStatus !== 'Paid') throw new Error('delivery_order_ineligible');
+  if (!order || order.brandId !== scope.brandId || order.locationId !== scope.locationId || order.deliveryType !== 'Delivery') throw new Error('delivery_order_ineligible');
   return managedSchema.parse(order.managedDelivery);
 }
 /** Scoped staff preparation. Worker dispatch must separately claim submitting before network I/O. */
@@ -30,6 +30,7 @@ export async function ensureOriginalDeliveryAttempt(rawScope: unknown): Promise<
         || intent.provider !== managed.providerId || intent.requestDigest !== managed.requestDigest || intent.reference !== reference || intent.intentId !== reference) throw new Error('delivery_attempt_conflict');
       return { intent, existing: true };
     }
+    if (order!.paymentStatus !== 'Paid') throw new Error('delivery_order_ineligible');
     const now = Date.now();
     const intent: BookingIntent = { schemaVersion: 1, scope, provider: managed.providerId, intentId: reference, reference,
       requestDigest: managed.requestDigest, revision: 0, state: 'pending', providerDeliveryId: null, createdAt: now, updatedAt: now };
@@ -50,6 +51,9 @@ export async function transitionOriginalDeliveryAttempt(rawScope: unknown, rawCo
     const command = rawCommand && typeof rawCommand === 'object' && !Array.isArray(rawCommand)
       ? { ...rawCommand, now: Date.now() } : rawCommand;
     const next = transitionBookingIntent(previous, command);
+    // Financial eligibility gates new dispatch, not recording a provider outcome
+    // for a request which may already have created a courier before compensation.
+    if (next.state === 'submitting' && order!.paymentStatus !== 'Paid') throw new Error('delivery_order_ineligible');
     if (next.revision !== previous.revision) tx.set(attemptRef, next);
     return next;
   });
