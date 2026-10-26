@@ -4,7 +4,7 @@ const { loadTs } = require('../helpers/load-ts.cjs');
 class AuthorityError extends Error { constructor(code, status = 403) { super(code); this.status = status; } }
 const now = new Date('2026-10-25T12:00:00Z');
 function order(id, extra = {}) { return { id, brandId: 'b1', locationId: 'l1', customerName: 'Anna', status: 'Received', paymentStatus: 'Paid', paymentMethod: 'Stripe', deliveryType: 'Pickup', createdAt: now, fulfillmentAt: now, productItems: [], ...extra }; }
-function fixture({ rows = [], grants = [{ brandId: 'b1', locationIds: ['l1'] }], edit = true, denyView = false, failure = null, foreignLocation = false } = {}) {
+function fixture({ rows = [], grants = [{ brandId: 'b1', locationIds: ['l1'] }], edit = true, denyView = false, failure = null, foreignLocation = false, tracking = async () => null } = {}) {
   const reads = [], access = [];
   const locs = [{ id: 'l1', name: 'Amager', brandId: foreignLocation ? 'b2' : 'b1' }, { id: 'l2', name: 'Other', brandId: 'b2' }];
   const snap = data => ({ id: data?.id, ref: { id: data?.id }, exists: Boolean(data), data: () => data });
@@ -32,7 +32,7 @@ function fixture({ rows = [], grants = [{ brandId: 'b1', locationIds: ['l1'] }],
     '@/lib/firebase-admin': { getAdminDb: () => ({ collection: name => query(name), runTransaction: async callback => callback({ get: async ref => snap(rows.find(row => row.id === ref.id)) }) }) },
     '@/lib/access/authority': { AuthorityError },
     '@/lib/access/scoped-data': { authorizeTransaction: async () => {} },
-    '@/lib/delivery/tracking-server': { loadAuthorizedDeliveryTracking: async () => null },
+    '@/lib/delivery/tracking-server': { loadAuthorizedDeliveryTracking: tracking },
     '@/lib/access/orderfly-session': {
       verifiedOrderflyIdentity: async () => ({ uid: 'operator' }),
       orderflyReadGrants: async permission => { assert.equal(permission, 'orderfly.orders:view'); if (denyView) throw new AuthorityError('forbidden'); return grants; },
@@ -163,4 +163,17 @@ test('scheduled managed delivery stays in preorder queue until target Copenhagen
   const moved = (await f.readTerminalOrders({ view: 'board' }, tomorrow)).orders.find(o => o.id === 'scheduled');
   assert.equal(moved.fulfillmentAt, preorders[0].fulfillmentAt);
   assert.equal(mod.exports.terminalTime(moved), '18.00');
+});
+
+
+test('delivered-only scan page retains cursor and reaches following active order while history includes all',async()=>{
+ const rows=Array.from({length:51},(_,i)=>order(`o${String(i).padStart(3,'0')}`,{status:'Ready',deliveryType:'Delivery',managedDelivery:{version:1}}));
+ const f=fixture({rows,tracking:async(tx,id)=>({orderId:id,deliveryStatus:id==='o050'?'picked_up':'delivered'})});
+ const first=await f.readTerminalOrders({view:'board'},now);
+ assert.deepEqual(first.orders,[]);assert.equal(first.hasMore,true);assert.ok(first.nextCursor);
+ const next=await f.readTerminalOrders({view:'board',cursor:first.nextCursor},now);
+ assert.deepEqual(next.orders.map(o=>o.id),['o050']);assert.equal(next.hasMore,false);
+ const history=await f.readTerminalOrders({view:'history'},now);
+ assert.equal(history.orders.length,50);assert.equal(history.hasMore,true);
+ assert.ok(history.orders.every(o=>o.status==='Ready'&&o.managedDeliveryTracking.deliveryStatus==='delivered'));
 });

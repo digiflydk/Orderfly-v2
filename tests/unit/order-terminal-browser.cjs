@@ -78,7 +78,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     if (state.initialRevoked && url.searchParams.get('brandId') === 'brand-a') return route.fulfill({status:403,json:{error:'forbidden'}});
     const locationId = url.searchParams.get('locationId') || (state.initialRevoked ? 'loc-b' : 'loc-a'), scope = locations.find(l => l.locationId === locationId), view = url.searchParams.get('view') || 'board';
     let rows = state.orders.filter(o => o.locationId === locationId);
-    rows = rows.filter(o => view === 'history' ? ['Completed','Delivered','Canceled'].includes(o.status) : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && o.fulfillmentAt < '2026-10-25T23:00:00.000Z');
+    rows = rows.filter(o => view === 'history' ? (['Completed','Delivered','Canceled'].includes(o.status) || o.managedDeliveryTracking?.deliveryStatus === 'delivered') : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && o.fulfillmentAt < '2026-10-25T23:00:00.000Z');
     const hasMore = state.emptyPage && !url.searchParams.has('cursor');
     const result = { orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: now, hasMore, nextCursor: hasMore ? 'fixture-next' : null };
     if (state.holdHistory && view === 'history') { state.heldHistory = {route,result}; return; }
@@ -304,4 +304,22 @@ test('a history read started before denial cannot authorize cached data after bo
 test('managed ready delivery shows courier state and cannot be manually completed',async t=>{
  const managed=order('ORD-MANAGED',{deliveryType:'Delivery',status:'Ready',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-MANAGED',bookingState:'accepted',deliveryStatus:'courier_to_pickup',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
  const {page,calls}=await fixture(t,768,1024,{orders:[managed]});await page.getByRole('button',{name:'Åbn ordre ORD-MANAGED',exact:true}).click();await expect(page.getByRole('heading',{name:'Leveringsstatus',exact:true})).toBeVisible();await expect(page.getByText('Kurér på vej til restauranten')).toBeVisible();await expect(page.getByRole('button',{name:'Markér leveret',exact:true})).toHaveCount(0);await expect(page.getByText('Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.')).toBeVisible();assert.equal(calls.filter(c=>c.kind==='status').length,0);
+});
+
+
+test('managed delivered refresh removes ready card while history remains accessible',async t=>{
+ const managed=order('ORD-DONE',{deliveryType:'Delivery',status:'Ready',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-DONE',bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+ const {page,state,calls,errors}=await fixture(t,768,1024,{orders:[managed],emptyPage:true});
+ await expect(page.getByRole('button',{name:'Åbn ordre ORD-DONE',exact:true})).toBeVisible();
+ state.orders[0].managedDeliveryTracking.deliveryStatus='delivered';
+ await page.getByRole('button',{name:'Opdater',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Åbn ordre ORD-DONE',exact:true})).toHaveCount(0);
+ assert.ok(calls.filter(c=>c.kind==='read'&&c.query.cursor==='fixture-next').length>=2);
+ assert.equal(state.orders[0].status,'Ready');
+ await page.getByRole('button',{name:'Historik',exact:true}).click();
+ // History pages are explicitly paged; the empty first scan retains its cursor.
+ const more=page.getByRole('button',{name:'Hent flere ordrer',exact:true});
+ await expect(more).toBeVisible();await more.click();
+ await expect(page.getByText('ORD-DONE',{exact:true}).first()).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='status').length,0);assert.deepEqual(errors,[]);
 });

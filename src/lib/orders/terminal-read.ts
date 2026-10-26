@@ -173,6 +173,9 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
           },{readOnly:true});
           if(tracking)order.managedDeliveryTracking=tracking;
         }
+        // Courier completion closes active queues without rewriting kitchen status.
+        // Only the freshly authorized, identity-bound tracking projection can hide a row.
+        if(q.view!=='history'&&order.managedDeliveryTracking?.deliveryStatus==='delivered')continue;
         responseBytes += Buffer.byteLength(JSON.stringify(order), 'utf8');
         if (responseBytes > 2 * 1024 * 1024) throw new TerminalReadError('terminal_result_too_large', 409);
         orders.push(order);

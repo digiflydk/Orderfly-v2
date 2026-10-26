@@ -32,7 +32,9 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
       || input.fulfillment.checkoutRef!==input.binding.checkoutReference || input.fulfillment.providerId!==settings.providerId
       || input.fulfillment.readyAt!==input.binding.fulfillmentAt
       || input.binding.normalizedAddress!==quoteAddressBinding(input.fulfillment.pickup,input.fulfillment.dropoff)) return {ok:false,reason:'scope_mismatch'};
-    const schedule=deliveryScheduleAt(settings,new Date(input.binding.fulfillmentAt));
+    // Scheduled coverage belongs to the requested delivery window; kitchen readiness is a separate native constraint.
+    const deliveryAt=input.fulfillment.desiredDelivery.kind==='scheduled'?input.fulfillment.desiredDelivery.interval.earliest:input.binding.fulfillmentAt;
+    const schedule=deliveryScheduleAt(settings,new Date(deliveryAt));
     if (!schedule.open) return {ok:false,reason:schedule.reason};
     const postal=(a:AddressInput)=>({street:`${a.street} ${a.building}`.trim(),postalCode:a.postcode,city:a.city,countryCode:a.country});
     const routeResult=await resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now});

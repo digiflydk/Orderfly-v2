@@ -36,7 +36,7 @@ async function fixture(options = {}) {
   const collection = f.db.collection;
   const wrapRef = ref => ({ ...ref, collection: child => query(collection(ref.path + '/' + child)) });
   const query = native => ({ ...native, doc: id => wrapRef(native.doc(id)),
-    where: (...args) => query(native.where(...args)), limit: count => query(native.limit(count)),
+    where: (...args) => query(native.where(...args)), orderBy: (...args) => query(native.orderBy(...args)), limit: count => query(native.limit(count)),
     get: async () => { const result = await native.get(); return { ...result, size: result.docs.length }; },
   });
   f.db.collection = name => query(collection(name));
@@ -59,7 +59,7 @@ async function fixture(options = {}) {
   const load = moduleGraph({ ...f.mocks, 'next/headers': { cookies: async () => ({ get: () => undefined }) }, stripe: { default: Provider },
     '@google-cloud/secret-manager': { SecretManagerServiceClient: class { async accessSecretVersion() { return [{payload:{data:Buffer.from('fixture-secret-with-at-least-32-characters')}}]; } } },
     '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => 'sk_test_fake' },
-    'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => 'fixture-server-time' } },
+    'firebase-admin/firestore': { FieldPath: { documentId: () => '__name__' }, FieldValue: { serverTimestamp: () => 'fixture-server-time' } },
   });
   const settings = load('src/lib/delivery/settings/schema.ts');
   const binding = load('src/lib/delivery/integrations/wolt-binding.ts');
@@ -92,13 +92,13 @@ async function fixture(options = {}) {
     if(options.lostResponse)throw new Error('simulated network response loss');
     return new Response(JSON.stringify({id:'delivery',wolt_order_reference_id:'native-order',merchant_order_reference_id:JSON.parse(init.body).merchant_order_reference_id,status:'INFO_RECEIVED'}),{status:201,headers:{'content-type':'application/json'}});
   };
-  const request=(merchantOrderReference)=>{
-    const payload={dispatched_at:new Date().toISOString(),type:'order.picked_up',details:{id:'event-one',venue_id:'venue',wolt_order_reference_id:'native-order',...(merchantOrderReference?{merchant_order_reference_id:merchantOrderReference}:{})}};
+  const request=(merchantOrderReference,type='order.picked_up')=>{
+    const payload={dispatched_at:new Date().toISOString(),type,details:{id:'event-one',venue_id:'venue',wolt_order_reference_id:'native-order',...(merchantOrderReference?{merchant_order_reference_id:merchantOrderReference}:{})}};
     const h=Buffer.from(JSON.stringify({alg:'HS256'})).toString('base64url'),p=Buffer.from(JSON.stringify(payload)).toString('base64url');
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
   };
-  return {...f,scope,session,settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
+  return {...f,scope,session,terminal:load('src/lib/orders/terminal-read.ts'),settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
 }
 
 test('real dispatcher, private binding, provider, payment acceptance and signed callback share one native lifecycle',async t=>{
@@ -190,4 +190,23 @@ test('real signed callback after unknown create retains scoped operator evidence
  assert.equal([...f.records].filter(([p])=>p.startsWith('deliveryProviderReferences/')).length,0);
  await f.dispatcher.runDeliveryDispatchWorker();assert.equal(f.network.length,1);assert.equal(f.refunds.length,0);assert.equal(f.jobs().length,0);
  assert.equal([...f.records].filter(([p,v])=>p.startsWith('deliveryWoltInbox/')&&v.state==='reconciliation_required').length,1);
+});
+
+
+test('verified delivered callback removes kitchen Ready from active terminal but preserves history and rejects foreign evidence',async t=>{
+ const f=await fixture();const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ await f.dispatcher.dispatchManagedDelivery(f.scope);
+ Object.assign(f.order(),{status:'Ready',fulfillmentAt:new Date().toISOString()});
+ assert.equal((await f.terminal.readTerminalOrders({view:'board'})).orders.some(o=>o.id===f.orderId),true);
+ assert.equal((await f.inbox.receiveNativeWoltCallback(f.request(undefined,'order.delivered'),f.key)).status,200);
+ assert.equal(f.order().status,'Ready');
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryState/current').status,'delivered');
+ assert.equal((await f.terminal.readTerminalOrders({view:'board'})).orders.some(o=>o.id===f.orderId),false);
+ const history=(await f.terminal.readTerminalOrders({view:'history'})).orders.find(o=>o.id===f.orderId);
+ assert.equal(history.status,'Ready');assert.equal(history.managedDeliveryTracking.deliveryStatus,'delivered');
+ const state=f.records.get('orders/'+f.orderId+'/deliveryState/current');
+ for(const patch of [{providerDeliveryId:'foreign'},{brandId:'foreign'},{status:'unknown'}]){
+  f.records.set('orders/'+f.orderId+'/deliveryState/current',{...state,...patch});
+  assert.equal((await f.terminal.readTerminalOrders({view:'board'})).orders.some(o=>o.id===f.orderId),true);
+ }
 });
