@@ -32,3 +32,11 @@ test('missing pickup ETA never promotes an earlier preliminary estimate',()=>{
   assert.equal(n.pickupEstimate,null);assert.equal(n.pickupEstimateReliable,null);
  }
 });
+test('merchant callback resolves two native venue orders independently without caller-selected scope',async()=>{
+ const f=fixture(),target=await f.deps.resolveAttempt();
+ f.deps.resolveAttempt=async(merchant,reference)=>merchant!=='merchant-a'?null:reference==='native-order-a'?target:reference==='native-order-b'?{...target,locationId:'location-b',venueId:'venue-b',nativeOrderReference:'native-order-b',providerDeliveryId:'delivery-b',attemptRef:'attempt-b'}:null;
+ assert.equal((await handleWoltWebhook(request(),callback,f.deps)).status,200);
+ assert.equal((await handleWoltWebhook(request(event('order.received',{id:'evt-b',venue_id:'venue-b',wolt_order_reference_id:'native-order-b'})),callback,f.deps)).status,200);
+ assert.equal((await handleWoltWebhook(request(event('order.received',{id:'evt-c',venue_id:'venue-b',wolt_order_reference_id:'native-order-a'})),callback,f.deps)).status,403);
+ assert.equal(f.accepted.length,2);assert.notEqual(f.accepted[0].dedupeIdentity,f.accepted[1].dedupeIdentity);
+});
