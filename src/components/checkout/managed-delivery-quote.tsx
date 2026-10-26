@@ -1,10 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { deliveryRoutingAttribution } from '@/lib/delivery/routing/attribution';
 
 /** Public display projection only. The server must resolve and validate the
  * immutable quote again before accepting payment or creating a delivery. */
 export type ManagedDeliveryQuoteView = {
+  /** Server projection of immutable economics.route.source; display only. */
+  routingSource?: string;
   quoteId: string;
   quoteToken: string;
   checkoutFingerprint: string;
@@ -41,6 +44,7 @@ export function ManagedDeliveryQuote({enabled,state,checkoutFingerprint,accepted
  const [now,setNow]=useState(()=>Date.now());const invalidated=useRef<string|null>(null);
  useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[enabled]);
  const q=state.kind==='ready'?state.quote:null;
+ const attribution=deliveryRoutingAttribution(q?.routingSource);
  const valid=!!q&&validManagedDeliveryQuote(q)&&q.checkoutFingerprint===checkoutFingerprint&&q.expiresAtMs>now;
  const acceptedCurrent=valid&&!!accepted&&accepted.quoteId===q!.quoteId&&accepted.quoteToken===q!.quoteToken&&accepted.checkoutFingerprint===q!.checkoutFingerprint&&accepted.customerFeeMinor===q!.customerFeeMinor&&accepted.checkoutTotalMinor===q!.checkoutTotalMinor&&accepted.currency===q!.currency;
  useEffect(()=>{if(!enabled||!accepted||acceptedCurrent){invalidated.current=null;return;}const key=JSON.stringify(accepted);if(invalidated.current!==key){invalidated.current=key;onAccept(null);}},[enabled,accepted,acceptedCurrent,onAccept]);
@@ -52,6 +56,7 @@ export function ManagedDeliveryQuote({enabled,state,checkoutFingerprint,accepted
   {state.kind==='loading'?<p role="status">Vi kontrollerer leveringsadressen og henter en pris…</p>:state.kind==='unavailable'?<p role="alert">{messages[state.reason]||'Vi kan ikke bekræfte levering lige nu. Prøv igen eller vælg afhentning.'}</p>:!valid?<p role="status">{expired?messages.quote_expired:changed?'Adressen, kurven eller tidspunktet er ændret. Hent en ny leveringspris.':'Kontrollér adressen og hent leveringsprisen, før du fortsætter til betaling.'}</p>:<>
    <dl className="space-y-2"><div className="flex flex-wrap justify-between gap-2"><dt>Levering</dt><dd className="font-semibold">{money(q!.customerFeeMinor,q!.currency)}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>Samlet beløb inkl. levering</dt><dd className="font-semibold">{money(q!.checkoutTotalMinor,q!.currency)}</dd></div></dl>
    <p>{q!.deliveryInterval?`Forventet levering: ${date(q!.deliveryInterval.earliest)} – ${date(q!.deliveryInterval.latest)}.`:'Leveringstidspunktet er endnu ikke oplyst.'}</p>
+   {attribution&&<p className="text-sm text-muted-foreground"><a className="underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={attribution.providerUrl}>{attribution.providerLabel}</a>{' | '}<a className="underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={attribution.dataUrl}>{attribution.dataLabel}</a></p>}
    {previousFeeMinor!==null&&previousFeeMinor!==undefined&&q!.customerFeeMinor>previousFeeMinor&&<p role="alert">Leveringsprisen er steget. Godkend den nye pris, før du betaler.</p>}
    <label className="flex min-h-11 items-start gap-3 rounded border p-3"><input className="mt-1 h-5 w-5" type="checkbox" checked={!!acceptedCurrent} disabled={locked} onChange={e=>onAccept(e.target.checked?{quoteId:q!.quoteId,quoteToken:q!.quoteToken,checkoutFingerprint:q!.checkoutFingerprint,customerFeeMinor:q!.customerFeeMinor,checkoutTotalMinor:q!.checkoutTotalMinor,currency:q!.currency}:null)}/><span>Jeg accepterer leveringsprisen på {money(q!.customerFeeMinor,q!.currency)} og det samlede beløb på {money(q!.checkoutTotalMinor,q!.currency)}.</span></label>
   </>}
