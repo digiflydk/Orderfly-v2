@@ -34,7 +34,7 @@ export function normalizeWoltEvent(event: VerifiedWoltPayload, merchantId: strin
     supported: known,
     // No raw payload, courier coordinates, handshake PIN, address or phone is retained.
     pickupEstimate: d.pickup?.eta ? { earliest: d.pickup.eta, latest: d.pickup.eta } : null,
-    pickupEstimateReliable: event.type === 'order.pickup_eta_updated' ? true : null,
+    pickupEstimateReliable: event.type === 'order.pickup_eta_updated' && !!d.pickup?.eta ? true : null,
     dropoffEstimate: d.dropoff?.eta ? { earliest: d.dropoff.eta.min, latest: d.dropoff.eta.max } : null,
     nativeFailureCode: d.purchase_rejected_reason ?? d.not_delivered_details?.reason ?? null,
     nativeFailureOutcome: d.not_delivered_details?.outcome ?? null,

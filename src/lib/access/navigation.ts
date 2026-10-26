@@ -3,6 +3,8 @@ export type NavigationAccess = { superuser: boolean; permissions: string[] };
 // Display policy only. Every data operation must independently authorize its
 // stored brand/location. Longest matching route wins for nested website pages.
 const routes: Array<[string, string]> = [
+  ['/merchant/delivery', 'orderfly.catalog:view'],
+  ['/superadmin/delivery', 'orderfly.catalog:view'],
   ['/merchant/orders', 'orderfly.orders:view'],
   ['/merchant/payments', 'orderfly.catalog:view'],
   ['/superadmin/dashboard', 'orderfly.analytics:view'],

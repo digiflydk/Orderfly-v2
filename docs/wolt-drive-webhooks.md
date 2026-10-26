@@ -29,3 +29,9 @@ Pickup/dropoff ETA events update estimates without inventing lifecycle progress.
 `node --test tests/unit/wolt-webhooks.cjs` exercises actual production adapter code with synthetic signatures and injected inbox I/O. Covers forged signatures, algorithms, claims, body bounds, malformed ETA, native mapping, identity, tenant rejection, duplicate requests, await-before-ack and storage failure. No real Wolt event was received in these tests.
 
 Before rollout: install a route with actual transactional inbox; test persisted replay/out-of-order/terminal conflicts and revocation; register a sandbox-only callback with a distinct random secret; receive genuine sandbox events; independent exact-head review; serial release and deployed SHA/live QA through #657. No webhook registration, production secrets or provider writes are performed by this change.
+
+## Shared integration checkpoint, 2026-10-26
+
+The delivery-owned `events/wolt-inbox.ts` now calls `verifyWoltWebhook` and `normalizeWoltEvent` directly, persists early signed receipts before acknowledgement, and applies them through scoped native-reference lookup and bounded replay. This supersedes the initial no-route-prepared status above, but does not itself prove a deployed callback or genuine event reception. The generic `handleWoltWebhook` remains an isolated integration seam; do not mount a second competing callback.
+
+A pickup-ETA-updated event without a non-null validated pickup ETA must return no reliability update. Otherwise a shared projection could mark a previously preliminary estimate reliable solely from the event name. The regression covers omitted pickup, null pickup, missing eta and null eta. Existing shared inbox tests were inspected separately; their in-memory transaction double is not Firestore emulator or live callback evidence.
