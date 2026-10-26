@@ -1,4 +1,5 @@
 'use server';
+import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
 import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
 import { getClubSignupDiscountEligibility, validateClubCheckoutSignup, prepareClubCheckoutSignup } from '@/lib/loyalty/stamp-card/club-signup';
 
@@ -10,7 +11,7 @@ import {recordNewsletterConsent} from '@/lib/marketing/store';
 import { marketingConfig } from '@/lib/marketing/config';
 import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
-import { checkoutRequestSchema } from '@/lib/checkout-schema';
+import { checkoutRequestSchema, deliveryQuoteRequestSchema, managedDeliveryAcceptanceSchema } from '@/lib/checkout-schema';
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
 import { assertCheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 import { validateCheckoutItems } from '@/lib/checkout-items';
@@ -47,6 +48,14 @@ import { generateOrderId } from '@/lib/order-id';
 import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
 import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
 import { prepareUnpaidAcceptanceOriginals } from '@/lib/printing/unpaid-acceptance-originals';
+import {managedDeliveryRequired} from '@/lib/delivery/quotes/adoption';
+import {managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from '@/lib/delivery/quotes/runtime';
+import {createNativeManagedCustomerQuote,currentNativeManagedDraft} from '@/lib/delivery/quotes/customer-controller';
+import {prepareCustomerQuoteConsumption} from '@/lib/delivery/quotes/customer-store';
+import {resolveManagedStripeGateway,type ManagedStripeAccount} from '@/lib/delivery/payments/stripe-authority';
+import type {AuthoritativeDraft} from '@/lib/delivery/quotes/customer-boundary';
+import type {StoredDeliveryQuote} from '@/lib/delivery/quotes/schema';
+
 
 
 // Helper functions for Stripe statement descriptors
@@ -455,50 +464,14 @@ export async function getDiscountCardCheckoutOfferAction(brandId: string, brandS
 }
 function zEmailValid(email:string) { return typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
 
-export async function createStripeCheckoutSessionAction(
-    cartItems: MinimalCartItem[],
-    customerInfo: CustomerInfo,
-    deliveryType: 'delivery' | 'pickup',
-    brandId: string,
-    locationId: string,
-    paymentDetails: Omit<PaymentDetails, 'paymentRefId'>,
-    appliedDiscountId: string | null,
-    brandSlug: string,
-    locationSlug: string,
-    deliveryTime?: string,
-    anonymousConsentId?: string
-): Promise<{ success: boolean; url?: string | null; orderId?: string; error?: string; retryable?: boolean }> {
-  let reservedOrderId: string | undefined;
-  let sessionRequestStarted = false;
-  let stage = 'configuration';
-  try {
-    const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
-    if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
-    [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
-    stage = 'validation';
-
-    const origin = await getOrigin();
-    // Return addresses stay short on the brand's own subdomain (#282), unchanged on orderfly.dk.
-    const checkoutPath = storefrontPath(brandSlug, brandSlugFromHost(origin.split('://').pop()) === brandSlug, locationSlug, 'checkout');
-    
-    const [brand, location] = await Promise.all([
-        getBrandById(brandId),
-        getLocationById(locationId),
-    ]);
-    if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
-    const paymentMethod = customerInfo.paymentMethod || 'online';
-    assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
-    let stripe: Stripe | undefined;
-    if (paymentMethod === 'online') {
-      stage = 'configuration';
-      const stripeSecretKey = await getActiveStripeSecretKey();
-      if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
-      stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });
-      stage = 'validation';
-    }
-    
-    if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
-    let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
+async function resolveAuthoritativeCheckoutPricing(input: {
+  cartItems: MinimalCartItem[]; customerInfo: CustomerInfo; deliveryType:'delivery'|'pickup';
+  brandId:string;locationId:string;brandSlug:string;brand:Brand;location:Location;
+  paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;
+  enforceLegacyDeliveryMinimum?:boolean;
+}) {
+  let {cartItems}=input;
+  const {customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId}=input;
     const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
     const existingCustomer = resolvedCustomer.customerDoc.exists()
       ? resolvedCustomer.customerDoc.data() as Customer
@@ -569,7 +542,7 @@ export async function createStripeCheckoutSessionAction(
     cartItems = validated.items;
     // Existing store policy: delivery minimum is the catalog subtotal including
     // options, before promotions and excluding delivery/bag/admin fees.
-    if (deliveryType === 'delivery' && validated.subtotal < Math.max(0, toNumber(location.minOrder))) {
+    if (input.enforceLegacyDeliveryMinimum !== false && deliveryType === 'delivery' && validated.subtotal < Math.max(0, toNumber(location.minOrder))) {
       throw new Error(`Levering kræver varer for mindst ${Number(location.minOrder).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr. før rabatter og gebyrer.`);
     }
     const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
@@ -670,14 +643,126 @@ export async function createStripeCheckoutSessionAction(
       vatAmount: money(totalAmount * ((brand.vatPercentage ?? 25) / (100 + (brand.vatPercentage ?? 25)))),
     };
 
+  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,
+    appliedDiscountIdForOrder,cartDiscountTotal,serverPaymentDetails,totalAmount,subtotalAfterDiscount,
+    freeDeliveryCampaignIds:activeStandardDiscounts.filter(d=>d.discountType==='free_delivery'&&subtotalAfterDiscount>=(d.minOrderValue||0)).map(d=>d.id).sort()};
+}
+
+export async function requestManagedDeliveryQuoteAction(input: {
+  checkoutKey:string;cartItems:MinimalCartItem[];customerInfo:CustomerInfo;brandId:string;locationId:string;
+  paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;brandSlug:string;locationSlug:string;deliveryTime?:string;
+}):Promise<import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteDto|import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteFailure> {
+  // No approved live route source is registered. Do not expose private provider prices or pretend a quote exists.
+  const failure={ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+  if (!input || !/^[a-f0-9]{64}$/.test(input.checkoutKey)) return {...failure,code:'invalid_request'};
+  const parsed=deliveryQuoteRequestSchema.safeParse([input.cartItems,input.customerInfo,'delivery',input.brandId,input.locationId,input.paymentDetails,input.appliedDiscountId,input.brandSlug,input.locationSlug,input.deliveryTime,undefined]);
+  if(!parsed.success)return {...failure,code:'invalid_request'};
+  const [items,customer,,b,l,payment,discount,bs,ls,time]=parsed.data;
+  input={...input,cartItems:items,customerInfo:customer,brandId:b,locationId:l,paymentDetails:payment,appliedDiscountId:discount,brandSlug:bs,locationSlug:ls,deliveryTime:time};
+  try{input={...input,customerInfo:{...input.customerInfo,phone:normalizeDeliveryPhone(input.customerInfo.phone)}};}catch{return {...failure,code:'invalid_request',message:deliveryPhoneMessage};}
+  try {
+    if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId}))return failure;
+    const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
+    if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
+    const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
+    if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
+    return await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
+      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
+  }catch{return failure;}
+}
+
+export async function createStripeCheckoutSessionAction(
+    cartItems: MinimalCartItem[],
+    customerInfo: CustomerInfo,
+    deliveryType: 'delivery' | 'pickup',
+    brandId: string,
+    locationId: string,
+    paymentDetails: Omit<PaymentDetails, 'paymentRefId'>,
+    appliedDiscountId: string | null,
+    brandSlug: string,
+    locationSlug: string,
+    deliveryTime?: string,
+    anonymousConsentId?: string,
+    managedDeliveryAcceptance?: {checkoutKey:string;quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;checkoutTotalMinor:number;currency:string}
+): Promise<{ success: boolean; url?: string | null; orderId?: string; error?: string; retryable?: boolean }> {
+  let reservedOrderId: string | undefined;
+  let sessionRequestStarted = false;
+  let stage = 'configuration';
+  try {
+
+    const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
+    if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
+    [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
+    if(managedDeliveryAcceptance!==undefined&&!managedDeliveryAcceptanceSchema.safeParse(managedDeliveryAcceptance).success)return {success:false,retryable:true,error:'Leveringstilbuddet er ugyldigt. Beregn levering igen.'};
+    if(managedDeliveryAcceptance){try{customerInfo={...customerInfo,phone:normalizeDeliveryPhone(customerInfo.phone)};}catch{return {success:false,retryable:true,error:deliveryPhoneMessage};}}
+    const managedRuntime = deliveryType === 'delivery' ? await managedDeliveryRuntimeAvailable({brandId,locationId}) : null;
+    const requiresManaged = deliveryType === 'delivery' && await managedDeliveryRequired({brandId,locationId});
+    if (requiresManaged && !managedRuntime) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+    if ((managedRuntime || requiresManaged) && !managedDeliveryAcceptance) return {success:false,retryable:true,error:'Beregn og acceptér leveringstilbuddet før betaling.'};
+    if (managedDeliveryAcceptance !== undefined && (deliveryType!=='delivery' || !managedRuntime)) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+    stage = 'validation';
+
+    const origin = await getOrigin();
+    // Return addresses stay short on the brand's own subdomain (#282), unchanged on orderfly.dk.
+    const checkoutPath = storefrontPath(brandSlug, brandSlugFromHost(origin.split('://').pop()) === brandSlug, locationSlug, 'checkout');
+    
+    const [brand, location] = await Promise.all([
+        getBrandById(brandId),
+        getLocationById(locationId),
+    ]);
+    if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
+    const paymentMethod = customerInfo.paymentMethod || 'online';
+    assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
+    let stripe: Stripe | undefined;
+    let managedStripeAccount:ManagedStripeAccount|undefined;
+    let managedQuote:StoredDeliveryQuote|undefined;
+    let managedDraft:AuthoritativeDraft|undefined;
+    if(managedDeliveryAcceptance && paymentMethod!=='online')throw Error('Levering kræver online betaling.');
+    if (paymentMethod === 'online') {
+      stage = 'configuration';
+      if(managedDeliveryAcceptance){
+        const environment=managedDeliveryRuntimeEnvironment();
+        if(!environment)throw Error('delivery_environment_unconfigured');
+        const gateway=await resolveManagedStripeGateway();
+        if(gateway.binding.livemode!==(environment==='production'))throw Error('delivery_payment_environment_mismatch');
+        stripe=gateway.stripe;managedStripeAccount=gateway.binding;
+      }
+      else {const stripeSecretKey = await getActiveStripeSecretKey();
+      if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
+      stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });}
+      stage = 'validation';
+    }
+    
+    if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
+    let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
+    const priced = await resolveAuthoritativeCheckoutPricing({cartItems,customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId,enforceLegacyDeliveryMinimum:!managedDeliveryAcceptance});
+    cartItems=priced.cartItems;
+    const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,appliedDiscountIdForOrder,
+      cartDiscountTotal,serverPaymentDetails}=priced;
+    let totalAmount=priced.totalAmount;
+    if(managedDeliveryAcceptance){
+      managedDraft=await currentNativeManagedDraft({brand,location,customer:customerInfo,cartItems,payment:serverPaymentDetails,
+        subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:managedDeliveryAcceptance.checkoutKey,deliverySelection:deliveryTime||'asap'});
+      const proof={...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor};
+      const preflight=await getAdminDb().runTransaction(tx=>prepareCustomerQuoteConsumption(tx,proof,managedDraft!,'preflight'));
+      managedQuote=preflight.quote;
+      totalAmount=sumMoney([priced.subtotalAfterDiscount,serverPaymentDetails.bagFee||0,serverPaymentDetails.adminFee||0,managedQuote.economics.customerFee.amountMinor/100]);
+      if(totalAmount<=0)throw Error('Levering kræver en positiv online betaling. Vælg afhentning.');
+      if(managedDeliveryAcceptance.currency!==managedQuote.economics.customerFee.currency||managedDeliveryAcceptance.checkoutTotalMinor!==ore(totalAmount))throw Error('Leveringsprisen er ændret. Beregn levering igen.');
+      serverPaymentDetails.deliveryFee=managedQuote.economics.customerFee.amountMinor/100;
+      serverPaymentDetails.vatAmount=money(totalAmount*((brand.vatPercentage??25)/(100+(brand.vatPercentage??25))));
+      if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet udløber snart. Beregn levering igen.');
+      fulfillmentAt=managedQuote.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:managedDraft.binding.fulfillmentAt;
+    }
+
     // Modern checkout always sends the displayed cart discount (including zero).
     // Reject a stale quote before consent, customer/order writes, or reservations.
     if (typeof paymentDetails.cartDiscountTotal === 'number' && (
       ore(paymentDetails.cartDiscountTotal) !== ore(cartDiscountTotal) ||
       ore(paymentDetails.discountTotal) !== ore(serverPaymentDetails.discountTotal) ||
       ore(paymentDetails.subtotal) !== ore(serverPaymentDetails.subtotal) ||
-      ore(paymentDetails.deliveryFee) !== ore(effectiveDeliveryFee) ||
-      ore(paymentDetails.adminFee || 0) !== ore(effectiveAdminFee)
+      ore(paymentDetails.deliveryFee) !== ore(serverPaymentDetails.deliveryFee) ||
+      ore(paymentDetails.adminFee || 0) !== ore(serverPaymentDetails.adminFee || 0)
     )) throw new Error('Priser eller tilbud er ændret. Opdatér kurven og kontrollér beløbet, før du fortsætter.');
 
     stage = 'customer';
@@ -733,7 +818,7 @@ export async function createStripeCheckoutSessionAction(
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
-        deliveryTime: displayFulfillmentTime(fulfillmentAt),
+        deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt),
         fulfillmentAt,
         brandName: brand.name,
         locationName: location.name,
@@ -742,9 +827,11 @@ export async function createStripeCheckoutSessionAction(
             // Retain the validated checkout contact for this order's kitchen ticket.
             // Do not resolve a mutable customer profile when rendering old orders.
             phone: customerInfo.phone,
+            ...(managedQuote ? {deliveryInstructions:customerInfo.deliveryInstructions||''} : {}),
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),
+        ...(managedQuote ? {managedDelivery:{version:1,providerId:managedQuote.binding.providerId,quoteRef:managedQuote.quoteRef,requestDigest:managedQuote.contentDigest},managedStripeAccount} : {}),
     });
     // Six-digit order references can collide. Never overwrite another order or
     // reuse its Stripe idempotency key; a collision must fail before payment.
@@ -752,6 +839,8 @@ export async function createStripeCheckoutSessionAction(
       const existing = await transaction.get(orderRef);
       if (discountCard) await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
       if (existing.exists()) throw new Error('Ordrenummeret er allerede i brug. Prøv igen.');
+      const claim=managedQuote&&managedDraft&&managedDeliveryAcceptance ? await prepareCustomerQuoteConsumption(context.transaction,{...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor},managedDraft,orderId):null;
+      claim?.apply();
       transaction.set(orderRef, orderData);
     });
 
@@ -872,8 +961,9 @@ export async function createStripeCheckoutSessionAction(
     // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
     stage = 'validation';
     // Optional reads/customer creation may take time. Recheck immediately before payment.
-    fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
-    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt) });
+    if(managedQuote){if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet er udløbet. Beregn levering igen.');}
+    else fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
+    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt) });
     if (discountCard) await assertDiscountCardCheckoutCurrent(getAdminDb(),{...discountCardInput,now:Date.now()},discountCard);
     stage = 'stripe_session';
     sessionRequestStarted = true;
@@ -928,6 +1018,7 @@ export async function createStripeCheckoutSessionAction(
       : identityMessage
       ? identityMessage
       : stage === 'newsletter_consent' ? 'Tilmeldingen kunne ikke gemmes. Prøv igen, eller fjern afkrydsningen for nyhedsbrev og fortsæt uden tilmelding.'
+      : managedDeliveryAcceptance && stage === 'validation' ? 'Leveringstilbuddet eller kurven er ændret. Beregn levering igen, og kontrollér totalbeløbet.'
       : ['validation', 'reservation'].includes(stage) && e instanceof Error
         ? e.message
         : 'Betalingen kunne ikke åbnes. Prøv igen, eller kontakt restauranten.';

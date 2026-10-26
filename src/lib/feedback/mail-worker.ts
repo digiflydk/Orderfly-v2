@@ -1,4 +1,5 @@
 import 'server-only';
+import { drainDeliveryFeedbackRequests } from './delivery-requests';
 import { randomUUID } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { feedbackAutomation, feedbackMailConfig } from './mail-config';
@@ -53,7 +54,7 @@ async function context(job: Job) {
       db.collection('feedback').where('brandId', '==', job.brandId).where('orderId', '==', job.sourceId).get(),
     ]);
     const data = order.data(), invitation = invite.data();
-    if (!data || !completedFeedbackOrder(data) || data.brandId !== job.brandId || data.locationId !== job.locationId || data.customerDetails?.id !== job.customerId || !invitation || invitation.brandId !== job.brandId || invitation.customerId !== job.customerId || invitation.sourceId !== job.sourceId || invitation.expiresAt <= Date.now() || !['active', 'submitted'].includes(invitation.status)) return null;
+    if (!data || !completedFeedbackOrder(data,job.sourceId) || data.brandId !== job.brandId || data.locationId !== job.locationId || data.customerDetails?.id !== job.customerId || !invitation || invitation.brandId !== job.brandId || invitation.customerId !== job.customerId || invitation.sourceId !== job.sourceId || invitation.expiresAt <= Date.now() || !['active', 'submitted'].includes(invitation.status)) return null;
     answered ||= legacy.docs.some(d => d.data().customerId === job.customerId) || invitation.status === 'submitted';
     language = invitation.language || 'da';
     experienceType = data.deliveryType === 'Delivery' ? 'delivery' : 'pickup';
@@ -71,6 +72,7 @@ async function context(job: Job) {
 }
 
 export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<ReturnType<typeof feedbackMailConfig>>) => new FeedbackMailProvider(config), now = Date.now()) {
+  await drainDeliveryFeedbackRequests(now).catch(()=>undefined);
   const db = getAdminDb();
   const due = await db.collection('feedbackMailJobs').where('nextAttemptAt', '<=', now).orderBy('nextAttemptAt').limit(10).get();
   const counts = { processed: 0, accepted: 0, suppressed: 0, uncertain: 0, failed: 0 };

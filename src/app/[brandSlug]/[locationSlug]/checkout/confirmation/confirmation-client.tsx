@@ -1,6 +1,7 @@
 
 'use client';
 
+import { ManagedDeliveryTracking } from '@/components/checkout/managed-delivery-tracking';
 import { useEffect, useState } from 'react';
 import Link from "next/link";
 import { formatPrice, localizeTime } from '@/lib/storefront-format';
@@ -140,14 +141,16 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     if (order.paymentStatus !== 'Paid' && !pickupAccepted) {
         const pickupCanceled = order.paymentMethod === 'PayAtPickup' && order.status === 'Canceled';
         const failed = order.paymentStatus === 'Failed' || pickupCanceled;
+        const refunded=order.managedDeliveryTracking?.paymentStatus==='refunded';
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
-            <h1 className="text-2xl font-bold">{pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
-            <p className="my-4">{pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
+            <h1 className="text-2xl font-bold">{refunded?'Betalingen er refunderet':pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
+            <p className="my-4">{refunded?'Betalingen for leveringen er refunderet. Se leveringsstatus nedenfor.':pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
-            {!failed && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
+            {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking}/>}
+            {!failed&&!refunded && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
             <Button asChild variant="outline" className="ml-2"><Link href={storefront(location.slug)}>Tilbage til menuen</Link></Button>
         </main>;
     }
@@ -179,15 +182,16 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                 <div className="w-full max-w-3xl mx-auto space-y-8">
                      <div className="text-center">
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
-                           <CheckCircle2 className="h-10 w-10 text-green-600" />
+                           {order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight">Tak for din bestilling!</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">{order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?'Vi kontrollerer din levering':'Tak for din bestilling!'}</h1>
                         {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
-                           Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span> er bekræftet.
+                           Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span>{order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?' er betalt. Leveringen er endnu ikke bekræftet.':' er bekræftet.'}
                         </p>
                     </div>
 
+                    {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking}/>}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
                              <CardHeader><CardTitle>Kundeoplysninger</CardTitle></CardHeader>

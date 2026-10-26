@@ -14,4 +14,28 @@ test('snapshot copied and provider earlier expiry wins',()=>{const b={...binding
 
 test('invalid calendar and corrupted stored time reject',()=>{assert.throws(()=>q.quoteFingerprint({...binding,fulfillmentAt:'2026-02-30T10:00:00Z'}));assert.equal(q.validateQuoteAcceptance({...make(),expiresAtMs:NaN},binding,1100,1100),'changed');});
 
-test('full payload tampering fails stored schema integrity even with unchanged fee and binding',()=>{for(const mutate of [v=>v.fulfillment.dropoff.street='Other street',v=>v.fulfillment.dropoffContact.phone='11111111',v=>v.fulfillment.instructions='Other instructions',v=>v.fulfillment.items[0].quantity=2,v=>v.providerQuote.quoteRef='other',v=>v.economics.customerFee.amountMinor=1]){const quote=structuredClone(make());mutate(quote);assert.equal(q.validateQuoteAcceptance(quote,binding,1100,1100),'changed');}});
+test('full payload tampering fails stored schema integrity even with unchanged fee and binding',()=>{for(const mutate of [v=>v.fulfillment.dropoff.street='Other street',v=>v.fulfillment.dropoffContact.phone='11111111',v=>v.fulfillment.instructions='Other instructions',v=>v.fulfillment.items[0].quantity=2,v=>v.fulfillment.preparationMinutes=20,v=>v.providerQuote.quoteRef='other',v=>v.economics.customerFee.amountMinor=1]){const quote=structuredClone(make());mutate(quote);assert.equal(q.validateQuoteAcceptance(quote,binding,1100,1100),'changed');}});
+
+const campaign={kind:'native_free_delivery',campaignIds:['campaign-a','campaign-b'],maxDistanceMeters:5000};
+test('native campaign preserves base economics and derives free delivery only',()=>{
+ const result=q.buildQuote(input({appliedCampaign:campaign}));assert.equal(result.ok,true);
+ const {economics}=result.quote;assert.deepEqual(economics.baseRules,price.rules);assert.deepEqual(economics.appliedCampaign,campaign);
+ assert.deepEqual(economics.rules,{...price.rules,freeDelivery:{minimumMinor:0,maxDistanceMeters:5000}});
+ assert.equal(economics.customerFee.amountMinor,0);assert.equal(economics.subsidy.amountMinor,2000);
+ assert.equal(q.validateQuoteAcceptance(result.quote,binding,1100,0),'valid');
+ assert.equal(Object.hasOwn(make().economics,'baseRules'),false);
+});
+test('native campaign cannot bypass subsidy limits or coverage',()=>{
+ const result=q.buildQuote(input({appliedCampaign:campaign,price:{...price,rules:{...price.rules,maximumSubsidyMinor:1000}}}));assert.equal(result.ok,false);
+ assert.throws(()=>q.buildQuote(input({appliedCampaign:{...campaign,maxDistanceMeters:10001}})));
+ assert.throws(()=>q.buildQuote(input({appliedCampaign:{...campaign,maxDistanceMeters:999}})));
+ for(const campaignIds of [[],['b','a'],['a','a']])assert.throws(()=>q.buildQuote(input({appliedCampaign:{...campaign,campaignIds}})));
+});
+test('rehashed campaign envelope rejects altered rules and unpaired provenance',()=>{
+ const {quoteContentDigest}=loadTs('src/lib/delivery/quotes/digest.ts');
+ const {storedDeliveryQuoteSchema}=loadTs('src/lib/delivery/quotes/schema.ts');
+ for(const mutate of [v=>delete v.economics.baseRules,v=>delete v.economics.appliedCampaign,v=>v.economics.rules.maximumSubsidyMinor++,v=>v.economics.appliedCampaign.maxDistanceMeters=999]){
+  const quote=structuredClone(q.buildQuote(input({appliedCampaign:campaign})).quote);mutate(quote);quote.contentDigest=quoteContentDigest(quote);
+  assert.equal(storedDeliveryQuoteSchema.safeParse(quote).success,false);
+ }
+});

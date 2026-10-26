@@ -1,5 +1,5 @@
 import type { KitchenSettings } from './kitchen-settings';
-import type { KitchenPreviewData } from './kitchen-preview';
+import type { KitchenPreviewData, DeliveryPrintDetails } from './kitchen-preview';
 import type { ReceiptSettings } from './settings';
 import type { ReceiptPreviewData } from './preview';
 
@@ -94,6 +94,14 @@ function date(value?: string, fallback = 'Dato ukendt') {
   return new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed);
 }
 function count(value: number | null) { return Number.isSafeInteger(value) && value! > 0 ? String(value) : '?'; }
+function printDelivery(doc: Layout, delivery: DeliveryPrintDetails) {
+  doc.box('Leveringsadresse', delivery.address || 'Adresse ikke angivet');
+  const interval = (value: { earliest: string; latest: string }) => value.earliest === value.latest
+    ? date(value.earliest) : `${date(value.earliest)} – ${date(value.latest)}`;
+  doc.line(`Ønsket levering: ${delivery.requested?.kind === 'asap' ? 'Hurtigst muligt' : delivery.requested?.kind === 'scheduled' ? interval(delivery.requested) : 'Ikke angivet'}`, { bold: true, size: 30 });
+  doc.line(delivery.reliablePickup ? `Forventet afhentning af bud: ${interval(delivery.reliablePickup)}` : 'Afhentning af bud: Tidspunkt ikke bekræftet', { size: 30 });
+}
+
 export function renderKitchenReceiptSvg(settings: KitchenSettings, order: KitchenPreviewData): ReceiptSvg {
   if (!Array.isArray(order.lines) || order.lines.length > 100) return fail();
   const doc = new Layout(settings.paperWidthMm), body = settings.textSize === 'large' ? 36 : 30;
@@ -104,7 +112,8 @@ export function renderKitchenReceiptSvg(settings: KitchenSettings, order: Kitche
   if (order.canceled) doc.box('ANNULLERET', 'MÅ IKKE TILBEREDES');
   doc.rule(); doc.line(`#${order.reference}`, { center: true, bold: true, size: settings.paperWidthMm === 58 ? 42 : 46 });
   doc.line(order.fulfillmentType.toUpperCase(), { center: true, bold: true, size: 36 });
-  doc.line(date(order.fulfillmentAt, order.fulfillmentLabel || 'Tidspunkt ikke angivet'), { center: true, bold: true, size: 38 });
+  if (order.delivery) printDelivery(doc, order.delivery);
+  else doc.line(date(order.fulfillmentAt, order.fulfillmentLabel || 'Tidspunkt ikke angivet'), { center: true, bold: true, size: 38 });
   doc.line(`Status: ${order.status}`, { center: true, size: 30 }); doc.rule();
   if (order.notes) doc.box('Bemærkning', order.notes);
   const sections: Array<{ name: string; lines: KitchenPreviewData['lines'] }> = [];
@@ -160,6 +169,7 @@ export function renderCustomerReceiptSvg(settings: ReceiptSettings, order: Recei
   if (order.paidAt) doc.line(`Betalt: ${date(order.paidAt)}`, { size: 30 });
   doc.line(order.paymentStatus, { bold: true, size: 30 }); doc.line(order.paymentMethod, { size: 30 });
   doc.line(`${order.deliveryType} · ${order.status}`, { size: 30 });
+  if (order.delivery) printDelivery(doc, order.delivery);
   if (settings.showCustomer && order.customerName) doc.line(`Kunde: ${order.customerName}`, { size: 30 });
   if (settings.showContact && order.customerContact) doc.line(`Kontakt: ${order.customerContact}`, { size: 30 });
   doc.rule(true);
@@ -179,7 +189,7 @@ export function renderCustomerReceiptSvg(settings: ReceiptSettings, order: Recei
   doc.amount('I alt', money(order.total), true);
   if (order.vat !== undefined) doc.amount('Heraf moms', money(order.vat));
   if (order.refunded > 0) doc.amount('Refunderet', money(order.refunded));
-  if (settings.showNotes && order.notes) { doc.gap(); doc.box('Bemærkning', order.notes); }
+  if ((settings.showNotes || order.delivery) && order.notes) { doc.gap(); doc.box('Bemærkning', order.notes); }
   if (settings.footer) { doc.rule(true); doc.line(settings.footer, { center: true, size: 30 }); }
   return doc.finish(logoBox);
 }

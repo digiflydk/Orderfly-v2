@@ -1,3 +1,4 @@
+import { ManagedDeliveryTracking } from '@/components/checkout/managed-delivery-tracking';
 import type { PortalOrder } from '@/lib/loyalty/stamp-card/order-history';
 import type { PortalMember } from '../data';
 import { danishDate, historyText } from '../texts';
@@ -13,10 +14,11 @@ export function HistoryView({ history, orders = [] }: { history: PortalMember['h
       <h2 className="text-xl">Onlinekøb</h2>
       <p className="text-sm">Dine seneste 100 betalte onlineordrer. Annullerede og ubetalte ordrer vises ikke.</p>
       {orders.length === 0 ? <p>Du har ingen betalte onlineordrer endnu.</p> : <ul aria-label="Onlinekøb" className="flex flex-col divide-y rounded-xl border">
-        {orders.map(order => <li key={order.id} className="flex items-baseline justify-between gap-3 p-4">
+        {orders.map(order => <li key={order.id} className="flex flex-wrap items-baseline justify-between gap-3 p-4">
           <span className="flex flex-col"><span className="font-semibold">Ordre {order.id}</span><span>{order.locationName} · {statusText[order.status] || 'Betalt'}</span>
             <span>{money(order.netAmount)}{order.refundedAmount > 0 && ` (refunderet ${money(order.refundedAmount)} af ${money(order.totalAmount)})`}</span></span>
           <time dateTime={new Date(order.orderedAt).toISOString()} className="shrink-0 text-sm">{danishDate(order.orderedAt)}</time>
+          {order.managedDeliveryTracking&&<div className="w-full"><ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking}/></div>}
         </li>)}
       </ul>}
       <h2 className="text-xl">Stempler og belønninger</h2>

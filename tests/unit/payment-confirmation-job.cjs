@@ -5,7 +5,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='true';
 const jobKey='orderNotificationJobs/'+createHash('sha256').update(JSON.stringify(['order-confirmation','b','ORD-TEST'])).digest('hex');
 const marketingJobKey='marketingOrderOutbox/'+createHash('sha256').update(JSON.stringify(['omnisend-paid-order','b','ORD-TEST'])).digest('hex');
-function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsent=false}={}) {
+function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsent=false,managed=false}={}) {
  let records={
   'orders/ORD-TEST':{brandId:'b',locationId:'l',paymentStatus:paid?'Paid':'Pending',status:'Received',psp:{checkoutSessionId:'cs_test_fixture_123456'},customerDetails:{id:'c',address:'For Pickup'},customerName:'Test Kunde',customerContact:'kunde@example.test',deliveryType:'Pickup',productItems:[{name:'Pizza',quantity:1,totalPrice:100,listTotalPrice:120}],paymentDetails:{subtotal:120,itemDiscountTotal:20,cartDiscountTotal:0,deliveryFee:0,bagFee:0,adminFee:0,vatAmount:20},totalAmount:100,appliedDiscountId:'d'},
   'brands/b':{name:'Fixture Brand',companyName:'Fixture Brand ApS',companyRegNo:'12345678',street:'Testvej 1',zipCode:'1000',city:'København K',country:'DK',currency:'DKK',vatPercentage:25},
@@ -13,6 +13,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   'customers/c':{brandId:'b',email:'kunde@example.test',marketingConsent,totalOrders:paid?1:0,totalSpend:paid?100:0},
   'discounts/d':{brandId:'b',usedCount:paid?1:0},
  };
+ if(managed){Object.assign(records['orders/ORD-TEST'],{status:'Pending',deliveryType:'Delivery',managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},managedStripeAccount:{accountId:'acct_test',livemode:false}});}
  if(paid&&!missingInvoice){
   records['orders/ORD-TEST'].invoice={number:'INV-2026-000001'};
   records['invoiceCounters/b-2026']={brandId:'b',year:2026,lastNumber:1};
@@ -23,6 +24,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
  const snapshot=value=>({exists:()=>!!value,data:()=>value});
  const mocks={
   'server-only':{},'@/lib/firebase':{db:{}},
+  '@/lib/delivery/payments/stripe-authority':{verifyManagedPaidOrder:async()=>{assert.ok(managed);return {};},managedPaymentProjection:()=>({scope:{orderId:'ORD-TEST',brandId:'b',locationId:'l'},paymentIntentId:'pi',checkoutSessionId:session.id,amountMinor:10000,binding:{accountId:'acct_test',livemode:false}})},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture'},
   'stripe':{default:class{checkout={sessions:{retrieve:async()=>structuredClone(session)}}}},
   'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
@@ -41,7 +43,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
    },
   },
  };
- const adminRef=path=>({path,id:path.split('/').at(-1)});
+ const adminRef=path=>({path,id:path.split('/').at(-1),get:async()=>({exists:!!records[path],data:()=>structuredClone(records[path])})});
  const client=mocks['firebase/firestore'];
  const transact=client.runTransaction;
  // Client permissions deny the private outbox. Settlement must use Admin SDK.
@@ -50,7 +52,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   collection:collection=>({doc:id=>adminRef(collection+'/'+id),where:()=>({})}),
   runTransaction:fn=>transact(null,async tx=>fn({
    get:async ref=>{if (!ref.path) return {docs:[]};assert.ok(ref.path,'Admin settlement requires server document references'); const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id,ref};},
-   set:(ref,data,opts)=>tx.set(ref.path,data,opts),update:(ref,data)=>tx.update(ref.path,data),
+   create:(ref,data)=>{assert.equal(records[ref.path],undefined);tx.set(ref.path,data);},set:(ref,data,opts)=>tx.set(ref.path,data,opts),update:(ref,data)=>tx.update(ref.path,data),
   })),
  })};
  const settlement=loadTs('src/lib/server/settle-checkout.ts',mocks);
@@ -189,3 +191,11 @@ test('release gate disabled keeps settlement working without private outbox read
    const ordinary=fixture();ordinary.records()['upsells/u']={brandId:'b',locationIds:['l'],conversions:4};
    await ordinary.settle();assert.equal(ordinary.records()['upsells/u'].conversions,4);
  });
+
+test('managed paid settlement queues dispatch once and withholds order confirmation until booking acceptance',async()=>{
+ const f=fixture({managed:true,marketingConsent:true});await Promise.all([f.settle(),f.settle()]);
+ assert.equal(f.records()['orders/ORD-TEST'].paymentStatus,'Paid');assert.equal(f.records()['orders/ORD-TEST'].status,'Pending');
+ assert.equal(f.records()['orders/ORD-TEST'].deliveryStatus,'awaiting_booking');assert.equal(f.records()['deliveryDispatchJobs/ORD-TEST'].state,'pending');
+ assert.equal(f.records()[jobKey],undefined);assert.equal(f.records()[marketingJobKey],undefined);assert.equal(f.records()['customers/c'].totalSpend,100);
+ assert.equal(f.records()['deliveryDispatchJobs/ORD-TEST'].requestDigest,'a'.repeat(64));
+});

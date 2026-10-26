@@ -1,3 +1,5 @@
+import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
+import { managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/stripe-authority';
 import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import 'server-only';
 import type Stripe from 'stripe';
@@ -95,6 +97,8 @@ async function settleOrder(proof: PaymentProof) {
   const serverTimestamp = () => getAdminFieldValue().serverTimestamp();
   const orderRef = db.collection('orders').doc(metadata.orderId);
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
+  const managedSnapshot = session ? (await orderRef.get()).data() : undefined;
+  const managedProof = managedSnapshot?.managedDelivery !== undefined ? await verifyManagedPaidOrder(metadata.orderId, managedSnapshot) : null;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
   // Disabled installations retain the old settlement path without print reads or
@@ -106,7 +110,8 @@ async function settleOrder(proof: PaymentProof) {
   if (printIntentsEnabled && session) {
     const needsPrintProof = await db.runTransaction(async transaction => {
       // Terminal Paid repair has no print dependency, including stale policy or targets.
-      if (isTerminalPaidReplay((await transaction.get(orderRef)).data())) return false;
+      const order = (await transaction.get(orderRef)).data();
+      if (order?.managedDelivery !== undefined || isTerminalPaidReplay(order)) return false;
       const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId, orderId: metadata.orderId });
       return preflight.enabled;
     }, { readOnly: true });
@@ -153,6 +158,17 @@ async function settleOrder(proof: PaymentProof) {
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists) throw new Error('Order not found');
     const order = orderSnap.data()!;
+    const managed = order.managedDelivery !== undefined ? managedDeliveryBindingSchema.parse(order.managedDelivery) : null;
+    if (Boolean(managed) !== Boolean(managedSnapshot?.managedDelivery)) throw new Error('Managed delivery binding changed');
+    if (managed) {
+      if (!managedProof || !session) throw new Error('Managed delivery payment proof missing');
+      const payment = managedPaymentProjection(managedProof);
+      if (order.psp?.provider !== 'stripe' || order.psp.checkoutSessionId !== payment.checkoutSessionId
+        || payment.scope.orderId !== metadata.orderId || payment.scope.brandId !== order.brandId || payment.scope.locationId !== order.locationId
+        || order.psp?.paymentIntentId !== undefined && order.psp.paymentIntentId !== payment.paymentIntentId
+        || payment.paymentIntentId !== piId || payment.checkoutSessionId !== session.id || payment.amountMinor !== Math.round(order.totalAmount * 100)
+        || payment.binding.accountId !== order.managedStripeAccount?.accountId || payment.binding.livemode !== order.managedStripeAccount?.livemode) throw new Error('Managed delivery payment changed');
+    }
     analytics = order.analytics;
     if (proof.kind === 'pickup') {
       if (proof.terminalActor) await authorizeOrderTerminalTransaction(transaction, proof.terminalActor, { brandId: order.brandId, locationId: order.locationId });
@@ -181,12 +197,14 @@ async function settleOrder(proof: PaymentProof) {
       if (job.orderId !== metadata.orderId || job.brandId !== order.brandId || job.locationId !== order.locationId || job.customerId !== order.customerDetails.id || job.kind !== 'paidOrder') throw new Error('Marketing order scope mismatch');
     }
     const ensureConfirmation = () => {
+      if (managed) return; // Dispatcher owns confirmation only after courier booking is accepted.
       if (!confirmation.exists && order.status !== 'Canceled') addWrite(() => transaction.set(confirmationRef, {
         orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
         kind: 'orderConfirmation', state: 'pending', eventId: randomUUID(), nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
       }));
     };
     const ensureMarketingOrder = (eventTime: string) => {
+      if (managed) return; // Do not announce a completed delivery order before provider acceptance.
       if (!marketingEnabled) return;
       const customer = customerSnap.data();
       const customerEmail = typeof customer?.email === 'string' ? customer.email.trim().toLowerCase() : '';
@@ -197,7 +215,19 @@ async function settleOrder(proof: PaymentProof) {
     };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
+    const deliveryJobRef = managed ? db.collection('deliveryDispatchJobs').doc(metadata.orderId) : null;
+    const deliveryJob = deliveryJobRef ? await transaction.get(deliveryJobRef) : null;
+    if (deliveryJob?.exists && (deliveryJob.data()?.brandId !== order.brandId || deliveryJob.data()?.locationId !== order.locationId
+      || deliveryJob.data()?.orderId !== metadata.orderId || deliveryJob.data()?.providerId !== managed!.providerId || deliveryJob.data()?.requestDigest !== managed!.requestDigest)) throw new Error('Managed dispatch job mismatch');
+    const ensureDeliveryJob = () => {
+      if (deliveryJobRef && !deliveryJob?.exists) {
+        const now = Date.now();
+        addWrite(() => transaction.create(deliveryJobRef, { version: 1, orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
+          providerId: managed!.providerId, requestDigest: managed!.requestDigest, state: 'pending', createdAtMs: now, updatedAtMs: now }));
+      }
+    };
     if (order.paymentStatus === 'Paid') {
+      if (managed && !['Canceled','Delivered','Completed'].includes(order.status)) ensureDeliveryJob();
       if (session && order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
       if (order.invoice) ensureMarketingOrder(order.invoice.issuedAt);
@@ -270,7 +300,7 @@ async function settleOrder(proof: PaymentProof) {
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
       ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : { paymentCollection }),
-      paymentStatus: 'Paid', status: order.status === 'Pending' ? 'Received' : order.status, paidAt: serverTimestamp(),
+      paymentStatus: 'Paid', status: managed ? order.status : order.status === 'Pending' ? 'Received' : order.status, ...(managed ? {deliveryStatus:'awaiting_booking'} : {}), paidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       invoice,
     }));
@@ -279,6 +309,7 @@ async function settleOrder(proof: PaymentProof) {
       actorId: (proof.terminalActor?.actorId ?? proof.actor!.actorId), actorName: (proof.terminalActor?.name ?? proof.actor!.name), method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
     }));
     addWrite(() => transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true }));
+    ensureDeliveryJob();
     ensureConfirmation();
     ensureMarketingOrder(invoice.issuedAt);
     return finish(true);
@@ -301,7 +332,7 @@ async function settleOrder(proof: PaymentProof) {
       }
       metadata.brandId = currentOrder.brandId; metadata.locationId = currentOrder.locationId;
     }
-    let policy = printIntentsEnabled && !isTerminalPaidReplay(currentOrder)
+    let policy = printIntentsEnabled && currentOrder?.managedDelivery === undefined && !isTerminalPaidReplay(currentOrder)
       ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId, orderId: metadata.orderId }) : null;
     if (proof.kind === 'pickup' && policy?.automaticActivationId) {
       // Acceptance is the sole producer of an unpaid order's original ticket.

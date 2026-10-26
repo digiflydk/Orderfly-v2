@@ -136,3 +136,10 @@ test('HTTP failures are safe and preserve actionable status codes', async () => 
     const f = httpFixture(error), response = await f.POST(request()); assert.equal(response.status, code); const body = await response.json(); assert.equal(body.success, false); assert.equal(JSON.stringify(body).includes('private'), false);
   }
 });
+test('managed courier completion cannot be forged by kitchen terminal, including corrupt marker',async()=>{
+ for(const managedDelivery of [{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},{}]){
+ const f=fixture({order:{status:'Ready',deliveryType:'Delivery',managedDelivery}});
+ await assert.rejects(f.progressTerminalOrder(command({expectedStatus:'Ready',status:'Delivered'})),/terminal_status_conflict/);
+ assert.equal(f.rows.get('orders/order-a').status,'Ready');assert.equal(f.writes.length,0);assert.equal(f.mail.length,0);
+ }
+});

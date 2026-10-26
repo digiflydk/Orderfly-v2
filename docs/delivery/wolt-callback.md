@@ -1,0 +1,16 @@
+# Native Wolt callback and early inbox
+
+The scoped callback route is `/api/delivery/webhooks/wolt/[callbackKey]`. It is disabled unless `ORDERFLY_DELIVERY_CALLBACK_ENABLED=true`; production also requires the production gate. Configuration is server-owned in deliveryProviderCallbacks keyed by SHA256 of an opaque callback key. It binds one location, merchant, venue, environment and active provider revision to a separate pinned webhook signing-secret version. The merchant API secret is never reused.
+
+A real HS256 envelope is verified with the configured secret before storing normalized non-contact event data. Callback and provider binding are reread in the commit transaction. The receiver acknowledges only after a durable inbox insert; early events remain pending when no native delivery mapping exists. Duplicate identity with altered immutable payload is rejected. No signing secret or raw webhook token is persisted.
+
+Accepted dispatch must atomically save deliveryProviderReferences for merchant + native order reference. Replay consumes bounded pages after that commit. State, ETA and audit are separate records under the native order; payment and kitchen state are never changed by this consumer. A signed forward lifecycle event can advance via explicit allowed transitions without fabricated occurrence time. Conflicting terminal states require reconciliation. Verified pickup ETA cannot be replaced by a later preliminary estimate. Callback revocation blocks pending processing.
+
+The existing internal dispatcher must replay pending pages; no standalone public replay endpoint is provided. Callback configuration, signing-secret provisioning, actual Wolt registration, retention policy and live signed-callback acceptance remain deployment prerequisites. These are not established by fixture tests.
+
+
+## Merchant subscription boundary and unknown outcomes
+
+Drive subscriptions are merchant-level. Version1 deliberately permits only one native venue/location per merchant and environment, through the canonical `deliveryWoltMerchants` registry described in `wolt-native-storage.md`. Both quote/dispatch binding resolution and callback handling validate this registry; its single callback hash must match the receiver key. A second active binding cannot become usable outside the registered scope, and an additional callback key cannot serve as a separate per-location merchant subscription. Multi-venue merchants are unsupported until an explicitly reviewed merchant-level routing extension is implemented.
+
+A signed event with the stable merchant order reference can find the server-created `deliveryAttemptReferences` index after a lost create response. The receiver rereads exact native scope, claim, attempt, digest, current merchant/venue binding and network-start evidence, then retains an operator reconciliation case and a safe administration warning. Webhook `details.id` is an event ID, not the provider delivery ID; no booking acceptance, refund, replacement courier or invented delivery ID follows from it. Pending early events without an indexed attempt stay durable. A later authentic accepted result and matching mapping can replay the event and clear a matching nonconflicting missing-ID case; conflicting evidence keeps its review flag.

@@ -1,3 +1,4 @@
+import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import type { OrderStatus } from '@/types';
 
 /** JSON-only snapshot shared by the terminal and its scoped read endpoint. */
@@ -9,6 +10,8 @@ export type TerminalOrderItem = {
   modifiers: string[];
 };
 export type TerminalOrder = {
+  managedDelivery?: boolean;
+  managedDeliveryTracking?: CustomerDeliveryTracking;
   id: string;
   brandId: string;
   locationId: string;

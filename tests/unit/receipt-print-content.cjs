@@ -84,3 +84,64 @@ test('physical headings accept native category ownership without legacy brandId,
   const snapshot = await f.api.prepareKitchenPrintSnapshot({ db: f.db, transaction: f.tx }, scope);
   assert.equal(snapshot.order.lines[0].category, 'Pasta');
 });
+
+function managedFixture(options = {}) {
+  const f = fixture(), { loadTs } = require('../helpers/load-ts.cjs');
+  const now = Date.now(), ready = new Date(now + 600000).toISOString();
+  const nativeScope = { brandId: 'b1', locationId: 'l1' }, scope = { ...nativeScope, orderId: 'o1' };
+  const price = { rules: { version:'1', currency:'DKK', taxBasis:'inclusive', maxDistanceMeters:10000, minimumMinor:0, maximumCustomerFeeMinor:5000, maximumSubsidyMinor:5000, tariff:{kind:'kilometer',baseMinor:1000,includedMeters:0,perKmMinor:100} }, route:{meters:1000,method:'route',source:'fixture',profile:'car',calculatedAt:new Date(now).toISOString()}, itemSubtotalAfterDiscountMinor:10000,providerCost:{amountMinor:2000,currency:'DKK',taxBasis:'inclusive'} };
+  const addr = { country:'DK',postcode:'2300',city:'Copenhagen',street:'Saved Street',building:'10',unit:null,coordinates:{latitude:55.6,longitude:12.6,source:'fixture'} };
+  const fulfillment = { version:1,scope:nativeScope,checkoutRef:'C',providerId:'wolt',pickup:addr,dropoff:addr,pickupContact:{name:'Restaurant',phone:'+4512345678'},dropoffContact:{name:'Customer',phone:'+4587654321'},instructions:'Ring twice',readyAt:ready,desiredDelivery:options.scheduled ? {kind:'scheduled',interval:{earliest:'2026-10-26T16:00:00Z',latest:'2026-10-26T16:00:00Z'}} : {kind:'asap'},items:[{name:'Pizza',quantity:1}],bagCount:1,requirements:[] };
+  const caps = {quote:true,create:true,readByProviderId:false,lookupByInternalReference:false,enforcedCreateIdempotency:false,cancellation:true,cancellationPricePreview:false,scheduledDeliveries:true,readyForPickup:false,trackingLinks:true,authenticatedWebhooks:true,sequenceNumbers:false};
+  const providerQuote={kind:'available',providerId:'wolt',quoteRef:'native',cost:{...price.providerCost,taxMinor:null},surcharges:[],expiresAt:null,pickupEstimateProvenance:null,pickupInterval:null,deliveryInterval:null,distance:null,capabilities:caps};
+  const {quote}=loadTs('src/lib/delivery/quotes/binding.ts').buildQuote({binding:{...nativeScope,checkoutReference:'C',providerId:'wolt',normalizedAddress:'DK Saved Street',cartDigest:'a'.repeat(64),fulfillmentAt:ready,brandRevision:1,locationRevision:0},quoteRef:'Q',providerQuoteRef:'native',nowMs:now,freshnessMs:300000,providerExpiresAtMs:null,price,fulfillment,providerQuote});
+  Object.assign(f.order,{deliveryType:'Delivery',fulfillmentAt:ready,managedDelivery:{version:1,providerId:'wolt',quoteRef:'Q',requestDigest:quote.contentDigest}});
+  Object.assign(f.order.customerDetails,{address:'Saved Street 10, 2300 København',deliveryInstructions:'Ring twice <please>'});
+  f.rows.set('deliveryQuotes/Q',quote);
+  f.rows.set('orders/o1/deliveryAttempts/original',{schemaVersion:1,scope,provider:'wolt',intentId:'original',reference:'original',requestDigest:quote.contentDigest,revision:2,state:'booked',providerDeliveryId:'provider-order',createdAt:1,updatedAt:2});
+  f.rows.set('orders/o1/deliveryEstimates/current',{...scope,provider:'wolt',providerDeliveryId:'provider-order',pickupReliable:options.reliable === true,pickup:{earliest:'2026-10-26T15:20:00Z',latest:'2026-10-26T15:25:00Z'}});
+  return f;
+}
+test('managed kitchen and customer output retains saved address/instructions and labels desired delivery separately',async()=>{
+ for(const kind of ['kitchen','customer']){
+  const f=managedFixture();const result=await f.api.prepareReceiptPrintContent({...scope,kind}),svg=result.payload.toString();
+  assert.match(svg,/Leveringsadresse/);assert.match(svg,/Saved Street 10/);assert.match(svg,/Ring twice &lt;please&gt;/);
+  assert.match(svg,/Ønsket levering/);assert.match(svg.replace(/<[^>]*>/g,' ').replace(/\s+/g,' '),/Hurtigst muligt/);assert.match(svg.replace(/<[^>]*>/g,' ').replace(/\s+/g,' '),/Tidspunkt ikke/);
+  assert.doesNotMatch(svg,/Forventet afhentning/);assert.doesNotMatch(svg,/provider-order/);
+ }
+});
+test('only exact scoped reliable native pickup estimate reaches print facts',async()=>{
+ const f=managedFixture({scheduled:true,reliable:true});
+ const snapshot=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);
+ assert.equal(snapshot.order.delivery.requested.kind,'scheduled');
+ assert.equal(snapshot.order.delivery.reliablePickup.earliest,'2026-10-26T15:20:00Z');
+ for(const width of [58,80]){
+  f.rows.get('locations/l1/printers/p1').configuration.paperWidthMm=width;
+  const rendered=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});
+  const text=rendered.payload.toString().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
+  assert.match(text,/Forventet afhentning af bud/);assert.match(text,/16[.:]20/);assert.match(text,/17[.:]00/);
+ }
+ for(const change of [row=>row.brandId='other',row=>row.providerDeliveryId='other',row=>row.pickupReliable=false]){
+  const g=managedFixture({reliable:true});change(g.rows.get('orders/o1/deliveryEstimates/current'));
+  const saved=await g.api.prepareKitchenPrintSnapshot({db:g.db,transaction:g.tx},scope);
+  assert.equal(saved.order.delivery.reliablePickup,null);
+ }
+});
+test('foreign immutable quote fails closed; absent historical quote never invents requested time',async()=>{
+ const f=managedFixture();f.rows.get('deliveryQuotes/Q').binding.brandId='foreign';
+ await assert.rejects(f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'}),/receipt_content_unavailable/);
+ const g=managedFixture();g.rows.delete('deliveryQuotes/Q');
+ const snapshot=await g.api.prepareKitchenPrintSnapshot({db:g.db,transaction:g.tx},scope);
+ assert.equal(snapshot.order.delivery.requested,null);assert.equal(snapshot.order.delivery.address,'Saved Street 10, 2300 København');
+ const pickup=fixture();pickup.order.customerDetails.address='Do not print pickup address';
+ const native=await pickup.api.prepareKitchenPrintSnapshot({db:pickup.db,transaction:pickup.tx},scope);
+ assert.equal(native.order.delivery,undefined);
+});
+
+test('managed output keeps delivery instructions even when optional customer notes are disabled',async()=>{
+ const f=managedFixture();const {loadTs}=require('../helpers/load-ts.cjs');
+ const settings=loadTs('src/lib/receipts/settings.ts').DEFAULT_RECEIPT_SETTINGS;
+ f.rows.set('receiptSettings/b1',{schemaVersion:1,brandId:'b1',revision:1,settings:{...settings,showNotes:false}});
+ const result=await f.api.prepareReceiptPrintContent({...scope,kind:'customer'});
+ assert.match(result.payload.toString(),/Ring twice &lt;please&gt;/);
+});

@@ -1,6 +1,10 @@
 'use client';
 import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
+import { Textarea } from '@/components/ui/textarea';
+import { ManagedDeliveryQuote, type ManagedDeliveryQuoteView } from './managed-delivery-quote';
+import { useManagedDeliveryQuote } from './use-managed-delivery-quote';
+import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
@@ -83,6 +87,7 @@ const checkoutSchema = z.object({
   street: z.string().optional(),
   zipCode: z.string().optional(),
   city: z.string().optional(),
+  deliveryInstructions: z.string().max(400, 'Leveringsinstruktioner må højst være 400 tegn.').optional(),
   subscribeToNewsletter: z.boolean().default(false),
   clubTermsAccepted: z.boolean().default(false),
   useClubDiscount: z.boolean().default(false),
@@ -99,6 +104,7 @@ interface CheckoutFormValues {
   street?: string;
   zipCode?: string;
   city?: string;
+  deliveryInstructions?: string;
   subscribeToNewsletter?: boolean;
   clubTermsAccepted?: boolean;
   useClubDiscount?: boolean;
@@ -108,6 +114,7 @@ interface CheckoutFormValues {
 interface CheckoutClientProps {
   brand: Brand;
   location: Location;
+  managedDeliveryEnabled?: boolean;
 }
 
 function BagFeeRow() {
@@ -166,7 +173,7 @@ function BagFeeRow() {
   );
 }
 
-function OrderSummaryContent({discountCardOffer}:{discountCardOffer:{name:string;percentage:number}|null}) {
+function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuote=null}:{discountCardOffer:{name:string;percentage:number}|null;managedDelivery?:boolean;managedQuote?:ManagedDeliveryQuoteView|null}) {
   const cart = useCart();
   const {cartItems,brand,deliveryType} = cart;
   const {subtotal,checkoutTotal,itemDiscount,automaticCartDiscount:cartDiscount,voucherDiscount,
@@ -278,7 +285,7 @@ function OrderSummaryContent({discountCardOffer}:{discountCardOffer:{name:string
         {deliveryType === 'delivery' && (
           <div className="flex justify-between">
             <span>Levering</span>
-            {freeDeliveryDiscountApplied ? (
+            {managedDelivery ? <span>{managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.customerFeeMinor/100):'Beregnes'}</span> : freeDeliveryDiscountApplied ? (
               <span className="font-semibold text-green-600">Gratis</span>
             ) : (
               <span>{formatPrice(deliveryFee)}</span>
@@ -298,10 +305,10 @@ function OrderSummaryContent({discountCardOffer}:{discountCardOffer:{name:string
         <Separator />
         <div className="flex justify-between font-bold text-lg">
           <span>I alt</span>
-          <span>{formatPrice(checkoutTotal)}</span>
+          <span>{managedDelivery?(managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.checkoutTotalMinor/100):'Afventer leveringspris'):formatPrice(checkoutTotal)}</span>
         </div>
 
-        {vatAmount > 0 && (
+        {!managedDelivery && vatAmount > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground pt-1">
             <span>Moms inkluderet ({brand?.vatPercentage ?? 25}%)</span>
             <span>{formatPrice(vatAmount)}</span>
@@ -312,7 +319,7 @@ function OrderSummaryContent({discountCardOffer}:{discountCardOffer:{name:string
   );
 }
 
-function CheckoutForm({ location }: { location: Location }) {
+function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Location;managedDeliveryEnabled?:boolean }) {
   const keyboardOpen = useCheckoutKeyboard();
   const { trackEvent, measurementKey, attribution: analyticsAttribution } = useAnalytics();
   const {
@@ -326,7 +333,8 @@ function CheckoutForm({ location }: { location: Location }) {
     deliveryType,
     selectedTime,
     saveCartForCheckout,
-    setSelectedTime
+    setSelectedTime,
+    setDeliveryType
   } = useCart();
 
   const { toast } = useToast();
@@ -385,8 +393,9 @@ function CheckoutForm({ location }: { location: Location }) {
 
 
 
+  const managedActive=managedDeliveryEnabled&&deliveryType==='delivery';
   const minOrderAmount = location?.minOrder ?? 0;
-  const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
+  const isDeliveryBelowMinOrder = !managedActive && deliveryType === 'delivery' && subtotal < minOrderAmount;
 
   useEffect(() => {
     if (!location?.id) return;
@@ -412,6 +421,7 @@ function CheckoutForm({ location }: { location: Location }) {
       street: '',
       zipCode: '',
       city: '',
+      deliveryInstructions: '',
       subscribeToNewsletter: false,
       clubTermsAccepted: false,
       useClubDiscount: false,
@@ -597,6 +607,26 @@ function CheckoutForm({ location }: { location: Location }) {
     catch { return false; }
   }, [location, selectedTime, deliveryType, timeSlots]);
 
+  const quoteForm=form.watch();
+  const quoteJoiningClub=clubSignupShown&&!!quoteForm.subscribeToNewsletter&&!!quoteForm.clubTermsAccepted;
+  const quoteCustomer:CustomerInfo & {acceptTerms:boolean;deliveryInstructions?:string}={name:quoteForm.name,email:quoteForm.email,phone:quoteForm.phone,street:quoteForm.street,zipCode:quoteForm.zipCode,city:quoteForm.city,...(managedActive&&quoteForm.deliveryInstructions?.trim()?{deliveryInstructions:quoteForm.deliveryInstructions.trim()}:{}),acceptTerms:quoteForm.acceptTerms,
+    paymentMethod:paymentMethod||'online',subscribeToNewsletter:quoteJoiningClub||signupConfig.mode==='newsletter'&&!!quoteForm.subscribeToNewsletter,
+    ...(quoteJoiningClub&&signupConfig.clubProgram?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion}:{})};
+  const quoteInput=brand&&location?{cartItems:checkoutItems(cartItems),customerInfo:quoteCustomer,brandId:brand.id,locationId:location.id,
+    paymentDetails:{subtotal,deliveryFee:freeDeliveryDiscountApplied?0:deliveryFee,bagFee,adminFee,vatAmount,discountTotal:sumMoney([itemDiscount||0,cartDiscount?.amount||0,voucherDiscount?.amount||0]),itemDiscountTotal:itemDiscount,cartDiscountTotal:(voucherDiscount??cartDiscount)?.amount||0,cartDiscountName:(voucherDiscount??cartDiscount)?.name,tips:0,taxes:0},
+    appliedDiscountId:appliedDiscount?.id||null,brandSlug:brand.slug,locationSlug:location.slug,deliveryTime:selectedTime}:null;
+  // Legal acceptance does not change price; all pricing/contact/scope inputs do.
+  const quoteIdentity=JSON.stringify({...quoteInput,customerInfo:{...quoteCustomer,acceptTerms:undefined}});
+  const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction});
+  const managedQuote=managed.state.kind==='ready'&&managed.state.quote.expiresAtMs>Date.now()?managed.state.quote:null;
+  const managedConsent=managedQuote&&managed.accepted&&managed.checkoutKey?{...managed.accepted,checkoutKey:managed.checkoutKey}:null;
+  const managedTotal=managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.checkoutTotalMinor/100):'Afventer leveringspris';
+  const requestDeliveryPrice=async()=>{
+    const valid=await form.trigger(['name','email','phone','street','zipCode','city','deliveryInstructions']);
+    if(!valid||!quoteForm.street?.trim()||!quoteForm.zipCode?.trim()||!quoteForm.city?.trim()){setCheckoutError('Udfyld navn, e-mail, telefon og leveringsadresse, før du henter leveringsprisen.');return;}
+    setCheckoutError(null);await managed.request();
+  };
+
   const proceedToStripe = async (formValues: CheckoutFormValues) => {
       // A slow payment request is not evidence that no session exists. Keep the
       // submission locked until a definitive response; never race it with retry.
@@ -634,6 +664,8 @@ function CheckoutForm({ location }: { location: Location }) {
         taxes: 0
       };
 
+      if(managedActive){if(!managedConsent||!managedQuote||managedQuote.expiresAtMs<=Date.now()){setCheckoutError('Hent og accepter en gyldig leveringspris før betaling.');return;}paymentDetails.deliveryFee=managedQuote.customerFeeMinor/100;}
+
       // Recheck even if the page or an upsell dialog has been open for a while.
       try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
       catch { setCheckoutError('Vælg et nyt ledigt tidspunkt.'); setIsTimeDialogOpen(true); return; }
@@ -657,9 +689,10 @@ function CheckoutForm({ location }: { location: Location }) {
       // The server receives an explicit consent boolean and stable retry identity.
       const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
       // Hidden Club fields must never survive a previous opt-in or refetch.
-      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, ...contactValues} = formValues;
+      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, deliveryInstructions: _deliveryInstructions, ...contactValues} = formValues;
       const customerInfo: CustomerInfo = {
         ...contactValues,
+        ...(managedActive&&formValues.deliveryInstructions?.trim()?{deliveryInstructions:formValues.deliveryInstructions.trim()}:{}),
         paymentMethod: paymentMethod || 'online',
         subscribeToNewsletter: newsletterConsent,
         ...(joiningClub && signupConfig.clubProgram ? {subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion} : signupConfig.clubSignupSuppressed ? {} : {subscribeToClub:false}),
@@ -678,7 +711,8 @@ function CheckoutForm({ location }: { location: Location }) {
         brand!.slug,
         location!.slug,
         finalDeliveryTime,
-        anonymousId
+        anonymousId,
+        ...(managedActive&&managedConsent?[managedConsent]:[])
       );
 
       setCheckoutError(null);
@@ -714,6 +748,7 @@ function CheckoutForm({ location }: { location: Location }) {
       setCheckoutError('Udfyld leveringsadressen.');
       return;
     }
+    if(managedActive&&!managedConsent){setCheckoutError('Hent og accepter leveringsprisen før betaling.');return;}
     requestInFlight.current = true;
     setIsProcessing(true);
     try {
@@ -806,14 +841,14 @@ function CheckoutForm({ location }: { location: Location }) {
         )}
         disabled={
           isProcessing || isValidatingDiscount || (!paymentUrl && (
-            paymentUncertain || !isTermsAccepted ||
+            paymentUncertain || !isTermsAccepted || (managedActive&&!managedConsent) ||
             isDeliveryBelowMinOrder || !isOrderTimeValid || !paymentMethod
           ))
         }
       >
         <div className="flex w-full justify-between items-center px-4">
           <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />{paymentMethod === 'pay_at_pickup' ? 'Sender bestilling…' : 'Åbner betaling…'}</> : paymentMethod === 'pay_at_pickup' ? 'Bestil og betal ved afhentning' : 'Gå til betaling'}</span>
-          <span>{formatPrice(checkoutTotal)}</span>
+          <span>{managedActive?managedTotal:formatPrice(checkoutTotal)}</span>
         </div>
       </Button>
       {paymentMethod === 'pay_at_pickup' && <p className="mt-2 text-sm">Betales ved afhentning. Din ordre sendes til restauranten, når du bestiller.</p>}
@@ -981,6 +1016,8 @@ function CheckoutForm({ location }: { location: Location }) {
                       </div>
                     </>
                   )}
+                  {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
+                  <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} accepted={managed.accepted} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} onAccept={managed.accept} onPickup={()=>{setDeliveryType('pickup');setSelectedTime('asap');}} locked={isFormLocked}/>
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField
                     control={form.control}
@@ -1068,6 +1105,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 text-destructive"
+                      aria-label="Fjern rabatkode"
                       onClick={handleRemoveDiscount}
                     >
                       <X className="h-4 w-4" />
@@ -1110,7 +1148,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <OrderSummaryContent discountCardOffer={discountCardOffer} />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={managedQuote} />
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -1127,7 +1165,7 @@ function CheckoutForm({ location }: { location: Location }) {
                   </CardHeader>
                   <CardContent className="flex-1 overflow-y-auto pr-4">
                     <fieldset className="min-w-0" disabled={isFormLocked}>
-                      <OrderSummaryContent discountCardOffer={discountCardOffer} />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={managedQuote} />
                     </fieldset>
                   </CardContent>
                 </Card>
@@ -1171,12 +1209,12 @@ function CheckoutForm({ location }: { location: Location }) {
   );
 }
 
-export function CheckoutClient({ brand, location }: CheckoutClientProps) {
+export function CheckoutClient({ brand, location, managedDeliveryEnabled=false }: CheckoutClientProps) {
   const { setCartContext, cartReady } = useCart();
   React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
   // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements.
   if (!cartReady) {
     return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
   }
-  return <CheckoutForm location={location} />;
+  return <CheckoutForm location={location} managedDeliveryEnabled={managedDeliveryEnabled} />;
 }

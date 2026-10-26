@@ -1,4 +1,6 @@
 import 'server-only';
+import { readReceiptDeliveryTracking } from '@/lib/delivery/tracking-server';
+import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import Stripe from 'stripe';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
@@ -10,6 +12,7 @@ export type ReceiptProof = { sessionId?: string; receiptToken?: string; orderId?
 export type GuestReceipt = Pick<OrderDetail,
   'id' | 'brandId' | 'locationId' | 'customerName' | 'customerContact' | 'deliveryType' |
   'deliveryTime' | 'status' | 'paymentStatus' | 'paymentMethod' | 'totalAmount' | 'productItems'> & {
+  managedDeliveryTracking?: CustomerDeliveryTracking;
   createdAt: string;
   customerDetails: Pick<OrderDetail['customerDetails'], 'id' | 'address'>;
   paymentDetails: Omit<OrderDetail['paymentDetails'], 'paymentRefId'>;
@@ -62,9 +65,11 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
   }
 
   if (!order) return null;
+  const managedDeliveryTracking = await readReceiptDeliveryTracking(order).catch(() => null);
   const payment = order.paymentDetails;
   // Explicit projection: no PSP identifiers, cancel hashes or arbitrary DB fields.
   return {
+    ...(managedDeliveryTracking ? {managedDeliveryTracking} : {}),
     id: order.id, brandId: order.brandId, locationId: order.locationId,
     customerName: order.customerName, customerContact: order.customerContact,
     customerDetails: { id: order.customerDetails.id, address: order.customerDetails.address },

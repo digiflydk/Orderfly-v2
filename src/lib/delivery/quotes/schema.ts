@@ -6,6 +6,8 @@ import { calculateDeliveryPrice } from '../pricing/calculate';
 const integer=z.number().int().nonnegative().safe();
 const digest=z.string().regex(/^[a-f0-9]{64}$/);
 const money=z.object({amountMinor:integer,currency:z.string().regex(/^[A-Z]{3}$/),taxBasis:z.enum(['inclusive','exclusive'])}).strict();
+export const deliveryCampaignSnapshotSchema=z.object({kind:z.literal('native_free_delivery'),campaignIds:z.array(deliveryIdSchema).min(1).max(100),maxDistanceMeters:integer}).strict().refine(v=>v.campaignIds.every((id,index)=>index===0||v.campaignIds[index-1]<id),'Campaign IDs must be sorted and unique');
+export type DeliveryCampaignSnapshot=z.infer<typeof deliveryCampaignSnapshotSchema>;
 export const storedDeliveryQuoteSchema=z.object({
   version:z.literal(1),quoteRef:deliveryIdSchema,providerQuoteRef:z.string().min(1).max(300),
   binding:z.object({brandId:deliveryIdSchema,locationId:deliveryIdSchema,checkoutReference:deliveryIdSchema,providerId:deliveryIdSchema,
@@ -13,7 +15,7 @@ export const storedDeliveryQuoteSchema=z.object({
   fingerprint:digest,contentDigest:digest,createdAtMs:integer,expiresAtMs:integer,
   fulfillment:deliveryQuoteRequestSchema,
   providerQuote:deliveryQuoteResultSchema.options[0],
-  economics:z.object({rules:deliveryPricingRulesSchema,route:routeDistanceSchema.refine(v=>v.method==='route'),itemSubtotalAfterDiscountMinor:integer,
+  economics:z.object({rules:deliveryPricingRulesSchema,baseRules:deliveryPricingRulesSchema.optional(),appliedCampaign:deliveryCampaignSnapshotSchema.optional(),route:routeDistanceSchema.refine(v=>v.method==='route'),itemSubtotalAfterDiscountMinor:integer,
     localCostEstimate:money.nullable(),providerQuoteCost:money,customerFee:money,subsidy:money,actualBilledCost:z.null(),freeDeliveryApplied:z.boolean()}).strict(),
 }).strict().superRefine((v,ctx)=>{
   const fail=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
@@ -22,6 +24,14 @@ export const storedDeliveryQuoteSchema=z.object({
   if(v.binding.brandId!==v.fulfillment.scope.brandId||v.binding.locationId!==v.fulfillment.scope.locationId||v.binding.checkoutReference!==v.fulfillment.checkoutRef||v.binding.providerId!==v.fulfillment.providerId||v.binding.providerId!==v.providerQuote.providerId||v.providerQuoteRef!==v.providerQuote.quoteRef)fail('Quote scope/reference mismatch');
   if(Date.parse(v.binding.fulfillmentAt)!==Date.parse(v.fulfillment.readyAt))fail('Binding fulfillment time mismatch');
   if(v.contentDigest!==quoteContentDigest(v))fail('Quote content digest mismatch');
+  const base=v.economics.baseRules,campaign=v.economics.appliedCampaign;
+  if(Boolean(base)!==Boolean(campaign))fail('Campaign and base rules must be paired');
+  if(base&&campaign){
+    if(campaign.maxDistanceMeters>base.maxDistanceMeters)fail('Campaign exceeds base coverage');
+    const effective={...base,freeDelivery:{minimumMinor:0,maxDistanceMeters:campaign.maxDistanceMeters}};
+    if(quoteContentDigest(effective)!==quoteContentDigest(v.economics.rules))fail('Campaign changed unauthorized price rules');
+    if(v.economics.route.meters>campaign.maxDistanceMeters)fail('Campaign is outside eligible distance');
+  }
   const cost=v.economics.providerQuoteCost;
   if(cost.amountMinor!==v.providerQuote.cost.amountMinor||cost.currency!==v.providerQuote.cost.currency||cost.taxBasis!==v.providerQuote.cost.taxBasis)fail('Provider cost mismatch');
   if(v.economics.route.method!=='route')return;

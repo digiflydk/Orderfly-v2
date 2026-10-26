@@ -30,6 +30,7 @@ export const deliveryQuoteRequestSchema = z.object({
   version: z.literal(1), scope: deliveryScopeSchema, checkoutRef: deliveryIdSchema, providerId: deliveryIdSchema,
   pickup: deliveryAddressSchema, dropoff: deliveryAddressSchema, pickupContact: contact, dropoffContact: contact,
   instructions: z.string().max(1000), readyAt: instant,
+  preparationMinutes: z.number().int().min(0).max(240).optional(),
   desiredDelivery: z.discriminatedUnion('kind', [z.object({kind:z.literal('asap')}).strict(), z.object({kind:z.literal('scheduled'), interval:deliveryIntervalSchema}).strict()]),
   items: z.array(z.object({ name: text(150), quantity: z.number().int().min(1).max(1000) }).strict()).min(1).max(100),
   bagCount: z.number().int().min(1).max(100).nullable(), requirements: z.array(text(100)).max(20),

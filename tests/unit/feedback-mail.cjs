@@ -117,14 +117,14 @@ test('provider enqueues only the scoped Orderfly template without exposing its s
  assert.equal(body.sender_profile,'orderfly');assert.equal(body.template_key,'orderfly.feedback.invitation');assert.equal(body.idempotency_key,'event-1');assert.equal(body.related_entity.id,'order');assert.equal(body.recipient.email,'private@example.test');assert.doesNotMatch(request.options.body,/synthetic-notification-secret/);
 });
 test('worker endpoint denies missing/wrong credentials before work and hides internal failures',async t=>{
- setup(t);let calls=0,gameCalls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {};}},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>({})}});
+ setup(t);let calls=0,gameCalls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({})},'@/lib/qr/worker':{runQrRetentionWorker:async()=>({})},'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {};}},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>({})}});
  for(const authorization of ['', 'Bearer wrong'])assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization}}))).status,401);
  assert.equal(calls,0);assert.equal(gameCalls,0);const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_FEEDBACK_WORKER_SECRET}}));assert.equal(response.status,503);assert.doesNotMatch(await response.text(),/private/);assert.equal(calls,1);assert.equal(gameCalls,1);
  process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';const integrationResponse=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}));assert.equal(integrationResponse.status,503);assert.doesNotMatch(await integrationResponse.text(),/private/);assert.equal(calls,2);
 });
 test('worker accepts the maximum shared secret length and rejects oversized headers before work',async t=>{
  setup(t);let calls=0,gameCalls=0;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';
- const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;return {}; }},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {accepted:1};}},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>({cards:0,rewards:0})}});
+ const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({})},'@/lib/qr/worker':{runQrRetentionWorker:async()=>({})},'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;return {}; }},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {accepted:1};}},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>({cards:0,rewards:0})}});
  process.env.ORDERFLY_NOTIFICATION_SECRET='s'.repeat(512);
  assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}))).status,200);
  assert.equal(calls,1);
@@ -251,4 +251,53 @@ test('order mail: a transient failure of the first order read is retried, a perm
   await worker.runOrderNotificationWorker(client,Date.now()+120000);
   assert.equal(sent.length,state==='pending'?1:0);
  }
+});
+
+function managedDelivered(f){
+ const order=f.records.get('orders/order'),digest='a'.repeat(64);
+ Object.assign(order,{status:'Ready',deliveryType:'Delivery',managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:digest}});
+ const completion={version:1,brandId:'b',locationId:'l',orderId:'order',providerId:'wolt',providerDeliveryId:'provider-order',attemptRef:require('node:crypto').createHash('sha256').update(JSON.stringify(['delivery-original-v1','b','l','order'])).digest('hex'),requestDigest:digest,eventRef:'b'.repeat(64),completedAtMs:Date.now()};
+ order.managedDeliveryCompletion=completion;
+ f.records.get('feedbackQuestionsVersion/v1').orderTypes.push('delivery');
+ f.records.set('deliveryFeedbackRequests/order',{version:1,completion:structuredClone(completion),state:'pending',nextAttemptAt:Date.now(),createdAtMs:Date.now()});
+ return order;
+}
+test('managed completion bridge recovers queue configuration failure and manual/automatic paths dedupe',async t=>{
+ const f=setup(t),order=managedDelivered(f),drain=loadTs('src/lib/feedback/delivery-requests.ts',f.mocks).drainDeliveryFeedbackRequests;
+ const endpoint=process.env.ORDERFLY_NOTIFICATION_ENDPOINT;delete process.env.ORDERFLY_NOTIFICATION_ENDPOINT;
+ await drain();assert.equal(f.records.get('deliveryFeedbackRequests/order').state,'pending');assert.equal(f.job('invitation'),undefined);
+ process.env.ORDERFLY_NOTIFICATION_ENDPOINT=endpoint;
+ await drain(Date.now()+61000);assert.equal(f.records.get('deliveryFeedbackRequests/order').state,'queued');
+ await f.mailQueue.queueOrderFeedback('order');await drain(Date.now()+62000);
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackMailJobs/')).length,1);
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackInvitations/')).length,1);assert.equal(order.status,'Ready');assert.equal(f.events.length,0);
+});
+test('managed completion keeps payment/refund and exact native marker bindings for manual and worker eligibility',async t=>{
+ for(const patch of [{brandId:'other'},{locationId:'foreign'},{orderId:'other'},{requestDigest:'c'.repeat(64)},{attemptRef:'c'.repeat(64)},{providerId:'test'},{eventRef:'invalid'}]){
+  const f=setup(t),order=managedDelivered(f);Object.assign(order.managedDeliveryCompletion,patch);
+  assert.equal(f.invitations.completedFeedbackOrder(order,'order'),false);await assert.rejects(f.mailQueue.queueOrderFeedback('order'));
+ }
+ for(const patch of [{paymentStatus:'Pending'},{refundedAmountOre:1},{refundedAmount:1},{refundedAt:Date.now()},{status:'Canceled'}]){
+  const f=setup(t),order=managedDelivered(f);Object.assign(order,patch);assert.equal(f.invitations.completedFeedbackOrder(order,'order'),false);
+ }
+ const f=setup(t),order=managedDelivered(f);delete order.managedDeliveryCompletion;order.status='Delivered';
+ assert.equal(f.invitations.completedFeedbackOrder(order,'order'),false);
+});
+test('existing feedback heartbeat drains managed completion and rechecks refund before synthetic send',async t=>{
+ const f=setup(t),order=managedDelivered(f);f.records.get('feedbackSettings/b').delayHours=0;
+ await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+1000);
+ assert.equal(f.records.get('deliveryFeedbackRequests/order').state,'queued');assert.equal(f.job('invitation').state,'accepted');assert.equal(f.events.length,1);
+ const g=setup(t),refunded=managedDelivered(g);await g.mailQueue.queueOrderFeedback('order');refunded.refundedAmountOre=1;
+ await g.mailWorker.runFeedbackMailWorker(g.provider,Date.now()+1000);assert.equal(g.events.length,0);assert.equal(g.job('invitation').state,'suppressed');
+});
+
+test('managed delivered invitation opens existing feedback submission path while refunded marker is rejected',async t=>{
+ const f=setup(t);managedDelivered(f);await f.mailQueue.queueOrderFeedback('order');
+ const token=f.invitations.signOrderFeedbackInvitation(f.key,f.records.get('feedbackInvitations/'+f.key).expiresAt);
+ await assert.rejects(f.public.submitFeedbackAction(null,responseForm({invitationToken:token})),e=>e.digest==='NEXT_REDIRECT');
+ assert.equal(f.records.get('feedback/'+f.key).sourceType,'commerce_order');
+ const g=setup(t),order=managedDelivered(g);await g.mailQueue.queueOrderFeedback('order');
+ const other=g.invitations.signOrderFeedbackInvitation(g.key,g.records.get('feedbackInvitations/'+g.key).expiresAt);
+ order.refundedAmountOre=1;
+ assert.equal((await g.public.submitFeedbackAction(null,responseForm({invitationToken:other}))).error,true);assert.equal(g.records.has('feedback/'+g.key),false);
 });

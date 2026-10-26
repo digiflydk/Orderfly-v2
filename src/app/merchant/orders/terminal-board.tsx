@@ -16,7 +16,7 @@ export function TerminalBoard({ orders, onSelectOrder, loading, hasMore, onLoadM
 }) {
   return <div className="space-y-4"><div className="grid gap-4 lg:grid-cols-3">
     {columns.map(column => {
-      const rows = orders.filter(order => order.status === column.status).sort((a, b) => (a.fulfillmentAt || a.createdAt || '').localeCompare(b.fulfillmentAt || b.createdAt || ''));
+      const rows = orders.filter(order => order.status === column.status && !(order.managedDelivery && order.managedDeliveryTracking?.deliveryStatus === 'delivered')).sort((a, b) => (a.fulfillmentAt || a.createdAt || '').localeCompare(b.fulfillmentAt || b.createdAt || ''));
       return <section key={column.status} aria-label={column.name} className={`min-w-0 rounded-2xl border border-t-4 bg-slate-50 p-3 ${column.border}`}>
         <h2 className="mb-4 flex items-center gap-2 px-1 text-lg font-semibold"><span className={`h-2.5 w-2.5 rounded-full ${column.dot}`} aria-hidden="true" />{column.name}<span className="ml-auto rounded-full bg-white px-3 py-1 text-sm tabular-nums">{rows.length}</span></h2>
         <div className="space-y-3">{rows.map(order => <button key={order.id} onClick={() => onSelectOrder(order)} aria-label={`Åbn ordre ${order.id}`} className="block w-full rounded-xl border bg-white p-4 text-left shadow-sm transition-colors hover:border-slate-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600">

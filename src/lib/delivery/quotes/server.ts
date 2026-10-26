@@ -34,7 +34,7 @@ async function current(tx: FirebaseFirestore.Transaction, quote: StoredDeliveryQ
   const { result } = await loadDeliverySettingsInTransaction(tx, quote.binding.brandId, quote.binding.locationId);
   if (result.brandRevision !== quote.binding.brandRevision || result.revision !== quote.binding.locationRevision
     || result.settings.providerId !== quote.binding.providerId || !result.settings.enabled || result.settings.paused
-    || !isDeepStrictEqual(result.settings.pricingRules, quote.economics.rules)
+    || !isDeepStrictEqual(result.settings.pricingRules, (quote.economics.baseRules ?? quote.economics.rules))
     || quote.economics.route.meters > result.settings.maxDistanceMeters) throw new DeliveryQuoteStoreError('quote_changed', 409);
 }
 /** Trusted internal service only: provider/route/cart inputs must be resolved server-side. No public action or HTTP wrapper. */

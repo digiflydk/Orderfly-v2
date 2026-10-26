@@ -43,6 +43,8 @@ export async function progressTerminalOrder(input: unknown, source: OrderTermina
       if (previous.action !== 'terminal_order_progressed' || previous.fingerprint !== fingerprint || previous.actorId !== actorId) throw new TerminalStatusError('terminal_status_conflict');
       return { changed: false, status: order.status as OrderStatus };
     }
+    // Courier delivery completion is authoritative provider state, never a kitchen action.
+    if (order.managedDelivery != null && command.status === 'Delivered') throw new TerminalStatusError('terminal_status_conflict');
     const next = order.status === 'Received' ? 'In Progress' : order.status === 'In Progress' ? 'Ready'
       : order.status === 'Ready' && order.deliveryType === 'Pickup' ? 'Completed'
       : order.status === 'Ready' && order.deliveryType === 'Delivery' ? 'Delivered' : null;

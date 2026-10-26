@@ -67,3 +67,13 @@ test('pricing persistence rejects invalid ranges and unknown economic fields; in
  await f.service.writeDeliverySettings(local({expectedBrandRevision:1,overrides:{pricingRules:null}}));assert.equal((await f.service.readDeliverySettings({brandId:'brand',locationId:'location'})).settings.pricingRules,null);
  for(const changed of [{...pricingRules,extra:1},{...pricingRules,tariff:{kind:'bands',bands:[{fromMeters:1,toMeters:5000,feeMinor:3500,minimumMinor:10000}]}}])await assert.rejects(f.service.writeDeliverySettings(brand({expectedRevision:1,settings:{...schema.defaultDeliverySettings(),pricingRules:changed}})),/invalid_request/);
 });
+test('dispatch launch requires explicit flag and valid environment with additional production approval',()=>{
+ const keys=['ORDERFLY_DELIVERY_DISPATCH_ENABLED','ORDERFLY_DELIVERY_ENVIRONMENT','ORDERFLY_DELIVERY_PRODUCTION_ENABLED'];const saved=keys.map(k=>process.env[k]);
+ try{for(const k of keys)delete process.env[k];const gate=fixture().service.deliveryDispatchEnabled;assert.equal(gate(),false);
+ process.env.ORDERFLY_DELIVERY_DISPATCH_ENABLED='true';assert.equal(gate(),false);
+ process.env.ORDERFLY_DELIVERY_ENVIRONMENT='sandbox';assert.equal(gate(),true);
+ process.env.ORDERFLY_DELIVERY_ENVIRONMENT='production';assert.equal(gate(),false);
+ process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED='true';assert.equal(gate(),true);
+ process.env.ORDERFLY_DELIVERY_DISPATCH_ENABLED='false';assert.equal(gate(),false);
+ }finally{keys.forEach((k,i)=>{if(saved[i]===undefined)delete process.env[k];else process.env[k]=saved[i];});}
+});

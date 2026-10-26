@@ -1,7 +1,15 @@
 import type { OrderDetail } from '@/types';
 import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 
+/** Server-projected delivery facts. Preparation time is never a promised pickup time. */
+export type DeliveryPrintDetails = {
+  address: string;
+  requested: { kind: 'asap' } | { kind: 'scheduled'; earliest: string; latest: string } | null;
+  reliablePickup: { earliest: string; latest: string } | null;
+};
+
 export type KitchenPreviewData = {
+  delivery?: DeliveryPrintDetails;
   reference: string;
   brandName: string;
   locationName: string;
@@ -42,8 +50,9 @@ function quantity(value: number): number | null {
  * projection. Phone is the checkout snapshot only; historical orders may not
  * contain one. Never infer phone or sales channel from email or analytics.
  */
-export function projectKitchenReceipt(order: OrderDetail, categories: Record<string, string> = {}): KitchenPreviewData {
+export function projectKitchenReceipt(order: OrderDetail, categories: Record<string, string> = {}, delivery?: DeliveryPrintDetails): KitchenPreviewData {
   return {
+    delivery,
     reference: order.id,
     brandName: order.brandName,
     locationName: order.locationName,

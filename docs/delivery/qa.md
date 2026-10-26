@@ -51,7 +51,7 @@ A pass in one class cannot stand in for another. Record blockers by class and na
 
 ## Release record
 
-For each candidate record main SHA, candidate SHA, test commands/results, independent review findings/resolutions, browser evidence, skipped/unavailable classes and reason. Re-run relevant checks after changes, not merely on an older commit. Coordinator owns serial merges and deployment, verifies actual release SHA and read-only live behavior, and retains rollback instructions. No current candidate has passed these gates yet.
+For each candidate record main SHA, candidate SHA, test commands/results, independent review findings/resolutions, browser evidence, skipped/unavailable classes and reason. Re-run relevant checks after changes, not merely on an older commit. Coordinator owns serial merges and deployment, verifies actual release SHA and read-only live behavior, and retains rollback instructions. The verified foundation release is recorded in `release-readiness.md`. Subsequent integration candidates require their own current-head evidence.
 
 ## Independent review checkpoint, 2026-10-25
 

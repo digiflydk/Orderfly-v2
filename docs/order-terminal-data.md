@@ -27,3 +27,9 @@ Preorders are active orders whose authoritative `fulfillmentAt` falls **after to
 ## Verification
 
 `node --test tests/unit/terminal-read.cjs` exercises actual production modules with synthetic Firestore/auth I/O: exact native scope, revoked grants and foreign native location, edit permission versus infrastructure failure,127-row pagination/deduplication, empty filtered continuation, cursor filter binding, Copenhagen DST/future routing, accepted-unpaid eligibility, creation-date filters, malformed timestamps, minimal food/customer projection, invalid inputs and sanitized HTTP failures. Typecheck is required separately. This is isolated service verification, not production session or physical iPad/printer acceptance.
+
+### Managed courier completion
+
+A managed order may remain kitchen `Ready` after the courier completes delivery. Active board and preorder reads exclude it only when the freshly authorized, provider-identity-bound tracking projection confirms `deliveryStatus: delivered`. This never rewrites the kitchen status or infers completion from an unbound provider field. Unknown or foreign delivery state cannot hide an active order. History keeps the order and its separate courier status.
+
+Filtering happens after the bounded status-page cursor is calculated. A page containing only completed deliveries therefore still returns its next cursor, allowing the board feed to continue scanning to later active orders. The board refresh already replaces the complete collected snapshot after following all pages; its card rendering also excludes confirmed managed deliveries. Internal regressions exercise a signed Wolt delivered callback through native state and terminal reads, an empty filtered page followed by an active order, and refresh/history behavior in Chromium.

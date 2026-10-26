@@ -26,7 +26,7 @@ Each adapter reports supported operation modes explicitly: quote; create; read-b
 
 ## Quote request and result
 
-Request: scope, checkout reference, requested provider, pickup and dropoff address/coordinates, pickup contact and delivery contact as needed, preparation-ready instant, ASAP or scheduled desired delivery interval, bounded items/bag counts and applicable delivery requirements. Include item dimensions/value only when actually known/required; do not invent them.
+Request: scope, checkout reference, requested provider, pickup and dropoff address/coordinates, pickup contact and delivery contact as needed, preparation-ready instant, ASAP or scheduled desired delivery interval, bounded items/bag counts and applicable delivery requirements. Include item dimensions/value only when actually known/required; do not invent them. Optional `preparationMinutes` is the authoritative effective kitchen duration (integer 0–240), separate from `readyAt`, which can include waiting for an opening. It is part of the immutable fulfillment digest. Wolt scheduled quotes use this duration when supplied and reject durations above its 60-minute bound without truncation; legacy requests without the field retain the absolute-readiness calculation. Wolt ASAP always uses absolute readiness, so the optional field cannot bring courier pickup forward while closed. The private Wolt quote retains the exact requested duration.
 
 Result is discriminated:
 

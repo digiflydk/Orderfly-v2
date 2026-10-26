@@ -1,4 +1,7 @@
 import 'server-only';
+import { loadAuthorizedDeliveryTracking } from '@/lib/delivery/tracking-server';
+import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
+import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import type { Firestore } from 'firebase-admin/firestore';
 import { customerHasEmail } from '@/lib/customer-identity';
 import { normalizeEmail } from '@/lib/integrations/esmeralda-customer-contract';
@@ -8,6 +11,7 @@ import type { MemberSession, ProgramBrand } from './membership';
 import { COLLECTIONS } from './model';
 
 export type PortalOrder = {
+  managedDeliveryTracking?: CustomerDeliveryTracking;
   id: string; orderedAt: number; locationName: string; status: string;
   totalAmount: number; refundedAmount: number; netAmount: number;
 };
@@ -63,10 +67,13 @@ export async function memberOrderHistory(db: Firestore, brand: ProgramBrand, ses
       const location = locations.get(order.locationId), date = asDate(order.paidAt) || asDate(order.createdAt);
       const grossOre = typeof order.totalAmount === 'number' ? Math.round(order.totalAmount * 100) : NaN;
       const refundOre = order.refundedAmountOre ?? 0;
+      const managed=managedDeliveryBindingSchema.safeParse(order.managedDelivery).success&&order.deliveryType==='Delivery';
+      const visibleFulfillment=SETTLED.has(order.status)||managed&&['Pending','Error','Canceled'].includes(order.status);
       if (!location || location.brandId !== brand.brandId || location.deletedAt || location.status === 'deleted'
-        || order.paymentStatus !== 'Paid' || !SETTLED.has(order.status) || !date
+        || !(order.paymentStatus === 'Paid'||managed&&order.paymentStatus==='Refunded') || !visibleFulfillment || !date
         || typeof order.totalAmount !== 'number' || order.totalAmount < 0 || !Number.isSafeInteger(grossOre) || grossOre < 0 || !Number.isSafeInteger(refundOre) || refundOre < 0 || refundOre > grossOre) continue;
-      orders.push({ id, orderedAt: date.getTime(), locationName: typeof location.name === 'string' ? location.name.slice(0, 160) : 'Lokation',
+      const managedDeliveryTracking = await loadAuthorizedDeliveryTracking(tx,id,order);
+      orders.push({ ...(managedDeliveryTracking ? {managedDeliveryTracking} : {}), id, orderedAt: date.getTime(), locationName: typeof location.name === 'string' ? location.name.slice(0, 160) : 'Lokation',
         status: order.status, totalAmount: grossOre / 100, refundedAmount: refundOre / 100, netAmount: (grossOre - refundOre) / 100 });
     }
     return orders.sort((a, b) => b.orderedAt - a.orderedAt || a.id.localeCompare(b.id)).slice(0, 100);

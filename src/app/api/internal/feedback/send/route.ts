@@ -6,6 +6,7 @@ import { runGameOutbox } from '@/lib/games/worker';
 import { runMarketingWorker } from '@/lib/marketing/worker';
 import { runLoyaltyWorker } from '@/lib/loyalty/stamp-card/worker';
 import { runQrRetentionWorker } from '@/lib/qr/worker';
+import { runDeliveryDispatchWorker } from '@/lib/delivery/booking/dispatcher';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export async function POST(request: Request) {
@@ -18,10 +19,10 @@ export async function POST(request: Request) {
   })) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     // Loyalty and QR retention failures must not fail the other heartbeat workers.
-    const [feedback, orders, games, contacts, loyalty, qr] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb()),
+    const [feedback, orders, games, contacts, loyalty, qr, delivery] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb()),
       runLoyaltyWorker(getAdminDb()).catch(() => ({ failed: true })),
-      runQrRetentionWorker(getAdminDb).catch(() => ({ state: 'failed' }))]);
-    return Response.json({ feedback, orders, games, contacts, loyalty, qr }, { headers: { 'Cache-Control': 'no-store' } });
+      runQrRetentionWorker(getAdminDb).catch(() => ({ state: 'failed' })), runDeliveryDispatchWorker().catch(() => ({ state: 'failed' }))]);
+    return Response.json({ feedback, orders, games, contacts, loyalty, qr, delivery }, { headers: { 'Cache-Control': 'no-store' } });
   }
   catch { return Response.json({ error: 'Feedback worker unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
 }

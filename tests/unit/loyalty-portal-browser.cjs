@@ -646,3 +646,7 @@ for(const width of [390,1440])test(`online purchase history and retained stamp e
   if(process.env.PORTAL_HISTORY_SCREENSHOTS){fs.mkdirSync(process.env.PORTAL_HISTORY_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.PORTAL_HISTORY_SCREENSHOTS,'history-'+width+'.png'),fullPage:true});}
  }finally{await page.close();}
 });
+test('managed customer history shows separate delivery tracking with unique headings',async()=>{
+ const {page}=await open('history?path=%2Fclub%2Fhistorik',{width:390,init:{fn:()=>{window.__member={history:[],orders:['order-a','order-b'].map(id=>({id,orderedAt:1792915200000,locationName:'Amager',status:'Ready',totalAmount:135,refundedAmount:0,netAmount:135,managedDeliveryTracking:{orderId:id,bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}}))};}}});
+ try{await page.getByRole('heading',{name:'Følg din levering'}).first().waitFor();assert.equal(await page.getByRole('heading',{name:'Følg din levering'}).count(),2);assert.equal(await page.getByText('Kurér har afhentet din ordre').count(),2);const ids=await page.getByRole('heading',{name:'Følg din levering'}).evaluateAll(nodes=>nodes.map(n=>n.id));assert.equal(new Set(ids).size,2);assert.ok(await noOverflow(page));}finally{await page.close();}
+});

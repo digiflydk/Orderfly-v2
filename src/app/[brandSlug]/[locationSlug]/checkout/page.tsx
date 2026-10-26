@@ -6,6 +6,7 @@ import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
 import { storefrontHref } from "@/lib/server/storefront-path";
+import { managedDeliveryRequired } from "@/lib/delivery/quotes/adoption";
 
 export const runtime = "nodejs";
 
@@ -21,9 +22,11 @@ export default async function CheckoutPage({
     redirect(await storefrontHref(brand.slug));
   }
 
+  const managedDeliveryEnabled = await managedDeliveryRequired({ brandId: brand.id, locationId: location.id });
+
   return (
     <div className="bg-[var(--storefront-menu-background,#FFF8F0)] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
-      <CheckoutClient brand={brand} location={location} />
+      <CheckoutClient brand={brand} location={location} managedDeliveryEnabled={managedDeliveryEnabled} />
     </div>
   );
 }

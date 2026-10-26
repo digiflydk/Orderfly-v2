@@ -6,6 +6,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { AuthorityError } from '@/lib/access/authority';
 import { managedDeliveryBindingSchema, verifiedDeliveryEventSchema } from '../provider-contract';
+import { cancellationAvailability } from '../cancellation/server';
 import { bookingIntentSchema } from '../booking/state';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const querySchema = z.object({ brandId: id, locationId: id, orderId: id.optional(), cursor: z.string().max(2048).optional(), eventCursor: z.string().max(2048).optional() }).strict()
@@ -20,7 +21,7 @@ function decode(raw: string | undefined, scope: string): string | null {
   try { const value=z.object({scope:z.literal(scope),after:id}).strict().parse(JSON.parse(Buffer.from(raw,'base64url').toString('utf8')));return value.after; }
   catch { throw new DeliveryQueryError(); }
 }
-export type DeliveryOrderRow = { id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null };
+export type DeliveryOrderRow = { id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null; costReviewRequired:boolean; deliveryReconciliationRequired:boolean };
 export async function readDeliveryOrders(raw: unknown) {
   const parsed=querySchema.safeParse(raw);if(!parsed.success)throw new DeliveryQueryError();const q=parsed.data;
   await requireOrderflyAccess(q.brandId,[q.locationId],'orderfly.orders:view');
@@ -36,7 +37,7 @@ export async function readDeliveryOrders(raw: unknown) {
     const boundState=boundAttempt && attempt.data.state==='booked' && state && state.providerDeliveryId===attempt.data.providerDeliveryId && state.brandId===q.brandId && state.locationId===q.locationId && state.orderId===doc.id && state.provider===managed.data.providerId && statuses.includes(state.status);
     return {id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:boundState?state.status:null,
       paymentStatus:['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
-      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null};
+      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true};
   }
   if(q.orderId){
     const doc=await db.collection('orders').doc(q.orderId).get(),row=await project(doc);if(!row)throw new DeliveryQueryError('delivery_not_found',404);
@@ -46,7 +47,8 @@ export async function readDeliveryOrders(raw: unknown) {
       return [{id:d.id,status:event.data.status,nativeStatus:event.data.nativeStatus,occurredAt:event.data.occurredAt,receivedAt:event.data.receivedAt,
         decision:['apply','ignore','reconcile'].includes(data.decision)?data.decision:null,reason:typeof data.reason==='string'&&/^[a-z_]{1,80}$/.test(data.reason)?data.reason:null}];});
     const more=snapshot.docs.length>PAGE;
-    return {orders:[row],nextCursor:null,hasMore:false,events,nextEventCursor:more?encode(scope,docs.at(-1)!.id):null,hasMoreEvents:more};
+    const cancellation=await cancellationAvailability({brandId:q.brandId,locationId:q.locationId,orderId:q.orderId}).catch(()=>({available:false}));
+    return {orders:[row],nextCursor:null,hasMore:false,cancellation:{available:cancellation.available},events,nextEventCursor:more?encode(scope,docs.at(-1)!.id):null,hasMoreEvents:more};
   }
   let query=db.collection('orders').where('brandId','==',q.brandId).where('locationId','==',q.locationId).orderBy(FieldPath.documentId());const after=decode(q.cursor,scope);if(after)query=query.startAfter(after);
   const snapshot=await query.limit(PAGE+1).get(),docs=snapshot.docs.slice(0,PAGE),orders=(await Promise.all(docs.map(project))).filter((v):v is DeliveryOrderRow=>v!==null),more=snapshot.docs.length>PAGE;

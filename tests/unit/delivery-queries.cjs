@@ -8,7 +8,7 @@ function fixture(options={}){
  const snap=(path)=>({id:path.split('/').at(-1),ref:ref(path),exists:rows.has(path),data:()=>rows.get(path)});
  function ref(path){return{path,collection:name=>collection(`${path}/${name}`),get:async()=>{calls.push(path);return snap(path)}};}
  function collection(path,filters=[],after=null,limit=Infinity){return{doc:id=>ref(`${path}/${id}`),where:(key,op,value)=>collection(path,[...filters,[key,value]],after,limit),orderBy:()=>collection(path,filters,after,limit),startAfter:value=>collection(path,filters,value,limit),limit:value=>collection(path,filters,after,value),get:async()=>{assert.ok(limit<=26,'bounded reads');calls.push(path);const docs=[...rows.keys()].filter(p=>p.startsWith(path+'/')&&p.split('/').length===path.split('/').length+1).sort().map(snap).filter(d=>(!after||d.id>after)&&filters.every(([key,value])=>d.data()[key]===value)).slice(0,limit);return{docs}}};}
- const mocks={'server-only':{},'firebase-admin/firestore':{FieldPath:{documentId:()=> '__id__'}},'@/lib/firebase-admin':{getAdminDb:()=>({collection})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{if(deny)throw Error('forbidden')}}};
+ const mocks={'server-only':{},'../cancellation/server':{cancellationAvailability:async()=>({available:false})},'firebase-admin/firestore':{FieldPath:{documentId:()=> '__id__'}},'@/lib/firebase-admin':{getAdminDb:()=>({collection})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{if(deny)throw Error('forbidden')}}};
  return{...loadTs('src/lib/delivery/queries/server.ts',mocks),rows,calls,revoke:()=>{deny=true}};
 }
 test('bounded scoped list paginates and never returns unrelated order',async()=>{
@@ -24,4 +24,17 @@ test('permission and cursor scope denial precede private order query',async()=>{
  const f=fixture();f.revoke();await assert.rejects(f.readDeliveryOrders(scope),/forbidden/);assert.equal(f.calls.length,0);
  const g=fixture(),first=await g.readDeliveryOrders(scope);await assert.rejects(g.readDeliveryOrders({...scope,orderId:'o00',eventCursor:first.nextCursor}),/invalid/);
  await assert.rejects(g.readDeliveryOrders({...scope,extra:'bad'}),/invalid/);
+});
+test('orders view projects only nonmonetary cost review flag in list and detail',async()=>{
+ const f=fixture();f.rows.get('orders/o00').deliveryCostException={reason:'accepted_provider_cost_changed',requiresReview:true,quotedCost:{amountMinor:4500},acceptedCost:{amountMinor:9000},customerFee:{amountMinor:3500},subsidy:{amountMinor:5500}};
+ const list=await f.readDeliveryOrders(scope),detail=await f.readDeliveryOrders({...scope,orderId:'o00'});
+ assert.equal(list.orders.find(o=>o.id==='o00').costReviewRequired,true);assert.equal(detail.orders[0].costReviewRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').costReviewRequired,false);
+ for(const result of [list,detail]){const text=JSON.stringify(result);for(const secret of ['quotedCost','acceptedCost','customerFee','subsidy','4500','9000','3500','5500','accepted_provider_cost_changed'])assert.equal(text.includes(secret),false);}
+});
+
+test('manual reconciliation exposes strict boolean without native identifiers or invented status',async()=>{
+ const f=fixture();Object.assign(f.rows.get('orders/o00'),{deliveryReconciliationRequired:true,providerDeliveryId:'private-courier-id',deliveryReconciliation:{nativeRequestId:'private-request-id',providerCost:7200}});f.rows.get('orders/o01').deliveryReconciliationRequired='true';
+ const list=await f.readDeliveryOrders(scope),detail=await f.readDeliveryOrders({...scope,orderId:'o00'});
+ assert.equal(list.orders.find(o=>o.id==='o00').deliveryReconciliationRequired,true);assert.equal(detail.orders[0].deliveryReconciliationRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').deliveryReconciliationRequired,false);assert.equal(detail.orders[0].bookingState,null);assert.equal(detail.orders[0].deliveryStatus,null);
+ for(const result of [list,detail])for(const secret of ['private-courier-id','private-request-id','providerCost','7200'])assert.equal(JSON.stringify(result).includes(secret),false);
 });
