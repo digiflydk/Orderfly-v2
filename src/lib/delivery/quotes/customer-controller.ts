@@ -9,7 +9,7 @@ import {quoteDelivery,quoteAddressBinding} from './service';
 import {normalizeDanishDeliveryAddress} from './address';
 import {checkoutKeyHash,issueCustomerQuote,type AuthoritativeDraft} from './customer-boundary';
 import {persistCustomerQuoteClaim,reserveCustomerQuoteRate,saveAuthoritativeCustomerDraft,loadCurrentCustomerDraft} from './customer-store';
-import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable} from './runtime';
+import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from './runtime';
 export type NativeManagedPricing={brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;fulfillmentAt:string;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
@@ -18,7 +18,7 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing){
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
  const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
  const key=checkoutKeyHash(input.checkoutKey);
- const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
+ const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment:managedDeliveryRuntimeEnvironment(),items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
    bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0),discount:input.payment.cartDiscountTotal||0,
    customer:{name:customer.name,email:customer.email.trim().toLowerCase(),phone:customer.phone,deliveryInstructions:customer.deliveryInstructions||'',subscribeToNewsletter:customer.subscribeToNewsletter,subscribeToClub:!!customer.subscribeToClub},selection:input.deliverySelection,freeDeliveryCampaignIds:input.freeDeliveryCampaignIds})));
  const binding={brandId:brand.id,locationId:location.id,checkoutReference:key,providerId:result.settings.providerId,

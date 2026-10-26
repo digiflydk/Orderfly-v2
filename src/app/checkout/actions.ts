@@ -48,7 +48,7 @@ import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt'
 import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
 import { prepareUnpaidAcceptanceOriginals } from '@/lib/printing/unpaid-acceptance-originals';
 import {managedDeliveryRequired} from '@/lib/delivery/quotes/adoption';
-import {managedDeliveryRuntimeAvailable} from '@/lib/delivery/quotes/runtime';
+import {managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from '@/lib/delivery/quotes/runtime';
 import {createNativeManagedCustomerQuote,currentNativeManagedDraft} from '@/lib/delivery/quotes/customer-controller';
 import {prepareCustomerQuoteConsumption} from '@/lib/delivery/quotes/customer-store';
 import {resolveManagedStripeGateway,type ManagedStripeAccount} from '@/lib/delivery/payments/stripe-authority';
@@ -718,7 +718,13 @@ export async function createStripeCheckoutSessionAction(
     if(managedDeliveryAcceptance && paymentMethod!=='online')throw Error('Levering kræver online betaling.');
     if (paymentMethod === 'online') {
       stage = 'configuration';
-      if(managedDeliveryAcceptance){const gateway=await resolveManagedStripeGateway();stripe=gateway.stripe;managedStripeAccount=gateway.binding;}
+      if(managedDeliveryAcceptance){
+        const environment=managedDeliveryRuntimeEnvironment();
+        if(!environment)throw Error('delivery_environment_unconfigured');
+        const gateway=await resolveManagedStripeGateway();
+        if(gateway.binding.livemode!==(environment==='production'))throw Error('delivery_payment_environment_mismatch');
+        stripe=gateway.stripe;managedStripeAccount=gateway.binding;
+      }
       else {const stripeSecretKey = await getActiveStripeSecretKey();
       if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
       stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });}

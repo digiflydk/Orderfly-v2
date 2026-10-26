@@ -23,18 +23,24 @@ const proofs = new WeakMap<object, { stripe: Stripe; value: PaymentProjection; v
 const reference = (value: string | { id: string } | null) => typeof value === 'string' ? value : value?.id;
 export async function verifyManagedPaidOrder(orderId: string, order: Record<string, any>): Promise<VerifiedManagedPayment> {
   const expected = managedStripeAccountSchema.parse(order.managedStripeAccount);
+  const storedPaymentIntentId = order.psp?.paymentIntentId;
   if (!['Pending', 'Paid'].includes(order.paymentStatus) || order.deliveryType !== 'Delivery' || order.psp?.provider !== 'stripe'
-    || !/^pi_[A-Za-z0-9]+$/.test(order.psp.paymentIntentId) || !/^cs_[A-Za-z0-9_]+$/.test(order.psp.checkoutSessionId)
+    || (storedPaymentIntentId === undefined ? order.paymentStatus !== 'Pending' : !/^pi_[A-Za-z0-9]+$/.test(storedPaymentIntentId)) || !/^cs_[A-Za-z0-9_]+$/.test(order.psp.checkoutSessionId)
     || typeof order.totalAmount !== 'number' || !Number.isFinite(order.totalAmount)) throw new Error('delivery_payment_invalid');
   const { stripe, binding } = await resolveManagedStripeGateway();
   if (binding.accountId !== expected.accountId || binding.livemode !== expected.livemode) throw new Error('delivery_payment_account_changed');
   const session = await stripe.checkout.sessions.retrieve(order.psp.checkoutSessionId);
-  const pi = await stripe.paymentIntents.retrieve(order.psp.paymentIntentId, { expand: ['latest_charge'] });
+  // First settlement has only the saved checkout session. Resolve the intent from
+  // Stripe on the pinned account, never from an unverified caller-supplied reference.
+  const paymentIntentId = reference(session.payment_intent);
+  if (!paymentIntentId || !/^pi_[A-Za-z0-9]+$/.test(paymentIntentId)
+    || storedPaymentIntentId !== undefined && storedPaymentIntentId !== paymentIntentId) throw new Error('delivery_payment_mismatch');
+  const pi = await stripe.paymentIntents.retrieve(paymentIntentId, { expand: ['latest_charge'] });
   const charge = pi.latest_charge;
   const amountMinor = Math.round(order.totalAmount * 100);
   const scope = { brandId: order.brandId, locationId: order.locationId, orderId };
   if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0 || session.id !== order.psp.checkoutSessionId || session.payment_status !== 'paid' || session.mode !== 'payment' || session.status !== 'complete'
-    || reference(session.payment_intent) !== pi.id || pi.id !== order.psp.paymentIntentId || pi.status !== 'succeeded'
+    || reference(session.payment_intent) !== pi.id || pi.id !== paymentIntentId || pi.status !== 'succeeded'
     || session.livemode !== binding.livemode || pi.livemode !== binding.livemode || session.currency !== 'dkk' || pi.currency !== 'dkk'
     || session.amount_total !== amountMinor || pi.amount_received !== amountMinor || pi.amount !== amountMinor
     || !charge || typeof charge === 'string' || !charge.paid || charge.disputed || charge.currency !== 'dkk' || charge.amount !== amountMinor

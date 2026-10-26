@@ -28,3 +28,9 @@ const resolver=createConfiguredManagedDeliveryRuntimeResolver({
 /** Configuration only: no provider, geocoding or paid routing calls. */
 export const managedDeliveryRuntimeAvailable=resolver.available;
 export async function resolveManagedDeliveryRuntime(scope:{brandId:string;locationId:string},draft:AuthoritativeDraft):Promise<ManagedDeliveryRuntime|null>{return resolver.resolve(scope,draft);}
+
+/** Explicit native mode only; a missing or unknown environment never defaults to production or sandbox. */
+export function managedDeliveryRuntimeEnvironment():'sandbox'|'production'|null{
+ const environment=process.env.ORDERFLY_DELIVERY_ENVIRONMENT;
+ return environment==='sandbox'||environment==='production'?environment:null;
+}

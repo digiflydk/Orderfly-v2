@@ -163,7 +163,9 @@ async function settleOrder(proof: PaymentProof) {
     if (managed) {
       if (!managedProof || !session) throw new Error('Managed delivery payment proof missing');
       const payment = managedPaymentProjection(managedProof);
-      if (payment.scope.orderId !== metadata.orderId || payment.scope.brandId !== order.brandId || payment.scope.locationId !== order.locationId
+      if (order.psp?.provider !== 'stripe' || order.psp.checkoutSessionId !== payment.checkoutSessionId
+        || payment.scope.orderId !== metadata.orderId || payment.scope.brandId !== order.brandId || payment.scope.locationId !== order.locationId
+        || order.psp?.paymentIntentId !== undefined && order.psp.paymentIntentId !== payment.paymentIntentId
         || payment.paymentIntentId !== piId || payment.checkoutSessionId !== session.id || payment.amountMinor !== Math.round(order.totalAmount * 100)
         || payment.binding.accountId !== order.managedStripeAccount?.accountId || payment.binding.livemode !== order.managedStripeAccount?.livemode) throw new Error('Managed delivery payment changed');
     }

@@ -51,7 +51,7 @@ async function fixture(options = {}) {
   const refunds=[];
   class Provider {
     refunds={create:async(params,opts)=>{assert.equal(f.records.get('orders/'+f.orderId+'/deliveryRefunds/original').state,'submitting');assert.match(opts.idempotencyKey,/^delivery-refund-[a-f0-9]{64}$/);const refund={id:'re_fixture',charge:'ch_test',payment_intent:'pi_test',amount:session.amount_total,currency:'dkk',metadata:params.metadata,status:'succeeded'};refunds.push(refund);return refund;},list:async()=>({data:refunds,has_more:false})};
-    accounts={retrieve:async()=>({id:'acct_test'})};
+    accounts={retrieve:async()=>{options.afterAccountRead?.(f);return {id:'acct_test'};}};
     checkout={sessions:{retrieve:async()=>{return session;}}};
     paymentIntents={retrieve:async()=>({id:'pi_test',status:'succeeded',livemode:false,currency:'dkk',amount:session.amount_total,amount_received:session.amount_total,metadata:scope,
       latest_charge:{id:'ch_test',paid:true,disputed:false,livemode:false,currency:'dkk',amount:session.amount_total,amount_refunded:0,payment_intent:'pi_test'}})};
@@ -97,7 +97,7 @@ async function fixture(options = {}) {
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
   };
-  return {...f,scope,dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
+  return {...f,scope,session,settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
 }
 
 test('real dispatcher, private binding, provider, payment acceptance and signed callback share one native lifecycle',async t=>{
@@ -139,4 +139,38 @@ test('authentic facade rejection before network consumption refunds once without
  assert.equal(f.network.length,0);assert.equal(f.refunds.length,1);assert.equal(f.jobs().length,0);
  assert.equal([...f.records].filter(([p])=>p.includes('/financialAdjustments/')).length,1);
  assert.equal([...f.records].filter(([p])=>p.startsWith('orderNotificationJobs/')).length,0);
+});
+
+test('first native managed settlement resolves PI from saved session then queues one delivery',async t=>{
+ const f=await fixture();const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;
+ f.records.delete('deliveryDispatchJobs/'+f.orderId);
+ const customerId=f.order().customerDetails.id, before=structuredClone(f.records.get('customers/'+customerId));
+ assert.equal(await f.settlement.settlePaidCheckoutSession(f.session),true);
+ assert.equal(f.order().psp.paymentIntentId,'pi_test');assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.order().status,'Pending');
+ assert.equal(f.records.get('deliveryDispatchJobs/'+f.orderId).state,'pending');
+ assert.equal(f.records.get('customers/'+customerId).totalSpend,(before.totalSpend||0)+f.order().totalAmount);
+ assert.equal(f.records.get('customers/'+customerId).totalOrders,(before.totalOrders||0)+1);
+ const invoice=structuredClone(f.order().invoice),customer=structuredClone(f.records.get('customers/'+customerId));
+ assert.equal(await f.settlement.settlePaidCheckoutSession(f.session),false);
+ assert.deepEqual(f.order().invoice,invoice);assert.deepEqual(f.records.get('customers/'+customerId),customer);
+ assert.equal(f.jobs().length,0);assert.equal(f.network.length,0);
+ assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'booked');
+ assert.equal(f.network.length,1);assert.equal(f.jobs().length,1);assert.equal(f.order().status,'Received');
+});
+test('first managed settlement rejects stored PI or authoritative session scope conflicts without writes',async()=>{
+ for(const mutate of [f=>f.order().psp.paymentIntentId='pi_other',f=>f.session.metadata={...f.session.metadata,brandId:'foreign'},f=>f.session.payment_intent='pi_other']){
+  const f=await fixture();f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);mutate(f);
+  const before=structuredClone([...f.records]);await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session));
+  assert.deepEqual([...f.records],before);assert.equal(f.network.length,0);
+ }
+});
+
+test('managed settlement transaction rejects concurrent PSP binding edits',async()=>{
+ for(const field of ['provider','checkoutSessionId','paymentIntentId']){
+  const f=await fixture({afterAccountRead:f=>{f.order().psp[field]='changed';}});
+  f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);
+  await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session),/Managed delivery payment changed/);
+  assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.records.has('deliveryDispatchJobs/'+f.orderId),false);assert.equal(f.order().invoice,undefined);
+ }
 });
