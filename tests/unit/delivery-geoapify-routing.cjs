@@ -11,7 +11,7 @@ const json = data => Response.json(data);
 function setup(extra = {}) {
   const events = [], calls = [];
   const options = { apiKey: 'synthetic-key', reserveQuote: async () => { events.push('quote'); return true; },
-    reserveRequest: async () => { events.push('request'); return true; }, fetch: async (url, init) => {
+    reserveRequest: async () => { events.push('request'); return { sendBeforeMs: Date.now() + 1000 }; }, fetch: async (url, init) => {
       calls.push({ url: new URL(url), init }); events.push('fetch');
       return json(url.includes('/geocode/') ? geocode(new URL(url).searchParams.get('housenumber')) : route());
     }, ...extra };
@@ -63,9 +63,41 @@ test('budget denial and exception fail closed without requests or second reserva
     assert.equal((await f.adapter.resolve(address)).kind, 'unavailable'); assert.equal((await f.adapter.resolve(address)).kind, 'unavailable');
     assert.equal(reservations, 1); assert.equal(f.calls.length, 0);
   }
-  for (const reserveRequest of [async () => false, async () => { throw Error('private'); }]) {
+  for (const reserveRequest of [async () => null, async () => { throw Error('private'); }]) {
     const f = setup({ reserveRequest }); assert.equal((await f.adapter.resolve(address)).kind, 'unavailable'); assert.equal(f.calls.length, 0);
   }
+});
+test('expired, boundary and malformed request grants cannot initiate network requests', async () => {
+  const realNow = Date.now;
+  Date.now = () => 2000;
+  try {
+    for (const grant of [null, true, false, {}, [], { sendBeforeMs: '3000' }, { sendBeforeMs: Infinity },
+      { sendBeforeMs: NaN }, { sendBeforeMs: 3000.5 }, { sendBeforeMs: Number.MAX_SAFE_INTEGER + 1 },
+      { sendBeforeMs: 1999 }, { sendBeforeMs: 2000 }, { sendBeforeMs: 3001 }]) {
+      let reservations = 0;
+      const f = setup({ reserveRequest: async () => { reservations++; return grant; } });
+      assert.deepEqual(await f.adapter.resolve(address), { kind: 'unavailable' });
+      assert.equal(f.calls.length, 0); assert.equal(reservations, 1);
+    }
+    const f = setup({ reserveRequest: async () => ({ sendBeforeMs: 2001 }) });
+    assert.equal((await f.adapter.resolve(address)).kind, 'verified'); assert.equal(f.calls.length, 1);
+  } finally { Date.now = realNow; }
+});
+test('grant delayed past its send deadline fails closed without renewal', async () => {
+  const realNow = Date.now;
+  let now = 1000, reservations = 0;
+  Date.now = () => now;
+  try {
+    const f = setup({ reserveRequest: async () => {
+      reservations++;
+      const grant = { sendBeforeMs: now + 1000 };
+      await Promise.resolve();
+      now = 2000;
+      return grant;
+    } });
+    assert.deepEqual(await f.adapter.resolve(address), { kind: 'unavailable' });
+    assert.equal(f.calls.length, 0); assert.equal(reservations, 1);
+  } finally { Date.now = realNow; }
 });
 test('concurrent resolves share reservation and third resolve cannot escape request cap', async () => {
   const f = setup(); const results = await Promise.all([f.adapter.resolve(address), f.adapter.resolve(address), f.adapter.resolve(address)]);

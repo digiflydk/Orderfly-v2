@@ -15,7 +15,7 @@ const samePoint = (a: VerifiedAddress, b: VerifiedAddress) => a.reference === b.
 /** One instance per quote. Credentials and quota reservations are server-owned dependencies. */
 export function createGeoapifyRoutingAdapter(options: {
   apiKey: string; fetch: typeof fetch; timeoutMs?: number;
-  reserveQuote: () => Promise<boolean>; reserveRequest: () => Promise<boolean>;
+  reserveQuote: () => Promise<boolean>; reserveRequest: () => Promise<{ sendBeforeMs: number } | null>;
 }): RoutingAdapter {
   const timeoutMs = options.timeoutMs ?? 4000;
   if (!text(options.apiKey, 300) || /\s/.test(options.apiKey) || typeof options.fetch !== 'function'
@@ -27,7 +27,11 @@ export function createGeoapifyRoutingAdapter(options: {
   const resolved: VerifiedAddress[] = [];
   const request = async (path: string, params: URLSearchParams): Promise<any> => {
     quoteReservation ??= Promise.resolve().then(() => reserveQuote()).then(value => value === true, () => false);
-    if (!await quoteReservation || await reserveRequest() !== true) throw Error('routing_budget_unavailable');
+    if (!await quoteReservation) throw Error('routing_budget_unavailable');
+    const grant = await reserveRequest();
+    if (!grant || typeof grant !== 'object' || Array.isArray(grant)
+      || !Number.isSafeInteger(grant.sendBeforeMs)) throw Error('routing_budget_unavailable');
+    const sendBeforeMs = grant.sendBeforeMs;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_, reject) => {
@@ -36,10 +40,16 @@ export function createGeoapifyRoutingAdapter(options: {
     params.set('apiKey', apiKey);
     try {
       return await Promise.race([timeout, (async () => {
-        const response = await fetchImpl(`${ENDPOINT}${path}?${params}`, {
+        const url = `${ENDPOINT}${path}?${params}`;
+        const init: RequestInit = {
           method: 'GET', redirect: 'error', cache: 'no-store', signal: controller.signal,
           headers: { Accept: 'application/json' },
-        });
+        };
+        // A delayed transaction/grant must never escape its reserved send window.
+        // No await may be introduced between this check and initiating fetch.
+        const sendAt = Date.now();
+        if (sendAt >= sendBeforeMs || sendBeforeMs - sendAt > 1000) throw Error('routing_budget_unavailable');
+        const response = await fetchImpl(url, init);
         if (!response.ok || !response.body) throw Error('routing_response_unavailable');
         const reader = response.body.getReader(), decoder = new TextDecoder();
         let size = 0, body = '';

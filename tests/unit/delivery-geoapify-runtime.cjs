@@ -21,7 +21,7 @@ function fixture({realRouting=false}={}){
  const config={scope:{...scope},environment:'sandbox',routingSource:'geoapify',routingApprovalRef:'sandbox-approval',retentionApprovalRef:'sandbox-retention',
   pickupContact:{name:'Test pickup',phone:'+4512345678',verifiedAt:'2026-10-26T00:00:00Z'}};
  let adopted=true,enabled=true,options;
- const budget={reserveQuote:async()=>{calls.push('quote-budget');return false;},reserveRequest:async()=>{calls.push('request-budget');return false;}};
+ const budget={reserveQuote:async()=>{calls.push('quote-budget');return false;},reserveRequest:async()=>{calls.push('request-budget');return null;}};
  const mocks={
   'server-only':{},
   './adoption':{readManagedDeliveryAdoption:async()=>adopted?'managed':'legacy'},
@@ -55,7 +55,7 @@ test('Geoapify availability performs configuration reads only; construction forw
   assert.equal(f.options().apiKey,defaults.ORDERFLY_DELIVERY_GEOAPIFY_API_KEY);
   assert.equal(f.options().fetch,fetch);
   assert.equal(f.options().reserveQuote,f.budget.reserveQuote);assert.equal(f.options().reserveRequest,f.budget.reserveRequest);
-  assert.equal(await f.options().reserveQuote(),false);assert.equal(await f.options().reserveRequest(),false);
+  assert.equal(await f.options().reserveQuote(),false);assert.equal(await f.options().reserveRequest(),null);
  });
 });
 

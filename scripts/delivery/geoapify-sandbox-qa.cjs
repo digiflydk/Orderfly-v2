@@ -46,7 +46,7 @@ async function runRoutingQa({ configFile, journalFile, createAdapter, fetchImpl 
     validateJournal(journal);
     const day = dayKey(now());
     const bucket = journal.days[day] ??= { reservedRequests: 0, runs: [] };
-    let reserved = false, allowed = 0, calls = 0;
+    let reserved = false, allowed = 0, calls = 0, sendBeforeMs = 0;
     const run = { id: crypto.randomUUID(), at: now().toISOString(), state: 'prepared', requests: [] };
     const persist = () => savePrivate(journalFile, journal);
     const reserveQuote = async () => {
@@ -54,8 +54,9 @@ async function runRoutingQa({ configFile, journalFile, createAdapter, fetchImpl 
       bucket.reservedRequests += 3; bucket.runs.push(run); reserved = true; run.state = 'reserved'; persist(); return true;
     };
     const reserveRequest = async () => {
-      if (!reserved || allowed >= 3 || allowed !== calls || dayKey(now()) !== day) return false;
-      allowed++; return true;
+      if (!reserved || allowed >= 3 || allowed !== calls || dayKey(now()) !== day) return null;
+      sendBeforeMs = now().getTime() + 1000;
+      allowed++; return { sendBeforeMs };
     };
     const guardedFetch = async (url, options) => {
       const parsed = new URL(url);
@@ -64,6 +65,7 @@ async function runRoutingQa({ configFile, journalFile, createAdapter, fetchImpl 
       const entry = { kind: calls < 2 ? 'geocode' : 'route', state: 'outbound_intent', at: now().toISOString() };
       run.requests.push(entry); calls++; run.state = 'in_progress'; persist();
       try {
+        if (now().getTime() >= sendBeforeMs) throw failure();
         const response = await fetchImpl(url, options);
         entry.state = 'response'; entry.httpStatus = response.status; persist(); return response;
       } catch {

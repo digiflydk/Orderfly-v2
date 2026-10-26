@@ -5,9 +5,12 @@ import {getAdminDb} from '@/lib/firebase-admin';
 
 const MAX_QUOTES_PER_DAY=100;
 const MAX_REQUESTS_PER_SECOND=5;
+const SEND_WINDOW_MS=1000;
+const RATE_WINDOW_MS=1000;
 const timestamp=z.number().int().nonnegative().safe();
 const dailySchema=z.object({version:z.literal(1),day:z.string().regex(/^\d{4}-\d{2}-\d{2}$/),count:z.number().int().min(1).max(MAX_QUOTES_PER_DAY)}).strict();
-const rateSchema=z.object({version:z.literal(1),lastSeenAtMs:timestamp,reservations:z.array(timestamp).min(1).max(MAX_REQUESTS_PER_SECOND)}).strict();
+// v2 reservations are expiry instants, not v1 request timestamps. Old records fail closed.
+const rateSchema=z.object({version:z.literal(2),lastSeenAtMs:timestamp,reservations:z.array(timestamp).min(1).max(MAX_REQUESTS_PER_SECOND)}).strict();
 
 export function isGeoapifyQuotaNamespace(value:unknown):value is string {
   return typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
@@ -42,18 +45,27 @@ export function createGeoapifyBudget(options:{quotaNamespace:string;db?:Firebase
         });
       }catch{return false;}
     },
-    async reserveRequest():Promise<boolean>{
+    async reserveRequest():Promise<{sendBeforeMs:number}|null>{
       try {
-        const at=timestamp.parse(now()),db=options.db??getAdminDb(),ref=document('requests');
-        return await db.runTransaction(async tx=>{
-          const snapshot=await tx.get(ref),prior=snapshot.exists?rateSchema.parse(snapshot.data()):null;
-          if(prior&&(prior.lastSeenAtMs>at||prior.reservations.some((v,i,a)=>v>prior.lastSeenAtMs||(i>0&&v<a[i-1]))))return false;
-          const reservations=(prior?.reservations??[]).filter(value=>value>at-1000);
-          if(reservations.length>=MAX_REQUESTS_PER_SECOND)return false;
-          tx.set(ref,{version:1,lastSeenAtMs:at,reservations:[...reservations,at]});
-          return true;
+        const db=options.db??getAdminDb(),ref=document('requests');
+        const grant=await db.runTransaction(async tx=>{
+          const snapshot=await tx.get(ref);
+          // Sample after the read on EVERY transaction attempt, including contention retries.
+          const at=timestamp.parse(now()),prior=snapshot.exists?rateSchema.parse(snapshot.data()):null;
+          if(prior&&(prior.lastSeenAtMs>at||prior.reservations.some((v,i,a)=>v>prior.lastSeenAtMs+SEND_WINDOW_MS+RATE_WINDOW_MS||(i>0&&v<a[i-1]))))return null;
+          const reservations=(prior?.reservations??[]).filter(value=>value>at);
+          if(reservations.length>=MAX_REQUESTS_PER_SECOND)return null;
+          const sendBeforeMs=timestamp.parse(at+SEND_WINDOW_MS),expiresAtMs=timestamp.parse(sendBeforeMs+RATE_WINDOW_MS);
+          tx.set(ref,{version:2,lastSeenAtMs:at,reservations:[...reservations,expiresAtMs]});
+          return {reservedAtMs:at,sendBeforeMs};
         });
-      }catch{return false;}
+        // A slow/unknown commit never grants a stale send and never refunds its reservation.
+        const completedAt=timestamp.parse(now());
+        if(!grant||completedAt<grant.reservedAtMs||completedAt>=grant.sendBeforeMs)return null;
+        // The adapter must recheck this strict deadline synchronously immediately before fetch.
+        // Tokens remain counted for a full second beyond the latest permitted send instant.
+        return {sendBeforeMs:grant.sendBeforeMs};
+      }catch{return null;}
     },
   };
 }

@@ -74,11 +74,31 @@ test('endpoint substitution never reaches network', async t => {
 test('a fourth request reservation fails after the complete three-call run', async t => {
   const f = fixture(t); let reserve;
   const result = await runRoutingQa({ ...f, createAdapter: options => { reserve = options.reserveRequest; return adapterFactory(options); }, fetchImpl: async () => new Response('{}') });
-  assert.equal(result.status, 'passed'); assert.equal(await reserve(), false);
+  assert.equal(result.status, 'passed'); assert.equal(await reserve(), null);
 });
 test('journal symlinks are rejected and do not overwrite their target', async t => {
   const f = fixture(t); const target = path.join(path.dirname(f.journalFile), 'target');
   fs.writeFileSync(target, 'untouched', { mode: 0o600 }); fs.symlinkSync(target, f.journalFile);
   await assert.rejects(runRoutingQa({ ...f, createAdapter: adapterFactory }));
   assert.equal(fs.readFileSync(target, 'utf8'), 'untouched');
+});
+
+test('private runner composes the actual adapter deadline contract with sanitized three-call proof', async t => {
+  const f = fixture(t);
+  const { loadTs } = require('../helpers/load-ts.cjs');
+  const { createGeoapifyRoutingAdapter } = loadTs('src/lib/delivery/routing/geoapify/adapter.ts', { 'server-only': {} });
+  let calls = 0;
+  const result = await runRoutingQa({ ...f, now: () => new Date(), createAdapter: createGeoapifyRoutingAdapter, fetchImpl: async raw => {
+    calls++;
+    const url = new URL(raw);
+    if (url.pathname === '/v1/geocode/search') return Response.json({ results: [{
+      place_id: `synthetic-${calls}`, lat: 55.6, lon: 12.5, country_code: 'dk',
+      postcode: url.searchParams.get('postcode'), street: url.searchParams.get('street'),
+      housenumber: url.searchParams.get('housenumber'), result_type: 'building',
+      rank: { confidence: 1, match_type: 'full_match' }, datasource: { sourcename: 'openstreetmap' },
+    }] });
+    return Response.json({ type: 'FeatureCollection', features: [{ properties: { distance: 1500, distance_units: 'Meters', time: 180 } }] });
+  } });
+  assert.equal(result.status, 'passed'); assert.equal(calls, 3);
+  assert.deepEqual(result.httpStatuses, [200, 200, 200]);
 });

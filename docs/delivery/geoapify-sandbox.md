@@ -16,7 +16,7 @@ Each adapter instance belongs to one quote attempt, with at most two geocodes an
 
 ## Quotas and failure handling
 
-The runtime quota is shared by the Geoapify project across locations and instances: 100 quote attempts per UTC day and five outbound requests in a rolling second. A transaction reserves budget before network access. Failed and unknown calls retain their reservation; there is no automatic refund or retry. Storage errors or malformed counters deny access.
+The runtime quota is shared by the Geoapify project across locations and instances: 100 quote attempts per UTC day and five outbound requests in a rolling second. A transaction reserves budget before network access. Each retry samples a fresh clock and returns a one-second send deadline, checked again immediately before the network call. Rate reservations remain counted until one second after the latest permitted send, so delayed transactions cannot recycle grants early. This conservatively reduces throughput; expired grants are not renewed. The version-2 rate ledger rejects older/malformed records instead of silently resetting their budget. Failed and unknown calls retain their reservation; there is no automatic refund or retry. Storage errors or malformed counters deny access.
 
 The quota namespace must be a stable deployment-controlled identifier for this one Geoapify project. Changing it, deleting counters, splitting the same workload across namespaces, or rotating a key must not be used to reset the quota. The cap is on quote attempts, not an exact assertion about provider credits. Verify actual charging in provider statistics before broadening usage. Other direct uses of the same key are outside this application's cap; keep the key exclusive to this sandbox.
 
