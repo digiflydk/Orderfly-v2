@@ -86,3 +86,54 @@ test('foreign cancellation context cannot invoke provider', async () => {
   const result = await createWoltProvider(f.deps).cancel({ scope, providerDeliveryId: 'delivery-A', attemptRef: 'attempt-A', operatorReason: 'Customer request', acceptedFee: null, feeQuoteRef: null, feeQuoteRevision: null });
   assert.equal(result.kind, 'unknown'); assert.equal(f.calls, 0);
 });
+
+test('quote rejects native comment/quantity overflow before available quote or provider I/O', async () => {
+  for (const fulfillment of [
+    { ...request(), instructions: 'x'.repeat(501) },
+    { ...request(), instructions: 'x'.repeat(499), dropoff: { ...address, unit: 'A' } },
+    { ...request(), items: [{ name: 'Pizza', quantity: 101 }] },
+  ]) {
+    const f = fixture(), result = await createWoltProvider(f.deps).quote(fulfillment);
+    assert.equal(result.kind, 'error'); assert.equal(result.error.code, 'invalid_request'); assert.equal(f.calls, 0);
+  }
+  const f = fixture(), provider = createWoltProvider(f.deps), fulfillment = { ...request(), instructions: 'x'.repeat(500), items: [{ name: 'Pizza', quantity: 100 }] };
+  const result = await provider.quote(fulfillment);
+  assert.equal(result.kind, 'available'); assert.equal(f.calls, 1);
+  assert.equal((await provider.create(createRequest(result, fulfillment))).kind, 'accepted'); assert.equal(f.creates, 1);
+});
+
+test('create rejects unsupported native bounds definitively without any provider request', async () => {
+  for (const fulfillment of [
+    { ...request(), instructions: 'x'.repeat(501) },
+    { ...request(), instructions: 'x'.repeat(499), dropoff: { ...address, unit: 'A' } },
+    { ...request(), items: [{ name: 'Pizza', quantity: 101 }] },
+    { ...request(), dropoffContact: { name: 'Test', phone: '123' } },
+  ]) {
+    const f = fixture(), provider = createWoltProvider(f.deps), quote = await provider.quote(request());
+    const before = f.calls, result = await provider.create(createRequest(quote, fulfillment));
+    assert.equal(result.kind, 'rejected'); assert.equal(result.error.code, 'invalid_request');
+    assert.equal(f.calls, before); assert.equal(f.creates, 0);
+  }
+});
+
+test('stored native payload failing local create schema is rejected, never ambiguous', async () => {
+  const f = fixture(), provider = createWoltProvider(f.deps), quote = await provider.quote(request());
+  f.stored.native.dropoff.formattedAddress = 'x'.repeat(501);
+  const result = await provider.create(createRequest(quote));
+  assert.equal(result.kind, 'rejected'); assert.equal(result.error.code, 'invalid_create_payload'); assert.equal(f.creates, 0);
+});
+
+test('unbookable native address or promise identity is rejected before offering/saving quote', async () => {
+  for (const change of ['address', 'identity']) {
+    const f = fixture(), originalFetch = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => {
+      const response = await originalFetch(url, options), body = await response.json();
+      if (change === 'address') body.dropoff.location.formatted_address = 'x'.repeat(501);
+      else body.id = 'invalid/id';
+      return Response.json(body, { status: 201 });
+    };
+    const result = await createWoltProvider(f.deps).quote(request());
+    assert.equal(result.kind, 'error'); assert.equal(result.error.code, 'invalid_native_quote');
+    assert.equal(f.stored, undefined); assert.equal(f.creates, 0);
+  }
+});

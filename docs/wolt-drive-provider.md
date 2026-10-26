@@ -18,7 +18,7 @@ The shared dispatcher MUST claim and durably transition the original intent to s
 
 ## Result semantics
 
-Only a point scheduled-delivery interval is supported. Unsupported requirements and impossible native recipient/parcel bounds are rejected before quoting. Native pickup estimates from quote/create are explicitly preliminary. Reliable kitchen/print time requires verified webhook evidence, handled separately. Provider tax basis is inclusive, tax amount remains unknown, and missing route distance/fees are not invented.
+Only a point scheduled-delivery interval is supported. Unsupported requirements and impossible native recipient/parcel bounds are rejected before quoting. Returned native quote data must also pass the create payload preflight before an available quote is offered or saved. In particular, a combined unit/instructions comment over 500 characters, parcel count over 100, oversized returned address or invalid promise ID cannot become a bookable quote. Create repeats local preflight and returns definitive rejection on local payload failure, without sending a provider request. Native pickup estimates from quote/create are explicitly preliminary. Reliable kitchen/print time requires verified webhook evidence, handled separately. Provider tax basis is inclusive, tax amount remains unknown, and missing route distance/fees are not invented.
 
 ## Validation and remaining integration
 

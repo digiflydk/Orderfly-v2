@@ -8,7 +8,7 @@ import { resolveWoltConfig, type WoltEnvironment, type WoltSecretResolver } from
 import { createWoltHttpClient } from './http';
 import { requestWoltQuote, type WoltQuoteBinding } from './quote';
 import { isWoltQuoteFresh } from './schedule';
-import { createWoltDelivery } from './create';
+import { buildWoltCreateRequest, createWoltDelivery, type WoltCreateInput } from './create';
 import { cancelWoltDelivery } from './cancel';
 
 export const woltCapabilities: ProviderCapabilities = Object.freeze({ quote: true, create: true,
@@ -44,6 +44,9 @@ const error = (code: string, retry: 'never' | 'read_only' | 'after_reconciliatio
 const point = (value: string | null) => value === null ? null : { earliest: value, latest: value };
 const equalScope = (a: DeliveryScope, b: DeliveryScope) => a.brandId === b.brandId && a.locationId === b.locationId;
 const sameMoney = (a: DeliveryMoney, b: DeliveryMoney) => a.amountMinor === b.amountMinor && a.currency === b.currency && a.taxBasis === b.taxBasis && a.taxMinor === b.taxMinor;
+const nativeFulfillmentValid = (request: DeliveryQuoteRequest) => /^\+[1-9]\d{6,14}$/.test(request.dropoffContact.phone)
+  && request.items.every(item => item.quantity <= 100)
+  && [request.dropoff.unit, request.instructions].filter(Boolean).join('\n').length <= 500;
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
@@ -71,6 +74,16 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
       && quote.native.venueId === binding.venueId && quote.native.promiseId === quote.quoteRef
       && sameMoney(quote.cost, request.quotedCost) && isWoltQuoteFresh(quote.native, at, maxAge);
   }
+  function nativeInput(fulfillment: DeliveryQuoteRequest, quote: WoltPrivateQuote, reference: string, orderRef: string): WoltCreateInput {
+    return { scope: fulfillment.scope, binding: { ...fulfillment.scope, venueId: quote.venueId },
+      quote: { ...fulfillment.scope, venueId: quote.venueId, promiseId: quote.native.promiseId, validUntil: quote.native.validUntil,
+        fetchedAt: quote.native.fetchedAt, isBinding: true, dropoff: quote.native.dropoff, scheduledDropoffTime: quote.native.scheduledDropoffTime },
+      merchantOrderReferenceId: reference, recipient: { name: fulfillment.dropoffContact.name, phoneNumber: fulfillment.dropoffContact.phone },
+      parcels: fulfillment.items.map((item, index) => ({ count: item.quantity, description: item.name, identifier: `${orderRef.slice(0, 180)}-${index}` })),
+      dropoffComment: [fulfillment.dropoff.unit, fulfillment.instructions].filter(Boolean).join('\n'),
+      ...(fulfillment.bagCount === null ? {} : { bagCount: fulfillment.bagCount }),
+    };
+  }
   return Object.freeze({
     providerId: 'wolt', capabilities: woltCapabilities,
     async quote(raw: unknown): Promise<DeliveryQuoteResult> {
@@ -78,8 +91,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
       if (!parsed.success || parsed.data.providerId !== 'wolt') return { kind: 'error', error: error('invalid_request') };
       const request = parsed.data;
       if (request.requirements.length) return { kind: 'unavailable', reason: 'unsupported_requirements' };
-      if (!/^\+[1-9]\d{6,14}$/.test(request.dropoffContact.phone) || request.items.some(item => item.quantity > 100)
-        || [request.dropoff.unit, request.instructions].filter(Boolean).join('\n').length > 500) return { kind: 'error', error: error('invalid_request') };
+      if (!nativeFulfillmentValid(request)) return { kind: 'error', error: error('invalid_request') };
       if (request.desiredDelivery.kind === 'scheduled' && Date.parse(request.desiredDelivery.interval.earliest) !== Date.parse(request.desiredDelivery.interval.latest)) return { kind: 'unavailable', reason: 'unsupported_schedule' };
       try {
         const { binding, client } = await context(request.scope);
@@ -100,6 +112,9 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         const privateQuote: WoltPrivateQuote = { scope: { ...request.scope }, quoteRef: result.quoteReference,
           fingerprint: woltFulfillmentFingerprint(request), bindingRevision: binding.revision, merchantId: binding.merchantId,
           venueId: binding.venueId, environment: binding.environment, cost, native: result.native };
+        // A binding native quote must also be representable by our create adapter before being offered.
+        try { buildWoltCreateRequest(nativeInput(request, privateQuote, request.checkoutRef, request.checkoutRef), new Date(now())); }
+        catch { return { kind: 'error', error: error('invalid_native_quote') }; }
         await deps.saveQuote(structuredClone(privateQuote));
         return { kind: 'available', providerId: 'wolt', quoteRef: result.quoteReference, cost, surcharges: [], expiresAt: result.expiresAt,
           pickupEstimateProvenance: { source: 'wolt.shipment_promise', reliability: 'preliminary', observedAt: new Date(at).toISOString() },
@@ -110,6 +125,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
       const parsed = deliveryCreateRequestSchema.safeParse(raw);
       if (!parsed.success || parsed.data.providerId !== 'wolt') return { kind: 'rejected', error: error('invalid_request') };
       const request = parsed.data;
+      if (!nativeFulfillmentValid(request.fulfillment) || request.fulfillment.requirements.length) return { kind: 'rejected', error: error('invalid_request') };
       try {
         const { binding, client } = await context(request.scope);
         const stored = await deps.loadQuote(request.scope, request.quoteRef);
@@ -118,14 +134,12 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         if (await deps.validateClaimedAttempt(structuredClone(request)) !== true) return { kind: 'unknown', attemptRef: request.attemptRef, error: error('dispatch_claim_unverified', 'after_reconciliation') };
         // Recheck after claim verification: that I/O can outlive the quote's validity.
         if (!validQuote(quote, request, binding, now())) return { kind: 'rejected', error: error('quote_changed_or_expired') };
-        const result = await createWoltDelivery({ scope: request.scope, binding: { ...request.scope, venueId: binding.venueId },
-          quote: { ...request.scope, venueId: quote.venueId, promiseId: quote.native.promiseId, validUntil: quote.native.validUntil,
-            fetchedAt: quote.native.fetchedAt, isBinding: true, dropoff: quote.native.dropoff, scheduledDropoffTime: quote.native.scheduledDropoffTime },
-          merchantOrderReferenceId: request.attemptRef, recipient: { name: request.fulfillment.dropoffContact.name, phoneNumber: request.fulfillment.dropoffContact.phone },
-          parcels: request.fulfillment.items.map((item, index) => ({ count: item.quantity, description: item.name, identifier: `${request.orderRef.slice(0, 180)}-${index}` })),
-          dropoffComment: [request.fulfillment.dropoff.unit, request.fulfillment.instructions].filter(Boolean).join('\n'),
-          ...(request.fulfillment.bagCount === null ? {} : { bagCount: request.fulfillment.bagCount }),
-        }, value => client.request(value), new Date(now()));
+        const payload = nativeInput(request.fulfillment, quote, request.attemptRef, request.orderRef);
+        // All local validation failures are definitive non-dispatch. Only an attempted provider write can be ambiguous.
+        const dispatchAt = new Date(now());
+        try { buildWoltCreateRequest(payload, dispatchAt); }
+        catch { return { kind: 'rejected', error: error('invalid_create_payload') }; }
+        const result = await createWoltDelivery(payload, value => client.request(value), dispatchAt);
         if (result.kind === 'rejected') return { kind: 'rejected', error: error(result.code) };
         if (result.kind === 'unknown') return { kind: 'unknown', attemptRef: request.attemptRef, error: error(result.code, 'after_reconciliation') };
         return { kind: 'accepted', providerDeliveryId: result.providerDeliveryId, nativeReference: result.woltOrderReferenceId,
