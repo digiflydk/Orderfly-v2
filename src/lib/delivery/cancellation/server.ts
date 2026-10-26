@@ -32,7 +32,9 @@ async function native(tx:FirebaseFirestore.Transaction,c:Scope,identity:Verified
  const binding=await loadWoltBindingInTransaction(tx,{brandId:c.brandId,locationId:c.locationId},environment);
  if(binding.merchantId!==dispatch.binding?.merchantId||binding.venueId!==dispatch.binding?.venueId||String(binding.revision)!==dispatch.binding?.bindingRevision)throw new DeliveryCancellationError('cancellation_conflict');
  if(state&&(state.brandId!==c.brandId||state.locationId!==c.locationId||state.orderId!==c.orderId||state.provider!=='wolt'||state.providerDeliveryId!==result.providerDeliveryId))throw new DeliveryCancellationError('cancellation_conflict');
- const pickupStarted=order.status==='Delivered'||!!state&&!['booked','courier_assigned','courier_to_pickup'].includes(state.status);
+ // Wolt order.pickup_started maps to courier_to_pickup: its cancellation
+ // cutoff is dispatch toward pickup, not physical collection of the food.
+ const pickupStarted=order.status==='Delivered'||!!state&&!['booked','courier_assigned'].includes(state.status);
  return {order,attempt,result,environment,binding,pickupStarted,state};
 }
 function view(saved:z.infer<typeof savedSchema>,changed=false){return {state:saved.state,changed,feeKnown:saved.result?.kind==='cancelled'&&saved.result.fee!==null};}
@@ -69,7 +71,7 @@ async function operation(c:Command,identity:VerifiedIdentity){
   // Recording observed provider evidence must survive operator revocation after network dispatch.
   if(saved.result!==null)return view(saved);
   const currentState=(await tx.get(refs.order.collection('deliveryState').doc('current'))).data();
-  const conflict=result.kind==='cancelled'&&(order.status==='Delivered'||currentState&&['picked_up','delivered'].includes(currentState.status));
+  const conflict=result.kind==='cancelled'&&(order.status==='Delivered'||currentState&&['courier_to_pickup','picked_up','delivered'].includes(currentState.status));
   const next={...saved,state:conflict?'unknown' as const:result.kind as State,reconcileRequired:!!conflict,result};
   tx.set(refs.cancel,next);tx.create(refs.cancel.collection('audit').doc('result'),{action:'delivery.cancel.result',claimId:saved.claimId,actorId,recordedAtMs:Date.now(),result});
   // This cancels the courier only. Financial/order cancellation and refunds are separate authorized actions.

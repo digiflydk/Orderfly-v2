@@ -25,3 +25,11 @@ Private provider promise data is distinct from the shared customer quote. The la
 ## Validation
 
 Internal tests exercise real native permission-policy logic with isolated Firestore I/O: wrong environment/scope, revoked access, deactivation, private quote immutability and revision invalidation, forged dispatch capability, expiry/future time, rejected plaintext reference and secret rotation during external await. No production data, real secret or courier call is used. Live credentials and native dispatcher integration require separate acceptance.
+
+## Initial merchant subscription restriction
+
+Version 1 supports exactly one native location and Wolt venue per merchant/environment, with one canonical webhook callback. This is enforced by the server-owned `deliveryWoltMerchants/{sha256(JSON.stringify(['wolt', environment, merchantId]))}` registry, whose strict record is `{version:1, environment, merchantId, brandId, locationId, venueId, callbackId, active:true}`. `callbackId` is the 64-character lowercase SHA-256 identifier of the callback key, not the callback secret.
+
+Every binding lookup must match the active canonical merchant record's environment, merchant, brand, location and venue. A second active location binding for the same merchant cannot quote or dispatch, even if its location record and credentials are otherwise valid. Callback intake must additionally match the registry's exact callback ID. Missing, malformed, inactive or mismatched registries fail closed. Supporting several venues later requires an explicit merchant-level subscription and routing design; adding per-location callbacks is not supported.
+
+The transaction helper `loadWoltMerchantInTransaction(tx, environment, merchantId)` is private server plumbing; callers establish operator, worker or verified callback authority. This change does not provision or alter any production binding, merchant registry, secret or provider subscription.

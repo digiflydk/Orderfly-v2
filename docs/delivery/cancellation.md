@@ -13,3 +13,5 @@ Wolt confirmation is the adapter's verified HTTP200 REJECTED response. Result an
 Courier cancellation is separate from order cancellation and customer refund. No payment status, accounting, kitchen state, booking rejection or refund job is fabricated. Provider fee null means unknown, never zero. UI must explain this before confirmation. Native callback can independently update delivery lifecycle. The cancellation evidence itself is retained even when a callback is delayed.
 
 `cancellationAvailability` is a read-only UI hint reusing canonical checks. Mutation repeats checks independently. Tests use isolated native policy/data and mocked provider I/O, covering concurrent/double clicks, unknown outcome, changed payload, authority loss, environment gates, pickup rejection and no refund side effects. No live provider cancel or production data mutation was performed.
+
+Wolt cancellation closes as soon as verified `order.pickup_started` maps to `courier_to_pickup` (including pickup arrival), before physical food collection. Both availability and the final pre-network claim check use this cutoff; the UI must not offer cancellation once this state is known.

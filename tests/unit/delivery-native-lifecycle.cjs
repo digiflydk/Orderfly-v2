@@ -67,6 +67,7 @@ async function fixture(options = {}) {
   const dispatcher = load('src/lib/delivery/booking/dispatcher.ts');
   const inbox = load('src/lib/delivery/events/wolt-inbox.ts');
   const nativeScope = {brandId:'b',locationId:'l'};
+  const key='fixture_callback_key_at_least_32_chars';
   const now=Date.now(),ready=new Date(now+600000).toISOString();
   const price={rules:{version:'1',currency:'DKK',taxBasis:'inclusive',maxDistanceMeters:10000,minimumMinor:0,maximumCustomerFeeMinor:5000,maximumSubsidyMinor:5000,tariff:{kind:'kilometer',baseMinor:1000,includedMeters:0,perKmMinor:100}},route:{meters:1000,method:'route',source:'fixture',profile:'car',calculatedAt:new Date(now).toISOString()},itemSubtotalAfterDiscountMinor:10000,providerCost:{amountMinor:2000,currency:'DKK',taxBasis:'inclusive'}};
   const addr={country:'DK',postcode:'2300',city:'Copenhagen',street:'Test',building:'1',unit:null,coordinates:{latitude:55.6,longitude:12.6,source:'fixture'}};
@@ -75,11 +76,11 @@ async function fixture(options = {}) {
   const {quote}=load('src/lib/delivery/quotes/binding.ts').buildQuote({binding:{...nativeScope,checkoutReference:'C',providerId:'wolt',normalizedAddress:'DK Test',cartDigest:'a'.repeat(64),fulfillmentAt:ready,brandRevision:1,locationRevision:0},quoteRef:'Q',providerQuoteRef:'native',nowMs:now,freshnessMs:300000,providerExpiresAtMs:null,price,fulfillment,providerQuote});
   f.records.set('deliverySettings/b',{schemaVersion:1,brandId:'b',locationId:null,revision:1,settings:{...settings.defaultDeliverySettings(),enabled:true,providerId:'wolt',pricingRules:price.rules}});
   f.records.set('deliveryProviderBindings/'+binding.woltBindingDocumentId(nativeScope,'sandbox'),{schemaVersion:1,...nativeScope,provider:'wolt',environment:'sandbox',active:true,revision:1,merchantId:'merchant',venueId:'venue',secretRef:'projects/test-project/secrets/orderfly-wolt-sandbox-merchant/versions/1'});
+  f.records.set('deliveryWoltMerchants/'+binding.woltMerchantDocumentId('sandbox','merchant'),{version:1,environment:'sandbox',merchantId:'merchant',...nativeScope,venueId:'venue',callbackId:inbox.woltCallbackId(key),active:true});
   await (await binding.createAuthorizedWoltStorage(nativeScope,'sandbox')).saveQuote({scope:nativeScope,quoteRef:'native',fingerprint:options.changedPrivateQuote?'b'.repeat(64):provider.woltFulfillmentFingerprint(fulfillment),bindingRevision:'1',merchantId:'merchant',venueId:'venue',environment:'sandbox',cost:providerQuote.cost,native:{promiseId:'native',venueId:'venue',validUntil:null,fetchedAt:new Date(now).toISOString(),dropoff:{coordinates:{lat:55.6,lon:12.6},formattedAddress:'Test 1'},scheduledDropoffTime:null,preparationMinutes:10}});
   f.records.set('deliveryQuotes/Q',quote);
   f.order().managedDelivery={version:1,providerId:'wolt',quoteRef:'Q',requestDigest:quote.contentDigest};
   f.records.set('deliveryDispatchJobs/'+f.orderId,{version:1,...scope,providerId:'wolt',requestDigest:quote.contentDigest,state:'pending',createdAtMs:now,updatedAtMs:now});
-  const key='fixture_callback_key_at_least_32_chars';
   f.records.set('deliveryProviderCallbacks/'+inbox.woltCallbackId(key),{version:1,active:true,...nativeScope,environment:'sandbox',merchantId:'merchant',venueId:'venue',bindingRevision:1,revision:1,signingSecretRef:'projects/test-project/secrets/orderfly-wolt-webhook-sandbox-merchant/versions/1'});
   const network=[];
   const fetch = async (url,init) => {
@@ -91,8 +92,8 @@ async function fixture(options = {}) {
     if(options.lostResponse)throw new Error('simulated network response loss');
     return new Response(JSON.stringify({id:'delivery',wolt_order_reference_id:'native-order',merchant_order_reference_id:JSON.parse(init.body).merchant_order_reference_id,status:'INFO_RECEIVED'}),{status:201,headers:{'content-type':'application/json'}});
   };
-  const request=()=>{
-    const payload={dispatched_at:new Date().toISOString(),type:'order.picked_up',details:{id:'event-one',venue_id:'venue',wolt_order_reference_id:'native-order'}};
+  const request=(merchantOrderReference)=>{
+    const payload={dispatched_at:new Date().toISOString(),type:'order.picked_up',details:{id:'event-one',venue_id:'venue',wolt_order_reference_id:'native-order',...(merchantOrderReference?{merchant_order_reference_id:merchantOrderReference}:{})}};
     const h=Buffer.from(JSON.stringify({alg:'HS256'})).toString('base64url'),p=Buffer.from(JSON.stringify(payload)).toString('base64url');
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
@@ -173,4 +174,20 @@ test('managed settlement transaction rejects concurrent PSP binding edits',async
   await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session),/Managed delivery payment changed/);
   assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.records.has('deliveryDispatchJobs/'+f.orderId),false);assert.equal(f.order().invoice,undefined);
  }
+});
+
+test('real signed callback after unknown create retains scoped operator evidence without invented booking',async t=>{
+ const f=await fixture({lostResponse:true});const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'unknown');
+ const nativeReference=f.network[0].body.merchant_order_reference_id;
+ const event=f.request(nativeReference),duplicate=event.clone();
+ assert.equal((await f.inbox.receiveNativeWoltCallback(event,f.key)).status,200);
+ assert.equal((await f.inbox.receiveNativeWoltCallback(duplicate,f.key)).status,200);
+ const review=f.records.get('orders/'+f.orderId+'/deliveryReconciliation/original');
+ assert.equal(review.state,'operator_review_required');assert.equal(review.providerDeliveryId,null);assert.equal(review.nativeOrderReference,'native-order');
+ assert.equal(f.order().deliveryReconciliationRequired,true);
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryAttempts/original').state,'unknown');
+ assert.equal([...f.records].filter(([p])=>p.startsWith('deliveryProviderReferences/')).length,0);
+ await f.dispatcher.runDeliveryDispatchWorker();assert.equal(f.network.length,1);assert.equal(f.refunds.length,0);assert.equal(f.jobs().length,0);
+ assert.equal([...f.records].filter(([p,v])=>p.startsWith('deliveryWoltInbox/')&&v.state==='reconciliation_required').length,1);
 });

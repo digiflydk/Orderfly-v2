@@ -48,3 +48,32 @@ export function displayFulfillmentTime(selection: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T/.test(selection) || !Number.isFinite(Date.parse(selection))) return selection;
   return format(toZonedTime(new Date(selection), zone), 'EEE d. MMM HH:mm', {locale: da});
 }
+
+/** Native preparation policy; a positive manual override replaces busy-level additions. */
+export function deliveryPreparationMinutes(location:Location,configuredFloor=0):number{
+  const manual=location.manual_override??0;
+  const native=manual>0?manual:(location.prep_time??20)+(location.travlhed_factor==='medium'?10:location.travlhed_factor==='høj'?20:0);
+  const effective=Math.max(configuredFloor,native);
+  if(![configuredFloor,native,effective].every(v=>Number.isSafeInteger(v)&&v>=0&&v<=240))throw new Error(unavailableTime);
+  return effective;
+}
+/** Half-open native kitchen hours, including the previous day's overnight interval. */
+export function deliveryKitchenOpenAt(location:Location,now=new Date()):boolean{
+  if(!location.isActive||!location.deliveryTypes?.includes('delivery')||!Number.isFinite(now.getTime()))return false;
+  const local=toZonedTime(now,zone),minute=local.getHours()*60+local.getMinutes();
+  const range=(day:Date)=>{
+    const h=location.openingHours[format(day,'eeee').toLowerCase()];
+    if(!h?.isOpen||!/^\d{2}:\d{2}$/.test(h.open)||!/^\d{2}:\d{2}$/.test(h.close))return null;
+    const minutes=(value:string)=>Number(value.slice(0,2))*60+Number(value.slice(3));
+    return {start:minutes(h.open),end:minutes(h.close)};
+  };
+  const current=range(local),previous=range(addDays(local,-1));
+  return !!((current&&(current.start<current.end?minute>=current.start&&minute<current.end:current.start>current.end&&minute>=current.start))
+    ||(previous&&previous.start>previous.end&&minute<previous.end));
+}
+/** Kitchen slots retain native opening/DST rules; the customer pickup offering is independent. */
+export function resolveDeliveryKitchenReadyTime(location:Location,now=new Date(),configuredFloor=0):string{
+  if(!location.isActive||!location.deliveryTypes?.includes('delivery'))throw new Error(unavailableTime);
+  const effective=deliveryPreparationMinutes(location,configuredFloor);
+  return resolveFulfillmentTime({...location,deliveryTypes:['pickup'],prep_time:effective,manual_override:effective,travlhed_factor:'normal'},'pickup','asap',now);
+}

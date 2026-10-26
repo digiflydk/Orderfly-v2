@@ -14,6 +14,8 @@ Persist private quote snapshots immutably and scope their reads by brand/locatio
 
 The shared dispatcher MUST claim and durably transition the original intent to submitting before calling `create`, only once. `validateClaimedAttempt` verifies that exact scope/order/quote/requestDigest/attempt linkage. It must return false for an unclaimed or replayed dispatch. It must not create another intent or permit another send after a lost response/crash. This facade does not implement a second booking state machine. Any uncertainty is returned as unknown with reconciliation required; native writes are not automatically retried.
 
+After awaited dispatch-claim verification and cancellation lookup, the facade reauthorizes and rereads the active binding. Revision, merchant, venue, environment and secret reference must still match the credential context resolved earlier. Revocation or rotation during those operations prevents an HTTP request with the earlier credentials. This is a last preflight check, not a distributed lock over the external Wolt request.
+
 `loadCancellation` supplies the authenticated original attempt's provider delivery ID, Wolt order reference, account/environment and observed pickup flags. A caller cannot choose another delivery through its request. The shared contract's validated `operatorReason` is forwarded; fee previews and late-cancellation agreements remain unsupported. The cancellation provider call still handles a pickup race conservatively.
 
 ## Result semantics

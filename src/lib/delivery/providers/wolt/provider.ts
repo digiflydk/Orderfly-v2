@@ -66,6 +66,13 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
     const config = await resolveWoltConfig(binding, deps.environment, deps.resolveSecret);
     return { binding, client: createWoltHttpClient(config, { fetchImpl: deps.fetchImpl }) };
   }
+  async function bindingStillCurrent(binding: Readonly<WoltBinding>): Promise<boolean> {
+    try {
+      const current = await resolveWoltBinding({ brandId: binding.brandId, locationId: binding.locationId }, deps, deps.environment);
+      return current.revision === binding.revision && current.merchantId === binding.merchantId
+        && current.venueId === binding.venueId && current.environment === binding.environment && current.secretRef === binding.secretRef;
+    } catch { return false; }
+  }
   function validQuote(quote: WoltPrivateQuote, request: DeliveryCreateRequest, binding: Readonly<WoltBinding>, at: number) {
     return equalScope(quote.scope, request.scope) && quote.quoteRef === request.quoteRef
       && quote.fingerprint === woltFulfillmentFingerprint(request.fulfillment)
@@ -96,7 +103,12 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
       try {
         const { binding, client } = await context(request.scope);
         const at = now();
-        const preparationMinutes = Math.max(0, Math.ceil((Date.parse(request.readyAt) - at) / 60_000));
+        // Scheduled readiness can include waiting until a future opening. Only the
+        // actual kitchen duration belongs in Wolt's preparation-time field.
+        // ASAP retains absolute readiness so an optional duration cannot move pickup earlier.
+        const preparationMinutes = request.desiredDelivery.kind === 'scheduled' && request.preparationMinutes !== undefined
+          ? request.preparationMinutes : Math.max(0, Math.ceil((Date.parse(request.readyAt) - at) / 60_000));
+        if (request.desiredDelivery.kind === 'scheduled' && preparationMinutes > 60) return { kind: 'unavailable', reason: 'unsupported_schedule' };
         const result = await requestWoltQuote(client, { venueId: binding.venueId,
           address: { street: request.dropoff.street, building: request.dropoff.building, city: request.dropoff.city, postCode: request.dropoff.postcode,
             coordinates: { lat: request.dropoff.coordinates.latitude, lon: request.dropoff.coordinates.longitude } },
@@ -132,6 +144,8 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         const quote = stored ? structuredClone(stored) : null;
         if (!quote || !validQuote(quote, request, binding, now())) return { kind: 'rejected', error: error('quote_changed_or_expired') };
         if (await deps.validateClaimedAttempt(structuredClone(request)) !== true) return { kind: 'unknown', attemptRef: request.attemptRef, error: error('dispatch_claim_unverified', 'after_reconciliation') };
+        // Claim verification can await storage while credentials/binding permissions are revoked or rotated.
+        if (!await bindingStillCurrent(binding)) return { kind: 'rejected', error: error('binding_changed_before_dispatch') };
         // Recheck after claim verification: that I/O can outlive the quote's validity.
         if (!validQuote(quote, request, binding, now())) return { kind: 'rejected', error: error('quote_changed_or_expired') };
         const payload = nativeInput(request.fulfillment, quote, request.attemptRef, request.orderRef);
@@ -159,6 +173,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         const saved = value ? structuredClone(value) : null;
         if (!saved || !equalScope(saved.scope, request.scope) || saved.providerDeliveryId !== request.providerDeliveryId
           || saved.merchantId !== binding.merchantId || saved.venueId !== binding.venueId || saved.environment !== binding.environment) return { kind: 'unknown', error: error('delivery_binding_unverified') };
+        if (!await bindingStillCurrent(binding)) return { kind: 'unknown', error: error('binding_changed_before_cancellation') };
         const result = await cancelWoltDelivery({ scope: request.scope, delivery: { ...request.scope,
           woltOrderReferenceId: saved.woltOrderReferenceId, pickupStarted: saved.pickupStarted, pickupCompleted: saved.pickupCompleted }, reason: request.operatorReason }, value => client.request(value));
         if (result.kind === 'cancelled') return { kind: 'cancelled', fee: null };

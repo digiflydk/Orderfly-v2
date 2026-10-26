@@ -1,4 +1,5 @@
 'use server';
+import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
 import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
 import { getClubSignupDiscountEligibility, validateClubCheckoutSignup, prepareClubCheckoutSignup } from '@/lib/loyalty/stamp-card/club-signup';
 
@@ -658,15 +659,15 @@ export async function requestManagedDeliveryQuoteAction(input: {
   if(!parsed.success)return {...failure,code:'invalid_request'};
   const [items,customer,,b,l,payment,discount,bs,ls,time]=parsed.data;
   input={...input,cartItems:items,customerInfo:customer,brandId:b,locationId:l,paymentDetails:payment,appliedDiscountId:discount,brandSlug:bs,locationSlug:ls,deliveryTime:time};
+  try{input={...input,customerInfo:{...input.customerInfo,phone:normalizeDeliveryPhone(input.customerInfo.phone)}};}catch{return {...failure,code:'invalid_request',message:deliveryPhoneMessage};}
   try {
     if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId}))return failure;
     const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
     const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
     if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
-    const fulfillmentAt=resolveFulfillmentTime(location,'pickup','asap');
     return await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
-      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,fulfillmentAt,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
+      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
   }catch{return failure;}
 }
 
@@ -693,6 +694,7 @@ export async function createStripeCheckoutSessionAction(
     if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
     [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
     if(managedDeliveryAcceptance!==undefined&&!managedDeliveryAcceptanceSchema.safeParse(managedDeliveryAcceptance).success)return {success:false,retryable:true,error:'Leveringstilbuddet er ugyldigt. Beregn levering igen.'};
+    if(managedDeliveryAcceptance){try{customerInfo={...customerInfo,phone:normalizeDeliveryPhone(customerInfo.phone)};}catch{return {success:false,retryable:true,error:deliveryPhoneMessage};}}
     const managedRuntime = deliveryType === 'delivery' ? await managedDeliveryRuntimeAvailable({brandId,locationId}) : null;
     const requiresManaged = deliveryType === 'delivery' && await managedDeliveryRequired({brandId,locationId});
     if (requiresManaged && !managedRuntime) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
@@ -740,7 +742,7 @@ export async function createStripeCheckoutSessionAction(
     let totalAmount=priced.totalAmount;
     if(managedDeliveryAcceptance){
       managedDraft=await currentNativeManagedDraft({brand,location,customer:customerInfo,cartItems,payment:serverPaymentDetails,
-        subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,fulfillmentAt,checkoutKey:managedDeliveryAcceptance.checkoutKey,deliverySelection:deliveryTime||'asap'});
+        subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:managedDeliveryAcceptance.checkoutKey,deliverySelection:deliveryTime||'asap'});
       const proof={...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor};
       const preflight=await getAdminDb().runTransaction(tx=>prepareCustomerQuoteConsumption(tx,proof,managedDraft!,'preflight'));
       managedQuote=preflight.quote;
@@ -750,7 +752,7 @@ export async function createStripeCheckoutSessionAction(
       serverPaymentDetails.deliveryFee=managedQuote.economics.customerFee.amountMinor/100;
       serverPaymentDetails.vatAmount=money(totalAmount*((brand.vatPercentage??25)/(100+(brand.vatPercentage??25))));
       if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet udløber snart. Beregn levering igen.');
-      fulfillmentAt=managedDraft.binding.fulfillmentAt;
+      fulfillmentAt=managedQuote.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:managedDraft.binding.fulfillmentAt;
     }
 
     // Modern checkout always sends the displayed cart discount (including zero).

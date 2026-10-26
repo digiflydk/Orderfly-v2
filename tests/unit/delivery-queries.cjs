@@ -31,3 +31,10 @@ test('orders view projects only nonmonetary cost review flag in list and detail'
  assert.equal(list.orders.find(o=>o.id==='o00').costReviewRequired,true);assert.equal(detail.orders[0].costReviewRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').costReviewRequired,false);
  for(const result of [list,detail]){const text=JSON.stringify(result);for(const secret of ['quotedCost','acceptedCost','customerFee','subsidy','4500','9000','3500','5500','accepted_provider_cost_changed'])assert.equal(text.includes(secret),false);}
 });
+
+test('manual reconciliation exposes strict boolean without native identifiers or invented status',async()=>{
+ const f=fixture();Object.assign(f.rows.get('orders/o00'),{deliveryReconciliationRequired:true,providerDeliveryId:'private-courier-id',deliveryReconciliation:{nativeRequestId:'private-request-id',providerCost:7200}});f.rows.get('orders/o01').deliveryReconciliationRequired='true';
+ const list=await f.readDeliveryOrders(scope),detail=await f.readDeliveryOrders({...scope,orderId:'o00'});
+ assert.equal(list.orders.find(o=>o.id==='o00').deliveryReconciliationRequired,true);assert.equal(detail.orders[0].deliveryReconciliationRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').deliveryReconciliationRequired,false);assert.equal(detail.orders[0].bookingState,null);assert.equal(detail.orders[0].deliveryStatus,null);
+ for(const result of [list,detail])for(const secret of ['private-courier-id','private-request-id','providerCost','7200'])assert.equal(JSON.stringify(result).includes(secret),false);
+});

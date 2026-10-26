@@ -21,7 +21,7 @@ function decode(raw: string | undefined, scope: string): string | null {
   try { const value=z.object({scope:z.literal(scope),after:id}).strict().parse(JSON.parse(Buffer.from(raw,'base64url').toString('utf8')));return value.after; }
   catch { throw new DeliveryQueryError(); }
 }
-export type DeliveryOrderRow = { id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null; costReviewRequired:boolean };
+export type DeliveryOrderRow = { id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null; costReviewRequired:boolean; deliveryReconciliationRequired:boolean };
 export async function readDeliveryOrders(raw: unknown) {
   const parsed=querySchema.safeParse(raw);if(!parsed.success)throw new DeliveryQueryError();const q=parsed.data;
   await requireOrderflyAccess(q.brandId,[q.locationId],'orderfly.orders:view');
@@ -37,7 +37,7 @@ export async function readDeliveryOrders(raw: unknown) {
     const boundState=boundAttempt && attempt.data.state==='booked' && state && state.providerDeliveryId===attempt.data.providerDeliveryId && state.brandId===q.brandId && state.locationId===q.locationId && state.orderId===doc.id && state.provider===managed.data.providerId && statuses.includes(state.status);
     return {id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:boundState?state.status:null,
       paymentStatus:['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
-      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true};
+      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true};
   }
   if(q.orderId){
     const doc=await db.collection('orders').doc(q.orderId).get(),row=await project(doc);if(!row)throw new DeliveryQueryError('delivery_not_found',404);

@@ -7,7 +7,7 @@ function order(id, extra = {}) { return { id, brandId: 'b1', locationId: 'l1', c
 function fixture({ rows = [], grants = [{ brandId: 'b1', locationIds: ['l1'] }], edit = true, denyView = false, failure = null, foreignLocation = false } = {}) {
   const reads = [], access = [];
   const locs = [{ id: 'l1', name: 'Amager', brandId: foreignLocation ? 'b2' : 'b1' }, { id: 'l2', name: 'Other', brandId: 'b2' }];
-  const snap = data => ({ id: data?.id, exists: Boolean(data), data: () => data });
+  const snap = data => ({ id: data?.id, ref: { id: data?.id }, exists: Boolean(data), data: () => data });
   function query(collection, predicates = [], after = null, limit = Infinity, sort = false) {
     return {
       where: (...p) => query(collection, [...predicates, p], after, limit, sort),
@@ -29,9 +29,12 @@ function fixture({ rows = [], grants = [{ brandId: 'b1', locationIds: ['l1'] }],
   }
   const mocks = {
     'server-only': {}, 'firebase-admin/firestore': { FieldPath: { documentId: () => '__name__' } },
-    '@/lib/firebase-admin': { getAdminDb: () => ({ collection: name => query(name) }) },
+    '@/lib/firebase-admin': { getAdminDb: () => ({ collection: name => query(name), runTransaction: async callback => callback({ get: async ref => snap(rows.find(row => row.id === ref.id)) }) }) },
     '@/lib/access/authority': { AuthorityError },
+    '@/lib/access/scoped-data': { authorizeTransaction: async () => {} },
+    '@/lib/delivery/tracking-server': { loadAuthorizedDeliveryTracking: async () => null },
     '@/lib/access/orderfly-session': {
+      verifiedOrderflyIdentity: async () => ({ uid: 'operator' }),
       orderflyReadGrants: async permission => { assert.equal(permission, 'orderfly.orders:view'); if (denyView) throw new AuthorityError('forbidden'); return grants; },
       requireOrderflyAccess: async (...args) => { access.push(args); if (args[2].endsWith(':edit') && !edit) throw new AuthorityError('forbidden'); return {}; },
     },
@@ -132,4 +135,32 @@ test('oversized food snapshots fail explicitly instead of dropping customer inst
 test('oversized aggregate response fails explicitly even when each order stays inside its bound', async () => {
   const f = fixture({ rows: Array.from({ length: 50 }, (_, i) => order(`o${i}`, { customerDetails: { deliveryInstructions: 'x'.repeat(50000) } })) });
   await assert.rejects(f.readTerminalOrders({}, now), e => e.code === 'terminal_result_too_large' && e.status === 409);
+});
+
+
+test('scheduled managed delivery stays in preorder queue until target Copenhagen day and displays dropoff time', async () => {
+  const kitchenReadyAt = '2026-10-25T12:30:00Z';
+  const desiredDropoffAt = '2026-10-26T17:00:00Z';
+  // Persisted native fulfillmentAt is the validated desired delivery slot. The
+  // provider pickup readiness remains a distinct quote field, not queue timing.
+  const quote = { fulfillment: { readyAt: kitchenReadyAt, desiredDelivery: { kind: 'scheduled', interval: { earliest: desiredDropoffAt, latest: '2026-10-26T17:30:00Z' } } } };
+  const f = fixture({ rows: [
+    order('scheduled', { deliveryType: 'Delivery', deliveryTime: '18:00', fulfillmentAt: new Date(quote.fulfillment.desiredDelivery.interval.earliest), managedDelivery: { version: 1, providerId: 'wolt', quoteRef: 'quote-scheduled', requestDigest: 'a'.repeat(64) } }),
+    order('asap', { deliveryType: 'Delivery', deliveryTime: 'Snarest muligt', fulfillmentAt: new Date(kitchenReadyAt), managedDelivery: { version: 1, providerId: 'wolt', quoteRef: 'quote-asap', requestDigest: 'b'.repeat(64) } }),
+  ] });
+  assert.deepEqual((await f.readTerminalOrders({ view: 'board' }, now)).orders.map(o => o.id), ['asap']);
+  const preorders = (await f.readTerminalOrders({ view: 'preorders' }, now)).orders;
+  assert.deepEqual(preorders.map(o => o.id), ['scheduled']);
+  assert.equal(preorders[0].fulfillmentAt, '2026-10-26T17:00:00.000Z');
+  assert.equal(preorders[0].managedDelivery, true);
+  const ts = require('typescript'), fs = require('node:fs');
+  const compiled = ts.transpileModule(fs.readFileSync('src/app/merchant/orders/terminal-board.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
+  const mod = { exports: {} };
+  new Function('require', 'module', 'exports', compiled)(name => { assert.equal(name, '@/lib/storefront-format'); return { formatPrice: value => String(value) }; }, mod, mod.exports);
+  assert.equal(mod.exports.terminalTime(preorders[0]), '18.00');
+  const tomorrow = new Date('2026-10-25T23:00:00Z'); // Copenhagen midnight after DST.
+  assert.deepEqual((await f.readTerminalOrders({ view: 'preorders' }, tomorrow)).orders, []);
+  const moved = (await f.readTerminalOrders({ view: 'board' }, tomorrow)).orders.find(o => o.id === 'scheduled');
+  assert.equal(moved.fulfillmentAt, preorders[0].fulfillmentAt);
+  assert.equal(mod.exports.terminalTime(moved), '18.00');
 });

@@ -92,6 +92,7 @@ async function claimOriginal(scope:Scope,environment:Environment):Promise<WoltDi
     const next=transitionBookingIntent(previous,{scope,intentId:reference,reference,requestDigest:managed.requestDigest,expectedRevision:previous.revision,now,outcome:{kind:'submit'}});
     const saved={version:1,scope,environment,claimId:randomUUID(),attemptRef:reference,requestDigest:managed.requestDigest,request,revision:next.revision,
       expiresAtMs:now+300000,customerFeeMinor:quote.economics.customerFee.amountMinor,maximumSubsidyMinor:quote.economics.rules.maximumSubsidyMinor,binding:{merchantId:binding.merchantId,venueId:binding.venueId,bindingRevision:String(binding.revision)},networkStartedAtMs:null,createdAtMs:now};
+    tx.create(db.collection('deliveryAttemptReferences').doc(reference),{version:1,...scope,providerId:'wolt',attemptRef:reference,requestDigest:managed.requestDigest,claimId:saved.claimId,environment});
     tx.set(attemptRef,next);tx.create(dispatchRef,saved);tx.update(jobRef,{state:'submitting',claimId:saved.claimId,updatedAtMs:now});
     return {...saved,consumed:false};
   });

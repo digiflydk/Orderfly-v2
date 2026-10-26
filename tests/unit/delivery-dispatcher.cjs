@@ -35,6 +35,7 @@ test('one atomic claim survives transaction retries and concurrent heartbeats wi
  assert.equal(f.rows.get('orderNotificationJobs/O').state,'pending');
  const mapping=[...f.rows].find(([key])=>key.startsWith('deliveryProviderReferences/'))[1];assert.equal(mapping.providerDeliveryId,'DELIVERY');assert.equal(mapping.nativeOrderReference,'NATIVE');assert.equal(mapping.bindingRevision,1);assert.equal(typeof mapping.bindingRevision,'number');
  assert.equal(f.rows.get('orders/O/deliveryDispatchResults/original').result.kind,'accepted');
+ const claim=f.rows.get('orders/O/deliveryDispatch/original'),index=f.rows.get('deliveryAttemptReferences/'+claim.attemptRef);assert.equal(index.claimId,claim.claimId);assert.equal(index.orderId,'O');assert.equal(index.requestDigest,claim.requestDigest);
 });
 test('lost response remains unknown across worker reruns with no blind redispatch',async()=>{
  const f=fixture({throw:true});assert.equal((await f.dispatchManagedDelivery(scope)).state,'unknown');await f.runDeliveryDispatchWorker();
@@ -48,6 +49,7 @@ test('claim commit failure and malformed scope never call provider',async()=>{
 test('late accepted post-refund records proof without reviving order or notifying',async()=>{
  const f=fixture({afterWrite:rows=>{rows.get('orders/O').paymentStatus='Refunded';}});assert.equal((await f.dispatchManagedDelivery(scope)).state,'booked');
  assert.equal(f.rows.get('orders/O').status,'Pending');assert.equal(f.rows.has('orderNotificationJobs/O'),false);assert.equal(f.rows.get('orders/O/deliveryDispatchResults/original').result.kind,'accepted');
+ const claim=f.rows.get('orders/O/deliveryDispatch/original'),index=f.rows.get('deliveryAttemptReferences/'+claim.attemptRef);assert.equal(index.claimId,claim.claimId);assert.equal(index.orderId,'O');assert.equal(index.requestDigest,claim.requestDigest);
 });
 test('disabled feature is inert and definitive rejection persists refund evidence',async()=>{
  const off=fixture({disabled:true});assert.equal((await off.runDeliveryDispatchWorker()).state,'disabled');assert.equal(off.transactions(),0);

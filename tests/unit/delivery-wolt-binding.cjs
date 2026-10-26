@@ -19,7 +19,7 @@ function fixture(options = {}) {
 }
 const scope={brandId:'brand',locationId:'location'};
 const config={schemaVersion:1,...scope,provider:'wolt',environment:'sandbox',active:true,revision:1,merchantId:'merchant',venueId:'venue',secretRef:'projects/test-project/secrets/orderfly-wolt-sandbox-merchant/versions/1'};
-function prepared(options={}){const f=fixture(options);const key=`deliveryProviderBindings/${f.service.woltBindingDocumentId(scope,'sandbox')}`;f.records.set(key,structuredClone(config));return {...f,key};}
+function prepared(options={}){const f=fixture(options);const key=`deliveryProviderBindings/${f.service.woltBindingDocumentId(scope,'sandbox')}`;f.records.set(key,structuredClone(config));const merchantKey='deliveryWoltMerchants/'+f.service.woltMerchantDocumentId('sandbox','merchant');f.records.set(merchantKey,{version:1,environment:'sandbox',merchantId:'merchant',...scope,venueId:'venue',callbackId:'a'.repeat(64),active:true});return {...f,key,merchantKey};}
 function quote(){const at=new Date().toISOString();return {scope,quoteRef:'native/quote:1',fingerprint:'a'.repeat(64),bindingRevision:'1',merchantId:'merchant',venueId:'venue',environment:'sandbox',cost:{amountMinor:2500,currency:'DKK',taxBasis:'inclusive',taxMinor:null},native:{promiseId:'native/quote:1',venueId:'venue',validUntil:null,fetchedAt:at,dropoff:{coordinates:{lat:55.6,lon:12.5},formattedAddress:'Test Street 1'},scheduledDropoffTime:null,preparationMinutes:5}};}
 test('native operator authority and exact scope/current environment bind storage',async()=>{
  const f=prepared(),a=await f.service.createAuthorizedWoltStorage(scope,'sandbox');
@@ -64,4 +64,27 @@ test('private native times reject invalid calendars/offsets and preserve microse
  assert.equal(f.service.woltPrivateQuoteSchema.safeParse({...q,native:{...q.native,fetchedAt:invalid}}).success,false,invalid);
  }
  assert.ok(f.service.woltPrivateQuoteSchema.safeParse({...q,native:{...q.native,fetchedAt:'2026-10-26T12:00:00.123456Z'}}).success);
+});
+
+
+test('merchant registry rejects missing, inactive, foreign scope/environment/venue and malformed callback identity', async()=>{
+ for(const patch of [null,{active:false},{environment:'production'},{merchantId:'other'},{brandId:'other'},{locationId:'other'},{venueId:'other'},{callbackId:'invalid'},{unexpected:true}]){
+  const f=prepared();if(patch===null)f.records.delete(f.merchantKey);else Object.assign(f.records.get(f.merchantKey),patch);
+  await assert.rejects(f.service.createAuthorizedWoltStorage(scope,'sandbox'),/binding_unavailable/);
+ }
+ const f=prepared(),a=await f.service.createAuthorizedWoltStorage(scope,'sandbox');
+ f.records.get(f.merchantKey).locationId='another-location';
+ assert.equal(await a.authorizeScope(scope),false);
+ await assert.rejects(a.resolveBinding(scope,'wolt'),/binding_unavailable/);
+ assert.equal(f.service.woltMerchantDocumentId('sandbox','merchant'),require('node:crypto').createHash('sha256').update(JSON.stringify(['wolt','sandbox','merchant'])).digest('hex'));
+ assert.notEqual(f.service.woltMerchantDocumentId('sandbox','merchant'),f.service.woltMerchantDocumentId('production','merchant'));
+});
+
+test('second active location binding cannot reuse canonical merchant owned by first location',async()=>{
+ const f=prepared(),second={brandId:scope.brandId,locationId:'location2'};
+ f.records.set('locations/location2',{brandId:scope.brandId});
+ f.records.get('platformAdminControl/access-v1').companies[0].locationIds.push('location2');
+ f.records.set('deliveryProviderBindings/'+f.service.woltBindingDocumentId(second,'sandbox'),{...config,...second,venueId:'venue2'});
+ await f.service.createAuthorizedWoltStorage(scope,'sandbox');
+ await assert.rejects(f.service.createAuthorizedWoltStorage(second,'sandbox'),/binding_unavailable/);
 });

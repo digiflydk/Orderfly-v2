@@ -4,7 +4,8 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { loadWoltBindingInTransaction } from '../integrations/wolt-binding';
+import { retainUnmappedWoltReconciliation } from '../booking/wolt-reconciliation';
+import { loadWoltBindingInTransaction, loadWoltMerchantInTransaction } from '../integrations/wolt-binding';
 import { verifyWoltWebhook, WOLT_WEBHOOK_MAX_BYTES, WoltWebhookError } from '../providers/wolt/webhook-verify';
 import { normalizeWoltEvent, type NormalizedWoltEvent } from '../providers/wolt/events';
 import { verifiedDeliveryEventSchema } from '../provider-contract';
@@ -28,6 +29,8 @@ async function currentCallback(tx:FirebaseFirestore.Transaction,key:string){
  if(!location.exists||location.data()?.brandId!==config.brandId)throw new Error('callback_scope');
  const binding=await loadWoltBindingInTransaction(tx,{brandId:config.brandId,locationId:config.locationId},config.environment);
  if(binding.merchantId!==config.merchantId||binding.venueId!==config.venueId||binding.revision!==config.bindingRevision)throw new Error('callback_unavailable');
+ const merchant=await loadWoltMerchantInTransaction(tx,config.environment,config.merchantId);
+ if(merchant.callbackId!==key||merchant.brandId!==config.brandId||merchant.locationId!==config.locationId||merchant.venueId!==config.venueId)throw new Error('callback_merchant_scope');
  return config;
 }
 async function bodyBytes(request:Request){
@@ -77,16 +80,16 @@ export async function receiveNativeWoltCallback(request:Request,key:string):Prom
 export async function applyNativeWoltInbox(eventId:string){
  if(!/^[a-f0-9]{64}$/.test(eventId))throw new Error('invalid_event');const db=getAdminDb(),inbox=db.collection('deliveryWoltInbox').doc(eventId);
  return db.runTransaction(async tx=>{
-  const row=(await tx.get(inbox)).data();if(!row||row.state!=='pending')return 'unchanged';
+  const row=(await tx.get(inbox)).data();if(!row||!['pending','reconciliation_required'].includes(row.state))return 'unchanged';
   const callback=await currentCallback(tx,row.callbackId);if(callback.revision!==row.callbackRevision||callback.environment!==row.environment)throw new Error('callback_changed');
   const event=row.event as NormalizedWoltEvent;
   if(row.referenceKey!==woltReferenceId(callback.merchantId,event.nativeOrderReference)||event.nativeVenueId!==null&&event.nativeVenueId!==callback.venueId)throw new Error('event_scope');
-  const mapped=await tx.get(db.collection('deliveryProviderReferences').doc(row.referenceKey));if(!mapped.exists)return 'pending';
+  const mapped=await tx.get(db.collection('deliveryProviderReferences').doc(row.referenceKey));if(!mapped.exists)return retainUnmappedWoltReconciliation(tx,{eventId,inboxRef:inbox,callback,event});
   const target=referenceSchema.parse(mapped.data());
   for(const k of ['brandId','locationId','merchantId','venueId','environment','bindingRevision'] as const)if(target[k]!==callback[k])throw new Error('event_scope');
   if(target.nativeOrderReference!==event.nativeOrderReference)throw new Error('event_scope');
   const orderRef=db.collection('orders').doc(target.orderId);
-  const [orderDoc,attemptDoc,currentDoc,etaDoc,priorLog]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryState').doc('current')),tx.get(orderRef.collection('deliveryEstimates').doc('current')),tx.get(orderRef.collection('deliveryEvents').doc(eventId))]);
+  const [orderDoc,attemptDoc,currentDoc,etaDoc,priorLog,reviewDoc]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryState').doc('current')),tx.get(orderRef.collection('deliveryEstimates').doc('current')),tx.get(orderRef.collection('deliveryEvents').doc(eventId)),tx.get(orderRef.collection('deliveryReconciliation').doc('original'))]);
   const order=orderDoc.data(),attempt=bookingIntentSchema.parse(attemptDoc.data());
   if(!order||order.brandId!==target.brandId||order.locationId!==target.locationId||order.deliveryType!=='Delivery'||order.managedDelivery?.providerId!=='wolt'||order.managedDelivery.requestDigest!==attempt.requestDigest||attempt.provider!=='wolt'||attempt.reference!==hash(['delivery-original-v1',target.brandId,target.locationId,target.orderId])||attempt.state!=='booked'||attempt.providerDeliveryId!==target.providerDeliveryId||attempt.scope.orderId!==target.orderId||attempt.scope.brandId!==target.brandId||attempt.scope.locationId!==target.locationId)throw new Error('event_scope');
   const base={brandId:target.brandId,locationId:target.locationId,orderId:target.orderId,provider:'wolt',providerDeliveryId:target.providerDeliveryId};
@@ -100,6 +103,11 @@ export async function applyNativeWoltInbox(eventId:string){
    tx.set(orderRef.collection('deliveryEstimates').doc('current'),{...base,dispatchedAtMs:dispatched,pickup:priorEta?.pickupReliable&&event.pickupEstimateReliable!==true?priorEta.pickup:(event.pickupEstimate??priorEta?.pickup??null),dropoff:event.dropoffEstimate??priorEta?.dropoff??null,pickupReliable:event.pickupEstimateReliable===true||priorEta?.pickupReliable===true,source:event.rawStatus});
   }
   if(!priorLog.exists)tx.create(orderRef.collection('deliveryEvents').doc(eventId),{event:verifiedDeliveryEventSchema.parse({version:1,providerId:'wolt',providerDeliveryId:target.providerDeliveryId,eventRef:eventId,scope:{brandId:target.brandId,locationId:target.locationId},status:event.status,nativeStatus:event.rawStatus,occurredAt:null,receivedAt:event.receivedAt,dispatchedAt:event.dispatchedAt,sequence:null,pickupInterval:event.pickupEstimate,deliveryInterval:event.dropoffEstimate,pickupEstimateProvenance:event.pickupEstimate?{source:event.rawStatus,reliability:event.pickupEstimateReliable===true?'verified_update':'preliminary',observedAt:event.dispatchedAt}:null,nativeErrorCode:null}),decision});
+  const review=reviewDoc.data();
+  if(decision!=='reconcile'&&review?.state==='operator_review_required'&&review.reason==='provider_delivery_id_unavailable'&&review.brandId===target.brandId&&review.locationId===target.locationId&&review.orderId===target.orderId&&review.attemptRef===attempt.reference&&review.requestDigest===attempt.requestDigest&&review.nativeOrderReference===target.nativeOrderReference){
+   tx.update(orderRef.collection('deliveryReconciliation').doc('original'),{state:'resolved_by_accepted_result',providerDeliveryId:target.providerDeliveryId,resolvedAtMs:Date.now()});
+   tx.update(orderRef,{deliveryReconciliationRequired:false});
+  }
   tx.update(inbox,{state:decision==='reconcile'?'reconciliation_required':'applied',appliedAtMs:Date.now()});
   return decision;
  });

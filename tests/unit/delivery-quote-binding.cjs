@@ -14,7 +14,7 @@ test('snapshot copied and provider earlier expiry wins',()=>{const b={...binding
 
 test('invalid calendar and corrupted stored time reject',()=>{assert.throws(()=>q.quoteFingerprint({...binding,fulfillmentAt:'2026-02-30T10:00:00Z'}));assert.equal(q.validateQuoteAcceptance({...make(),expiresAtMs:NaN},binding,1100,1100),'changed');});
 
-test('full payload tampering fails stored schema integrity even with unchanged fee and binding',()=>{for(const mutate of [v=>v.fulfillment.dropoff.street='Other street',v=>v.fulfillment.dropoffContact.phone='11111111',v=>v.fulfillment.instructions='Other instructions',v=>v.fulfillment.items[0].quantity=2,v=>v.providerQuote.quoteRef='other',v=>v.economics.customerFee.amountMinor=1]){const quote=structuredClone(make());mutate(quote);assert.equal(q.validateQuoteAcceptance(quote,binding,1100,1100),'changed');}});
+test('full payload tampering fails stored schema integrity even with unchanged fee and binding',()=>{for(const mutate of [v=>v.fulfillment.dropoff.street='Other street',v=>v.fulfillment.dropoffContact.phone='11111111',v=>v.fulfillment.instructions='Other instructions',v=>v.fulfillment.items[0].quantity=2,v=>v.fulfillment.preparationMinutes=20,v=>v.providerQuote.quoteRef='other',v=>v.economics.customerFee.amountMinor=1]){const quote=structuredClone(make());mutate(quote);assert.equal(q.validateQuoteAcceptance(quote,binding,1100,1100),'changed');}});
 
 const campaign={kind:'native_free_delivery',campaignIds:['campaign-a','campaign-b'],maxDistanceMeters:5000};
 test('native campaign preserves base economics and derives free delivery only',()=>{

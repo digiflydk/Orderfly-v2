@@ -57,9 +57,11 @@ test('malformed command and wrong accepted provider identity never dispatch',asy
  const f=prepared();await assert.rejects(f.service.cancelManagedDelivery(command({operatorReason:''})),/invalid_request/);
  f.records.get('orders/order/deliveryDispatchResults/original').result.providerDeliveryId='other';await assert.rejects(f.service.cancelManagedDelivery(command()),/not_cancellable/);assert.equal(f.effects.length,0);
 });
-test('conflicting delivered evidence after remote cancellation stays unknown for reconciliation',async()=>{
- const f=prepared({afterNetwork:rows=>rows.set('orders/order/deliveryState/current',{...scope,provider:'wolt',providerDeliveryId:'native',status:'delivered'})});
+test('conflicting pickup-started or delivered evidence after remote cancellation stays unknown for reconciliation',async()=>{
+ for(const status of ['courier_to_pickup','delivered']){
+ const f=prepared({afterNetwork:rows=>rows.set('orders/order/deliveryState/current',{...scope,provider:'wolt',providerDeliveryId:'native',status})});
  const result=await f.service.cancelManagedDelivery(command());assert.equal(result.state,'unknown');assert.equal(f.records.get('orders/order/deliveryCancellation/original').reconcileRequired,true);assert.equal(f.effects.length,1);
+ }
 });
 test('HTTP requires native session, same origin and bounded JSON before cancellation',async()=>{
  let calls=0;class AuthorityError extends Error{constructor(){super('no');this.status=401;}}
@@ -69,4 +71,30 @@ test('HTTP requires native session, same origin and bounded JSON before cancella
  assert.equal((await POST(request('https://evil.example','{}'))).status,403);
  assert.equal((await POST(request('https://orderfly.dk','x'.repeat(8193)))).status,400);assert.equal(calls,0);
  const response=await POST(request('https://orderfly.dk',JSON.stringify(command())));assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(calls,1);
+});
+
+test('signed Wolt pickup_started advances native state and blocks cancellation before any provider I/O', async () => {
+ const { createHmac } = require('node:crypto');
+ const { verifyWoltWebhook } = loadTs('src/lib/delivery/providers/wolt/webhook-verify.ts', { 'server-only': {} });
+ const { normalizeWoltEvent } = loadTs('src/lib/delivery/providers/wolt/events.ts', { 'server-only': {} });
+ const { planVerifiedDeliveryEvent } = loadTs('src/lib/delivery/events/state.ts');
+ const now = Date.parse('2026-10-26T12:00:00Z'), secret = 'synthetic-cancellation-event-test-key';
+ const payload = { type: 'order.pickup_started', dispatched_at: '2026-10-26T11:59:00Z', details: { id: 'pickup-event', venue_id: 'venue', wolt_order_reference_id: 'wolt-native' } };
+ const parts = [{ alg: 'HS256', typ: 'JWT' }, payload].map(v => Buffer.from(JSON.stringify(v)).toString('base64url'));
+ const signature = createHmac('sha256', secret).update(parts.join('.')).digest('base64url');
+ const body = Buffer.from(JSON.stringify({ token: [...parts, signature].join('.') }));
+ assert.throws(() => verifyWoltWebhook(body, 'foreign-key', now));
+ const event = normalizeWoltEvent(verifyWoltWebhook(body, secret, now), 'merchant', new Date(now).toISOString());
+ assert.equal(event.status, 'courier_to_pickup');
+ const f = prepared();
+ const previous = { ...scope, provider: 'wolt', providerDeliveryId: 'native', status: 'booked', occurredAt: null, sequence: null, nativeStatus: 'order.received' };
+ assert.equal((await f.service.cancellationAvailability(scope)).available, true);
+ const decision = planVerifiedDeliveryEvent(previous, { ...previous, status: event.status, nativeStatus: event.rawStatus, eventId: event.dedupeIdentity, receivedAt: now });
+ assert.equal(decision.action, 'apply');
+ f.records.set('orders/order/deliveryState/current', decision.snapshot);
+ assert.deepEqual(await f.service.cancellationAvailability(scope), { available: false, reason: 'not_cancellable' });
+ await assert.rejects(f.service.cancelManagedDelivery(command()), /not_cancellable/);
+ assert.equal(f.effects.length, 0);
+ assert.equal(f.records.has('orders/order/deliveryCancellation/original'), false);
+ assert.equal(f.records.get('orders/order').paymentStatus, 'Paid');
 });
