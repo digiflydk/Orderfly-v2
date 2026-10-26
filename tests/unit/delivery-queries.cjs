@@ -8,7 +8,7 @@ function fixture(options={}){
  const snap=(path)=>({id:path.split('/').at(-1),ref:ref(path),exists:rows.has(path),data:()=>rows.get(path)});
  function ref(path){return{path,collection:name=>collection(`${path}/${name}`),get:async()=>{calls.push(path);return snap(path)}};}
  function collection(path,filters=[],after=null,limit=Infinity){return{doc:id=>ref(`${path}/${id}`),where:(key,op,value)=>collection(path,[...filters,[key,value]],after,limit),orderBy:()=>collection(path,filters,after,limit),startAfter:value=>collection(path,filters,value,limit),limit:value=>collection(path,filters,after,value),get:async()=>{assert.ok(limit<=26,'bounded reads');calls.push(path);const docs=[...rows.keys()].filter(p=>p.startsWith(path+'/')&&p.split('/').length===path.split('/').length+1).sort().map(snap).filter(d=>(!after||d.id>after)&&filters.every(([key,value])=>d.data()[key]===value)).slice(0,limit);return{docs}}};}
- const mocks={'server-only':{},'firebase-admin/firestore':{FieldPath:{documentId:()=> '__id__'}},'@/lib/firebase-admin':{getAdminDb:()=>({collection})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{if(deny)throw Error('forbidden')}}};
+ const mocks={'server-only':{},'../cancellation/server':{cancellationAvailability:async()=>({available:false})},'firebase-admin/firestore':{FieldPath:{documentId:()=> '__id__'}},'@/lib/firebase-admin':{getAdminDb:()=>({collection})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{if(deny)throw Error('forbidden')}}};
  return{...loadTs('src/lib/delivery/queries/server.ts',mocks),rows,calls,revoke:()=>{deny=true}};
 }
 test('bounded scoped list paginates and never returns unrelated order',async()=>{

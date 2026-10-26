@@ -12,6 +12,7 @@ const analyticsAttribution = z.object({
   referrerHost: z.string().max(253).regex(/^[a-z0-9.-]+$/).optional(),
 }).strict().optional();
 const customerBase = z.object({
+  deliveryInstructions: z.string().regex(/^[^\p{Cf}\p{Cs}\u0000-\u0008\u000b-\u001f\u007f]*$/u, 'Delivery instructions contain unsupported control characters').trim().max(400).optional(),
   paymentMethod: z.enum(['online', 'pay_at_pickup']).optional(),
   analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(), analyticsAttribution,
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),

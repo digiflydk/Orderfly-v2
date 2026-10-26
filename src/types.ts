@@ -99,6 +99,7 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+    deliveryInstructions?: string;
   paymentMethod?: 'online' | 'pay_at_pickup';
     newsletterConsentId?: string;
     newsletterConsentVersion?: string;

@@ -96,6 +96,7 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+    deliveryInstructions?: string;
     newsletterConsentId?: string;
     newsletterConsentVersion?: string;
     analyticsSessionId?: string;

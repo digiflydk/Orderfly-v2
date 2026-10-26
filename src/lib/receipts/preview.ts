@@ -1,8 +1,10 @@
+import type { DeliveryPrintDetails } from './kitchen-preview';
 import type { ReceiptBrandIdentity } from './brand-identity';
 import type { OrderDetail } from '@/types';
 import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 
 export type ReceiptPreviewData = {
+  delivery?: DeliveryPrintDetails;
   reference: string; createdAt: string; paidAt?: string; invoiceNumber?: string;
   currency: string; brandName: string; locationName: string;
   logoUrl?: string;
@@ -21,10 +23,11 @@ function date(value: Date | string | undefined): string | undefined {
 }
 
 /** Allowlist only display data; never serialize the raw order/PSP/analytics objects. */
-export function projectReceipt(order: OrderDetail, brandIdentity?: ReceiptBrandIdentity): ReceiptPreviewData {
+export function projectReceipt(order: OrderDetail, brandIdentity?: ReceiptBrandIdentity, delivery?: DeliveryPrintDetails): ReceiptPreviewData {
   const invoice = order.invoice;
   const details = order.paymentDetails;
   return {
+    delivery,
     reference: order.id, createdAt: date(order.createdAt) ?? '',
     paidAt: date(order.paidAt), invoiceNumber: invoice?.number,
     currency: invoice?.currency || 'DKK',

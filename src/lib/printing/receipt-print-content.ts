@@ -6,12 +6,16 @@ import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import { storedPrinterSchema } from './storage';
 import { DEFAULT_KITCHEN_SETTINGS, kitchenSettingsSchema } from '@/lib/receipts/kitchen-settings';
 import { DEFAULT_RECEIPT_SETTINGS, receiptSettingsSchema } from '@/lib/receipts/settings';
-import { projectKitchenReceipt } from '@/lib/receipts/kitchen-preview';
+import { projectKitchenReceipt, type DeliveryPrintDetails } from '@/lib/receipts/kitchen-preview';
 import { projectReceipt } from '@/lib/receipts/preview';
 import { projectReceiptBrand } from '@/lib/receipts/brand-identity';
 import { kitchenCatalogLabelApplies } from '@/lib/receipts/kitchen-category-scope';
 import { renderKitchenReceiptSvg, renderCustomerReceiptSvg } from '@/lib/receipts/print-layout';
 import { rasterizeReceipt, resolveReceiptLogo } from '@/lib/receipts/print-raster';
+
+import { managedDeliveryBindingSchema, deliveryIntervalSchema } from '@/lib/delivery/provider-contract';
+import { storedDeliveryQuoteSchema } from '@/lib/delivery/quotes/schema';
+import { bookingIntentSchema } from '@/lib/delivery/booking/state';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const scopeSchema = z.object({ orderId: id, brandId: id, locationId: id, printerId: id }).strict();
@@ -32,7 +36,7 @@ const invoiceSchema = z.object({ number: text(160), currency: z.string().regex(/
 const orderSchema = z.object({ brandId: id, locationId: id,
   brandName: text(300).optional().default(''), locationName: text(300).optional().default(''),
   customerName: text(300).optional().default(''), customerContact: text(300).optional().default(''),
-  customerDetails: z.object({ phone: text(50).optional(), deliveryInstructions: text(400).optional() }).optional(),
+  customerDetails: z.object({ address: text(1300).optional(), phone: text(50).optional(), deliveryInstructions: text(400).optional() }).optional(),
   status: text(50), paymentStatus: text(50).optional(), paymentMethod: text(50).optional(),
   deliveryType: z.enum(['Pickup', 'Delivery']), deliveryTime: text(300).optional(),
   productItems: z.array(item).min(1).max(100), totalAmount: money.optional(), refundedAmountOre: money.optional(),
@@ -68,6 +72,38 @@ async function categoryNames(context: NativeTransactionContext, s: Scope, order:
   }
   return labels;
 }
+async function managedDeliveryDetails(context: NativeTransactionContext, scope: Scope, raw: FirebaseFirestore.DocumentData): Promise<DeliveryPrintDetails | undefined> {
+  if (raw.deliveryType !== 'Delivery' || raw.managedDelivery === undefined) return undefined;
+  const managed = managedDeliveryBindingSchema.safeParse(raw.managedDelivery);
+  if (!managed.success) return fail();
+  const { db, transaction: tx } = context;
+  const orderRef = db.collection('orders').doc(scope.orderId);
+  const [quoteRow, estimateRow, attemptRow] = await Promise.all([
+    tx.get(db.collection('deliveryQuotes').doc(managed.data.quoteRef)),
+    tx.get(orderRef.collection('deliveryEstimates').doc('current')),
+    tx.get(orderRef.collection('deliveryAttempts').doc('original')),
+  ]);
+  const quote = storedDeliveryQuoteSchema.safeParse(quoteRow.data());
+  let requested: DeliveryPrintDetails['requested'] = null;
+  if (quoteRow.exists) {
+    if (!quote.success || quote.data.quoteRef !== managed.data.quoteRef || quote.data.contentDigest !== managed.data.requestDigest
+      || quote.data.binding.brandId !== scope.brandId || quote.data.binding.locationId !== scope.locationId || quote.data.binding.providerId !== managed.data.providerId) return fail();
+    const desired = quote.data.fulfillment.desiredDelivery;
+    requested = desired.kind === 'asap' ? { kind: 'asap' } : { kind: 'scheduled', ...desired.interval };
+  }
+  let reliablePickup: DeliveryPrintDetails['reliablePickup'] = null;
+  const estimate = estimateRow.data(), attempt = bookingIntentSchema.safeParse(attemptRow.data());
+  if (estimate?.pickupReliable === true && attempt.success && attempt.data.state === 'booked'
+    && attempt.data.scope.brandId === scope.brandId && attempt.data.scope.locationId === scope.locationId && attempt.data.scope.orderId === scope.orderId
+    && attempt.data.requestDigest === managed.data.requestDigest && attempt.data.provider === managed.data.providerId
+    && estimate.brandId === scope.brandId && estimate.locationId === scope.locationId && estimate.orderId === scope.orderId
+    && estimate.provider === managed.data.providerId && estimate.providerDeliveryId === attempt.data.providerDeliveryId) {
+    const interval = deliveryIntervalSchema.safeParse(estimate.pickup);
+    if (interval.success) reliablePickup = interval.data;
+  }
+  return { address: raw.customerDetails?.address ?? '', requested, reliablePickup };
+}
+
 async function nativeSnapshot(context: NativeTransactionContext, input: Scope) {
   const parsed = scopeSchema.safeParse(input); if (!parsed.success || context.db !== getAdminDb()) return fail();
   const s = parsed.data, { db, transaction: tx } = context;
@@ -86,6 +122,7 @@ async function nativeSnapshot(context: NativeTransactionContext, input: Scope) {
     || printer.data.configuration.id !== s.printerId || printer.data.configuration.brandId !== s.brandId
     || printer.data.configuration.locationId !== s.locationId || printer.data.configuration.state !== 'active'
     || printer.data.configuration.manufacturer !== 'star' || printer.data.configuration.transport !== 'cloudprnt-http') return fail();
+  const delivery = await managedDeliveryDetails(context, s, raw!);
   const width = printer.data.configuration.paperWidthMm;
   if (width !== 58 && width !== 80) return fail();
   const kitchenRecord = z.object({ schemaVersion: z.literal(1), brandId: z.literal(s.brandId), revision: z.number().int().positive().safe(), settings: kitchenSettingsSchema }).strict();
@@ -96,7 +133,7 @@ async function nativeSnapshot(context: NativeTransactionContext, input: Scope) {
   // Explicit projection removes unrelated provider/session/customer fields before rendering.
   const order = { ...orderParsed.data, id: s.orderId, createdAt: timestamp(raw!.createdAt), paidAt: timestamp(raw!.paidAt),
     fulfillmentAt: timestamp(raw!.fulfillmentAt) } as OrderDetail;
-  return { order, brand, kitchenSettings: { ...(kitchen?.success ? kitchen.data.settings : DEFAULT_KITCHEN_SETTINGS), paperWidthMm: width },
+  return { order, brand, delivery, kitchenSettings: { ...(kitchen?.success ? kitchen.data.settings : DEFAULT_KITCHEN_SETTINGS), paperWidthMm: width },
     receiptSettings: { ...(receipt?.success ? receipt.data.settings : DEFAULT_RECEIPT_SETTINGS), paperWidthMm: width } };
 }
 
@@ -112,7 +149,7 @@ export async function prepareKitchenPrintSnapshot(context: NativeTransactionCont
     });
   }
   const categories = await categoryNames(context, s, snapshot.order);
-  return { settings: snapshot.kitchenSettings, order: projectKitchenReceipt(snapshot.order, categories) };
+  return { settings: snapshot.kitchenSettings, order: projectKitchenReceipt(snapshot.order, categories, snapshot.delivery) };
 }
 
 /** Called only after the manual-request service authorizes actor/order/printer.
@@ -129,7 +166,7 @@ export async function prepareReceiptPrintContent(input: Scope & { kind: 'kitchen
   const snapshot = await db.runTransaction(transaction => nativeSnapshot({ db, transaction }, scope), { readOnly: true });
   if (!snapshot.order.invoice && (!snapshot.order.paymentDetails || snapshot.order.totalAmount === undefined
     || snapshot.order.productItems.some(p => p.unitPrice === undefined || p.totalPrice === undefined))) return fail();
-  const order = projectReceipt(snapshot.order, projectReceiptBrand(snapshot.brand));
+  const order = projectReceipt(snapshot.order, projectReceiptBrand(snapshot.brand), snapshot.delivery);
   const logoDataUri = order.logoUrl ? await resolveReceiptLogo(order.logoUrl) : undefined;
   return rasterizeReceipt(renderCustomerReceiptSvg(snapshot.receiptSettings, order, { logoDataUri }));
 }

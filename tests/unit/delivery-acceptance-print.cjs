@@ -99,7 +99,7 @@ test('delayed native acceptance atomically confirms and prints exactly once with
  assert.equal(typeof f.records.get('deliveryDispatchJobs/'+f.orderId).acceptanceCompletedAtMs,'number');
 });
 test('acceptance refuses refunded/unknown/foreign evidence before output',async()=>{
- for(const mutate of [f=>f.order().refundedAmountOre=1,f=>f.records.get('orders/'+f.orderId+'/deliveryDispatchResults/original').result={kind:'unknown',attemptRef:'attempt',error:{code:'timeout',messageKey:'unknown',retry:'after_reconciliation',nativeCode:null}},f=>f.records.get('orders/'+f.orderId+'/deliveryDispatch/original').scope.brandId='other']){
+ for(const mutate of [f=>f.records.get('orders/'+f.orderId+'/deliveryDispatch/original').networkStartedAtMs=null,f=>f.order().refundedAmountOre=1,f=>f.records.get('orders/'+f.orderId+'/deliveryDispatchResults/original').result={kind:'unknown',attemptRef:'attempt',error:{code:'timeout',messageKey:'unknown',retry:'after_reconciliation',nativeCode:null}},f=>f.records.get('orders/'+f.orderId+'/deliveryDispatch/original').scope.brandId='other']){
  const f=await fixture();mutate(f);await assert.rejects(f.settle());assert.equal(f.jobs().length,0);assert.equal(f.order().status,'Pending');}
 });
 test('late print failure rolls back native acceptance and confirmation',async()=>{

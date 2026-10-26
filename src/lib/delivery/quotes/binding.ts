@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { storedDeliveryQuoteSchema, type StoredDeliveryQuote } from './schema';
+import { storedDeliveryQuoteSchema, deliveryCampaignSnapshotSchema, type DeliveryCampaignSnapshot, type StoredDeliveryQuote } from './schema';
 import { quoteContentDigest } from './digest';
 import { type DeliveryQuoteRequest, type DeliveryQuoteResult } from '../provider-contract';
 import { calculateDeliveryPrice, isRouteDistance, type DeliveryPriceInput } from '../pricing/calculate';
@@ -22,6 +22,7 @@ export function quoteFingerprint(input: QuoteBindingInput): string {
 }
 export function buildQuote(input: { binding: QuoteBindingInput; quoteRef: string; providerQuoteRef: string;
   fulfillment: DeliveryQuoteRequest; providerQuote: Extract<DeliveryQuoteResult,{kind:'available'}>;
+  appliedCampaign?: DeliveryCampaignSnapshot;
   nowMs: number; freshnessMs: number; providerExpiresAtMs: number | null; price: DeliveryPriceInput }) {
   if (!safeId(input.quoteRef) || typeof input.providerQuoteRef !== 'string' || !input.providerQuoteRef.trim() || input.providerQuoteRef.length > 500
     || !Number.isSafeInteger(input.nowMs) || input.nowMs < 0 || !Number.isSafeInteger(input.freshnessMs) || input.freshnessMs <= 0 || input.freshnessMs > 300000
@@ -31,10 +32,14 @@ export function buildQuote(input: { binding: QuoteBindingInput; quoteRef: string
   if(nativeExpiry!==input.providerExpiresAtMs)throw new Error('provider_expiry_mismatch');
   const expiresAtMs = Math.min(input.nowMs + input.freshnessMs, nativeExpiry ?? Infinity);
   if (!Number.isSafeInteger(expiresAtMs)) throw new Error('invalid_quote_expiry');
-  const result = calculateDeliveryPrice(input.price);
+  const campaign=input.appliedCampaign===undefined?undefined:deliveryCampaignSnapshotSchema.parse(input.appliedCampaign);
+  const baseRules=structuredClone(input.price.rules);
+  if(campaign&&campaign.maxDistanceMeters>baseRules.maxDistanceMeters)throw new Error('invalid_campaign_distance');
+  const price=campaign?{...input.price,rules:{...baseRules,freeDelivery:{minimumMinor:0,maxDistanceMeters:campaign.maxDistanceMeters}}}:input.price;
+  const result = calculateDeliveryPrice(price);
   if (!result.ok) return result;
   const envelope={ version: 1 as const, quoteRef: input.quoteRef, providerQuoteRef: input.providerQuoteRef,
-    binding: structuredClone(input.binding), fingerprint, createdAtMs: input.nowMs, expiresAtMs, economics: result.snapshot, fulfillment:structuredClone(input.fulfillment), providerQuote:structuredClone(input.providerQuote) };
+    binding: structuredClone(input.binding), fingerprint, createdAtMs: input.nowMs, expiresAtMs, economics: {...result.snapshot,...(campaign?{baseRules,appliedCampaign:structuredClone(campaign)}:{})}, fulfillment:structuredClone(input.fulfillment), providerQuote:structuredClone(input.providerQuote) };
   const quote=storedDeliveryQuoteSchema.parse({...envelope,contentDigest:quoteContentDigest(envelope)});
   return {ok:true as const,quote};
 }

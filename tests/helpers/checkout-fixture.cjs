@@ -52,6 +52,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(existing) records.set('customers/c',record);
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
+  '@/lib/delivery/quotes/adoption':{managedDeliveryRequired:async()=>false},
+  '@/lib/delivery/quotes/runtime':{managedDeliveryRuntimeAvailable:async()=>false,resolveManagedDeliveryRuntime:async()=>null},
   'next/headers': {cookies:async()=>({get:name=>name==='__Host-orderfly-loyalty' && loyaltyToken ? {value:loyaltyToken}:undefined})},
   '@/lib/loyalty/stamp-card/portal-http':{SESSION_COOKIE:'__Host-orderfly-loyalty'},
   '@/lib/loyalty/discount-card/checkout':acceptanceGraph('src/lib/loyalty/discount-card/checkout.ts'),

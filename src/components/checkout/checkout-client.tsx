@@ -1,6 +1,7 @@
 'use client';
 import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
+import { Textarea } from '@/components/ui/textarea';
 import { ManagedDeliveryQuote, type ManagedDeliveryQuoteView } from './managed-delivery-quote';
 import { useManagedDeliveryQuote } from './use-managed-delivery-quote';
 import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
@@ -86,6 +87,7 @@ const checkoutSchema = z.object({
   street: z.string().optional(),
   zipCode: z.string().optional(),
   city: z.string().optional(),
+  deliveryInstructions: z.string().max(400, 'Leveringsinstruktioner må højst være 400 tegn.').optional(),
   subscribeToNewsletter: z.boolean().default(false),
   clubTermsAccepted: z.boolean().default(false),
   useClubDiscount: z.boolean().default(false),
@@ -102,6 +104,7 @@ interface CheckoutFormValues {
   street?: string;
   zipCode?: string;
   city?: string;
+  deliveryInstructions?: string;
   subscribeToNewsletter?: boolean;
   clubTermsAccepted?: boolean;
   useClubDiscount?: boolean;
@@ -418,6 +421,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
       street: '',
       zipCode: '',
       city: '',
+      deliveryInstructions: '',
       subscribeToNewsletter: false,
       clubTermsAccepted: false,
       useClubDiscount: false,
@@ -605,7 +609,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
 
   const quoteForm=form.watch();
   const quoteJoiningClub=clubSignupShown&&!!quoteForm.subscribeToNewsletter&&!!quoteForm.clubTermsAccepted;
-  const quoteCustomer:CustomerInfo & {acceptTerms:boolean}={name:quoteForm.name,email:quoteForm.email,phone:quoteForm.phone,street:quoteForm.street,zipCode:quoteForm.zipCode,city:quoteForm.city,acceptTerms:quoteForm.acceptTerms,
+  const quoteCustomer:CustomerInfo & {acceptTerms:boolean;deliveryInstructions?:string}={name:quoteForm.name,email:quoteForm.email,phone:quoteForm.phone,street:quoteForm.street,zipCode:quoteForm.zipCode,city:quoteForm.city,...(managedActive&&quoteForm.deliveryInstructions?.trim()?{deliveryInstructions:quoteForm.deliveryInstructions.trim()}:{}),acceptTerms:quoteForm.acceptTerms,
     paymentMethod:paymentMethod||'online',subscribeToNewsletter:quoteJoiningClub||signupConfig.mode==='newsletter'&&!!quoteForm.subscribeToNewsletter,
     ...(quoteJoiningClub&&signupConfig.clubProgram?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion}:{})};
   const quoteInput=brand&&location?{cartItems:checkoutItems(cartItems),customerInfo:quoteCustomer,brandId:brand.id,locationId:location.id,
@@ -618,7 +622,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
   const managedConsent=managedQuote&&managed.accepted&&managed.checkoutKey?{...managed.accepted,checkoutKey:managed.checkoutKey}:null;
   const managedTotal=managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.checkoutTotalMinor/100):'Afventer leveringspris';
   const requestDeliveryPrice=async()=>{
-    const valid=await form.trigger(['name','email','phone','street','zipCode','city']);
+    const valid=await form.trigger(['name','email','phone','street','zipCode','city','deliveryInstructions']);
     if(!valid||!quoteForm.street?.trim()||!quoteForm.zipCode?.trim()||!quoteForm.city?.trim()){setCheckoutError('Udfyld navn, e-mail, telefon og leveringsadresse, før du henter leveringsprisen.');return;}
     setCheckoutError(null);await managed.request();
   };
@@ -685,9 +689,10 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
       // The server receives an explicit consent boolean and stable retry identity.
       const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
       // Hidden Club fields must never survive a previous opt-in or refetch.
-      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, ...contactValues} = formValues;
+      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, deliveryInstructions: _deliveryInstructions, ...contactValues} = formValues;
       const customerInfo: CustomerInfo = {
         ...contactValues,
+        ...(managedActive&&formValues.deliveryInstructions?.trim()?{deliveryInstructions:formValues.deliveryInstructions.trim()}:{}),
         paymentMethod: paymentMethod || 'online',
         subscribeToNewsletter: newsletterConsent,
         ...(joiningClub && signupConfig.clubProgram ? {subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion} : signupConfig.clubSignupSuppressed ? {} : {subscribeToClub:false}),
@@ -1011,6 +1016,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
                       </div>
                     </>
                   )}
+                  {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
                   <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} accepted={managed.accepted} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} onAccept={managed.accept} onPickup={()=>{setDeliveryType('pickup');setSelectedTime('asap');}} locked={isFormLocked}/>
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField

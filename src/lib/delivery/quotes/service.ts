@@ -1,3 +1,4 @@
+import type {DeliveryCampaignSnapshot} from './schema';
 import { deliveryQuoteRequestSchema, deliveryQuoteResultSchema, type DeliveryQuoteRequest, type DeliveryProvider } from '../provider-contract';
 import { deliverySettingsSchema, type DeliverySettings } from '../settings/schema';
 import { deliveryScheduleAt } from '../settings/schedule';
@@ -8,7 +9,7 @@ import { buildQuote, quoteFingerprint, type QuoteBindingInput, type BoundQuote }
 type AddressInput = Omit<DeliveryQuoteRequest['pickup'], 'coordinates'>;
 type FulfillmentInput = Omit<DeliveryQuoteRequest, 'pickup' | 'dropoff'> & {pickup:AddressInput;dropoff:AddressInput};
 export type DeliveryQuoteServiceInput = {
-  settings: DeliverySettings; binding: QuoteBindingInput; fulfillment: FulfillmentInput;
+  appliedCampaign?:DeliveryCampaignSnapshot; settings: DeliverySettings; binding: QuoteBindingInput; fulfillment: FulfillmentInput;
   quoteRef: string; itemSubtotalAfterDiscountMinor: number; freshnessMs: number; maxRouteAgeMs: number; routeProfile: string;
 };
 export function quoteAddressBinding(pickup:AddressInput,dropoff:AddressInput):string {
@@ -42,6 +43,12 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
       pickup:{...input.fulfillment.pickup,coordinates:coordinates(pickup)},dropoff:{...input.fulfillment.dropoff,coordinates:coordinates(dropoff)}});
     if (fulfillment.scope.brandId!==input.binding.brandId || fulfillment.scope.locationId!==input.binding.locationId
       || fulfillment.checkoutRef!==input.binding.checkoutReference || fulfillment.providerId!==settings.providerId) return {ok:false,reason:'scope_mismatch'};
+    if(fulfillment.desiredDelivery.kind==='scheduled'){
+      const target=Date.parse(fulfillment.desiredDelivery.interval.earliest);
+      if(target!==Date.parse(fulfillment.desiredDelivery.interval.latest)||target<Date.parse(fulfillment.readyAt)+route.durationSeconds*1000)return {ok:false,reason:'unsupported_schedule'};
+      const targetSchedule=deliveryScheduleAt(settings,new Date(target));
+      if(!targetSchedule.open)return {ok:false,reason:targetSchedule.reason};
+    }
     const areaAllowed=deps.areaAllows(route);
     const initialCoverage=checkDeliveryCoverage({settings,schedule,route,areaAllowed,providerAvailable:true,nowMs:deps.now().getTime(),maxRouteAgeMs:input.maxRouteAgeMs});
     if (!initialCoverage.eligible) return {ok:false,reason:initialCoverage.reason};
@@ -54,7 +61,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const nowMs=deps.now().getTime();
     const coverage=checkDeliveryCoverage({settings,schedule,route,areaAllowed,providerAvailable:true,nowMs,maxRouteAgeMs:input.maxRouteAgeMs});
     if (!coverage.eligible) return {ok:false,reason:coverage.reason};
-    const result=buildQuote({fulfillment,providerQuote,binding:input.binding,quoteRef:input.quoteRef,providerQuoteRef:providerQuote.quoteRef,nowMs,
+    const result=buildQuote({fulfillment,providerQuote,...(input.appliedCampaign?{appliedCampaign:input.appliedCampaign}:{}),binding:input.binding,quoteRef:input.quoteRef,providerQuoteRef:providerQuote.quoteRef,nowMs,
       freshnessMs:input.freshnessMs,providerExpiresAtMs:providerQuote.expiresAt===null?null:Date.parse(providerQuote.expiresAt),
       price:{rules:settings.pricingRules,route:{meters:route.meters,method:route.method,source:route.source,profile:route.profile,calculatedAt:route.calculatedAt},itemSubtotalAfterDiscountMinor:input.itemSubtotalAfterDiscountMinor,
         providerCost:{amountMinor:providerQuote.cost.amountMinor,currency:providerQuote.cost.currency,taxBasis:providerQuote.cost.taxBasis}}});

@@ -29,7 +29,10 @@ async function native(tx:FirebaseFirestore.Transaction,scope:Scope){
     ||!result||result.version!==1||!isDeepStrictEqual(result.scope,scope)||result.attemptRef!==reference||result.requestDigest!==managed.data.requestDigest
     ||result.providerId!==managed.data.providerId||!integer.safeParse(result.recordedAtMs).success
     ||!(result.evidence==='definitive_local_no_dispatch'&&result.claimId===null&&!claimSnap.exists
-      ||id.safeParse(result.claimId).success&&claim&&claim.claimId===result.claimId&&isDeepStrictEqual(claim.scope,scope)&&claim.requestDigest===managed.data.requestDigest&&typeof claim.networkStartedAtMs==='number')
+      ||id.safeParse(result.claimId).success&&claim&&claim.claimId===result.claimId&&isDeepStrictEqual(claim.scope,scope)&&claim.requestDigest===managed.data.requestDigest&&claim.attemptRef===reference
+        // The server adapter can reject after claiming but before consuming network permission.
+        // Only its immutable matching rejected result authorizes this path; unknown never does.
+        &&(claim.networkStartedAtMs===null||integer.safeParse(claim.networkStartedAtMs).success))
     ||!outcome.success||outcome.data.kind!=='rejected')throw new Error('delivery_refund_evidence_invalid');
   const ledger=ledgerSnap.exists?ledgerSchema.parse(ledgerSnap.data()):null;
   if(ledger&&(!isDeepStrictEqual(ledger.scope,scope)||ledger.requestDigest!==managed.data.requestDigest))throw new Error('delivery_refund_ledger_scope');

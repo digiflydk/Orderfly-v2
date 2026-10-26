@@ -51,7 +51,7 @@ export async function authorizeWoltDispatchInTransaction(tx:FirebaseFirestore.Tr
   const quote=storedDeliveryQuoteSchema.parse((await tx.get(db.collection('deliveryQuotes').doc(managed.quoteRef))).data());
   if(quote.contentDigest!==claim.requestDigest||quote.quoteRef!==managed.quoteRef||!sameScope(quote.binding,scope)||Date.now()<quote.createdAtMs||Date.now()>=quote.expiresAtMs)throw new Error('delivery_quote_expired');
   const {result}=await loadDeliverySettingsInTransaction(tx,scope.brandId,scope.locationId);
-  if(result.brandRevision!==quote.binding.brandRevision||result.revision!==quote.binding.locationRevision||!isDeepStrictEqual(result.settings.pricingRules,quote.economics.rules))throw new Error('delivery_settings_changed');
+  if(result.brandRevision!==quote.binding.brandRevision||result.revision!==quote.binding.locationRevision||!isDeepStrictEqual(result.settings.pricingRules,(quote.economics.baseRules ?? quote.economics.rules)))throw new Error('delivery_settings_changed');
   if(!result.settings.enabled||result.settings.paused||result.settings.providerId!=='wolt')throw new Error('delivery_dispatch_disabled');
 }
 async function validateClaimedWoltAttempt(capability:WoltDispatchCapability,request:Readonly<DeliveryCreateRequest>):Promise<boolean>{
@@ -85,7 +85,7 @@ async function claimOriginal(scope:Scope,environment:Environment):Promise<WoltDi
     if(quote.quoteRef!==managed.quoteRef||quote.contentDigest!==managed.requestDigest||!sameScope(quote.binding,scope)||quote.binding.providerId!=='wolt')throw new PreparationError('quote_changed');
     if(now<quote.createdAtMs||now>=quote.expiresAtMs)throw new PreparationError('quote_expired');
     const {result}=await loadDeliverySettingsInTransaction(tx,scope.brandId,scope.locationId);
-    if(!result.settings.enabled||result.settings.paused||result.settings.providerId!=='wolt'||result.brandRevision!==quote.binding.brandRevision||result.revision!==quote.binding.locationRevision||!isDeepStrictEqual(result.settings.pricingRules,quote.economics.rules))throw new PreparationError('settings_changed');
+    if(!result.settings.enabled||result.settings.paused||result.settings.providerId!=='wolt'||result.brandRevision!==quote.binding.brandRevision||result.revision!==quote.binding.locationRevision||!isDeepStrictEqual(result.settings.pricingRules,(quote.economics.baseRules ?? quote.economics.rules)))throw new PreparationError('settings_changed');
     const binding=await loadWoltBindingInTransaction(tx,{brandId:scope.brandId,locationId:scope.locationId},environment);
     const request=deliveryCreateRequestSchema.parse({version:1,scope:{brandId:scope.brandId,locationId:scope.locationId},providerId:'wolt',orderRef:scope.orderId,attemptRef:reference,
       quoteRef:quote.providerQuoteRef,requestDigest:managed.requestDigest,readyAt:quote.fulfillment.readyAt,deliveryInterval:quote.fulfillment.desiredDelivery.kind==='scheduled'?quote.fulfillment.desiredDelivery.interval:null,quotedCost:quote.providerQuote.cost,fulfillment:quote.fulfillment});

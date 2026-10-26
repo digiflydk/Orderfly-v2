@@ -1,0 +1,75 @@
+import 'server-only';
+import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { loadDeliverySettingsInTransaction } from '../settings/server';
+import { deliveryIdSchema, deliveryQuoteRequestSchema, type DeliveryProvider, type DeliveryScope } from '../provider-contract';
+import { createCustomerWoltStorage } from './wolt-binding';
+import { createWoltProvider } from '../providers/wolt/provider';
+
+const integer=z.number().int().nonnegative().safe(),digest=z.string().regex(/^[a-f0-9]{64}$/);
+const draftSchema=z.object({checkoutKeyHash:digest,requestDigest:digest,draftRevision:integer,addressRevision:integer,
+ itemSubtotalAfterDiscountMinor:integer,bagFeeMinor:integer,adminFeeMinor:integer,
+ binding:z.object({brandId:deliveryIdSchema,locationId:deliveryIdSchema,checkoutReference:deliveryIdSchema,providerId:z.literal('wolt'),normalizedAddress:z.string().trim().min(1).max(1000),cartDigest:digest,fulfillmentAt:z.string().datetime({offset:true}),brandRevision:integer,locationRevision:integer}).strict(),
+}).strict();
+type Draft=z.infer<typeof draftSchema>;
+type Environment='sandbox'|'production';
+export type CustomerWoltQuoteCapability=Readonly<{readonly __customerWoltQuote:unique symbol}>;
+type Entry={draft:Draft;environment:Environment;expiresAtMs:number};
+const capabilities=new WeakMap<object,Entry>();
+function expiry(raw:FirebaseFirestore.DocumentData):number {
+ if(Number.isSafeInteger(raw.expiresAtMs)&&raw.expiresAtMs>=0)return raw.expiresAtMs;
+ const value=raw.expiresAt;
+ if(value instanceof Date)return value.getTime();
+ if(value&&typeof value.toMillis==='function')return value.toMillis();
+ throw new Error('delivery_customer_draft_expiry');
+}
+function inspect(capability:CustomerWoltQuoteCapability):Entry {
+ const entry=capability&&typeof capability==='object'?capabilities.get(capability):undefined;
+ if(!entry||Date.now()>=entry.expiresAtMs)throw new Error('delivery_customer_quote_authority');
+ if(entry.environment==='production'&&process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED!=='true')throw new Error('delivery_production_disabled');
+ return entry;
+}
+export function inspectCustomerWoltQuoteCapability(capability:CustomerWoltQuoteCapability):Readonly<DeliveryScope&{environment:Environment}>{
+ const {draft,environment}=inspect(capability);return Object.freeze({brandId:draft.binding.brandId,locationId:draft.binding.locationId,environment});
+}
+/** Fixed native authority accessor. It never trusts a browser-provided verified flag or callback. */
+export async function authorizeCustomerWoltQuoteInTransaction(tx:FirebaseFirestore.Transaction,capability:CustomerWoltQuoteCapability,scope:DeliveryScope):Promise<void>{
+ const entry=inspect(capability),expected=entry.draft,binding=expected.binding;
+ if(scope.brandId!==binding.brandId||scope.locationId!==binding.locationId)throw new Error('delivery_customer_quote_scope');
+ const db=getAdminDb();
+ const [draftSnap,brandSnap,locationSnap]=await Promise.all([tx.get(db.collection('deliveryCheckoutDrafts').doc(expected.checkoutKeyHash)),tx.get(db.collection('brands').doc(binding.brandId)),tx.get(db.collection('locations').doc(binding.locationId))]);
+ const raw=draftSnap.data(),location=locationSnap.data();
+ if(!raw||!brandSnap.exists||!locationSnap.exists||location?.brandId!==binding.brandId||location.isActive!==true)throw new Error('delivery_customer_quote_scope');
+ const {expiresAt:_expiresAt,expiresAtMs:_expiresAtMs,...nativeDraft}=raw;
+ if(!isDeepStrictEqual(draftSchema.parse(nativeDraft),expected)||Date.now()>=expiry(raw))throw new Error('delivery_customer_draft_changed');
+ const {result}=await loadDeliverySettingsInTransaction(tx,binding.brandId,binding.locationId);
+ if(!result.settings.enabled||result.settings.paused||result.settings.providerId!=='wolt'||result.brandRevision!==binding.brandRevision||result.revision!==binding.locationRevision)throw new Error('delivery_customer_settings_changed');
+}
+const forbidden=()=>({code:'quote_only_capability',messageKey:'delivery.quote_only_capability',retry:'never' as const,nativeCode:null});
+/** Internal composition after saveAuthoritativeCustomerDraft. The returned facade cannot dispatch or cancel. */
+export async function createCustomerWoltQuoteProvider(rawDraft:unknown,rawEnvironment:unknown):Promise<DeliveryProvider>{
+ const draft=draftSchema.parse(rawDraft),environment=z.enum(['sandbox','production']).parse(rawEnvironment);
+ if(draft.binding.checkoutReference!==draft.checkoutKeyHash)throw new Error('delivery_customer_draft_changed');
+ const capability=Object.freeze({}) as CustomerWoltQuoteCapability;
+ // Bounded capability lifetime supplements, never replaces, native draft expiry on every operation.
+ capabilities.set(capability,{draft:structuredClone(draft),environment,expiresAtMs:Date.now()+300000});
+ const scope={brandId:draft.binding.brandId,locationId:draft.binding.locationId};
+ try{
+  await getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope));
+  const storage=await createCustomerWoltStorage(capability,environment);
+  const provider=createWoltProvider({...storage,environment,validateClaimedAttempt:async()=>false,loadCancellation:async()=>null});
+  return Object.freeze({providerId:provider.providerId,capabilities:provider.capabilities,
+   async quote(raw:unknown){
+    const request=deliveryQuoteRequestSchema.parse(raw),fields=(a:typeof request.pickup)=>[a.country,a.postcode,a.city,a.street,a.building,a.unit];
+    if(request.providerId!=='wolt'||request.scope.brandId!==scope.brandId||request.scope.locationId!==scope.locationId||request.checkoutRef!==draft.checkoutKeyHash
+      ||request.readyAt!==draft.binding.fulfillmentAt||JSON.stringify([fields(request.pickup),fields(request.dropoff)])!==draft.binding.normalizedAddress)throw new Error('delivery_customer_quote_request_changed');
+    await getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope));
+    return provider.quote(request);
+   },
+   async create(){return {kind:'rejected' as const,error:forbidden()};},
+   async cancel(){return {kind:'unsupported' as const};},
+   async reconcile(){return {kind:'unsupported' as const};},
+  });
+ }catch(error){capabilities.delete(capability);throw error;}
+}

@@ -47,7 +47,8 @@ import { generateOrderId } from '@/lib/order-id';
 import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
 import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
 import { prepareUnpaidAcceptanceOriginals } from '@/lib/printing/unpaid-acceptance-originals';
-import {resolveManagedDeliveryRuntime} from '@/lib/delivery/quotes/runtime';
+import {managedDeliveryRequired} from '@/lib/delivery/quotes/adoption';
+import {managedDeliveryRuntimeAvailable} from '@/lib/delivery/quotes/runtime';
 import {createNativeManagedCustomerQuote,currentNativeManagedDraft} from '@/lib/delivery/quotes/customer-controller';
 import {prepareCustomerQuoteConsumption} from '@/lib/delivery/quotes/customer-store';
 import {resolveManagedStripeGateway,type ManagedStripeAccount} from '@/lib/delivery/payments/stripe-authority';
@@ -658,11 +659,11 @@ export async function requestManagedDeliveryQuoteAction(input: {
   const [items,customer,,b,l,payment,discount,bs,ls,time]=parsed.data;
   input={...input,cartItems:items,customerInfo:customer,brandId:b,locationId:l,paymentDetails:payment,appliedDiscountId:discount,brandSlug:bs,locationSlug:ls,deliveryTime:time};
   try {
-    if(!await resolveManagedDeliveryRuntime({brandId:input.brandId,locationId:input.locationId}))return failure;
-    if(input.deliveryTime && input.deliveryTime!=='asap')return {...failure,code:'invalid_request',message:'Forudbestilt levering er endnu ikke tilgængelig. Vælg hurtigst muligt.'};
+    if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId}))return failure;
     const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
     const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
+    if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
     const fulfillmentAt=resolveFulfillmentTime(location,'pickup','asap');
     return await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
       subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,fulfillmentAt,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
@@ -692,8 +693,10 @@ export async function createStripeCheckoutSessionAction(
     if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
     [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
     if(managedDeliveryAcceptance!==undefined&&!managedDeliveryAcceptanceSchema.safeParse(managedDeliveryAcceptance).success)return {success:false,retryable:true,error:'Leveringstilbuddet er ugyldigt. Beregn levering igen.'};
-    const managedRuntime = deliveryType === 'delivery' ? await resolveManagedDeliveryRuntime({brandId,locationId}) : null;
-    if (managedRuntime && !managedDeliveryAcceptance) return {success:false,retryable:true,error:'Beregn og acceptér leveringstilbuddet før betaling.'};
+    const managedRuntime = deliveryType === 'delivery' ? await managedDeliveryRuntimeAvailable({brandId,locationId}) : null;
+    const requiresManaged = deliveryType === 'delivery' && await managedDeliveryRequired({brandId,locationId});
+    if (requiresManaged && !managedRuntime) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+    if ((managedRuntime || requiresManaged) && !managedDeliveryAcceptance) return {success:false,retryable:true,error:'Beregn og acceptér leveringstilbuddet før betaling.'};
     if (managedDeliveryAcceptance !== undefined && (deliveryType!=='delivery' || !managedRuntime)) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
     stage = 'validation';
 
@@ -740,6 +743,7 @@ export async function createStripeCheckoutSessionAction(
       if(managedDeliveryAcceptance.currency!==managedQuote.economics.customerFee.currency||managedDeliveryAcceptance.checkoutTotalMinor!==ore(totalAmount))throw Error('Leveringsprisen er ændret. Beregn levering igen.');
       serverPaymentDetails.deliveryFee=managedQuote.economics.customerFee.amountMinor/100;
       serverPaymentDetails.vatAmount=money(totalAmount*((brand.vatPercentage??25)/(100+(brand.vatPercentage??25))));
+      if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet udløber snart. Beregn levering igen.');
       fulfillmentAt=managedDraft.binding.fulfillmentAt;
     }
 
@@ -806,7 +810,7 @@ export async function createStripeCheckoutSessionAction(
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
-        deliveryTime: displayFulfillmentTime(fulfillmentAt),
+        deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt),
         fulfillmentAt,
         brandName: brand.name,
         locationName: location.name,
@@ -815,6 +819,7 @@ export async function createStripeCheckoutSessionAction(
             // Retain the validated checkout contact for this order's kitchen ticket.
             // Do not resolve a mutable customer profile when rendering old orders.
             phone: customerInfo.phone,
+            ...(managedQuote ? {deliveryInstructions:customerInfo.deliveryInstructions||''} : {}),
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),
@@ -948,9 +953,9 @@ export async function createStripeCheckoutSessionAction(
     // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
     stage = 'validation';
     // Optional reads/customer creation may take time. Recheck immediately before payment.
-    if(managedQuote){if(Date.now()>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet er udløbet. Beregn levering igen.');}
+    if(managedQuote){if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet er udløbet. Beregn levering igen.');}
     else fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
-    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt) });
+    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt) });
     if (discountCard) await assertDiscountCardCheckoutCurrent(getAdminDb(),{...discountCardInput,now:Date.now()},discountCard);
     stage = 'stripe_session';
     sessionRequestStarted = true;

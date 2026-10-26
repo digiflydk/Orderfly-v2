@@ -48,7 +48,9 @@ async function fixture(options = {}) {
   Object.assign(f.order().psp,{provider:'stripe',paymentIntentId:'pi_test'});
   const session = { livemode:false,payment_intent:'pi_test',id: 'cs_test_atomic_349_reference', mode: 'payment', status: 'complete', payment_status: 'paid', currency: 'dkk',
     amount_total: Math.round(f.order().totalAmount * 100), metadata: { orderId: f.orderId, brandId: 'b', locationId: 'l' } };
+  const refunds=[];
   class Provider {
+    refunds={create:async(params,opts)=>{assert.equal(f.records.get('orders/'+f.orderId+'/deliveryRefunds/original').state,'submitting');assert.match(opts.idempotencyKey,/^delivery-refund-[a-f0-9]{64}$/);const refund={id:'re_fixture',charge:'ch_test',payment_intent:'pi_test',amount:session.amount_total,currency:'dkk',metadata:params.metadata,status:'succeeded'};refunds.push(refund);return refund;},list:async()=>({data:refunds,has_more:false})};
     accounts={retrieve:async()=>({id:'acct_test'})};
     checkout={sessions:{retrieve:async()=>{return session;}}};
     paymentIntents={retrieve:async()=>({id:'pi_test',status:'succeeded',livemode:false,currency:'dkk',amount:session.amount_total,amount_received:session.amount_total,metadata:scope,
@@ -73,7 +75,7 @@ async function fixture(options = {}) {
   const {quote}=load('src/lib/delivery/quotes/binding.ts').buildQuote({binding:{...nativeScope,checkoutReference:'C',providerId:'wolt',normalizedAddress:'DK Test',cartDigest:'a'.repeat(64),fulfillmentAt:ready,brandRevision:1,locationRevision:0},quoteRef:'Q',providerQuoteRef:'native',nowMs:now,freshnessMs:300000,providerExpiresAtMs:null,price,fulfillment,providerQuote});
   f.records.set('deliverySettings/b',{schemaVersion:1,brandId:'b',locationId:null,revision:1,settings:{...settings.defaultDeliverySettings(),enabled:true,providerId:'wolt',pricingRules:price.rules}});
   f.records.set('deliveryProviderBindings/'+binding.woltBindingDocumentId(nativeScope,'sandbox'),{schemaVersion:1,...nativeScope,provider:'wolt',environment:'sandbox',active:true,revision:1,merchantId:'merchant',venueId:'venue',secretRef:'projects/test-project/secrets/orderfly-wolt-sandbox-merchant/versions/1'});
-  await (await binding.createAuthorizedWoltStorage(nativeScope,'sandbox')).saveQuote({scope:nativeScope,quoteRef:'native',fingerprint:provider.woltFulfillmentFingerprint(fulfillment),bindingRevision:'1',merchantId:'merchant',venueId:'venue',environment:'sandbox',cost:providerQuote.cost,native:{promiseId:'native',venueId:'venue',validUntil:null,fetchedAt:new Date(now).toISOString(),dropoff:{coordinates:{lat:55.6,lon:12.6},formattedAddress:'Test 1'},scheduledDropoffTime:null,preparationMinutes:10}});
+  await (await binding.createAuthorizedWoltStorage(nativeScope,'sandbox')).saveQuote({scope:nativeScope,quoteRef:'native',fingerprint:options.changedPrivateQuote?'b'.repeat(64):provider.woltFulfillmentFingerprint(fulfillment),bindingRevision:'1',merchantId:'merchant',venueId:'venue',environment:'sandbox',cost:providerQuote.cost,native:{promiseId:'native',venueId:'venue',validUntil:null,fetchedAt:new Date(now).toISOString(),dropoff:{coordinates:{lat:55.6,lon:12.6},formattedAddress:'Test 1'},scheduledDropoffTime:null,preparationMinutes:10}});
   f.records.set('deliveryQuotes/Q',quote);
   f.order().managedDelivery={version:1,providerId:'wolt',quoteRef:'Q',requestDigest:quote.contentDigest};
   f.records.set('deliveryDispatchJobs/'+f.orderId,{version:1,...scope,providerId:'wolt',requestDigest:quote.contentDigest,state:'pending',createdAtMs:now,updatedAtMs:now});
@@ -95,7 +97,7 @@ async function fixture(options = {}) {
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
   };
-  return {...f,scope,dispatcher,inbox,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
+  return {...f,scope,dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
 }
 
 test('real dispatcher, private binding, provider, payment acceptance and signed callback share one native lifecycle',async t=>{
@@ -120,4 +122,21 @@ test('real lost create response stays unknown across repeated dispatch and worke
  assert.equal(f.network.length,1);assert.equal(f.order().status,'Pending');assert.equal(f.jobs().length,0);
  assert.equal([...f.records].filter(([p])=>p.startsWith('orderNotificationJobs/')).length,0);
  assert.equal(f.records.get('orders/'+f.orderId+'/deliveryAttempts/original').state,'unknown');
+});
+
+test('authentic facade rejection before network consumption refunds once without courier or print',async t=>{
+ const f=await fixture({changedPrivateQuote:true});const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ const customer=f.records.get('customers/'+f.order().customerDetails.id);
+ customer.totalSpend=f.order().totalAmount+25;
+ assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'rejected');
+ assert.equal(f.network.length,0);assert.equal(f.refunds.length,1);
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryDispatch/original').networkStartedAtMs,null);
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryDispatchResults/original').result.error.code,'quote_changed_or_expired');
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryRefunds/original').state,'succeeded');
+ assert.equal(f.order().status,'Canceled');assert.equal(f.order().refundedAmountOre,Math.round(f.order().totalAmount*100));
+ assert.equal(f.records.get('customers/'+f.order().customerDetails.id).totalSpend,25);
+ await f.dispatcher.runDeliveryDispatchWorker();
+ assert.equal(f.network.length,0);assert.equal(f.refunds.length,1);assert.equal(f.jobs().length,0);
+ assert.equal([...f.records].filter(([p])=>p.includes('/financialAdjustments/')).length,1);
+ assert.equal([...f.records].filter(([p])=>p.startsWith('orderNotificationJobs/')).length,0);
 });

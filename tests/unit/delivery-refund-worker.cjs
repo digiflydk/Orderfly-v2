@@ -7,7 +7,7 @@ function fixture(options={}){
  psp:{provider:'stripe',paymentIntentId:'pi_123',checkoutSessionId:'cs_test_123'},managedStripeAccount:{accountId:'acct_123',livemode:false},managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest}};
  const attempt={schemaVersion:1,scope,provider:'wolt',intentId:attemptRef,reference:attemptRef,requestDigest,revision:2,state:'rejected',providerDeliveryId:null,createdAt:1,updatedAt:2};
  const result={version:1,scope,attemptRef,requestDigest,providerId:'wolt',claimId:'claim',recordedAtMs:2,result:{kind:'rejected',error:{code:'no_courier',messageKey:'unavailable',retry:'never',nativeCode:null}}};
- const records=new Map([['orders/order',order],['deliveryDispatchJobs/order',{...scope,requestDigest,state:'rejected'}],['orders/order/deliveryAttempts/original',attempt],['orders/order/deliveryDispatchResults/original',result],['customers/customer',{brandId:'brand',totalSpend:250}],['orders/order/deliveryDispatch/original',{scope,claimId:'claim',requestDigest,networkStartedAtMs:1}]]);
+ const records=new Map([['orders/order',order],['deliveryDispatchJobs/order',{...scope,requestDigest,state:'rejected'}],['orders/order/deliveryAttempts/original',attempt],['orders/order/deliveryDispatchResults/original',result],['customers/customer',{brandId:'brand',totalSpend:250}],['orders/order/deliveryDispatch/original',{scope,claimId:'claim',attemptRef,requestDigest,networkStartedAtMs:1}]]);
  let queue=Promise.resolve();const commits=[];const snap=path=>({id:path.split('/').at(-1),exists:records.has(path),data:()=>structuredClone(records.get(path))});
  const ref=path=>({path,id:path.split('/').at(-1),get:async()=>snap(path),collection:name=>({doc:id=>ref(`${path}/${name}/${id}`)})});
  const db={collection:name=>({doc:id=>ref(`${name}/${id}`)}),runTransaction(run){const job=queue.then(async()=>{const staged=new Map(structuredClone([...records]));let writing=false;const writes=[];const tx={get:async r=>{assert.equal(writing,false);return {id:r.id,exists:staged.has(r.path),data:()=>structuredClone(staged.get(r.path))};},create(r,v){writing=true;assert.equal(staged.has(r.path),false);staged.set(r.path,v);writes.push(r.path);},set(r,v,opts){writing=true;staged.set(r.path,opts?.merge?{...staged.get(r.path),...v}:v);writes.push(r.path);},update(r,v){writing=true;assert.ok(staged.has(r.path));staged.set(r.path,{...staged.get(r.path),...v});writes.push(r.path);}};
@@ -39,4 +39,15 @@ test('terminal refund failure marks operator review and never repeats PSP verifi
  assert.equal(f.records.get('deliveryDispatchJobs/order').refundReviewRequired,true);assert.equal(f.records.get('orders/order').refundedAmountOre,undefined);
  f.setAccount('acct_unavailable');f.records.get('deliveryDispatchJobs/order').refundReviewRequired=false;
  assert.equal((await f.worker.processManagedDeliveryRefund(scope)).state,'failed');assert.equal(f.records.get('deliveryDispatchJobs/order').refundReviewRequired,true);assert.equal(f.creates,1);assert.equal(f.lists,0);
+});
+
+test('pre-network adapter rejection requires exact native claim and definitive result',async()=>{
+ const f=fixture();f.records.get('orders/order/deliveryDispatch/original').networkStartedAtMs=null;
+ assert.equal((await f.worker.processManagedDeliveryRefund(scope)).state,'succeeded');assert.equal(f.creates,1);
+ for(const mutate of [
+  f=>delete f.records.get('orders/order/deliveryDispatch/original').networkStartedAtMs,
+  f=>f.records.get('orders/order/deliveryDispatch/original').attemptRef='foreign',
+  f=>f.records.get('orders/order/deliveryDispatch/original').claimId='foreign',
+  f=>f.records.get('orders/order/deliveryDispatchResults/original').result={kind:'unknown',attemptRef,error:{code:'timeout',messageKey:'unknown',retry:'after_reconciliation',nativeCode:null}},
+ ]){const g=fixture();g.records.get('orders/order/deliveryDispatch/original').networkStartedAtMs=null;mutate(g);await assert.rejects(g.worker.processManagedDeliveryRefund(scope),/evidence/);assert.equal(g.creates,0);}
 });
