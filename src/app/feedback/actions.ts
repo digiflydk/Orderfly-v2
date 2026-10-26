@@ -72,7 +72,7 @@ async function resolveAuthoritativeSource(
 ): Promise<AuthoritativeSource | null> {
   if (parsed.sourceType === 'commerce_order') {
     const order = await getOrderById(parsed.sourceId);
-    if (!order || order.customerDetails.id !== parsed.customerId || !completedFeedbackOrder(order)) return null;
+    if (!order || order.customerDetails.id !== parsed.customerId || !completedFeedbackOrder(order,parsed.sourceId)) return null;
     const invitation = parsed.invitationToken ? await resolveOrderFeedbackInvitation(parsed.invitationToken) : null;
     if (parsed.invitationToken && (!invitation || invitation.sourceId !== order.id || invitation.brandId !== order.brandId || invitation.locationId !== order.locationId || invitation.customerId !== parsed.customerId)) return null;
     return {
@@ -216,7 +216,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       }
       if (source.sourceType === 'commerce_order') {
         const current = (await transaction.get(db.collection('orders').doc(source.sourceId))).data();
-        if (!current || !completedFeedbackOrder(current) || current.brandId !== source.brandId || current.locationId !== source.locationId || current.customerDetails?.id !== source.customerId) throw new Error('Order is no longer eligible for feedback.');
+        if (!current || !completedFeedbackOrder(current,source.sourceId) || current.brandId !== source.brandId || current.locationId !== source.locationId || current.customerDetails?.id !== source.customerId) throw new Error('Order is no longer eligible for feedback.');
       }
       // Shares the activation lock with question administration. A concurrent
       // reassignment or edit cannot make the submitted answers use stale rules.

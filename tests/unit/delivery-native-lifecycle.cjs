@@ -98,7 +98,7 @@ async function fixture(options = {}) {
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
   };
-  return {...f,scope,session,terminal:load('src/lib/orders/terminal-read.ts'),settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
+  return {...f,scope,session,feedbackDrain:load('src/lib/feedback/delivery-requests.ts').drainDeliveryFeedbackRequests,terminal:load('src/lib/orders/terminal-read.ts'),settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
 }
 
 test('real dispatcher, private binding, provider, payment acceptance and signed callback share one native lifecycle',async t=>{
@@ -201,6 +201,12 @@ test('verified delivered callback removes kitchen Ready from active terminal but
  assert.equal((await f.inbox.receiveNativeWoltCallback(f.request(undefined,'order.delivered'),f.key)).status,200);
  assert.equal(f.order().status,'Ready');
  assert.equal(f.records.get('orders/'+f.orderId+'/deliveryState/current').status,'delivered');
+ const completion=f.order().managedDeliveryCompletion;
+ assert.equal(completion.orderId,f.orderId);assert.equal(completion.requestDigest,f.order().managedDelivery.requestDigest);
+ assert.equal(f.records.get('deliveryFeedbackRequests/'+f.orderId).state,'pending');
+ assert.deepEqual(f.records.get('deliveryFeedbackRequests/'+f.orderId).completion,completion);
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackMailJobs/')).length,0,'callback never queues or sends mail outside its durable transaction');
+
  assert.equal((await f.terminal.readTerminalOrders({view:'board'})).orders.some(o=>o.id===f.orderId),false);
  const history=(await f.terminal.readTerminalOrders({view:'history'})).orders.find(o=>o.id===f.orderId);
  assert.equal(history.status,'Ready');assert.equal(history.managedDeliveryTracking.deliveryStatus,'delivered');
@@ -209,4 +215,44 @@ test('verified delivered callback removes kitchen Ready from active terminal but
   f.records.set('orders/'+f.orderId+'/deliveryState/current',{...state,...patch});
   assert.equal((await f.terminal.readTerminalOrders({view:'board'})).orders.some(o=>o.id===f.orderId),true);
  }
+});
+
+
+test('verified delivered evidence and durable feedback request survive canceled/refunded native order',async t=>{
+ const f=await fixture();const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ await f.dispatcher.dispatchManagedDelivery(f.scope);Object.assign(f.order(),{status:'Canceled',refundedAmountOre:100});
+ const callback=f.request(undefined,'order.delivered'),repeat=callback.clone();
+ assert.equal((await f.inbox.receiveNativeWoltCallback(callback,f.key)).status,200);
+ assert.equal((await f.inbox.receiveNativeWoltCallback(repeat,f.key)).status,200);
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryState/current').status,'delivered');
+ assert.equal(f.order().status,'Canceled');assert.equal(f.order().refundedAmountOre,100);
+ assert.equal(f.records.get('deliveryFeedbackRequests/'+f.orderId).state,'pending');
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('deliveryFeedbackRequests/')).length,1);
+});
+
+
+test('delivered before native acceptance remains retryable and queues after acceptance without duplicate feedback',async t=>{
+ const values={ORDERFLY_NOTIFICATION_ENDPOINT:'https://notifications.example.test/enqueue',ORDERFLY_NOTIFICATION_ORGANIZATION_ID:'11111111-1111-4111-8111-111111111111',ORDERFLY_NOTIFICATION_SECRET:'synthetic-feedback-secret-at-least-32-chars',ORDERFLY_FEEDBACK_TOKEN_SECRET:'synthetic-feedback-token-at-least-32-chars'};
+ const previous=Object.fromEntries(Object.keys(values).map(k=>[k,process.env[k]]));Object.assign(process.env,values);t.after(()=>{for(const[k,v]of Object.entries(previous))v===undefined?delete process.env[k]:process.env[k]=v;});
+ const f=await fixture();const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ f.records.set('feedbackSettings/b',{emailEnabled:true,automaticRequests:true,delayHours:2,language:'da'});
+ f.records.set('feedbackQuestionsVersion/delivery',{versionLabel:'Delivery',isActive:true,language:'da',orderTypes:['delivery'],questions:[{questionId:'rating',label:'Feedback',type:'stars',isRequired:true}]});
+ const run=f.db.runTransaction.bind(f.db);let intercepted=false;
+ f.db.runTransaction=async(...args)=>{
+  const result=await run(...args);
+  if(!intercepted&&f.order().status==='Pending'&&f.records.get('orders/'+f.orderId+'/deliveryAttempts/original')?.state==='booked'){
+   intercepted=true;
+   assert.equal((await f.inbox.receiveNativeWoltCallback(f.request(undefined,'order.delivered'),f.key)).status,200);
+   await f.feedbackDrain(Date.now()+1000);
+   assert.equal(f.records.get('deliveryFeedbackRequests/'+f.orderId).state,'pending');
+   assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackMailJobs/')).length,0);
+  }
+  return result;
+ };
+ await f.dispatcher.dispatchManagedDelivery(f.scope);assert.equal(intercepted,true);assert.equal(f.order().status,'Received');
+ await f.feedbackDrain(Date.now()+120000);await f.feedbackDrain(Date.now()+180000);
+ assert.equal(f.records.get('deliveryFeedbackRequests/'+f.orderId).state,'queued');
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackMailJobs/')).length,1);
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackInvitations/')).length,1);
+ assert.equal(f.network.length,1,'only mocked courier create was requested, never mail');
 });

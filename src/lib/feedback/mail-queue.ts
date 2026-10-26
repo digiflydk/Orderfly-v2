@@ -24,7 +24,7 @@ export async function enqueueFeedbackMessage(source: FeedbackMailSource, kind: F
 export async function queueOrderFeedback(orderId: string, automatic = false) {
   if (!/^[\w-]{1,160}$/.test(orderId)) throw new Error('Ugyldig ordre.');
   const db = getAdminDb(), order = (await db.collection('orders').doc(orderId).get()).data();
-  if (!order || !completedFeedbackOrder(order) || !/^[\w-]{1,160}$/.test(order.brandId || '') || !/^[\w-]{1,160}$/.test(order.locationId || '')) throw new Error('Feedback kan først sendes for en gennemført og betalt ordre.');
+  if (!order || !completedFeedbackOrder(order,orderId) || !/^[\w-]{1,160}$/.test(order.brandId || '') || !/^[\w-]{1,160}$/.test(order.locationId || '')) throw new Error('Feedback kan først sendes for en gennemført og betalt ordre.');
   const settings = feedbackAutomation((await db.collection('feedbackSettings').doc(order.brandId).get()).data());
   if (!settings.emailEnabled || (automatic && !settings.automaticRequests)) return null;
   if (!feedbackMailConfig(order.brandId)) throw new Error('Feedbackmail er ikke konfigureret for brandet.');

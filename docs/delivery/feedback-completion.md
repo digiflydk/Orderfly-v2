@@ -1,0 +1,11 @@
+# Feedback after managed delivery
+
+A verified, accepted Wolt `delivered` event now atomically records a server-owned `managedDeliveryCompletion` on the native order and creates `deliveryFeedbackRequests/{orderId}`. The marker binds brand, location, order, provider delivery, canonical booking attempt, immutable request digest and verified event reference. It does not change kitchen status. Caller input and arbitrary courier status fields cannot establish this evidence. Duplicate events preserve the original marker and deterministic request.
+
+Feedback eligibility uses the same marker validation in manual queueing, invitation pages, submission (including its transaction), and mail worker preflight. Orders must still be paid, non-canceled and have no refund evidence. Legacy non-managed Completed/Delivered orders retain their existing rules. Provider events for canceled or refunded orders still record factual completion; feedback is suppressed separately.
+
+The existing authenticated feedback heartbeat first drains up to ten due delivery feedback requests into the existing idempotent invitation/message queue. This stage sends no email. Optional bridge failure does not block existing mail jobs. Queue/configuration failures move a request's retry time forward; retrying after a partial queue commit uses the same deterministic invitation/message IDs. Disabled automation suppresses requests. A verified delivery can arrive between provider acceptance and native kitchen acceptance: paid, otherwise eligible Pending orders remain retryable until native acceptance completes, rather than losing the invitation.
+
+Delivery callbacks perform no email or queue network calls. A process crash after their transaction cannot lose the request. The existing mail worker still checks current payment/refund/source/customer/questionnaire eligibility and provider subscription before dispatch. No feedback settings, credentials, provider subscriptions or production data are provisioned by this change.
+
+Internal coverage includes actual signed callback/native acceptance races, durable retry after configuration failure, manual/automatic deduplication, foreign/stale markers, refund suppression, and the existing customer submission flow. Email-provider calls in tests are synthetic only.

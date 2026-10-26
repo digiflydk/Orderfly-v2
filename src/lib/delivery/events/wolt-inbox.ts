@@ -1,4 +1,5 @@
 import 'server-only';
+import { managedDeliveryCompletionSchema, verifiedManagedFeedbackCompletion } from '@/lib/feedback/delivery-completion';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
@@ -89,14 +90,23 @@ export async function applyNativeWoltInbox(eventId:string){
   for(const k of ['brandId','locationId','merchantId','venueId','environment','bindingRevision'] as const)if(target[k]!==callback[k])throw new Error('event_scope');
   if(target.nativeOrderReference!==event.nativeOrderReference)throw new Error('event_scope');
   const orderRef=db.collection('orders').doc(target.orderId);
-  const [orderDoc,attemptDoc,currentDoc,etaDoc,priorLog,reviewDoc]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryState').doc('current')),tx.get(orderRef.collection('deliveryEstimates').doc('current')),tx.get(orderRef.collection('deliveryEvents').doc(eventId)),tx.get(orderRef.collection('deliveryReconciliation').doc('original'))]);
+  const feedbackRef=db.collection('deliveryFeedbackRequests').doc(target.orderId);
+  const [orderDoc,attemptDoc,currentDoc,etaDoc,priorLog,reviewDoc,feedbackDoc]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryState').doc('current')),tx.get(orderRef.collection('deliveryEstimates').doc('current')),tx.get(orderRef.collection('deliveryEvents').doc(eventId)),tx.get(orderRef.collection('deliveryReconciliation').doc('original')),tx.get(feedbackRef)]);
   const order=orderDoc.data(),attempt=bookingIntentSchema.parse(attemptDoc.data());
   if(!order||order.brandId!==target.brandId||order.locationId!==target.locationId||order.deliveryType!=='Delivery'||order.managedDelivery?.providerId!=='wolt'||order.managedDelivery.requestDigest!==attempt.requestDigest||attempt.provider!=='wolt'||attempt.reference!==hash(['delivery-original-v1',target.brandId,target.locationId,target.orderId])||attempt.state!=='booked'||attempt.providerDeliveryId!==target.providerDeliveryId||attempt.scope.orderId!==target.orderId||attempt.scope.brandId!==target.brandId||attempt.scope.locationId!==target.locationId)throw new Error('event_scope');
   const base={brandId:target.brandId,locationId:target.locationId,orderId:target.orderId,provider:'wolt',providerDeliveryId:target.providerDeliveryId};
   const current=currentDoc.exists?deliveryEventSnapshotSchema.parse(currentDoc.data()):{...base,status:'booked' as const,occurredAt:null,sequence:null,nativeStatus:'booking.accepted'};
   for(const k of ['brandId','locationId','orderId','provider','providerDeliveryId'] as const)if(current[k]!==base[k])throw new Error('event_scope');
   let decision='eta_only_retained';
-  if(event.status!==null){const planned=planVerifiedDeliveryEvent(current,{...base,status:event.status,occurredAt:null,sequence:null,nativeStatus:event.rawStatus,eventId,receivedAt:Date.parse(event.receivedAt)});decision=planned.action;if(planned.action==='apply')tx.set(orderRef.collection('deliveryState').doc('current'),planned.snapshot);}
+  if(event.status!==null){const planned=planVerifiedDeliveryEvent(current,{...base,status:event.status,occurredAt:null,sequence:null,nativeStatus:event.rawStatus,eventId,receivedAt:Date.parse(event.receivedAt)});decision=planned.action;if(planned.action==='apply'){
+   tx.set(orderRef.collection('deliveryState').doc('current'),planned.snapshot);
+   if(planned.snapshot.status==='delivered'){
+    const completion=order.managedDeliveryCompletion??managedDeliveryCompletionSchema.parse({version:1,brandId:target.brandId,locationId:target.locationId,orderId:target.orderId,providerId:'wolt',providerDeliveryId:target.providerDeliveryId,attemptRef:attempt.reference,requestDigest:attempt.requestDigest,eventRef:eventId,completedAtMs:Date.now()});
+    if(!verifiedManagedFeedbackCompletion({...order,managedDeliveryCompletion:completion},target.orderId)||completion.providerDeliveryId!==target.providerDeliveryId)throw new Error('completion_scope');
+    if(!order.managedDeliveryCompletion)tx.update(orderRef,{managedDeliveryCompletion:completion});
+    if(!feedbackDoc.exists)tx.create(feedbackRef,{version:1,completion,state:'pending',nextAttemptAt:Date.now(),createdAtMs:Date.now()});
+   }
+  }}
   if(event.requiresReconciliation)decision='reconcile';
   const priorEta=etaDoc.data();if(priorEta)for(const k of ['brandId','locationId','orderId','provider','providerDeliveryId'] as const)if(priorEta[k]!==base[k])throw new Error('event_scope');const dispatched=Date.parse(event.dispatchedAt);
   if(Number.isFinite(dispatched)&&(!priorEta||dispatched>priorEta.dispatchedAtMs)){

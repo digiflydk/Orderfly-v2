@@ -59,7 +59,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
   if (!orderId || !customerId) notFound();
 
   const order = await getOrderById(orderId);
-  if (!order || order.customerDetails.id !== customerId || !completedFeedbackOrder(order)) notFound();
+  if (!order || order.customerDetails.id !== customerId || !completedFeedbackOrder(order,orderId)) notFound();
   if (invitation && (invitation.brandId !== order.brandId || invitation.locationId !== order.locationId)) notFound();
 
   const brandSnapshot = await getAdminDb().collection('brands').doc(order.brandId).get();

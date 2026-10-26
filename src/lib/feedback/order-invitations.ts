@@ -1,4 +1,5 @@
 import 'server-only';
+import { verifiedManagedFeedbackCompletion } from './delivery-completion';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 export function feedbackSourceKey(brandId: string, sourceType: string, sourceId: string) {
@@ -26,8 +27,8 @@ export async function resolveOrderFeedbackInvitation(token: string) {
     return { id: doc.id, brandId: String(data.brandId), locationId: String(data.locationId), customerId: String(data.customerId), sourceId: String(data.sourceId), language: String(data.language || 'da'), status: data.status as 'active' | 'submitted' };
   } catch { return null; }
 }
-export function completedFeedbackOrder(order: Record<string, any>) {
-  return ['Completed', 'Delivered'].includes(order.status) && order.paymentStatus === 'Paid' &&
+export function completedFeedbackOrder(order: Record<string, any>, orderId: unknown = order.id) {
+  return (order.managedDelivery != null ? ['Received','In Progress','Ready','Completed','Delivered'].includes(order.status)&&verifiedManagedFeedbackCompletion(order,orderId) : ['Completed', 'Delivered'].includes(order.status)) && order.paymentStatus === 'Paid' &&
     !(typeof order.refundedAmountOre === 'number' && order.refundedAmountOre > 0) &&
     !(typeof order.refundedAmount === 'number' && order.refundedAmount > 0) && !order.refundedAt;
 }
