@@ -137,3 +137,20 @@ test('unbookable native address or promise identity is rejected before offering/
     assert.equal(f.stored, undefined); assert.equal(f.creates, 0);
   }
 });
+
+test('binding revoked or rotated during durable claim cannot send with earlier credentials', async () => {
+  for (const mutate of [binding => { binding.active = false; }, binding => { binding.revision = '2'; },
+    binding => { binding.merchantId = 'merchant-B'; }, binding => { binding.secretRef = 'sandbox/rotated'; }]) {
+    const f = fixture(); f.deps.validateClaimedAttempt = async () => { mutate(f.binding); return true; };
+    const provider = createWoltProvider(f.deps), quote = await provider.quote(request());
+    const result = await provider.create(createRequest(quote));
+    assert.equal(result.kind, 'rejected'); assert.equal(result.error.code, 'binding_changed_before_dispatch'); assert.equal(f.creates, 0);
+  }
+});
+
+test('binding rotation during cancellation lookup prevents request using old credentials', async () => {
+  const f = fixture(), load = f.deps.loadCancellation;
+  f.deps.loadCancellation = async () => { const saved = await load(); f.binding.revision = '2'; return saved; };
+  const result = await createWoltProvider(f.deps).cancel({ scope, providerDeliveryId: 'delivery-A', attemptRef: 'attempt-A', operatorReason: 'Customer request', acceptedFee: null, feeQuoteRef: null, feeQuoteRevision: null });
+  assert.equal(result.kind, 'unknown'); assert.equal(result.error.code, 'binding_changed_before_cancellation'); assert.equal(f.calls, 0);
+});
