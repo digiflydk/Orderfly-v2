@@ -1,15 +1,20 @@
 import 'server-only';
 import Stripe from 'stripe';
 import { z } from 'zod';
+import {getAdminDb} from '@/lib/firebase-admin';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 
 export const managedStripeAccountSchema = z.object({ accountId: z.string().regex(/^acct_[A-Za-z0-9]+$/), livemode: z.boolean() }).strict();
 export type ManagedStripeAccount = z.infer<typeof managedStripeAccountSchema>;
 /** The exact returned client must create the managed checkout session bound to this account. */
-export async function resolveManagedStripeGateway() {
-  const secret = await getActiveStripeSecretKey();
+export async function resolveManagedStripeGateway(environment?:'sandbox'|'production') {
+  let secret:string|null;
+  if(environment){
+    const settings=(await getAdminDb().collection('platform_settings').doc('payment_gateway').get()).data();
+    secret=settings?.[environment==='production'?'live':'test']?.secretKey||null;
+  }else secret=await getActiveStripeSecretKey();
   const match = secret && /^(?:sk|rk)_(test|live)_/.exec(secret);
-  if (!secret || !match) throw new Error('delivery_payment_unavailable');
+  if (!secret || !match||environment&&match[1]!==(environment==='production'?'live':'test')) throw new Error('delivery_payment_unavailable');
   const stripe = new Stripe(secret, { timeout: 15000, maxNetworkRetries: 0 });
   const account = await stripe.accounts.retrieve();
   return { stripe, binding: managedStripeAccountSchema.parse({ accountId: account.id, livemode: match[1] === 'live' }) };
@@ -27,7 +32,7 @@ export async function verifyManagedPaidOrder(orderId: string, order: Record<stri
   if (!['Pending', 'Paid'].includes(order.paymentStatus) || order.deliveryType !== 'Delivery' || order.psp?.provider !== 'stripe'
     || (storedPaymentIntentId === undefined ? order.paymentStatus !== 'Pending' : !/^pi_[A-Za-z0-9]+$/.test(storedPaymentIntentId)) || !/^cs_[A-Za-z0-9_]+$/.test(order.psp.checkoutSessionId)
     || typeof order.totalAmount !== 'number' || !Number.isFinite(order.totalAmount)) throw new Error('delivery_payment_invalid');
-  const { stripe, binding } = await resolveManagedStripeGateway();
+  const { stripe, binding } = await resolveManagedStripeGateway(expected.livemode?'production':'sandbox');
   if (binding.accountId !== expected.accountId || binding.livemode !== expected.livemode) throw new Error('delivery_payment_account_changed');
   const session = await stripe.checkout.sessions.retrieve(order.psp.checkoutSessionId);
   // First settlement has only the saved checkout session. Resolve the intent from
@@ -81,4 +86,26 @@ export function assertManagedRefund(proof: VerifiedManagedPayment, key: string, 
     || reference(refund.charge) !== value.chargeId || refund.amount !== value.amountMinor || refund.currency !== 'dkk'
     || refund.metadata?.orderflyDeliveryRefund !== key || Object.entries(value.scope).some(([k,v]) => refund.metadata?.[k] !== v)) throw new Error('delivery_refund_mismatch');
   return { id: refund.id, status: refund.status === 'succeeded' ? 'succeeded' as const : refund.status === 'failed' || refund.status === 'canceled' ? 'failed' as const : 'pending' as const };
+}
+
+/** Alternate webhook modes are accepted only after signature and native managed-order scope/account checks. */
+export async function verifyManagedStripeWebhook(rawBody:string,signature:string):Promise<Stripe.Event>{
+ const db=getAdminDb(),settings=(await db.collection('platform_settings').doc('payment_gateway').get()).data();
+ for(const [mode,environment]of [['test','sandbox'],['live','production']] as const){
+  const secret=settings?.[mode]?.secretKey,signing=settings?.[mode]?.webhookSecret;
+  if(typeof secret!=='string'||typeof signing!=='string'||!signing||!new RegExp(`^(?:sk|rk)_${mode}_`).test(secret))continue;
+  const stripe=new Stripe(secret,{timeout:5000,maxNetworkRetries:0});let event:Stripe.Event;
+  try{event=await stripe.webhooks.constructEventAsync(rawBody,signature,signing);}catch{continue;}
+  if(event.livemode!==(mode==='live')||!['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.expired','checkout.session.async_payment_failed'].includes(event.type))continue;
+  const session=event.data.object as Stripe.Checkout.Session,scope=session.metadata;
+  if(!scope||!['orderId','brandId','locationId'].every(key=>/^[A-Za-z0-9_-]{1,128}$/.test(scope[key]??'')))continue;
+  const order=(await db.collection('orders').doc(scope.orderId).get()).data();
+  const binding=managedStripeAccountSchema.safeParse(order?.managedStripeAccount);
+  if(!order?.managedDelivery||!binding.success||binding.data.livemode!==event.livemode||session.livemode!==event.livemode
+   ||order.brandId!==scope.brandId||order.locationId!==scope.locationId||order.psp?.provider!=='stripe'||order.psp.checkoutSessionId!==session.id)continue;
+  const gateway=await resolveManagedStripeGateway(environment);
+  if(gateway.binding.accountId!==binding.data.accountId)continue;
+  return event;
+ }
+ throw new Error('stripe_webhook_unverified');
 }

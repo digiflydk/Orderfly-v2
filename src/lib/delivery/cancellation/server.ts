@@ -1,4 +1,5 @@
 import 'server-only';
+import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -47,7 +48,7 @@ async function operation(c:Command,identity:VerifiedIdentity){
   const old=await tx.get(refs.cancel);
   if(old.exists){const saved=savedSchema.parse(old.data());if(saved.brandId!==c.brandId||saved.locationId!==c.locationId||saved.orderId!==c.orderId||saved.requestId===c.requestId&&saved.fingerprint!==fingerprint)throw new DeliveryCancellationError('cancellation_conflict');return {saved,fresh:false};}
   const current=await native(tx,c,identity);
-  if(!deliveryCancellationEnabled(current.environment))throw new DeliveryCancellationError('cancellation_disabled',503);
+  if(!await deliveryScopeRuntimeAllowed(c,current.environment,'cancel',tx))throw new DeliveryCancellationError('cancellation_disabled',503);
   if(current.pickupStarted)throw new DeliveryCancellationError('not_cancellable');
   const saved=savedSchema.parse({version:1,brandId:c.brandId,locationId:c.locationId,orderId:c.orderId,requestId:c.requestId,actorId,fingerprint,claimId:randomUUID(),attemptRef:current.attempt.reference,providerDeliveryId:current.result.providerDeliveryId,environment:current.environment,operatorReason:c.operatorReason,state:'submitting',reconcileRequired:false,networkStartedAtMs:null,createdAtMs:Date.now(),result:null});
   tx.create(refs.cancel,saved);tx.create(refs.cancel.collection('audit').doc('requested'),{...saved,action:'delivery.cancel.requested'});return {saved,fresh:true};
@@ -59,7 +60,7 @@ async function operation(c:Command,identity:VerifiedIdentity){
   const provider=createWoltProvider({...storage,environment:claim.saved.environment,validateClaimedAttempt:async()=>false,
    loadCancellation:async(scope,attemptRef)=>db.runTransaction(async tx=>{
     const current=await native(tx,c,identity),row=await tx.get(refs.cancel),saved=savedSchema.parse(row.data());
-    if(!deliveryCancellationEnabled(current.environment)||scope.brandId!==c.brandId||scope.locationId!==c.locationId||attemptRef!==saved.attemptRef||saved.claimId!==claim.saved.claimId||saved.state!=='submitting'||saved.networkStartedAtMs!==null)throw new DeliveryCancellationError('cancellation_conflict');
+    if(!await deliveryScopeRuntimeAllowed(c,current.environment,'cancel',tx)||scope.brandId!==c.brandId||scope.locationId!==c.locationId||attemptRef!==saved.attemptRef||saved.claimId!==claim.saved.claimId||saved.state!=='submitting'||saved.networkStartedAtMs!==null)throw new DeliveryCancellationError('cancellation_conflict');
     tx.update(refs.cancel,{networkStartedAtMs:Date.now()});
     return {scope:{brandId:c.brandId,locationId:c.locationId},providerDeliveryId:current.result.providerDeliveryId,woltOrderReferenceId:current.result.nativeReference,merchantId:current.binding.merchantId,venueId:current.binding.venueId,environment:current.environment,pickupStarted:current.pickupStarted,pickupCompleted:current.state?.status==='delivered'};
    })});
@@ -86,7 +87,7 @@ export async function cancellationAvailability(raw:unknown):Promise<{available:b
  try{return await getAdminDb().runTransaction(async tx=>{
   const current=await native(tx,scope,identity),existing=await tx.get(paths(scope).cancel);
   if(existing.exists)return {available:false,reason:'cancellation_already_requested'};
-  if(!deliveryCancellationEnabled(current.environment))return {available:false,reason:'cancellation_disabled'};
+  if(!await deliveryScopeRuntimeAllowed(scope,current.environment,'cancel',tx))return {available:false,reason:'cancellation_disabled'};
   if(current.pickupStarted)return {available:false,reason:'not_cancellable'};
   return {available:true,reason:null};
  },{readOnly:true});}catch(e){

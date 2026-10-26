@@ -2,6 +2,7 @@ import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
 import Stripe from 'stripe';
+import {verifyManagedStripeWebhook} from '@/lib/delivery/payments/stripe-authority';
 import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/lib/server/payment-settings';
 import { headers } from 'next/headers';
 
@@ -21,8 +22,7 @@ export async function POST(req: Request) {
     const webhookSecret = await getActiveStripeWebhookSecret();
 
     if (!stripeKey || !webhookSecret) {
-        console.error('Stripe keys or webhook secret not configured.');
-        return new Response('Stripe not configured', { status: 500 });
+        throw new Error('Stripe not configured');
     }
     
     if (!sig) {
@@ -34,9 +34,8 @@ export async function POST(req: Request) {
     event = await stripe.webhooks.constructEventAsync(rawBody, sig, webhookSecret);
 
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`Webhook signature verification failed: ${errorMessage}`);
-    return new Response(`Webhook Error: ${errorMessage}`, { status: 400 });
+    try{if(!sig)throw Error('missing_signature');event=await verifyManagedStripeWebhook(rawBody,sig);}
+    catch{return new Response('Webhook signature verification failed', { status: 400 });}
   }
 
   // Handle the event

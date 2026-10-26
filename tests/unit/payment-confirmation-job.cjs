@@ -142,6 +142,7 @@ test('signed asynchronous success invokes the same settlement; invalid signature
  const session={payment_status:'paid',metadata:{orderId:'ORD-TEST'}};
  const api=loadTs('src/app/api/stripe/webhook/route.ts',{
   '@/lib/server/settle-checkout':{settlePaidCheckoutSession:async value=>{assert.equal(value,session);calls++;}},
+  '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('no alternate signed managed event');}},
   '@/lib/discount-reservations':{},'next/headers':{headers:async()=>({get:()=> 'signature'})},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture',getActiveStripeWebhookSecret:async()=> 'fixture'},
   stripe:{default:class{webhooks={constructEventAsync:async()=>{if(invalid)throw Error('invalid');return{type:'checkout.session.async_payment_succeeded',data:{object:session}};}}}},

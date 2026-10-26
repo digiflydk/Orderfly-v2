@@ -3,7 +3,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { deliveryDispatchEnabled, loadDeliverySettingsInTransaction } from '../settings/server';
+import {deliveryScopeRuntimeAllowed} from '../management-runtime';
+import {managedStripeAccountSchema} from '../payments/stripe-authority';
+import { loadDeliverySettingsInTransaction } from '../settings/server';
 import { deliveryIdSchema, deliveryCreateRequestSchema, deliveryCreateResultSchema, managedDeliveryBindingSchema, type DeliveryCreateRequest, type DeliveryCreateResult, type DeliveryScope } from '../provider-contract';
 import { storedDeliveryQuoteSchema } from '../quotes/schema';
 import { bookingIntentSchema, transitionBookingIntent, type BookingIntent } from './state';
@@ -23,11 +25,10 @@ const capabilities=new WeakMap<object,Claim>();
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 class PreparationError extends Error { constructor(readonly code:'quote_expired'|'quote_changed'|'settings_changed'){super(code);} }
 const sameScope=(a:DeliveryScope,b:DeliveryScope)=>a.brandId===b.brandId&&a.locationId===b.locationId;
-function activeEnvironment():Environment {
-  const value=process.env.ORDERFLY_DELIVERY_ENVIRONMENT;
-  if(value!=='sandbox'&&value!=='production')throw new Error('delivery_environment_unconfigured');
-  if(value==='production'&&process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED!=='true')throw new Error('delivery_production_disabled');
-  return value;
+async function activeEnvironment(scope:Scope):Promise<Environment> {
+ const order=(await getAdminDb().runTransaction(tx=>tx.get(getAdminDb().collection('orders').doc(scope.orderId)),{readOnly:true})).data();
+ if(!order||!sameScope(order as DeliveryScope,scope))throw new Error('delivery_scope_invalid');
+ return managedStripeAccountSchema.parse(order.managedStripeAccount).livemode?'production':'sandbox';
 }
 function inspect(capability:WoltDispatchCapability,allowExpired=false):Claim {
   const value=capability&&typeof capability==='object'?capabilities.get(capability):undefined;
@@ -40,11 +41,12 @@ export function inspectWoltDispatchCapability(capability:WoltDispatchCapability)
 /** Fixed native authority accessor used by private Wolt storage, never a caller-provided true flag. */
 export async function authorizeWoltDispatchInTransaction(tx:FirebaseFirestore.Transaction,capability:WoltDispatchCapability,scope:DeliveryScope):Promise<void> {
   const claim=inspect(capability);
-  if(!deliveryDispatchEnabled()||!sameScope(claim.scope,scope)||activeEnvironment()!==claim.environment)throw new Error('delivery_dispatch_disabled');
+  if(!sameScope(claim.scope,scope)||!await deliveryScopeRuntimeAllowed(scope,claim.environment,'recovery',tx))throw new Error('delivery_dispatch_disabled');
   const db=getAdminDb(),orderRef=db.collection('orders').doc(claim.scope.orderId);
   const [orderSnap,attemptSnap,dispatchSnap]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryDispatch').doc('original'))]);
   const order=orderSnap.data(),attempt=bookingIntentSchema.parse(attemptSnap.data()),dispatch=dispatchSnap.data(),managed=managedDeliveryBindingSchema.parse(order?.managedDelivery);
   if(!order||!sameScope(order as DeliveryScope,scope)||order.deliveryType!=='Delivery'||order.paymentStatus!=='Paid'||order.status!=='Pending'
+    ||managedStripeAccountSchema.parse(order.managedStripeAccount).livemode!==(claim.environment==='production')
     ||managed.providerId!=='wolt'||managed.requestDigest!==claim.requestDigest||attempt.reference!==claim.attemptRef||attempt.requestDigest!==claim.requestDigest
     ||!sameScope(attempt.scope,scope)||attempt.scope.orderId!==claim.scope.orderId||attempt.state!=='submitting'||attempt.revision!==claim.revision
     ||dispatch?.claimId!==claim.claimId||dispatch.environment!==claim.environment||dispatch.requestDigest!==claim.requestDigest||dispatch.expiresAtMs!==claim.expiresAtMs)throw new Error('delivery_claim_changed');
@@ -74,6 +76,8 @@ async function claimOriginal(scope:Scope,environment:Environment):Promise<WoltDi
     const order=orderSnap.data(),job=jobSnap.data(),managed=managedDeliveryBindingSchema.parse(order?.managedDelivery);
     if(!order||!sameScope(order as DeliveryScope,scope)||order.deliveryType!=='Delivery'||order.paymentStatus!=='Paid'||order.status!=='Pending'
       ||managed.providerId!=='wolt'||job?.version!==1||job.orderId!==scope.orderId||!sameScope(job as DeliveryScope,scope)||job.providerId!=='wolt'||job.requestDigest!==managed.requestDigest)throw new Error('delivery_order_ineligible');
+    if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery',tx))throw new Error('delivery_dispatch_disabled');
+    if(managedStripeAccountSchema.parse(order.managedStripeAccount).livemode!==(environment==='production'))throw new Error('delivery_payment_environment_changed');
     if(job.state!=='pending')return null;
     if(dispatchSnap.exists)throw new Error('delivery_claim_exists');
     const reference=originalAttemptReference(scope),now=Date.now();
@@ -142,8 +146,9 @@ async function recordPreparationRejection(scope:Scope,reason:PreparationError['c
 }
 const unknown=(attemptRef:string):DeliveryCreateResult=>({kind:'unknown',attemptRef,error:{code:'dispatch_outcome_unknown',messageKey:'delivery.dispatch_outcome_unknown',retry:'after_reconciliation',nativeCode:null}});
 export async function dispatchManagedDelivery(rawScope:unknown):Promise<{state:'disabled'|'not_pending'|'booked'|'rejected'|'unknown'}>{
-  if(!deliveryDispatchEnabled())return {state:'disabled'};
-  const scope=scopeSchema.parse(rawScope),environment=activeEnvironment();let capability:WoltDispatchCapability|null;
+  const scope=scopeSchema.parse(rawScope),environment=await activeEnvironment(scope);
+  if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery'))return {state:'disabled'};
+  let capability:WoltDispatchCapability|null;
   try{capability=await claimOriginal(scope,environment);}catch(error){
     if(error instanceof PreparationError&&await recordPreparationRejection(scope,error.code)){
       try{await processManagedDeliveryRefund(scope);}catch{/* durable rejected job retries compensation */}
@@ -177,6 +182,7 @@ async function replayAcceptedInbox(scope:Scope):Promise<void>{
   if(!order||!resultRecord||!sameScope(order as DeliveryScope,scope)||job.orderId!==scope.orderId||!sameScope(job as DeliveryScope,scope)||!claim||claim.claimId!==resultRecord?.claimId||result.kind!=='accepted'
     ||claim.requestDigest!==order.managedDelivery?.requestDigest||resultRecord.requestDigest!==claim.requestDigest||!sameScope(resultRecord.scope,scope)||resultRecord.scope.orderId!==scope.orderId
     ||!Number.isSafeInteger(job.inboxReplayRevision)||job.inboxReplayRevision<0||!(job.inboxReplayCursor===null||typeof job.inboxReplayCursor==='string'&&/^[a-f0-9]{64}$/.test(job.inboxReplayCursor)))throw new Error('delivery_replay_binding');
+  if(!await deliveryScopeRuntimeAllowed(scope,z.enum(['sandbox','production']).parse(claim.environment),'recovery',tx))return null;
   return {merchantId:claim.binding.merchantId as string,nativeReference:result.nativeReference,environment:claim.environment as Environment,cursor:job.inboxReplayCursor as string|null,revision:job.inboxReplayRevision as number};
  });
  if(!prepared)return;
@@ -197,6 +203,8 @@ async function recoverExpiredSubmittingJobs():Promise<number>{
    const [orderSnap,attemptSnap,claimSnap]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryDispatch').doc('original'))]);
    const order=orderSnap.data(),attempt=bookingIntentSchema.parse(attemptSnap.data()),claim=claimSnap.data();
    if(!order||!sameScope(order as DeliveryScope,scope)||!claim||claim.claimId!==job.claimId||!Number.isSafeInteger(claim.expiresAtMs)||Date.now()<claim.expiresAtMs)return false;
+   const environment=z.enum(['sandbox','production']).parse(claim.environment);
+   if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery',tx))return false;
    if(attempt.state!=='submitting'||attempt.reference!==originalAttemptReference(scope)||attempt.requestDigest!==job.requestDigest)return false;
    const next=transitionBookingIntent(attempt,{scope,intentId:attempt.intentId,reference:attempt.reference,requestDigest:attempt.requestDigest,expectedRevision:attempt.revision,now:Date.now(),outcome:{kind:'unknown'}});
    tx.set(orderRef.collection('deliveryAttempts').doc('original'),next);tx.update(jobRef,{state:'unknown',reason:'worker_interrupted',updatedAtMs:Date.now()});return true;
@@ -218,7 +226,6 @@ async function deferPreparationFailure(jobId:string):Promise<void>{
 }
 /** Protected existing heartbeat calls this bounded worker. Unknown jobs are never redispatched. */
 export async function runDeliveryDispatchWorker(){
- if(!deliveryDispatchEnabled())return {state:'disabled',processed:0};
  const db=getAdminDb(),deadline=Date.now()+45000,recovered=await recoverExpiredSubmittingJobs();
  const replayJobs=await db.collection('deliveryDispatchJobs').where('state','==','booked').where('inboxReplayCompletedAtMs','==',null).limit(5).get();
  for(const doc of replayJobs.docs){if(Date.now()>=deadline)break;try{const job=doc.data();if(doc.id!==job.orderId)continue;await replayAcceptedInbox(scopeSchema.parse({brandId:job.brandId,locationId:job.locationId,orderId:job.orderId}));}catch{/* durable cursor retries next heartbeat */}}
@@ -228,7 +235,7 @@ export async function runDeliveryDispatchWorker(){
   if(Date.now()>=deadline||attempted>=2)break;
   const job=doc.data();if(typeof job.nextAttemptAtMs==='number'&&job.nextAttemptAtMs>Date.now())continue;
   attempted++;
-  try{if(doc.id!==job.orderId)throw new Error('delivery_job_invalid');await dispatchManagedDelivery({brandId:job.brandId,locationId:job.locationId,orderId:job.orderId});counts.processed++;}
+  try{if(doc.id!==job.orderId)throw new Error('delivery_job_invalid');const outcome=await dispatchManagedDelivery({brandId:job.brandId,locationId:job.locationId,orderId:job.orderId});if(outcome.state!=='disabled')counts.processed++;}
   catch{counts.failed++;try{await deferPreparationFailure(doc.id);}catch{/* failure does not authorize re-dispatch */}}
  }
 
@@ -237,6 +244,7 @@ export async function runDeliveryDispatchWorker(){
   if(state==='rejected')pendingQuery=pendingQuery.where('refundReviewRequired','==',false);
   const pending=await pendingQuery.limit(5).get();
   for(const doc of pending.docs){if(Date.now()>=deadline)break;try{const job=doc.data();if(doc.id!==job.orderId)throw new Error('delivery_job_invalid');const scope=scopeSchema.parse({brandId:job.brandId,locationId:job.locationId,orderId:job.orderId});
+   if(!await deliveryScopeRuntimeAllowed(scope,await activeEnvironment(scope),'recovery'))continue;
    if(state==='booked'){await completeManagedDeliveryAcceptance(scope);counts.accepted++;}else{await processManagedDeliveryRefund(scope);counts.compensation++;}
   }catch{counts.failed++;}}
  }

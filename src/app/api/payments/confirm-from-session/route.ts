@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/delivery/payments/stripe-authority';
 import { db } from '@/lib/server/firestore-compat';
 import { doc, getDoc } from '@/lib/server/firestore-compat';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
@@ -18,16 +19,20 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return reply({ ok: false, error: 'invalid_params' }, 400);
   const { orderId, sessionId } = parsed.data;
   try {
-    const stripeKey = await getActiveStripeSecretKey();
-    if (!stripeKey) throw new Error('Stripe unavailable');
-    const stripe = new Stripe(stripeKey, { timeout: 5000, maxNetworkRetries: 0 });
+    const snap = await getDoc(doc(db, 'orders', orderId));
+    const order = snap.data();
+    if(!snap.exists()||order?.psp?.checkoutSessionId!==sessionId)return reply({ok:false,error:'payment_scope_mismatch'},403);
+    const expected=order.managedDelivery?managedStripeAccountSchema.parse(order.managedStripeAccount):null;
+    const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox'):null;
+    if(expected&&gateway?.binding.accountId!==expected.accountId)throw new Error('Stripe unavailable');
+    const stripeKey = gateway?null:await getActiveStripeSecretKey();
+    if (!gateway&&!stripeKey) throw new Error('Stripe unavailable');
+    const stripe = gateway?.stripe??new Stripe(stripeKey!, { timeout: 5000, maxNetworkRetries: 0 });
     // The random session is the caller's capability. Do not expose whether an
     // unrelated predictable order ID exists, and never accept it as proof alone.
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     if (session.id !== sessionId || session.metadata?.orderId !== orderId ||
         !session.metadata.brandId || !session.metadata.locationId) return reply({ ok: false, error: 'payment_scope_mismatch' }, 403);
-    const snap = await getDoc(doc(db, 'orders', orderId));
-    const order = snap.data();
     if (!snap.exists() || order?.psp?.checkoutSessionId !== sessionId ||
         order.brandId !== session.metadata.brandId || order.locationId !== session.metadata.locationId) return reply({ ok: false, error: 'payment_scope_mismatch' }, 403);
     // A complete checkout may still be awaiting an asynchronous payment.

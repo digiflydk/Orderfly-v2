@@ -14,7 +14,7 @@ import {checkoutKeyHash,issueCustomerQuote,type AuthoritativeDraft} from './cust
 import {persistCustomerQuoteClaim,reserveCustomerQuoteRate,saveAuthoritativeCustomerDraft,loadCurrentCustomerDraft} from './customer-store';
 import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from './runtime';
 export type NativeManagedPricing={brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
-export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string){
+export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
  const result=await getAdminDb().runTransaction(async tx=>(await loadDeliverySettingsInTransaction(tx,brand.id,location.id)).result);
  if(!result.settings.enabled||result.settings.paused||!result.settings.providerId)throw Error('delivery_disabled');
@@ -25,7 +25,10 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
  const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
  const key=checkoutKeyHash(input.checkoutKey);
- const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment:managedDeliveryRuntimeEnvironment(),preparationMinutes,kitchenHours:location.openingHours,items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
+ const runtimeEnvironment=await managedDeliveryRuntimeEnvironment({brandId:brand.id,locationId:location.id});
+ if(!runtimeEnvironment)throw Error('delivery_environment_unconfigured');
+ if(expectedEnvironment!==undefined&&runtimeEnvironment!==expectedEnvironment)throw Error('delivery_environment_changed');
+ const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment,preparationMinutes,kitchenHours:location.openingHours,items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
    bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0),discount:input.payment.cartDiscountTotal||0,
    customer:{name:customer.name,email:customer.email.trim().toLowerCase(),phone:normalizeDeliveryPhone(customer.phone),deliveryInstructions:customer.deliveryInstructions||'',subscribeToNewsletter:customer.subscribeToNewsletter,subscribeToClub:!!customer.subscribeToClub},selection:input.deliverySelection,freeDeliveryCampaignIds:input.freeDeliveryCampaignIds})));
  const binding={brandId:brand.id,locationId:location.id,checkoutReference:key,providerId:result.settings.providerId,
@@ -33,13 +36,13 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const draft={checkoutKeyHash:key,binding,requestDigest:quoteContentDigest({binding}),itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0)};
  const settings=structuredClone(result.settings);
 
- return {draft,settings,pickup,dropoff,preparationMinutes};
+ return {draft,settings,pickup,dropoff,preparationMinutes,runtimeEnvironment};
 }
 export async function createNativeManagedCustomerQuote(input:NativeManagedPricing){
  const scope={brandId:input.brand.id,locationId:input.location.id};
  if(!await managedDeliveryRuntimeAvailable(scope))return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
  const native=await prepareNativeManagedDraft(input),draft=await saveAuthoritativeCustomerDraft(native.draft);
- const runtime=await resolveManagedDeliveryRuntime(scope,draft);
+ const runtime=await resolveManagedDeliveryRuntime(scope,draft,native.runtimeEnvironment);
  if(!runtime)return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
  // Global aggregate budget is deliberately conservative until trusted edge identity is configured; never trust client IP headers.
  return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:persistCustomerQuoteClaim,createQuote:async()=>{
@@ -52,9 +55,9 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
   return result.ok&&result.quote.providerQuote.expiresAt!==null?result.quote:null;
  }});
 }
-export async function currentNativeManagedDraft(input:NativeManagedPricing):Promise<AuthoritativeDraft>{
+export async function currentNativeManagedDraft(input:NativeManagedPricing,expectedEnvironment?:'sandbox'|'production'):Promise<AuthoritativeDraft>{
  const saved=await loadCurrentCustomerDraft(checkoutKeyHash(input.checkoutKey));
- const current=await prepareNativeManagedDraft(input,saved.binding.fulfillmentAt);
+ const current=await prepareNativeManagedDraft(input,saved.binding.fulfillmentAt,expectedEnvironment);
  if(current.draft.requestDigest!==saved.requestDigest)throw Error('quote_draft_changed');
  return {...current.draft,draftRevision:saved.draftRevision,addressRevision:saved.addressRevision};
 }

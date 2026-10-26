@@ -1,4 +1,5 @@
 import 'server-only';
+import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -27,7 +28,7 @@ function expiry(raw:FirebaseFirestore.DocumentData):number {
 function inspect(capability:CustomerWoltQuoteCapability):Entry {
  const entry=capability&&typeof capability==='object'?capabilities.get(capability):undefined;
  if(!entry||Date.now()>=entry.expiresAtMs)throw new Error('delivery_customer_quote_authority');
- if(entry.environment==='production'&&process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED!=='true')throw new Error('delivery_production_disabled');
+
  return entry;
 }
 export function inspectCustomerWoltQuoteCapability(capability:CustomerWoltQuoteCapability):Readonly<DeliveryScope&{environment:Environment}>{
@@ -37,6 +38,7 @@ export function inspectCustomerWoltQuoteCapability(capability:CustomerWoltQuoteC
 export async function authorizeCustomerWoltQuoteInTransaction(tx:FirebaseFirestore.Transaction,capability:CustomerWoltQuoteCapability,scope:DeliveryScope):Promise<void>{
  const entry=inspect(capability),expected=entry.draft,binding=expected.binding;
  if(scope.brandId!==binding.brandId||scope.locationId!==binding.locationId)throw new Error('delivery_customer_quote_scope');
+ if(!await deliveryScopeRuntimeAllowed(scope,entry.environment,'new',tx))throw new Error('delivery_customer_quote_disabled');
  const db=getAdminDb();
  const [draftSnap,brandSnap,locationSnap]=await Promise.all([tx.get(db.collection('deliveryCheckoutDrafts').doc(expected.checkoutKeyHash)),tx.get(db.collection('brands').doc(binding.brandId)),tx.get(db.collection('locations').doc(binding.locationId))]);
  const raw=draftSnap.data(),location=locationSnap.data();

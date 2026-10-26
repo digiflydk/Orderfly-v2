@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
-import { deliveryDispatchEnabled } from '../settings/server';
+import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { bookingIntentSchema } from '../booking/state';
 import { originalAttemptReference } from '../booking/server';
 import { deliveryCreateResultSchema, managedDeliveryBindingSchema } from '../provider-contract';
@@ -47,9 +47,10 @@ function assertPayment(order:Record<string,any>,proof:VerifiedManagedPayment,sco
 }
 /** Only the authenticated server dispatch worker may invoke this internal function. No public action/route. */
 export async function processManagedDeliveryRefund(input:unknown):Promise<{state:Ledger['state'];refundId:string|null}> {
-  if(!deliveryDispatchEnabled())throw new Error('delivery_refund_disabled');
   const scope=scopeSchema.parse(input),db=getAdminDb();
   const snapshot=await db.runTransaction(tx=>native(tx,scope),{readOnly:true});
+  const environment=managedStripeAccountSchema.parse(snapshot.order.managedStripeAccount).livemode?'production':'sandbox';
+  if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery'))throw new Error('delivery_refund_disabled');
   if(snapshot.ledger?.state==='succeeded')return {state:'succeeded',refundId:snapshot.ledger.refundId};
   if(snapshot.ledger?.state==='failed')return db.runTransaction(async tx=>{
     const current=await native(tx,scope);

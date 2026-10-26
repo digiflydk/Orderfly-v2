@@ -5,7 +5,7 @@ const { loadTs } = require('../helpers/load-ts.cjs');
 
 async function fixture() {
   const token = 'a'.repeat(64), data = new Map();
-  const session = { status: 'open', payment_status: 'unpaid', metadata: { orderId: 'ORD-ONE', brandId: 'b', locationId: 'l' } };
+  const session = { id: 'cs_one', livemode: false, status: 'open', payment_status: 'unpaid', metadata: { orderId: 'ORD-ONE', brandId: 'b', locationId: 'l' } };
   const snapshot = ref => ({ exists: () => data.has(ref), data: () => data.get(ref) });
   const sdk = {
     doc: (_, collection, id) => `${collection}/${id}`, getDoc: async ref => snapshot(ref), serverTimestamp: () => 'server-time',

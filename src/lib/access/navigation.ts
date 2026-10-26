@@ -4,7 +4,6 @@ export type NavigationAccess = { superuser: boolean; permissions: string[] };
 // stored brand/location. Longest matching route wins for nested website pages.
 const routes: Array<[string, string]> = [
   ['/merchant/delivery', 'orderfly.catalog:view'],
-  ['/superadmin/delivery', 'orderfly.catalog:view'],
   ['/merchant/orders', 'orderfly.orders:view'],
   ['/merchant/payments', 'orderfly.catalog:view'],
   ['/superadmin/dashboard', 'orderfly.analytics:view'],
@@ -40,6 +39,7 @@ export function counterOnly(access?: NavigationAccess | null): boolean {
 
 export function canNavigate(href: string, access?: NavigationAccess | null): boolean {
   if (!access) return false;
+  if (href === '/superadmin/delivery' || href.startsWith('/superadmin/delivery/')) return access.superuser;
   if (href === '/merchant/receipts' || href.startsWith('/merchant/receipts/')) return false;
   if (href === '/superadmin/receipts' || href.startsWith('/superadmin/receipts/')) return access.superuser;
   if (href === '/superadmin/print-log' || href.startsWith('/superadmin/print-log/')) return access.superuser;

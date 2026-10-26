@@ -69,7 +69,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  Object.assign(state['orders/o'],{id:'o',status:'Received',customerName:'Fixture',customerContact:'fixture@example.test',deliveryType:'Pickup',productItems:[{name:'Pizza',quantity:1,totalPrice:100,listTotalPrice:100}],paymentDetails:{subtotal:100,deliveryFee:0,bagFee:0,adminFee:0}});
  state['brands/b']={name:'Fixture',companyName:'Fixture ApS',companyRegNo:'12345678',street:'Testvej 1',zipCode:'1000',city:'Copenhagen',country:'DK',currency:'DKK',vatPercentage:25};
  state['locations/l']={brandId:'b',name:'Fixture',address:'Testvej 1'};
- const ref=path=>({path,id:path.split('/').at(-1)});
+ const ref=path=>({path,id:path.split('/').at(-1),get:async()=>({exists:!!state[path],data:()=>state[path]})});
  mocks['@/lib/firebase-admin']={getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({
    collection:name=>({doc:id=>ref(name+'/'+id),where:()=>({})}),
    runTransaction:fn=>mocks['firebase/firestore'].runTransaction(null,tx=>fn({
@@ -79,6 +79,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  })};
  mocks['@/lib/marketing/config']={paidOrderMarketingEnabled:()=>false};
  mocks['@/lib/server/settle-checkout']=loadTs('src/lib/server/settle-checkout.ts',mocks);
+ mocks['@/lib/delivery/payments/stripe-authority']={verifyManagedStripeWebhook:async()=>{assert.fail('Legacy signed webhook must not use managed fallback');}};
  const route=load('src/app/api/stripe/webhook/route.ts',mocks);
  assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,500);
  assert.equal(state['orders/o'].paymentStatus,'Pending');
@@ -168,7 +169,7 @@ test('cancel requires capability, confirms expiration before release and tolerat
  const crypto = require('node:crypto');
  const token='a'.repeat(64);
  let status='open', fail=false, race=false, releases=0;
- const session=()=>({status,payment_status:status==='complete'?'paid':'unpaid',metadata:{orderId:'ORD-1',brandId:'b',locationId:'l'}});
+ const session=()=>({id:'s',livemode:false,status,payment_status:status==='complete'?'paid':'unpaid',metadata:{orderId:'ORD-1',brandId:'b',locationId:'l'}});
  class Stripe { checkout={sessions:{retrieve:async()=>session(),expire:async()=>{if(race){status='complete';throw Error('paid');} if(fail)throw Error('network');status='expired';return session();}}}; }
  const api=load('src/app/checkout/cancel-actions.ts',{
   'node:crypto':crypto, stripe:{default:Stripe}, '@/lib/firebase':{db:{}},

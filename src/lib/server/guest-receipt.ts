@@ -2,6 +2,7 @@ import 'server-only';
 import { readReceiptDeliveryTracking } from '@/lib/delivery/tracking-server';
 import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import Stripe from 'stripe';
+import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/delivery/payments/stripe-authority';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
@@ -45,9 +46,15 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
   // A failed read stays Pending and can be retried; it is not payment failure.
   if (!pickup && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
     try {
-      const key = await getActiveStripeSecretKey();
-      if (key) {
-        const stripe = new Stripe(key, { timeout: 5000, maxNetworkRetries: 0 });
+      // getOrderById/getOrderByCheckoutSessionId are private native server reads.
+      // Keep payment authority fields local; the public receipt projection below never includes them.
+      const nativePayment=order as OrderDetail&{managedDelivery?:unknown;managedStripeAccount?:unknown};
+      const key = nativePayment.managedDelivery?null:await getActiveStripeSecretKey();
+      if (nativePayment.managedDelivery||key) {
+        const expected=nativePayment.managedDelivery?managedStripeAccountSchema.parse(nativePayment.managedStripeAccount):null;
+        const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox'):null;
+        if(expected&&gateway?.binding.accountId!==expected.accountId)throw Error('delivery_payment_account_changed');
+        const stripe = gateway?.stripe??new Stripe(key!, { timeout: 5000, maxNetworkRetries: 0 });
         const session = await stripe.checkout.sessions.retrieve(proof.sessionId);
         if (session.id !== proof.sessionId || session.metadata?.orderId !== order.id ||
             session.metadata?.brandId !== order.brandId || session.metadata?.locationId !== order.locationId) return null;

@@ -1,4 +1,9 @@
 env:
+  # Platform-wide secret storage; merchant credentials are managed in Superadmin.
+  - variable: ORDERFLY_DELIVERY_SECRET_PROJECT
+    value: orderfly-v21-10334086-b3076
+    availability:
+      - RUNTIME
   # QR #449: merge only after documented index/access readiness and explicit activation acceptance.
   - variable: QR_MODULE_ENABLED
     value: "true"

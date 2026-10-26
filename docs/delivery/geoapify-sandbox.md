@@ -1,5 +1,7 @@
 # Geoapify sandbox routing (#691 / #694)
 
+> Superadmin platform configuration (#691) now supplies the shared Geoapify key, approvals and stable quota namespace. Its approved adapter can serve sandbox and explicitly activated production merchants. The sandbox-only environment-variable setup below remains a legacy fallback and standalone QA path. See [Merchant administration](merchant-portal.md).
+
 ## Authorized scope
 
 On 26 October 2026 the PO approved Geoapify Free for the isolated sandbox, with at most 100 quote attempts per UTC day and no paid upgrade. The PO completed account authentication. The project `Orderfly Delivery Sandbox` was created and its Free plan verified. Its API credential is private and must never be included in this document, repository, browser screenshots, logs or issue comments.

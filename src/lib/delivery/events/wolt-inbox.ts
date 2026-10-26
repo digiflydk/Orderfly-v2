@@ -1,4 +1,5 @@
 import 'server-only';
+import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { managedDeliveryCompletionSchema, verifiedManagedFeedbackCompletion } from '@/lib/feedback/delivery-completion';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -45,18 +46,18 @@ export async function receiveNativeWoltCallback(request:Request,key:string):Prom
  if(request.method!=='POST')return new Response(null,{status:405});
  if(!/^application\/json(?:\s*;|$)/i.test(request.headers.get('content-type')??''))return new Response(null,{status:415});
  if(!/^[A-Za-z0-9_-]{32,128}$/.test(key))return new Response(null,{status:404});
- if(process.env.ORDERFLY_DELIVERY_CALLBACK_ENABLED!=='true')return new Response(null,{status:503});
+
  const callbackId=woltCallbackId(key),db=getAdminDb();
  try{
   const before=await db.runTransaction(tx=>currentCallback(tx,callbackId));
-  if(before.environment==='production'&&process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED!=='true')return new Response(null,{status:503});
+  if(!await deliveryScopeRuntimeAllowed(before,before.environment,'callback'))return new Response(null,{status:503});
   const [version]=await new SecretManagerServiceClient().accessSecretVersion({name:before.signingSecretRef});
   const raw=version.payload?.data;const secret=typeof raw==='string'?Buffer.from(raw,'base64').toString('utf8'):raw?Buffer.from(raw).toString('utf8'):'';
   const event=normalizeWoltEvent(verifyWoltWebhook(await bodyBytes(request),secret),before.merchantId,new Date().toISOString());
   if(event.nativeVenueId!==null&&event.nativeVenueId!==before.venueId)return new Response(null,{status:403});
   const eventId=hash([callbackId,event.dedupeIdentity]),ref=db.collection('deliveryWoltInbox').doc(eventId);
   await db.runTransaction(async tx=>{
-   const current=await currentCallback(tx,callbackId);if(!isDeepStrictEqual(before,current))throw new Error('callback_changed');
+   const current=await currentCallback(tx,callbackId);if(!isDeepStrictEqual(before,current)||!await deliveryScopeRuntimeAllowed(current,current.environment,'callback',tx))throw new Error('callback_changed');
    const existing=await tx.get(ref);
    if(existing.exists){const prior=existing.data();const {receivedAt:_a,...a}=event;const {receivedAt:_b,...b}=prior!.event??{};if(prior!.callbackId!==callbackId||!isDeepStrictEqual(a,b))throw new Error('event_conflict');return;}
    const referenceKey=woltReferenceId(before.merchantId,event.nativeOrderReference);

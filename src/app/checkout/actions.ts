@@ -49,7 +49,7 @@ import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt'
 import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
 import { prepareUnpaidAcceptanceOriginals } from '@/lib/printing/unpaid-acceptance-originals';
 import {managedDeliveryRequired} from '@/lib/delivery/quotes/adoption';
-import {managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from '@/lib/delivery/quotes/runtime';
+import {managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment,assertManagedCheckoutRuntime} from '@/lib/delivery/quotes/runtime';
 import {createNativeManagedCustomerQuote,currentNativeManagedDraft} from '@/lib/delivery/quotes/customer-controller';
 import {prepareCustomerQuoteConsumption} from '@/lib/delivery/quotes/customer-store';
 import {resolveManagedStripeGateway,type ManagedStripeAccount} from '@/lib/delivery/payments/stripe-authority';
@@ -715,15 +715,17 @@ export async function createStripeCheckoutSessionAction(
     assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
     let stripe: Stripe | undefined;
     let managedStripeAccount:ManagedStripeAccount|undefined;
+    let managedEnvironment:'sandbox'|'production'|undefined;
     let managedQuote:StoredDeliveryQuote|undefined;
     let managedDraft:AuthoritativeDraft|undefined;
     if(managedDeliveryAcceptance && paymentMethod!=='online')throw Error('Levering kræver online betaling.');
     if (paymentMethod === 'online') {
       stage = 'configuration';
       if(managedDeliveryAcceptance){
-        const environment=managedDeliveryRuntimeEnvironment();
+        const environment=await managedDeliveryRuntimeEnvironment({brandId,locationId});
         if(!environment)throw Error('delivery_environment_unconfigured');
-        const gateway=await resolveManagedStripeGateway();
+        managedEnvironment=environment;
+        const gateway=await resolveManagedStripeGateway(environment);
         if(gateway.binding.livemode!==(environment==='production'))throw Error('delivery_payment_environment_mismatch');
         stripe=gateway.stripe;managedStripeAccount=gateway.binding;
       }
@@ -742,7 +744,7 @@ export async function createStripeCheckoutSessionAction(
     let totalAmount=priced.totalAmount;
     if(managedDeliveryAcceptance){
       managedDraft=await currentNativeManagedDraft({brand,location,customer:customerInfo,cartItems,payment:serverPaymentDetails,
-        subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:managedDeliveryAcceptance.checkoutKey,deliverySelection:deliveryTime||'asap'});
+        subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:managedDeliveryAcceptance.checkoutKey,deliverySelection:deliveryTime||'asap'},managedEnvironment);
       const proof={...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor};
       const preflight=await getAdminDb().runTransaction(tx=>prepareCustomerQuoteConsumption(tx,proof,managedDraft!,'preflight'));
       managedQuote=preflight.quote;
@@ -839,6 +841,7 @@ export async function createStripeCheckoutSessionAction(
       const existing = await transaction.get(orderRef);
       if (discountCard) await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
       if (existing.exists()) throw new Error('Ordrenummeret er allerede i brug. Prøv igen.');
+      if(managedQuote){if(!managedEnvironment)throw Error('delivery_environment_unconfigured');await assertManagedCheckoutRuntime(context.transaction,{brandId,locationId},managedEnvironment);}
       const claim=managedQuote&&managedDraft&&managedDeliveryAcceptance ? await prepareCustomerQuoteConsumption(context.transaction,{...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor},managedDraft,orderId):null;
       claim?.apply();
       transaction.set(orderRef, orderData);
