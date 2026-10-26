@@ -6,7 +6,7 @@ const address = { street: 'Testvej 1', postalCode: '2300', city: 'København', c
 function geocode(number = '1') { return { results: [{ place_id: 'osm-' + number, lat: 55.6, lon: 12.5,
   country_code: 'dk', postcode: '2300', street: 'Testvej', housenumber: number, result_type: 'building',
   rank: { confidence: 1, match_type: 'full_match' }, datasource: { sourcename: 'openstreetmap' } }] }; }
-const route = () => ({ type: 'FeatureCollection', features: [{ properties: { distance: 1234.2, distance_units: 'Meters', time: 120.1 } }] });
+const route = () => ({ type: 'FeatureCollection', features: [{ properties: { distance: 1234.2, distance_units: 'meters', time: 120.1 } }] });
 const json = data => Response.json(data);
 function setup(extra = {}) {
   const events = [], calls = [];
@@ -114,7 +114,9 @@ test('route requires the instance verified endpoints and supported profile befor
 test('missing numeric evidence never becomes zero; empty route remains distinct', async () => {
   for (const mutate of [d => delete d.features[0].properties.distance, d => d.features[0].properties.distance = -1,
     d => d.features[0].properties.distance = '12', d => d.features[0].properties.time = null,
-    d => d.features[0].properties.distance_units = 'Miles', d => d.features.push(d.features[0])]) {
+    d => d.features[0].properties.distance_units = 'Miles', d => d.features[0].properties.distance_units = 'miles',
+    d => d.features[0].properties.distance_units = 'METERS', d => delete d.features[0].properties.distance_units,
+    d => d.features.push(d.features[0])]) {
     const data = route(); mutate(data);
     const f = setup({ fetch: async url => json(url.includes('/geocode/') ? geocode(new URL(url).searchParams.get('housenumber')) : data) });
     assert.equal((await f.adapter.route(await points(f.adapter))).kind, 'unavailable');
@@ -122,6 +124,11 @@ test('missing numeric evidence never becomes zero; empty route remains distinct'
   const f = setup({ fetch: async url => json(url.includes('/geocode/') ? geocode() : { type: 'FeatureCollection', features: [] }) });
   const p1 = await f.adapter.resolve(address), p2 = await f.adapter.resolve(address);
   assert.deepEqual(await f.adapter.route({ pickup: p1.address, dropoff: p2.address, profile: 'car' }), { kind: 'no_route' });
+});
+test('documented capitalized Meters remains compatible with observed lowercase meters', async () => {
+  const data = route(); data.features[0].properties.distance_units = 'Meters';
+  const f = setup({ fetch: async url => json(url.includes('/geocode/') ? geocode(new URL(url).searchParams.get('housenumber')) : data) });
+  assert.deepEqual(await f.adapter.route(await points(f.adapter)), { kind: 'route', meters: 1235, durationSeconds: 121 });
 });
 test('transport failures and oversized bodies return safe outcomes without retry', async () => {
   for (const reply of [async () => new Response('private', { status: 429 }), async () => { throw Error('synthetic-key private URL'); },
@@ -131,6 +138,51 @@ test('transport failures and oversized bodies return safe outcomes without retry
   }
   let signal; const f = setup({ timeoutMs: 10, fetch: async (_, init) => { signal = init.signal; return new Promise(() => {}); } });
   assert.deepEqual(await f.adapter.resolve(address), { kind: 'unavailable' }); assert.equal(signal.aborted, true);
+});
+test('default timeout allows a six-second connection response and clears its abort timer', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let started, signal, calls = 0;
+  const ready = new Promise(resolve => { started = resolve; });
+  const f = setup({ fetch: async (_, init) => {
+    calls++; signal = init.signal; started();
+    return new Promise(resolve => setTimeout(() => resolve(json(geocode())), 6000));
+  } });
+  const pending = f.adapter.resolve(address);
+  await ready;
+  t.mock.timers.tick(4500);
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1500);
+  assert.equal((await pending).kind, 'verified');
+  t.mock.timers.tick(4000);
+  assert.equal(signal.aborted, false); assert.equal(calls, 1);
+  assert.deepEqual(f.events, ['quote', 'request']);
+});
+test('default timeout aborts at ten seconds without a retry or renewed quota', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  let started, signal, calls = 0;
+  const ready = new Promise(resolve => { started = resolve; });
+  const f = setup({ fetch: async (_, init) => {
+    calls++; signal = init.signal; started(); return new Promise(() => {});
+  } });
+  const pending = f.adapter.resolve(address);
+  await ready;
+  t.mock.timers.tick(9999);
+  assert.equal(signal.aborted, false);
+  t.mock.timers.tick(1);
+  assert.deepEqual(await pending, { kind: 'unavailable' });
+  assert.equal(signal.aborted, true); assert.equal(calls, 1);
+  assert.deepEqual(f.events, ['quote', 'request']);
+});
+test('invalid timeout configuration rejects before reserving quota or making requests', () => {
+  let calls = 0;
+  for (const timeoutMs of [0, -1, 10001, 1.5, NaN, Infinity, '10000']) {
+    assert.throws(() => create({ apiKey: 'synthetic-key', timeoutMs,
+      reserveQuote: async () => { calls++; return true; },
+      reserveRequest: async () => { calls++; return { sendBeforeMs: Date.now() + 1000 }; },
+      fetch: async () => { calls++; return json(geocode()); },
+    }), /invalid_routing_configuration/);
+  }
+  assert.equal(calls, 0);
 });
 test('mutable caller dependencies and address cannot change an in-flight operation', async () => {
   let release; const wait = new Promise(resolve => { release = resolve; });

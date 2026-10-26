@@ -17,7 +17,7 @@ export function createGeoapifyRoutingAdapter(options: {
   apiKey: string; fetch: typeof fetch; timeoutMs?: number;
   reserveQuote: () => Promise<boolean>; reserveRequest: () => Promise<{ sendBeforeMs: number } | null>;
 }): RoutingAdapter {
-  const timeoutMs = options.timeoutMs ?? 4000;
+  const timeoutMs = options.timeoutMs ?? 10000;
   if (!text(options.apiKey, 300) || /\s/.test(options.apiKey) || typeof options.fetch !== 'function'
     || typeof options.reserveQuote !== 'function' || typeof options.reserveRequest !== 'function'
     || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 10000) throw Error('invalid_routing_configuration');
@@ -113,7 +113,7 @@ export function createGeoapifyRoutingAdapter(options: {
         if (!data.features.length) return { kind: 'no_route' };
         if (data.features.length !== 1) return { kind: 'unavailable' };
         const route = data.features[0]?.properties;
-        if (route?.distance_units !== 'Meters' || typeof route.distance !== 'number' || !Number.isFinite(route.distance)
+        if (!['meters', 'Meters'].includes(route?.distance_units) || typeof route.distance !== 'number' || !Number.isFinite(route.distance)
           || route.distance < 0 || typeof route.time !== 'number' || !Number.isFinite(route.time) || route.time < 0) return { kind: 'unavailable' };
         const meters = Math.ceil(route.distance), durationSeconds = Math.ceil(route.time);
         if (!Number.isSafeInteger(meters) || !Number.isSafeInteger(durationSeconds)) return { kind: 'unavailable' };
