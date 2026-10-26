@@ -47,7 +47,7 @@ All validation for this work is internal; no GitHub Actions. Before release requ
 - `/api/delivery/platform` and `/api/delivery/platform/check`: shared routing configuration and explicit connection check.
 - Existing native bindings, canonical Wolt merchant registry, callback inbox, adoption and runtime documents remain the source for delivery processing.
 
-Only one environment may be active for new orders at a location. Already-created orders retain their own Stripe account and test/live mode for settlement and recovery. A platform Stripe active-mode change must not redirect an existing managed order to a different mode.
+Only one environment may be active for new orders at a location. Already-created orders retain their own Stripe account and test/live mode for settlement, checkout-session cancellation and recovery. A platform Stripe active-mode change must not redirect an existing managed order to a different mode. Canceling checkout expires the payable session before releasing its discount reservation; it does not cancel a courier or refund an order.
 
 The current canonical Wolt registry still permits one venue/location per Wolt merchant and environment. Competing bindings are rejected rather than overwritten. API authentication checks do not validate the pickup venue/address; check those with the provider before activating. API and signing credentials cannot be changed in place after native provisioning without a recovery-safe rotation workflow.
 
