@@ -20,16 +20,20 @@ function fixture({realRouting=false}={}){
  const calls=[];
  const config={scope:{...scope},environment:'sandbox',routingSource:'geoapify',routingApprovalRef:'sandbox-approval',retentionApprovalRef:'sandbox-retention',
   pickupContact:{name:'Test pickup',phone:'+4512345678',verifiedAt:'2026-10-26T00:00:00Z'}};
- let adopted=true,enabled=true,options;
+ let adopted=true,enabled=true,options,platform=null,enrollment=null,platformError=false;
  const budget={reserveQuote:async()=>{calls.push('quote-budget');return false;},reserveRequest:async()=>{calls.push('request-budget');return null;}};
  const mocks={
   'server-only':{},
   './adoption':{readManagedDeliveryAdoption:async()=>adopted?'managed':'legacy'},
   '../settings/server':{deliveryDispatchEnabled:()=>enabled},
-  '@/lib/firebase-admin':{getAdminDb:()=>({collection:name=>{assert.equal(name,'deliveryRuntimeConfigs');return {doc:key=>{
-   assert.equal(key,createHash('sha256').update(JSON.stringify([scope.brandId,scope.locationId])).digest('hex'));
-   return {get:async()=>({exists:true,data:()=>structuredClone(config)})};
-  }};}})},
+  './settings/server':{deliveryDispatchEnabled:()=>enabled},
+  '../management/platform':{getPlatformGeoapifyReadiness:async()=>{if(platformError)throw Error('platform_unavailable');return platform;},getPlatformGeoapifyRuntime:async()=>platform?{...platform,apiKey:defaults.ORDERFLY_DELIVERY_GEOAPIFY_API_KEY}:null},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:name=>({doc:key=>({path:`${name}/${key}`,get:async()=>{
+   assert.equal(name,'deliveryRuntimeConfigs');assert.equal(key,createHash('sha256').update(JSON.stringify([scope.brandId,scope.locationId])).digest('hex'));
+   return {exists:true,data:()=>structuredClone(config)};
+  }})}),runTransaction:async fn=>fn({get:async ref=>{
+   assert.match(ref.path,/^deliveryMerchantEnrollments\//);return {exists:!!enrollment,data:()=>structuredClone(enrollment)};
+  }})})},
   '../routing/geoapify/budget':{
    isGeoapifyQuotaNamespace:value=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value),
    createGeoapifyBudget:value=>{calls.push('budget-construction');assert.deepEqual(value,{quotaNamespace:defaults.ORDERFLY_DELIVERY_GEOAPIFY_QUOTA_NAMESPACE});return budget;},
@@ -42,7 +46,7 @@ function fixture({realRouting=false}={}){
  };
  if(realRouting){delete mocks['../routing/geoapify/budget'];delete mocks['../routing/geoapify/adapter'];}
  const runtime=moduleGraph(mocks)('src/lib/delivery/quotes/runtime.ts');
- return {runtime,config,calls,budget,options:()=>options,disable:()=>{enabled=false;},unadopt:()=>{adopted=false;}};
+ return {runtime,config,calls,budget,setPlatform:value=>{platform=value;},setEnrollment:value=>{enrollment=value;},failPlatform:()=>{platformError=true;},options:()=>options,disable:()=>{enabled=false;},unadopt:()=>{adopted=false;}};
 }
 
 test('Geoapify availability performs configuration reads only; construction forwards durable quotas without consuming them',async()=>{
@@ -118,5 +122,36 @@ test('actual Geoapify adapter and durable budget construct without quota reads o
    assert.deepEqual(await guarded.routing.resolve({street:'Testvej 1',postalCode:'1000',city:'København',countryCode:'DK'}),{kind:'unavailable'});
    assert.equal(requests,0);
   }finally{globalThis.fetch=originalFetch;}
+ });
+});
+
+
+test('portal production requires provisioned approved enrollment while sharing platform routing quota',async()=>{
+ await withEnvironment({ORDERFLY_DELIVERY_ENVIRONMENT:undefined,ORDERFLY_DELIVERY_GEOAPIFY_ENABLED:undefined},async()=>{
+  const f=fixture();f.config.environment='production';
+  f.setPlatform({enabled:true,retentionApproved:true,keyConfigured:true,routingApprovalRef:'approved',retentionApprovalRef:'approved',quotaNamespace:defaults.ORDERFLY_DELIVERY_GEOAPIFY_QUOTA_NAMESPACE});
+  const enrollment={version:1,id:createHash('sha256').update(JSON.stringify([scope.brandId,scope.locationId,'production'])).digest('hex'),...scope,environment:'production',displayName:'Test',merchantId:'merchant',venueId:'venue',pickupContact:f.config.pickupContact,status:'active',revision:1,
+   secretRefs:{api:'private-reference',webhook:'private-signing-reference'},callbackKey:'a'.repeat(40),callbackStatus:'registered',providerWebhookId:'webhook',connectionStatus:'verified',connectionCheckedAtMs:1,productionApproved:false,operation:null,provisioned:true,createdAtMs:1,updatedAtMs:1};
+  f.setEnrollment(enrollment);assert.equal(await f.runtime.managedDeliveryRuntimeAvailable(scope),false);assert.deepEqual(f.calls,[]);
+  enrollment.productionApproved=true;f.setEnrollment(enrollment);
+  assert.equal(await f.runtime.managedDeliveryRuntimeAvailable(scope),true);assert.deepEqual(f.calls,[]);
+  assert.equal((await f.runtime.resolveManagedDeliveryRuntime(scope,draft)).routing.source,'geoapify');
+  assert.equal(f.options().reserveQuote,f.budget.reserveQuote);
+ });
+});
+
+test('malformed platform configuration cannot fall back to otherwise valid legacy environment credentials',async()=>{
+ await withEnvironment({},async()=>{const f=fixture();f.failPlatform();assert.equal(await f.runtime.managedDeliveryRuntimeAvailable(scope),false);assert.equal(await f.runtime.resolveManagedDeliveryRuntime(scope,draft),null);assert.deepEqual(f.calls,[]);});
+});
+
+test('managed order transaction pins the canonical runtime environment before quote consumption',async()=>{
+ await withEnvironment({},async()=>{
+  const f=fixture(),reads=[];
+  const tx={get:async ref=>{reads.push(ref.path);return ref.path.startsWith('deliveryRuntimeConfigs/')?{exists:true,data:()=>structuredClone(f.config)}:{exists:false,data:()=>undefined};}};
+  await f.runtime.assertManagedCheckoutRuntime(tx,scope,'sandbox');
+  assert.equal(reads.length,2);assert.deepEqual(f.calls,[]);
+  f.config.environment='production';
+  await assert.rejects(f.runtime.assertManagedCheckoutRuntime(tx,scope,'sandbox'),/environment_changed/);
+  assert.deepEqual(f.calls,[]);
  });
 });

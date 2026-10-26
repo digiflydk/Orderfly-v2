@@ -112,13 +112,6 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
-      key: 'delivery',
-      title: 'Levering',
-      items: [
-        { href: merchantPortal ? '/merchant/delivery' : '/superadmin/delivery', label: 'Levering', icon: MapPin },
-      ],
-    },
-    {
       key: 'catalog',
       title: 'Catalog',
       items: [
@@ -154,6 +147,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/loyalty/discount-card', label: 'Rabatkort', icon: Percent },
         { href: '/superadmin/loyalty/score', label: 'Kundescore', icon: Trophy },
         { href: '/merchant/stamp-card', label: 'Kassevisning', icon: ScanLine },
+        { href: merchantPortal ? '/merchant/delivery' : '/superadmin/delivery', label: 'Levering', icon: MapPin },
       ],
     },
     {
@@ -213,9 +207,9 @@ export function SuperAdminSidebarClient({
 
   const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people') : allGroups)
     .filter(g => !merchantPortal || !['people','system','platform'].includes(g.key))
-    // The merchant portal shows only the counter view from Loyalitet; administration stays in /superadmin.
+    // Merchant administration stays in /superadmin; retain the scoped delivery and counter views.
     .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal)
-      && (!merchantPortal || g.key !== 'loyalty' || i.href === '/merchant/stamp-card'))}));
+      && (!merchantPortal || g.key !== 'loyalty' || ['/merchant/stamp-card', '/merchant/delivery'].includes(i.href || '')))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 

@@ -12,6 +12,7 @@ const policyPath = 'locations/l/printIntentPolicies/original';
 const rulesPath = 'locations/l/printerRouting/original';
 async function fixture(options = {}) {
   const f = await paymentFixture();
+  f.records.set('platform_settings/payment_gateway',{activeMode:'test',test:{secretKey:'sk_test_fake'}});
   f.records.get('brands/b').status = 'active';
   Object.assign(f.order(), { paymentMethod: 'Stripe', status: 'Pending', psp: { checkoutSessionId: 'cs_test_atomic_349_reference' } });
   f.records.set('categories/pizza', { isActive: true, locationIds: ['l'] });

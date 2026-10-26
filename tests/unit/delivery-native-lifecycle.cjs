@@ -23,6 +23,7 @@ const policyPath = 'locations/l/printIntentPolicies/original';
 const rulesPath = 'locations/l/printerRouting/original';
 async function fixture(options = {}) {
   const f = await paymentFixture();
+  f.records.set('platform_settings/payment_gateway',{activeMode:'test',test:{secretKey:'sk_test_fake'}});
   f.records.get('brands/b').status = 'active';
   Object.assign(f.order(), { paymentMethod: 'Stripe', status: 'Pending', psp: { checkoutSessionId: 'cs_test_atomic_349_reference' } });
   f.records.set('categories/pizza', { isActive: true, locationIds: ['l'] });
@@ -255,4 +256,18 @@ test('delivered before native acceptance remains retryable and queues after acce
  assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackMailJobs/')).length,1);
  assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedbackInvitations/')).length,1);
  assert.equal(f.network.length,1,'only mocked courier create was requested, never mail');
+});
+
+test('inactive portal enrollment completes already-paid sandbox dispatch and callback without global runtime flags',async t=>{
+ const f=await fixture(),originalFetch=global.fetch,saved=Object.fromEntries(Object.keys(environment).map(key=>[key,process.env[key]]));
+ global.fetch=f.fetch;
+ t.after(()=>{global.fetch=originalFetch;for(const[key,value]of Object.entries(saved)){if(value===undefined)delete process.env[key];else process.env[key]=value;}});
+ for(const key of ['ORDERFLY_DELIVERY_ENVIRONMENT','ORDERFLY_DELIVERY_DISPATCH_ENABLED','ORDERFLY_DELIVERY_CALLBACK_ENABLED'])delete process.env[key];
+ const id=require('node:crypto').createHash('sha256').update(JSON.stringify(['b','l','sandbox'])).digest('hex');
+ f.records.set('deliveryMerchantEnrollments/'+id,{version:1,id,brandId:'b',locationId:'l',environment:'sandbox',displayName:'Test enrollment',merchantId:'merchant',venueId:'venue',pickupContact:{name:'Test',phone:'+4512345678',verifiedAt:'2026-10-26T00:00:00Z'},status:'inactive',revision:2,
+  secretRefs:{api:'projects/test-project/secrets/orderfly-wolt-sandbox-merchant/versions/1',webhook:'projects/test-project/secrets/orderfly-wolt-webhook-sandbox-merchant/versions/1'},callbackKey:f.key,callbackStatus:'registered',providerWebhookId:'webhook',connectionStatus:'verified',connectionCheckedAtMs:1,productionApproved:false,operation:null,provisioned:true,createdAtMs:1,updatedAtMs:2});
+ assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'booked');assert.equal(f.network.length,1);assert.equal(f.order().status,'Received');
+ assert.equal((await f.inbox.receiveNativeWoltCallback(f.request(),f.key)).status,200);
+ assert.equal(f.records.get('orders/'+f.orderId+'/deliveryState/current').status,'picked_up');
+ await f.dispatcher.runDeliveryDispatchWorker();assert.equal(f.network.length,1);assert.equal(f.jobs().length,1);
 });

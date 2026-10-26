@@ -15,10 +15,10 @@ const errorText = (status:number) => status === 409 ? 'Indstillingerne er ændre
 const time = (minute:number) => `${String(Math.floor(minute/60)).padStart(2,'0')}:${String(minute%60).padStart(2,'0')}`;
 const minutes = (value:string) => { const [h,m] = value.split(':').map(Number); return h*60+m; };
 
-export function DeliveryAdmin({brands,locations}:Catalog) {
-  const [brandId,setBrandId] = useState('');
-  const [locationId,setLocationId] = useState('');
-  const [section,setSection] = useState<Section>('Oversigt');
+export function DeliveryAdmin({brands,locations,fixedScope,readOnly=false}:Catalog & {fixedScope?:{brandId:string;locationId:string};readOnly?:boolean}) {
+  const [brandId,setBrandId] = useState(fixedScope?.brandId||'');
+  const [locationId,setLocationId] = useState(fixedScope?.locationId||'');
+  const [section,setSection] = useState<Section>(fixedScope?'Indstillinger':'Oversigt');
   const [data,setData] = useState<DeliverySettingsResponse|null>(null);
   const [draft,setDraft] = useState<DeliverySettings|null>(null);
   const [overrides,setOverrides] = useState<DeliveryOverrides>({});
@@ -46,13 +46,13 @@ export function DeliveryAdmin({brands,locations}:Catalog) {
   },[brandId,locationId,reload]);
   const discard = () => !dirty || window.confirm('Du har ugemte ændringer. Vil du kassere dem?');
   const change = <K extends keyof DeliverySettings>(key:K,value:DeliverySettings[K]) => {
-    if(!draft || !data?.editable || busy)return;
+    if(!draft || !data?.editable || busy||readOnly)return;
     setDraft({...draft,[key]:value}); if(locationId)setOverrides({...overrides,[key]:value}); setDirty(true);setNotice('');
   };
   const inherited = (key:keyof DeliverySettings) => locationId && !Object.prototype.hasOwnProperty.call(overrides,key);
   const origin = (key:keyof DeliverySettings) => locationId ? <small className="block text-muted-foreground">{inherited(key)?'Arvet fra brand':'Tilpasset denne restaurant'}</small> : null;
   const save = async () => {
-    if(!data||!draft||!dirty||!data.editable||saving.current||conflict)return;
+    if(!data||!draft||!dirty||!data.editable||saving.current||conflict||readOnly)return;
     const checked=deliverySettingsSchema.safeParse(draft);
     if(!checked.success){setError('Kontrollér indstillingerne. Tider skal være sorteret uden overlap, og tal skal være inden for de viste grænser.');return;}
     saving.current=true;setBusy(true);setError('');setNotice('');const current=generation.current;
@@ -64,26 +64,27 @@ export function DeliveryAdmin({brands,locations}:Catalog) {
       if(!parsed.success)throw new Error('Serverens svar kunne ikke bekræftes. Genindlæs indstillingerne.');
       const value=parsed.data;
       if(value.brandId!==brandId||value.locationId!==(locationId||null)||value.revision!==data.revision+1||value.brandRevision!==(locationId?data.brandRevision:data.brandRevision+1))throw new Error('Svaret kunne ikke bekræftes. Genindlæs for at kontrollere, om ændringen blev gemt.');
-      if(current===generation.current){setData(value);setDraft(value.settings);setOverrides(value.overrides);setDirty(false);setNotice('Indstillingerne er gemt. Kundevendt levering er endnu ikke aktiveret.');}
+      if(current===generation.current){setData(value);setDraft(value.settings);setOverrides(value.overrides);setDirty(false);setNotice(fixedScope?'Indstillingerne er gemt. En aktiv merchant bruger disse indstillinger i checkout.':'Indstillingerne er gemt. Kundevendt levering er endnu ikke aktiveret.');}
     } catch(e){if(current===generation.current){setConflict(true);setError(e instanceof Error?e.message:'Svaret kunne ikke bekræftes. Genindlæs indstillingerne.');}}
     finally{saving.current=false;if(current===generation.current)setBusy(false);}
   };
   const reset = () => {if(!data||!locationId||!window.confirm('Nulstil alle lokale tilpasninger til brandets indstillinger? Ændringen træder først i kraft, når du gemmer.'))return;setOverrides({});setDraft(data.brandSettings);setDirty(true);setNotice('Brandets indstillinger vises nu. Gem for at fjerne alle lokale tilpasninger.');};
   return <div className="space-y-6" aria-busy={busy}>
-    <header><h1 className="text-2xl font-bold">Levering</h1><p className="mt-2 text-muted-foreground">Administrer levering for dit brand og dine restauranter.</p></header>
+    {!fixedScope&&<><header><h1 className="text-2xl font-bold">Levering</h1><p className="mt-2 text-muted-foreground">Administrer levering for dit brand og dine restauranter.</p></header>
     <div className="rounded-lg border p-4"><h2 className="font-semibold">Klargøring af levering</h2><p>Indstillinger kan forberedes her. Levering til kunder åbnes først, når leverandør, priser og den samlede test er godkendt.</p></div>
     <div className="grid gap-4 sm:grid-cols-2">
       <label>Brand<select className={inputClass} value={brandId} disabled={busy} onChange={e=>{if(discard()){setBrandId(e.target.value);setLocationId('');}}}><option value="">Vælg brand</option>{brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
       <label>Restaurant<select className={inputClass} value={locationId} disabled={!brandId||busy} onChange={e=>{if(discard())setLocationId(e.target.value);}}><option value="">Brandets standardindstillinger</option>{locations.filter(l=>l.brandId===brandId).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
     </div>
-    <nav aria-label="Levering"><div className="flex flex-wrap gap-2">{sections.map(s=><Button key={s} className="min-h-11" variant={section===s?'default':'outline'} aria-current={section===s?'page':undefined} onClick={()=>setSection(s)}>{s}</Button>)}</div></nav>
+    </>}<nav aria-label="Levering"><div className="flex flex-wrap gap-2">{sections.filter(s=>!fixedScope||!['Oversigt','Leverandører'].includes(s)).map(s=><Button key={s} className="min-h-11" variant={section===s?'default':'outline'} aria-current={section===s?'page':undefined} onClick={()=>setSection(s)}>{s}</Button>)}</div></nav>
     {error&&<div ref={errorSummary} tabIndex={-1} role="alert" className="rounded-md border border-destructive p-4"><p>{error}</p><Button className="mt-2 min-h-11" variant="outline" disabled={busy} onClick={()=>{if(discard())setReload(r=>r+1);}}>Genindlæs</Button></div>}
     <p role="status" className="text-sm">{busy?'Indlæser eller gemmer indstillinger…':notice||(dirty?'Ugemte ændringer':'')}</p>
     {!brandId&&<p>Vælg et brand for at se leveringsindstillinger.</p>}
     {draft&&data&&<>
       {!data.editable&&<p>Du kan se indstillingerne, men har ikke adgang til at ændre dem.</p>}
-      {section==='Leveringer'||section==='Log'?(locationId?<DeliveryOrders key={`${brandId}:${locationId}`} brandId={brandId} locationId={locationId} showLog={section==='Log'}/>:<p>Vælg en restaurant for at se leveringer og log.</p>):section==='Leverandører'?<section className="rounded-lg border p-4 space-y-3"><h2 className="text-xl font-semibold">Leverandører</h2><dl className="space-y-2"><div><dt className="font-medium">Valgt i indstillinger</dt><dd>{draft.providerId==='wolt'?'Wolt Drive':draft.providerId||'Ingen leverandør valgt'}</dd></div><div><dt className="font-medium">Forbindelse</dt><dd>Forbindelsesstatus kan endnu ikke kontrolleres her.</dd></div><div><dt className="font-medium">Levering til kunder</dt><dd>Ikke aktiveret</dd></div></dl><p>Valg af leverandør gemmer kun konfigurationen. Det bekræfter ikke en forbindelse eller et leveringsområde.</p><p>Før åbning skal restaurantens tilknytning, ruteafstande, priser, betaling og leveringstest være verificeret.</p><Button className="min-h-11" variant="outline" onClick={()=>setSection('Indstillinger')}>Vælg leverandør i indstillinger</Button></section>:section==='Oversigt'?<section className="rounded-lg border p-4 space-y-3"><h2 className="text-xl font-semibold">Leveringsstatus</h2><p>Kundevendt levering: Ikke aktiveret</p><p>Valgt leverandør: {draft.providerId==='wolt'?'Wolt Drive':draft.providerId||'Ingen'}</p><p>Pause i konfiguration: {draft.paused?'Ja':'Nej'}</p><p>Priser og leveringsområder kan forberedes under Områder og priser. Leverandøropsætning og leveringslog tilføjes, når integrationen er klar. Der vises ingen simulerede leveringer.</p></section>:<fieldset disabled={!data.editable||busy||conflict} className="space-y-5 rounded-lg border p-4"><legend className="px-2 text-xl font-semibold">{section}</legend>
+      {section==='Leveringer'||section==='Log'?(locationId?<DeliveryOrders key={`${brandId}:${locationId}`} brandId={brandId} locationId={locationId} showLog={section==='Log'}/>:<p>Vælg en restaurant for at se leveringer og log.</p>):section==='Leverandører'?<section className="rounded-lg border p-4 space-y-3"><h2 className="text-xl font-semibold">Leverandører</h2><dl className="space-y-2"><div><dt className="font-medium">Valgt i indstillinger</dt><dd>{draft.providerId==='wolt'?'Wolt Drive':draft.providerId||'Ingen leverandør valgt'}</dd></div><div><dt className="font-medium">Forbindelse</dt><dd>Forbindelsesstatus kan endnu ikke kontrolleres her.</dd></div><div><dt className="font-medium">Levering til kunder</dt><dd>Ikke aktiveret</dd></div></dl><p>Valg af leverandør gemmer kun konfigurationen. Det bekræfter ikke en forbindelse eller et leveringsområde.</p><p>Før åbning skal restaurantens tilknytning, ruteafstande, priser, betaling og leveringstest være verificeret.</p><Button className="min-h-11" variant="outline" onClick={()=>setSection('Indstillinger')}>Vælg leverandør i indstillinger</Button></section>:section==='Oversigt'?<section className="rounded-lg border p-4 space-y-3"><h2 className="text-xl font-semibold">Leveringsstatus</h2><p>Kundevendt levering: Ikke aktiveret</p><p>Valgt leverandør: {draft.providerId==='wolt'?'Wolt Drive':draft.providerId||'Ingen'}</p><p>Pause i konfiguration: {draft.paused?'Ja':'Nej'}</p><p>Priser og leveringsområder kan forberedes under Områder og priser. Leverandøropsætning og leveringslog tilføjes, når integrationen er klar. Der vises ingen simulerede leveringer.</p></section>:<fieldset disabled={!data.editable||busy||conflict||readOnly} className="space-y-5 rounded-lg border p-4"><legend className="px-2 text-xl font-semibold">{section}</legend>
         {section==='Områder og priser'||section==='Kampagner'?<><p>{section==='Kampagner'?'Gratis levering og tilskud konfigureres sammen med prisreglerne, så reglerne kan kontrolleres samlet.':'Leveringsområdet afgrænses med maksimal ruteafstand. Både denne grænse og grænsen under Indstillinger skal være opfyldt.'}</p>{origin('pricingRules')}<PricingEditor value={draft.pricingRules} onChange={v=>change('pricingRules',v)}/></>:section==='Indstillinger'?<>
+          {fixedScope&&<label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={draft.enabled} onChange={e=>change('enabled',e.target.checked)}/>Tillad levering for denne restaurant{origin('enabled')}</label>}
           <label className="block">Leverandør<select className={inputClass} value={draft.providerId||''} onChange={e=>change('providerId',e.target.value||null)}><option value="">Ingen leverandør</option><option value="wolt">Wolt Drive</option>{draft.providerId&&draft.providerId!=='wolt'&&<option value={draft.providerId}>{draft.providerId} (allerede konfigureret)</option>}</select>{origin('providerId')}</label>
           <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={draft.paused} onChange={e=>change('paused',e.target.checked)}/>Pause levering{origin('paused')}</label>
           {(['preparationMinutes','maxTransportMinutes','maxDistanceMeters'] as const).map((key,i)=><label key={key} className="block">{['Klargøringstid (minutter, 0–240)','Maksimal transporttid (minutter, 1–240)','Maksimal ruteafstand (meter, 1–100.000)'][i]}<input className={inputClass} type="number" min={i===0?0:1} max={i===2?100000:240} step="1" value={Number.isFinite(draft[key])?draft[key]:''} onChange={e=>change(key,e.target.value===''?NaN:Number(e.target.value))}/>{origin(key)}</label>)}

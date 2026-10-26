@@ -1,5 +1,7 @@
 # Levering release and activation
 
+> Portal enrollment update (#691): use [Merchant administration](merchant-portal.md) for new Superadmin-managed configuration. Enrollment state controls per-location new-order access and preserves in-flight recovery when deactivated or archived. The environment-variable instructions below describe the legacy configuration path, not recurring merchant onboarding. Geoapify portal approval supports sandbox and explicitly approved production; no global Wolt key is used.
+
 ## Verified foundation release
 
 PR #701 merged as `6f0032b1e918316870451132b48779483daedcee`. The production health endpoint reported that exact SHA on 2026-10-26 at 06:12:50 UTC. Authenticated read-only QA verified the Levering navigation, brand/location selection, inherited settings and empty delivery list. No settings were saved and customer delivery remained inactive. The foundation passed 87 delivery tests, typecheck, production build and independent review internally. No GitHub Actions was used.
