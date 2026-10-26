@@ -25,3 +25,9 @@ test('permission and cursor scope denial precede private order query',async()=>{
  const g=fixture(),first=await g.readDeliveryOrders(scope);await assert.rejects(g.readDeliveryOrders({...scope,orderId:'o00',eventCursor:first.nextCursor}),/invalid/);
  await assert.rejects(g.readDeliveryOrders({...scope,extra:'bad'}),/invalid/);
 });
+test('orders view projects only nonmonetary cost review flag in list and detail',async()=>{
+ const f=fixture();f.rows.get('orders/o00').deliveryCostException={reason:'accepted_provider_cost_changed',requiresReview:true,quotedCost:{amountMinor:4500},acceptedCost:{amountMinor:9000},customerFee:{amountMinor:3500},subsidy:{amountMinor:5500}};
+ const list=await f.readDeliveryOrders(scope),detail=await f.readDeliveryOrders({...scope,orderId:'o00'});
+ assert.equal(list.orders.find(o=>o.id==='o00').costReviewRequired,true);assert.equal(detail.orders[0].costReviewRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').costReviewRequired,false);
+ for(const result of [list,detail]){const text=JSON.stringify(result);for(const secret of ['quotedCost','acceptedCost','customerFee','subsidy','4500','9000','3500','5500','accepted_provider_cost_changed'])assert.equal(text.includes(secret),false);}
+});

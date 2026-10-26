@@ -1,0 +1,9 @@
+# Native Wolt callback and early inbox
+
+The scoped callback route is `/api/delivery/webhooks/wolt/[callbackKey]`. It is disabled unless `ORDERFLY_DELIVERY_CALLBACK_ENABLED=true`; production also requires the production gate. Configuration is server-owned in deliveryProviderCallbacks keyed by SHA256 of an opaque callback key. It binds one location, merchant, venue, environment and active provider revision to a separate pinned webhook signing-secret version. The merchant API secret is never reused.
+
+A real HS256 envelope is verified with the configured secret before storing normalized non-contact event data. Callback and provider binding are reread in the commit transaction. The receiver acknowledges only after a durable inbox insert; early events remain pending when no native delivery mapping exists. Duplicate identity with altered immutable payload is rejected. No signing secret or raw webhook token is persisted.
+
+Accepted dispatch must atomically save deliveryProviderReferences for merchant + native order reference. Replay consumes bounded pages after that commit. State, ETA and audit are separate records under the native order; payment and kitchen state are never changed by this consumer. A signed forward lifecycle event can advance via explicit allowed transitions without fabricated occurrence time. Conflicting terminal states require reconciliation. Verified pickup ETA cannot be replaced by a later preliminary estimate. Callback revocation blocks pending processing.
+
+The existing internal dispatcher must replay pending pages; no standalone public replay endpoint is provided. Callback configuration, signing-secret provisioning, actual Wolt registration, retention policy and live signed-callback acceptance remain deployment prerequisites. These are not established by fixture tests.

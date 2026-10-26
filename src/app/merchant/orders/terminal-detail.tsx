@@ -1,4 +1,5 @@
 'use client';
+import { ManagedDeliveryTracking } from '@/components/checkout/managed-delivery-tracking';
 import { useRef, useState, type ReactNode } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import type { OrderStatus } from '@/types';
@@ -16,7 +17,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
   const [message, setMessage] = useState(''), [failure, setFailure] = useState(false);
   const [paymentConfirm, setPaymentConfirm] = useState(false), [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [uncertainPayment, setUncertainPayment] = useState(false);
-  const next: OrderStatus | null = order.status === 'Received' ? 'In Progress' : order.status === 'In Progress' ? 'Ready' : order.status === 'Ready' ? (order.deliveryType === 'Delivery' ? 'Delivered' : 'Completed') : null;
+  const next: OrderStatus | null = order.status === 'Received' ? 'In Progress' : order.status === 'In Progress' ? 'Ready' : order.status === 'Ready' ? (order.deliveryType === 'Delivery' ? (order.managedDelivery?null:'Delivered') : 'Completed') : null;
   const unpaidCompletion = next !== null && ['Completed', 'Delivered'].includes(next) && order.paymentStatus !== 'Paid';
   async function advance() {
     if (lock.current || !next || disabled || unpaidCompletion || !canEdit) return;
@@ -58,6 +59,8 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onPointerDownOutside={event => { if (busy) event.preventDefault(); }}>
     <DialogHeader><DialogTitle className="break-all text-2xl">Ordre {order.id}</DialogTitle><DialogDescription>{order.brandName} · {order.locationName} · {ORDER_STATUS_LABELS[order.status]}</DialogDescription></DialogHeader>
     <div className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><p className="text-sm text-slate-600">{order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p><p className="text-3xl font-bold tabular-nums">{terminalTime(order)}</p>{order.fulfillmentAt && <p className="text-sm">{new Date(order.fulfillmentAt).toLocaleDateString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p>}</div><div className="text-right"><p className="font-semibold">{order.customerName || 'Kunde'}</p>{order.customerPhone && <a href={`tel:${order.customerPhone}`} className="block py-2 text-blue-700 underline">{order.customerPhone}</a>}<p className="text-sm">{order.deliveryAddress}</p></div></div>
+    {order.managedDelivery&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking||null} variant="merchant" onRefresh={onChanged}/>}
+    {order.managedDelivery&&order.status==='Ready'&&<p className="rounded border p-3">Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.</p>}
     <ul className="divide-y">{order.items.map((item, index) => <li key={index} className="flex justify-between gap-4 py-3"><div className="min-w-0"><p className="break-words font-semibold">{item.quantity}× {item.name}</p>{item.modifiers.map((modifier, i) => <p className="mt-1 break-words text-sm text-slate-600" key={i}>+ {modifier}</p>)}</div><span className="shrink-0">{formatPrice(item.totalPrice)}</span></li>)}</ul>
     {order.notes && <div className="rounded-xl bg-amber-50 p-4"><p className="font-semibold">Bemærkning til ordren</p><p className="whitespace-pre-wrap break-words">{order.notes}</p></div>}
     <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>I alt {formatPrice(order.totalAmount)}</strong><span className={order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? 'Betalt' : 'Betaling mangler'}</span></div>

@@ -1,0 +1,9 @@
+# Authorized delivery tracking
+
+The existing receipt session/token proof and existing Club member/customer ownership checks remain the authority. No order-ID-only endpoint or parallel login was introduced. `GuestReceipt.managedDeliveryTracking` is loaded only after receipt proof; the second read rechecks scope and unchanged receipt/session identity. Club history loads tracking in the same authenticated member/order transaction. Paid managed orders awaiting booking or showing a failure remain visible in owned history rather than disappearing because kitchen acceptance is held.
+
+The DTO projects only booking/fulfillment/payment states, safe HTTPS tracking URL, ETA intervals, pickup reliability and known update time. Native IDs, request digests, credentials, costs and provider errors are never projected. Scope, provider, request digest, attempt identity and accepted provider delivery ID must match across original attempt/result/state/estimate records. Foreign or malformed metadata produces no tracking URL or ETA. Missing timestamps remain null. Preliminary pickup estimates are never labeled reliable.
+
+Merchant terminal adds the same scoped projection. Its server progression rejects manual Delivered for every non-null managedDelivery marker, including malformed markers. Staff may still mark kitchen preparation/ready through existing authorized transitions; provider completion is separate. Legacy pickup and unmanaged delivery retain their existing transitions.
+
+Internal checks: receipt capability failures cannot reach tracking reads; wrong metadata scope and invalid tracking URLs are suppressed; matching verified estimates and refunds remain distinct; manual managed completion rejected with no audit mutation or feedback. Existing member-history and terminal regression suites remain applicable. UI rendering and browser acceptance are separately owned by the UI/QA lane.

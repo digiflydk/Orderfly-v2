@@ -301,3 +301,7 @@ test('a history read started before denial cannot authorize cached data after bo
   assert.equal(await page.evaluate(()=>window.__piiReturned),false,'old in-flight success must never restore historical PII');
   assert.ok(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length>=3,'history requires a new post-denial read');
 });
+test('managed ready delivery shows courier state and cannot be manually completed',async t=>{
+ const managed=order('ORD-MANAGED',{deliveryType:'Delivery',status:'Ready',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-MANAGED',bookingState:'accepted',deliveryStatus:'courier_to_pickup',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+ const {page,calls}=await fixture(t,768,1024,{orders:[managed]});await page.getByRole('button',{name:'Åbn ordre ORD-MANAGED',exact:true}).click();await expect(page.getByRole('heading',{name:'Leveringsstatus',exact:true})).toBeVisible();await expect(page.getByText('Kurér på vej til restauranten')).toBeVisible();await expect(page.getByRole('button',{name:'Markér leveret',exact:true})).toHaveCount(0);await expect(page.getByText('Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.')).toBeVisible();assert.equal(calls.filter(c=>c.kind==='status').length,0);
+});

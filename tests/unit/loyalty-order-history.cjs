@@ -25,3 +25,12 @@ test('settled fulfillment statuses and refund amounts are explicit; pending/erro
  const rows=await view(f);assert.equal(rows.length,8);assert.equal(rows.find(x=>x.id==='partial').netAmount,75);assert.equal(rows.find(x=>x.id==='refunded').netAmount,0);assert.equal(rows.find(x=>x.id==='free').totalAmount,0);for(const status of ['Received','In Progress','Ready','Completed','Delivered'])assert.ok(rows.some(x=>x.id===status));
 });
 test('sort and cap follow filtering and date normalization, so invalid earlier documents cannot hide recent purchases',async()=>{const f=setup();for(let i=0;i<130;i++)f.db.rows.set('orders/pending'+i,order({paymentStatus:'Pending'}));for(let i=0;i<120;i++)f.db.rows.set('orders/order'+String(i).padStart(3,'0'),order({paidAt:NOW+i}));const rows=await view(f);assert.equal(rows.length,100);assert.equal(rows[0].id,'order119');assert.equal(rows.at(-1).id,'order020');});
+test('managed paid pending delivery is visible and tracking runs only for owned authorized rows',async()=>{
+ const f=setup(),calls=[];
+ const {memberOrderHistory:read}=loadTs('src/lib/loyalty/stamp-card/order-history.ts',{'server-only':{},'@/lib/delivery/tracking-server':{loadAuthorizedDeliveryTracking:async(tx,id)=>{calls.push(id);return {orderId:id,bookingState:'pending'};}}});
+ const managedDelivery={version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)};
+ f.db.rows.set('orders/waiting',order({status:'Pending',deliveryType:'Delivery',managedDelivery}));
+ f.db.rows.set('orders/foreign',order({status:'Pending',deliveryType:'Delivery',managedDelivery,customerDetails:{id:'other'}}));
+ const rows=await read(f.db,brand,f.session,NOW);assert.deepEqual(rows.map(x=>x.id),['waiting']);assert.deepEqual(calls,['waiting']);assert.equal(rows[0].managedDeliveryTracking.bookingState,'pending');
+ calls.length=0;f.db.rows.get('loyaltySessions/session').revokedAt=NOW;assert.deepEqual(await read(f.db,brand,f.session,NOW),[]);assert.deepEqual(calls,[]);
+});

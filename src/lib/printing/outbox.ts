@@ -98,6 +98,12 @@ export async function preparePickupAcceptancePrintIntents(context: NativeTransac
   return prepareAuthorizedOriginals(context, read, input, false, true);
 }
 
+/** Native managed-delivery acceptance is a separate transition from payment settlement. */
+export async function prepareManagedDeliveryAcceptancePrintIntents(context: NativeTransactionContext, capability: import('@/lib/delivery/payments/acceptance').ManagedDeliveryAcceptanceCapability, input: unknown) {
+  const reader = (await import('@/lib/delivery/payments/acceptance')).readManagedDeliveryAcceptanceCapability;
+  return prepareAuthorizedOriginals(context, applied => reader(context, capability, applied), input, false, true);
+}
+
 async function prepareAuthorizedOriginals(context: NativeTransactionContext, read: OriginalRead, input: unknown,
   pickup = false, freshOnly = false) {
   const authority = read();

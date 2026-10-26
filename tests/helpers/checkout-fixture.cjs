@@ -14,7 +14,7 @@ function strictWrite(value,path='root') {
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
 }
 const offer={id:'d',brandId:'b',isActive:true,locationIds:['l'],orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],discountType:'percentage',discountValue:10,code:'SAVE10',usedCount:0,usageLimit:0};
-async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, loyaltyToken, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
+async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, loyaltyToken, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d',configureMocks,managedDeliveryAcceptance}={}) {
  const path='src/app/checkout/actions.ts';
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
@@ -122,7 +122,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
    },
    runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);const tx={get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)};
     const compatRef=ref=>{const [collection,id]=ref.path.split('/');return firestoreRef(collection,id);};
-    const nativeTx={get:async ref=>{if(!ref.path||ref.path.split('/').length!==2)return ref.get();const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},create:(ref,data)=>{if(records.has(ref.path))throw Error('Exists');strictWrite(data);records.set(ref.path,structuredClone(data));},set:(ref,...args)=>ref.path.split('/').length===2?tx.set(compatRef(ref),...args):records.set(ref.path,structuredClone(args[0])),update:(ref,...args)=>tx.update(compatRef(ref),...args)};
+    const nativeTx={get:async ref=>{if(!ref.path||ref.path.split('/').length!==2)return ref.get();const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},create:(ref,data)=>{if(records.has(ref.path))throw Error('Exists');strictWrite(data);records.set(ref.path,structuredClone(data));},set:(ref,...args)=>ref.path.split('/').length===2?tx.set(compatRef(ref),...args):records.set(ref.path,structuredClone(args[0])),update:(ref,...args)=>ref.path.split('/').length===2?tx.update(compatRef(ref),...args):records.set(ref.path,{...records.get(ref.path),...structuredClone(args[0])})};
     const result=await callback(tx,Object.freeze({db:marketingDb,transaction:nativeTx}));
     if(fault==='pickup-response'&&records.get('orders/'+orderId)?.status==='Received')throw Error('acceptance response lost');
     return result;},
@@ -148,9 +148,10 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   };
  }
  if(discountReaders) mocks['@/lib/server/checkout-discounts']=discountReaders;
+ configureMocks?.({mocks,records,marketingDb,events});
  const api=load(path,mocks);
  if(createOnly) return {result:{},writes,events,records,actions:api};
- const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:['newsletter','club'].includes(kind),...(kind==='club'?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:'consent-1',clubTermsVersion:'terms-1'}:{}),acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter','club'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
+ const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:['newsletter','club'].includes(kind),...(kind==='club'?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:'consent-1',clubTermsVersion:'terms-1'}:{}),acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter','club'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined),managedDeliveryAcceptance);
  return {result,writes,events,coupon,records,patchCalls,persistenceError,sessionParams,actions:api};
 }
 

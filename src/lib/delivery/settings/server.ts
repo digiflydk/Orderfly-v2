@@ -75,5 +75,9 @@ export async function writeDeliverySettings(input: unknown): Promise<DeliverySet
   }));
 }
 
-/** Configuration is preparatory. Only the coordinator-owned launch gate may enable dispatch. */
-export function deliveryDispatchEnabled(): false { return false; }
+/** Server-owned launch gates. Missing or malformed configuration always leaves dispatch disabled. */
+export function deliveryDispatchEnabled(): boolean {
+  if (process.env.ORDERFLY_DELIVERY_DISPATCH_ENABLED !== 'true') return false;
+  const environment = process.env.ORDERFLY_DELIVERY_ENVIRONMENT;
+  return environment === 'sandbox' || environment === 'production' && process.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED === 'true';
+}

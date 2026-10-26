@@ -1,4 +1,7 @@
 import 'server-only';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { loadAuthorizedDeliveryTracking } from '@/lib/delivery/tracking-server';
 import { createHash } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
 import { z } from 'zod';
@@ -58,6 +61,7 @@ export function projectTerminalOrder(orderId: string, value: unknown): TerminalO
     return { name: text(item.name), quantity: amount(item.quantity), unitPrice: amount(item.unitPrice), totalPrice: amount(item.totalPrice), modifiers };
   });
   const projected: TerminalOrder = {
+    managedDelivery: data.managedDelivery != null,
     id: orderId, brandId: text(data.brandId), locationId: text(data.locationId), brandName: text(data.brandName), locationName: text(data.locationName),
     customerName: text(data.customerName), customerContact: text(data.customerContact), customerPhone: text(customer.phone),
     deliveryAddress: text(customer.address), notes: text(customer.deliveryInstructions), createdAt: iso(data.createdAt), fulfillmentAt: iso(data.fulfillmentAt),
@@ -158,6 +162,17 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
       if (q.view !== 'history' && raw.paymentStatus !== 'Paid' && (raw.psp || raw.discountReservation !== 'held')) continue;
       const order = projectTerminalOrder(doc.id, raw);
       if (order && matches(order, q, today)) {
+        if(order.managedDelivery){
+          const identity=actor?null:await verifiedOrderflyIdentity();
+          const tracking=await db.runTransaction(async tx=>{
+            const fresh=(await tx.get(doc.ref)).data();
+            if(!fresh||fresh.brandId!==selected.brandId||fresh.locationId!==selected.locationId)throw new AuthorityError('forbidden');
+            if(actor)await authorizeOrderTerminalTransaction(tx,actor,{brandId:selected.brandId,locationId:selected.locationId});
+            else await authorizeTransaction(tx,identity!,fresh,'orderfly.orders:view','location');
+            return loadAuthorizedDeliveryTracking(tx,doc.id,fresh);
+          },{readOnly:true});
+          if(tracking)order.managedDeliveryTracking=tracking;
+        }
         responseBytes += Buffer.byteLength(JSON.stringify(order), 'utf8');
         if (responseBytes > 2 * 1024 * 1024) throw new TerminalReadError('terminal_result_too_large', 409);
         orders.push(order);

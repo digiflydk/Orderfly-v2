@@ -6,7 +6,7 @@ const fs=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
 const http=require('node:http');
-const {chromium}=require('@playwright/test');
+const {chromium,expect}=require('@playwright/test');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const {CUSTOMER_IDENTITY_CHECKOUT_MESSAGE}=loadTs('src/lib/checkout-public-error.ts');
 const webpackModule=require('next/dist/compiled/webpack/webpack');
@@ -15,7 +15,7 @@ let dir,server,browser,origin;
 const requests=new Map();const attemptKeys=new Set();
 const root=process.cwd();
 const brand={id:'b',slug:'brand',name:'Fixture',bagFee:0,vatPercentage:25};
-const location={id:'l',slug:'location',brandId:'b',name:'Fixture',city:'Hellerup',minOrder:0,isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))};
+const location={id:'l',slug:'location',brandId:'b',name:'Fixture',city:'Hellerup',minOrder:0,deliveryFee:20,isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))};
 function fixture(name,content){const file=path.join(dir,name+'.js');fs.writeFileSync(file,content);return file;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'checkout-browser-'));
@@ -37,6 +37,7 @@ before(async()=>{
  const standardDiscounts=scenario.includes('automatic')?[{id:'auto',isActive:true,discountName:'Automatisk rabat',discountType:'cart',discountMethod:'percentage',discountValue:scenario.includes('weaker')?5:20,minOrderValue:0}]:[];
  export function FixtureCart({children}) {
   const [includeBagFee,toggleBagFee]=React.useState(true);
+  const [deliveryType,setDeliveryType]=React.useState(scenario.startsWith('managed-')?'delivery':'pickup');
   const [items,setItems]=React.useState(initialItems),[discount,setDiscount]=React.useState(scenario==='ui-newsletter-conflict'?{id:'stronger',applicationType:'code',discountType:'percentage',discountValue:20,code:'SAVE20'}:null);
   React.useEffect(()=>{window.replaceFixtureItems=setItems;},[]);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
@@ -47,7 +48,7 @@ before(async()=>{
   const bagFee=includeBagFee?brand.bagFee:0;
   const totals=basketTotals({cartItems:items,appliedDiscount:discount,standardDiscounts,deliveryType:'pickup',location,brand,includeBagFee});
   const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
-   deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
+   deliveryType,setDeliveryType,selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
    applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,removeFromCart:id=>setItems(items=>items.filter(i=>i.cartItemId!==id)),
    ...(newsletter?{...totals,cartDiscount:totals.automaticCartDiscount}:{})};
   return React.createElement(context.Provider,{value},children);
@@ -61,7 +62,8 @@ before(async()=>{
  export const newsletterSyncAvailableAction=async()=>true;
  export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
- export async function validateDiscountAction(){throw Error('discount network failed');}
+ export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:null,expiresAtMs:Date.now()+60000};}
+ export async function validateDiscountAction(){if(scenario==='managed-discount')return {success:true,discount:{id:'code-discount',applicationType:'code',discountType:'percentage',discountValue:10,code:'TEST10',isActive:true}};throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
   if(window.optionalActionQueueBusy)return new Promise(()=>{});
@@ -91,7 +93,7 @@ before(async()=>{
  import {StorefrontCatalog} from ${JSON.stringify(path.join(root,'src/context/storefront-catalog.tsx'))};
  import {FixtureCart,brand,location} from ${JSON.stringify(cart)};
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
- const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location});
+ const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},surface):surface;
  createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},content)));
  `);
@@ -523,4 +525,21 @@ test('#596 refreshed card clears previous Club opt-in and prevents stale consent
  await page.getByRole('button',{name:/Gå til betaling/}).first().click();await page.waitForURL('**/stripe?*');
  const customer=requests.get(scenario)[0][1];assert.equal(customer.subscribeToNewsletter,false);
  for(const key of ['subscribeToClub','clubTermsAccepted','clubConsentVersion','clubTermsVersion','clubCampaignVersion'])assert.equal(Object.hasOwn(customer,key),false,key);
+});
+test('managed checkout requires quote consent and submits exact capability with server total',async t=>{
+ const page=await setup(t,'managed-success');
+ await page.locator('.commerce-terms').getByRole('checkbox').first().uncheck();
+ await page.getByLabel('Adresse',{exact:true}).fill('Testvej 1');await page.getByLabel('Postnummer',{exact:true}).fill('2300');await page.getByLabel('By',{exact:true}).fill('København');
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.getByRole('button',{name:'Hent leveringspris'}).click();await page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/}).check();
+ assert.equal(await page.evaluate(()=>window.quoteInputs[0].customerInfo.acceptTerms),false);await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();await page.locator('.commerce-terms').getByRole('checkbox').first().check();
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('managed-success')[0];assert.equal(args.length,12);assert.equal(args[5].deliveryFee,35);assert.equal(args[11].customerFeeMinor,3500);assert.equal(args[11].checkoutTotalMinor,13500);assert.match(args[11].checkoutKey,/^[a-f0-9]{64}$/);assert.equal(args[11].quoteToken,'a'.repeat(64));
+});
+test('managed unavailable delivery offers existing pickup flow without clearing cart',async t=>{
+ const page=await setup(t,'managed-unavailable');await page.getByLabel('Adresse',{exact:true}).fill('Testvej 1');await page.getByLabel('Postnummer',{exact:true}).fill('2300');await page.getByLabel('By',{exact:true}).fill('København');await page.getByRole('button',{name:'Hent leveringspris'}).click();await expect(page.getByText('Vi kan ikke bekræfte levering lige nu. Prøv igen eller vælg afhentning.')).toBeVisible();await page.getByRole('button',{name:'Vælg afhentning i stedet'}).click();await expect(page.getByRole('heading',{name:'Leveringspris og tidspunkt'})).toHaveCount(0);await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('managed-unavailable')[0];assert.equal(args[2],'pickup');assert.equal(args[0].length,1);assert.equal(args.length,11);
+});
+test('managed discount applies before any quote and removing it invalidates accepted delivery',async t=>{
+ const page=await setup(t,'managed-discount');await page.getByLabel('Adresse',{exact:true}).fill('Testvej 1');await page.getByLabel('Postnummer',{exact:true}).fill('2300');await page.getByLabel('By',{exact:true}).fill('København');
+ await page.locator('details').filter({has:page.getByPlaceholder('Indtast rabatkode')}).locator('summary').click();await page.getByPlaceholder('Indtast rabatkode').fill('TEST10');await page.getByRole('button',{name:'Anvend',exact:true}).click();await expect(page.getByRole('button',{name:'Fjern rabatkode',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
+ await page.getByRole('button',{name:'Hent leveringspris'}).click();await page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/}).check();assert.equal(await page.evaluate(()=>window.quoteInputs[0].appliedDiscountId),'code-discount');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeEnabled();await page.getByRole('button',{name:'Fjern rabatkode',exact:true}).click();await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();await expect(page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/})).toHaveCount(0);await page.getByRole('button',{name:'Hent leveringspris'}).click();await expect(page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/})).toBeVisible();assert.equal(await page.evaluate(()=>window.quoteInputs[1].appliedDiscountId),null);
 });
