@@ -1,6 +1,6 @@
 # Wolt sandbox acceptance evidence
 
-Issue #690. This record contains quote-only evidence and a separate controlled ASAP create/cancel test. Callback, scheduled-booking and production acceptance remain open.
+Issue #690. This record contains quote-only evidence and separate controlled ASAP and scheduled create/cancel tests. Callback and production acceptance remain open.
 
 ## Genuine provider evidence
 
@@ -34,9 +34,21 @@ Source pins: quote/HTTP/timing PR #700 head `981a0164a77a43eb79a5dec4e686f3b4ae3
 
 Before the create call, the private journal persisted one stable attempt reference, request digest and submitting state. It refuses rerunning an existing attempt. It saved raw provider responses privately before mapping; no blind create retry occurred. Cancellation addressed only the identified test delivery. No SMS or handshake option was sent. Recipient details, credentials, tracking links, native delivery IDs and raw payloads are excluded from this report. The private runner and journal remain available to the coordinator and independent reviewer, outside the repository, mode 0600. This proves a controlled sandbox API creation/cancellation sequence, not shared Orderfly datastore/checkout integration or webhook processing.
 
+## Controlled scheduled creation and immediate cancellation
+
+The coordinator then authorized the remaining scheduled-booking scenario. A separate deliberate attempt used a fresh scheduled quote for +12 hours, the same approved private recipient and exact scheduled time from the quote. It did not reuse or retry the ASAP attempt. The separate private journal was persisted before its one create call.
+
+| Operation | Time UTC, 2026-10-26 | Native evidence | Adapter result |
+|---|---|---|---|
+| Scheduled quote | 06:02:59 | HTTP 201; binding quote, 8625 minor DKK | available |
+| One scheduled creation | 06:03:07 | HTTP 201; `INFO_RECEIVED`; both IDs present | accepted |
+| Immediate cancellation | 06:03:13 | HTTP 200; `REJECTED` | cancelled; fee unknown/null |
+
+Request IDs in order: `9965dce2-6f64-441a-b819-56100d461196`, `0f916fee-b360-45b5-8c3e-133654a71110`, `da2ef549-fc1e-435d-b417-b78dbea1bee6`. Scheduled-attempt fingerprint: `10325beceaf563891da86ae3`. Source pins and private-data handling are identical to the ASAP run. Each scenario sent exactly three requests and both journals finished at `cancel_result`; no unknown create was retried and no test delivery remains unresolved in the recorded terminal results. No SMS/handshake option was sent.
+
 ## Remaining acceptance
 
-- The approved-contact blocker is resolved for the controlled ASAP test above. A scheduled quote passed earlier, but a scheduled delivery creation/cancellation has not been run. No inference from Marketplace test behavior is used.
+- Approved-contact, ASAP booking/cancellation and scheduled booking/cancellation checks are now satisfied for the controlled sandbox scenarios above. No inference from Marketplace test behavior is used.
 - No webhook subscription exists. Genuine callback receipt requires a reachable scoped HTTPS handler, durable shared inbox and configured signing secret. Do not register a placeholder or unverified callback.
 - Full adapter fixture suite, shared checkout/payment/browser acceptance, deployment SHA verification and physical courier/device acceptance are separate records.
 
