@@ -25,6 +25,9 @@ export type ManagedQuoteState =
 export type ManagedQuoteAcceptance = {quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;checkoutTotalMinor:number;currency:string};
 const messages:Record<string,string>={
  closed:'Restauranten har lukket for levering på det valgte tidspunkt.',
+ unsupported_schedule:'Vælg et senere leveringstidspunkt, så der er tid til klargøring og transport.',
+ rate_limited:'Vent lidt, før du beregner levering igen.',
+ quote_changed:'Kurven eller leveringsoplysningerne er ændret. Hent en ny leveringspris.',
  paused:'Restauranten har midlertidigt sat levering på pause.',
  outside_area:'Adressen ligger uden for restaurantens leveringsområde.',
  invalid_address:'Kontrollér leveringsadressen, husnummeret og postnummeret.',

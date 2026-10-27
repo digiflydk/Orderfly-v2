@@ -2,9 +2,10 @@ import 'server-only';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { storedDeliveryQuoteSchema, type StoredDeliveryQuote } from './schema';
 import { validateQuoteAcceptance, type QuoteBindingInput } from './binding';
+import type {CustomerQuoteFailure} from './customer-failure';
+export type {CustomerQuoteFailure} from './customer-failure';
 
 export type CustomerQuoteDto = {ok:true;quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;currency:string;checkoutTotalMinor:number;deliveryInterval:{earliest:string;latest:string}|null;expiresAtMs:number;routingSource?:string};
-export type CustomerQuoteFailure = {ok:false;code:'delivery_unavailable'|'invalid_request'|'rate_limited'|'quote_changed';message:string};
 export type AuthoritativeDraft = {checkoutKeyHash:string;binding:QuoteBindingInput;requestDigest:string;itemSubtotalAfterDiscountMinor:number;bagFeeMinor:number;adminFeeMinor:number;draftRevision:number;addressRevision:number};
 export type CustomerQuoteProof = {quoteId:string;quoteToken:string;checkoutFingerprint:string;acceptedFeeMinor:number};
 export type CustomerQuoteClaim = {quote:StoredDeliveryQuote;tokenHash:string;checkoutKeyHash:string;requestDigest:string;draftRevision:number;addressRevision:number};
@@ -16,7 +17,7 @@ const failure=(code:CustomerQuoteFailure['code']):CustomerQuoteFailure=>({ok:fal
 /** Dependencies are native server implementations, never request-provided callbacks. Rate writes commit BEFORE provider calls. */
 export async function issueCustomerQuote(draft:AuthoritativeDraft, deps:{
   reserveRate:()=>Promise<boolean>;
-  createQuote:()=>Promise<StoredDeliveryQuote|null>;
+  createQuote:()=>Promise<StoredDeliveryQuote|CustomerQuoteFailure|null>;
   commitIfCurrent:(claim:CustomerQuoteClaim)=>Promise<boolean>;
   now:()=>number;
 }):Promise<CustomerQuoteDto|CustomerQuoteFailure>{
@@ -24,6 +25,7 @@ export async function issueCustomerQuote(draft:AuthoritativeDraft, deps:{
     if(!validDraft(draft))return failure('invalid_request');
     if(!await deps.reserveRate())return failure('rate_limited');
     const raw=await deps.createQuote();if(!raw)return failure('delivery_unavailable');
+    if('ok' in raw && raw.ok===false)return raw;
     const quote=storedDeliveryQuoteSchema.parse(raw);
     if(quote.economics.itemSubtotalAfterDiscountMinor!==draft.itemSubtotalAfterDiscountMinor
       || validateQuoteAcceptance(quote,draft.binding,deps.now(),quote.economics.customerFee.amountMinor)!=='valid')return failure('quote_changed');

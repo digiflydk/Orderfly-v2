@@ -37,7 +37,9 @@ before(async()=>{
  const standardDiscounts=scenario.includes('automatic')?[{id:'auto',isActive:true,discountName:'Automatisk rabat',discountType:'cart',discountMethod:'percentage',discountValue:scenario.includes('weaker')?5:20,minOrderValue:0}]:[];
  export function FixtureCart({children}) {
   const [includeBagFee,toggleBagFee]=React.useState(true);
-  const [deliveryType,setDeliveryType]=React.useState(scenario.startsWith('managed-')?'delivery':'pickup');
+  const [deliveryType,setDeliveryTypeState]=React.useState(scenario.startsWith('managed-')?'delivery':'pickup');
+  const [cartReady,setCartReady]=React.useState(true);
+  const setDeliveryType=type=>{setCartReady(false);setDeliveryTypeState(type);setTimeout(()=>setCartReady(true),50);};
   const [items,setItems]=React.useState(initialItems),[discount,setDiscount]=React.useState(scenario==='ui-newsletter-conflict'?{id:'stronger',applicationType:'code',discountType:'percentage',discountValue:20,code:'SAVE20'}:null);
   React.useEffect(()=>{window.replaceFixtureItems=setItems;},[]);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
@@ -47,7 +49,7 @@ before(async()=>{
   const total=items.reduce((sum,i)=>sum+i.price*i.quantity,0);
   const bagFee=includeBagFee?brand.bagFee:0;
   const totals=basketTotals({cartItems:items,appliedDiscount:discount,standardDiscounts,deliveryType:'pickup',location,brand,includeBagFee});
-  const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
+  const value={brand,location,cartReady,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
    deliveryType,setDeliveryType,selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
    applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,removeFromCart:id=>setItems(items=>items.filter(i=>i.cartItemId!==id)),
    ...(newsletter?{...totals,cartDiscount:totals.automaticCartDiscount}:{})};
@@ -154,6 +156,7 @@ async function setup(t,scenario,email='test@example.test'){
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
  if(scenario==='telemetry')await page.addInitScript(()=>{window.telemetryUnavailable=true;});
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
+ if(scenario==='managed-future')await page.clock.setFixedTime(new Date('2026-10-27T22:00:00.000Z'));
  await page.goto(origin+'/?case='+scenario);
  await page.getByPlaceholder('John Doe',{exact:true}).waitFor().catch(async error=>{
   t.diagnostic(JSON.stringify({body:await page.locator('body').innerText(),errors}));throw error;
@@ -545,4 +548,13 @@ test('managed discount applies before any quote and removing it invalidates acce
 });
 test('managed delivery instructions are quoted and changes revoke acceptance',async t=>{
  const page=await setup(t,'managed-instructions');await page.getByLabel('Adresse',{exact:true}).fill('Testvej 1');await page.getByLabel('Postnummer',{exact:true}).fill('2300');await page.getByLabel('By',{exact:true}).fill('København');const input=page.getByLabel('Leveringsinstruktioner (valgfrit)',{exact:true});await input.fill('Ring på ved bagdøren.');await page.getByRole('button',{name:'Hent leveringspris'}).click();await page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/}).check();assert.equal(await page.evaluate(()=>window.quoteInputs[0].customerInfo.deliveryInstructions),'Ring på ved bagdøren.');await input.fill('Ring på ved hoveddøren.');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();await page.getByRole('button',{name:'Hent leveringspris'}).click();await page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/}).check();await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-instructions')[0][1].deliveryInstructions,'Ring på ved hoveddøren.');
+});
+
+test('closed kitchen sends the displayed next-day slot to both quote and payment',async t=>{
+ const page=await setup(t,'managed-future');
+ await expect(page.getByText('ons. 28. okt. 12:40',{exact:true})).toBeVisible();
+ await page.getByLabel('Adresse',{exact:true}).fill('Testvej 1');await page.getByLabel('Postnummer',{exact:true}).fill('2300');await page.getByLabel('By',{exact:true}).fill('København');
+ await page.getByRole('button',{name:'Hent leveringspris'}).click();await page.getByRole('checkbox',{name:/Jeg accepterer leveringsprisen/}).check();
+ const selection=await page.evaluate(()=>window.quoteInputs[0].deliveryTime);assert.equal(selection,'2026-10-28T11:40:00.000Z');
+ await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-future')[0][9],selection);
 });

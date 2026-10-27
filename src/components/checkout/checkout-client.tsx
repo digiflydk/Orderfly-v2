@@ -8,7 +8,7 @@ import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
-import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { resolveFulfillmentTime, displayFulfillmentTime, managedDeliverySelection } from '@/lib/fulfillment-time';
 import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
@@ -24,7 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import Image from "next/image";
 import Link from "next/link";
-import { useForm, FormProvider } from "react-hook-form";
+import { useForm, FormProvider, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
@@ -319,7 +319,7 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
   );
 }
 
-function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Location;managedDeliveryEnabled?:boolean }) {
+function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { location: Location;managedDeliveryEnabled?:boolean;form:UseFormReturn<CheckoutFormValues> }) {
   const keyboardOpen = useCheckoutKeyboard();
   const { trackEvent, measurementKey, attribution: analyticsAttribution } = useAnalytics();
   const {
@@ -411,23 +411,6 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
       ? timeSlots.delivery_times
       : timeSlots.pickup_times
     : [];
-
-  const form = useForm<CheckoutFormValues>({
-    resolver: zodResolver(checkoutSchema),
-    defaultValues: {
-      name: '',
-      email: '',
-      phone: '',
-      street: '',
-      zipCode: '',
-      city: '',
-      deliveryInstructions: '',
-      subscribeToNewsletter: false,
-      clubTermsAccepted: false,
-      useClubDiscount: false,
-      acceptTerms: false
-    }
-  });
 
   const consentAttempt = React.useRef<{key:string;id:string}|null>(null);
   const newsletterOptIn = form.watch('subscribeToNewsletter');
@@ -600,7 +583,12 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
     return text || "Currently unavailable";
   }, [timeSlots, deliveryType]);
 
-  const displayTime = selectedTime === 'asap' ? asapText : displayFulfillmentTime(selectedTime);
+  const effectiveTime = useMemo(() => {
+    if (!managedActive) return selectedTime;
+    try { return managedDeliverySelection(location,selectedTime); }
+    catch { return selectedTime; }
+  }, [managedActive,location,selectedTime,timeSlots]);
+  const displayTime = effectiveTime === 'asap' ? asapText : displayFulfillmentTime(effectiveTime);
 
   const isOrderTimeValid = useMemo(() => {
     try { if (!deliveryType) return false; resolveFulfillmentTime(location, deliveryType, selectedTime); return true; }
@@ -614,7 +602,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
     ...(quoteJoiningClub&&signupConfig.clubProgram?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion}:{})};
   const quoteInput=brand&&location?{cartItems:checkoutItems(cartItems),customerInfo:quoteCustomer,brandId:brand.id,locationId:location.id,
     paymentDetails:{subtotal,deliveryFee:freeDeliveryDiscountApplied?0:deliveryFee,bagFee,adminFee,vatAmount,discountTotal:sumMoney([itemDiscount||0,cartDiscount?.amount||0,voucherDiscount?.amount||0]),itemDiscountTotal:itemDiscount,cartDiscountTotal:(voucherDiscount??cartDiscount)?.amount||0,cartDiscountName:(voucherDiscount??cartDiscount)?.name,tips:0,taxes:0},
-    appliedDiscountId:appliedDiscount?.id||null,brandSlug:brand.slug,locationSlug:location.slug,deliveryTime:selectedTime}:null;
+    appliedDiscountId:appliedDiscount?.id||null,brandSlug:brand.slug,locationSlug:location.slug,deliveryTime:effectiveTime}:null;
   // Legal acceptance does not change price; all pricing/contact/scope inputs do.
   const quoteIdentity=JSON.stringify({...quoteInput,customerInfo:{...quoteCustomer,acceptTerms:undefined}});
   const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction});
@@ -669,7 +657,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
       // Recheck even if the page or an upsell dialog has been open for a while.
       try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
       catch { setCheckoutError('Vælg et nyt ledigt tidspunkt.'); setIsTimeDialogOpen(true); return; }
-      const finalDeliveryTime = selectedTime;
+      const finalDeliveryTime = effectiveTime;
       // The server resolves consent ownership from its HttpOnly cookie.
       const anonymousId = undefined;
 
@@ -1211,10 +1199,28 @@ function CheckoutForm({ location, managedDeliveryEnabled=false }: { location: Lo
 
 export function CheckoutClient({ brand, location, managedDeliveryEnabled=false }: CheckoutClientProps) {
   const { setCartContext, cartReady } = useCart();
+  const form = useForm<CheckoutFormValues>({
+    resolver: zodResolver(checkoutSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      phone: '',
+      street: '',
+      zipCode: '',
+      city: '',
+      deliveryInstructions: '',
+      subscribeToNewsletter: false,
+      clubTermsAccepted: false,
+      useClubDiscount: false,
+      acceptTerms: false
+    }
+  });
+  // Keep form state across cart re-pricing (e.g. delivery -> pickup), in memory only.
+  React.useEffect(() => { form.reset(); }, [brand.id,location.id,form]);
   React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
   // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements.
   if (!cartReady) {
     return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
   }
-  return <CheckoutForm location={location} managedDeliveryEnabled={managedDeliveryEnabled} />;
+  return <CheckoutForm location={location} managedDeliveryEnabled={managedDeliveryEnabled} form={form} />;
 }
