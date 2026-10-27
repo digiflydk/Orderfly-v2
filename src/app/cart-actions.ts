@@ -27,7 +27,12 @@ export async function restoreCartAction(raw: unknown) {
     getActiveStandardDiscounts(input),
     db.collection('upsells').where('brandId', '==', input.brandId).where('isActive', '==', true).get(),
   ]);
-  const catalog = { products, combos, discounts,
+  const attachedGroupIds = new Set(products.flatMap(product => (product as any).toppingGroupIds || []));
+  const linkedIds = [...new Set(toppingRows.docs.filter(row=>attachedGroupIds.has(row.data().groupId)).map(row=>row.data().productId).filter((value):value is string=>typeof value==='string'))];
+  if(linkedIds.length>500 || linkedIds.some(value=>!/^[A-Za-z0-9_-]{1,128}$/.test(value))) throw new Error('Invalid linked option products.');
+  const linkedProducts=await byIds('products',linkedIds);
+  const allProducts=[...new Map([...products,...linkedProducts].map(product=>[product.id,product])).values()];
+  const catalog = { products:allProducts, combos, discounts,
     toppings: toppingRows.docs.map(row => ({ ...row.data(), id: row.id })),
     groups: groupRows.docs.map(row => ({ ...row.data(), id: row.id })),
     upsells: upsellRows.docs.map(row => ({ ...row.data(), id: row.id })),

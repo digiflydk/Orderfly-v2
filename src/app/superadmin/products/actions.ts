@@ -5,6 +5,7 @@ import 'server-only';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
+import { toppingOverridesSchema, validateToppingOverrides, catalogIdentifier } from '@/lib/superadmin/topping-catalog-schema';
 import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
 import type { Topping, ToppingGroup } from '@/types';
 import { createHash } from 'node:crypto';
@@ -42,7 +43,11 @@ const baseFields = {
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: optionalNonNegativePrice,
   allergenIds: z.array(z.string()).optional().default([]),
-  toppingGroupIds: z.array(z.string()).optional().default([]),
+  toppingGroupIds: z.array(catalogIdentifier).max(100).optional().default([]),
+  toppingOverrides: z.preprocess(value => {
+    if (typeof value !== 'string') return value;
+    try { return JSON.parse(value); } catch { return null; }
+  }, toppingOverridesSchema.optional()),
   toppingGroupConditions: z.preprocess(value => {
     if (typeof value !== 'string') return value;
     try { return JSON.parse(value); } catch { return null; }
@@ -79,7 +84,7 @@ async function fingerprintCreationRequest(
   const normalized = {
     ...productData,
     locationIds: [...(productData.locationIds as string[])].sort(),
-    toppingGroupIds: [...(productData.toppingGroupIds as string[])].sort(),
+    toppingGroupIds: [...(productData.toppingGroupIds as string[])],
     allergenIds: [...(productData.allergenIds as string[])].sort(),
     // Production Server Actions can represent an untouched file input as a
     // named, zero-byte File. Only bytes make this an actual upload.
@@ -209,6 +214,12 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           throw new Error('Every topping group must belong to the selected brand.');
         }
       }
+      const overrides = toppingOverridesSchema.parse(productData.toppingOverrides ?? existing.data()?.toppingOverrides ?? {});
+      if (productData.toppingOverrides !== undefined) toWrite.toppingOverrides = overrides;
+      const overrideDocs = await Promise.all(Object.keys(overrides).map(optionId => db.collection('toppings').doc(optionId).get()));
+      const overrideOptions = overrideDocs.filter(doc=>doc.exists).map(doc=>({...doc.data(),id:doc.id} as Topping));
+      const overrideError = validateToppingOverrides(overrides,productData.toppingGroupIds,conditionGroups,overrideOptions,requiredLocationIds);
+      if (overrideError) throw new Error(overrideError);
       const conditions = toppingConditionsSchema.parse(productData.toppingGroupConditions ?? existing.data()?.toppingGroupConditions ?? {});
       const triggerIds = [...new Set(Object.values(conditions).flat())];
       const triggerDocs = triggerIds.length ? await db.getAll(...triggerIds.map(trigger => db.collection('toppings').doc(trigger))) : [];
@@ -232,6 +243,26 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       try {
       await db.runTransaction(async tx => {
         const current = await tx.get(ref);
+        if (id && current.exists && current.data()?.brandId !== productData.brandId) {
+          const linkedOptions = await tx.get(db.collection('toppings').where('productId', '==', id).limit(1));
+          if (!linkedOptions.empty) throw new Error('Produktet bruges som tilvalg og kan ikke flyttes til et andet brand.');
+        }
+        // Re-read associations inside the write transaction. Group deletion and
+        // option edits cannot race a new product reference into existence.
+        const currentGroups: ToppingGroup[] = [];
+        for (const groupId of productData.toppingGroupIds) {
+          const group = await tx.get(db.collection('topping_groups').doc(groupId));
+          if (!group.exists || !group.data()?.locationIds?.some((location:string)=>brandLocationIds.has(location))) throw new Error('Tilvalgsgruppen er ændret. Genindlæs produktet.');
+          currentGroups.push({...group.data(),id:group.id} as ToppingGroup);
+        }
+        const currentOptions: Topping[] = [];
+        for (const optionId of [...new Set([...Object.keys(overrides),...triggerIds])]) {
+          const option = await tx.get(db.collection('toppings').doc(optionId));
+          if (option.exists) currentOptions.push({...option.data(),id:option.id} as Topping);
+        }
+        const currentOverrideError=validateToppingOverrides(overrides,productData.toppingGroupIds,currentGroups,currentOptions,requiredLocationIds);
+        const currentConditionError=validateToppingConditions(conditions,productData.toppingGroupIds,currentGroups,currentOptions,requiredLocationIds);
+        if(currentOverrideError||currentConditionError)throw new Error(currentOverrideError||currentConditionError!);
         if (id) {
           if (!current.exists || !current.updateTime?.isEqual(existing.updateTime!)) throw Object.assign(new Error('The product changed while saving.'), { code: 'failed-precondition' });
           await authorizeTransaction(tx, identity, current.data()!, 'orderfly.catalog:edit', 'locations');
@@ -289,7 +320,11 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
 export async function deleteProduct(productId: string) {
     try {
         const db = getAdminDb();
-        await mutateScopedDocument('products', productId, 'orderfly.catalog:delete', 'locations', () => null);
+        await mutateScopedDocument('products', productId, 'orderfly.catalog:delete', 'locations', async (_,tx) => {
+          const links=await tx.get(db.collection('toppings').where('productId','==',productId).limit(1));
+          if(!links.empty)throw new Error('Produktet bruges som tilvalg. Fjern produktreferencen før sletning.');
+          return null;
+        });
         revalidatePath("/superadmin/products");
     revalidateTag('storefront');
         return { message: "Product deleted successfully.", error: false };
@@ -389,10 +424,20 @@ export async function duplicateProducts({
         await authorizeTransaction(tx, identity, target, 'orderfly.catalog:create', 'locations');
         const category = await tx.get(db.collection('categories').doc(identifier.parse(original.categoryId)));
         if (!category.exists || requiredLocations.some(location=>!category.data()?.locationIds?.includes(location))) throw new Error('The product category must be available at every target location.');
+        const copyGroups: ToppingGroup[] = [];
         for (const groupId of original.toppingGroupIds || []) {
           const group = await tx.get(db.collection('topping_groups').doc(identifier.parse(groupId)));
           if (!group.exists || requiredLocations.some(location=>!group.data()?.locationIds?.includes(location))) throw new Error('The topping groups must be available at every target location.');
+          copyGroups.push({...group.data(), id:group.id} as ToppingGroup);
         }
+        const copyOverrides = toppingOverridesSchema.parse(original.toppingOverrides ?? {});
+        const copyOptions: Topping[] = [];
+        for (const optionId of Object.keys(copyOverrides)) {
+          const option = await tx.get(db.collection('toppings').doc(optionId));
+          if (option.exists) copyOptions.push({...option.data(), id:option.id} as Topping);
+        }
+        const copyOverrideError = validateToppingOverrides(copyOverrides, original.toppingGroupIds || [], copyGroups, copyOptions, requiredLocations);
+        if (copyOverrideError) throw new Error(copyOverrideError);
         // A copy is a new creation. It must not inherit a previous form's
         // idempotency key, which could acknowledge an unrelated retry.
         const {id:_id,creationKey:_key,creationFingerprint:_fingerprint,...data} = target;
