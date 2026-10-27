@@ -1,138 +1,55 @@
-
 'use client';
 
-import { useEffect, useMemo, useState, useActionState } from 'react';
+import { useActionState, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
 import Link from '@/components/superadmin/admin-link';
-
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from '@/components/ui/select'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { ToppingGroup, Location, Brand } from '@/types';
-import { createOrUpdateToppingGroup, type FormState } from '@/app/superadmin/toppings/actions';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
-import { ScrollArea } from '../ui/scroll-area';
-import { Checkbox } from '../ui/checkbox';
-import { Card, CardContent, CardFooter } from '../ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { ToppingGroup, Topping, Location, Brand } from '@/types';
+import { createOrUpdateToppingGroup, deleteToppingGroup } from '@/app/superadmin/toppings/actions';
 
-interface ToppingGroupFormPageProps {
-	group?: ToppingGroup | null;
-	locations: Location[];
-	brands: any[];
-}
-
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-	const { pending } = useFormStatus();
-	return (
-		<Button type="submit" disabled={pending}>
-			{pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Opret tilvalgsgruppe')}
-		</Button>
-	);
-}
-
-export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupFormPageProps) {
-	const { toast } = useToast();
-	const [state, formAction] = useActionState(createOrUpdateToppingGroup, null);
-
-	const [selectedBrandId, setSelectedBrandId] = useState<string>(() => {
-		if (group) {
-			const loc = locations.find(l => group.locationIds.includes(l.id));
-			return loc?.brandId || '';
-		}
-		return '';
-	});
-
-	const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(group?.locationIds || []);
-
-	const availableLocations = useMemo(() => {
-		if (!selectedBrandId) return [];
-		return locations.filter(l => l.brandId === selectedBrandId);
-	}, [selectedBrandId, locations]);
-
-	useEffect(() => {
-		if (state?.error) {
-			toast({ variant: 'destructive', title: 'Error', description: state.message });
-		}
-	}, [state, toast]);
-
-	const title = group ? 'Rediger tilvalgsgruppe' : 'Opret tilvalgsgruppe';
-	const description = group ? `Editing details for ${group.groupName}.` : 'Udfyld oplysningerne om den nye tilvalgsgruppe.';
-
-	return (
-		<div className="space-y-6">
-			<div className="flex items-center justify-between">
-				<div>
-					<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-					<p className="text-muted-foreground">{description}</p>
-				</div>
-			</div>
-			<form action={formAction} className="space-y-6">
-				{group?.id && <input type="hidden" name="id" value={group.id} />}
-				<Card>
-					<CardContent className="pt-6 space-y-4">
-						<div>
-							<label htmlFor="groupName">Tilvalgsgruppens navn</label>
-							<Input id="groupName" name="groupName" placeholder="Fx saucer eller ekstra tilbehør" defaultValue={group?.groupName} />
-						</div>
-						<div className="grid grid-cols-2 gap-4">
-							<div>
-								<label htmlFor="minSelection">Min. Selection</label>
-								<Input id="minSelection" name="minSelection" type="number" placeholder="0" defaultValue={group?.minSelection ?? 0} />
-							</div>
-							<div>
-								<label htmlFor="maxSelection">Max. Selection</label>
-								<Input id="maxSelection" name="maxSelection" type="number" placeholder="1" defaultValue={group?.maxSelection ?? 1} />
-								<p className="text-xs text-muted-foreground mt-1">Set to 0 for unlimited selections.</p>
-							</div>
-						</div>
-						<div className="space-y-2">
-							<label>Brand</label>
-							<Select onValueChange={(value) => { setSelectedBrandId(value); setSelectedLocationIds([]); }} value={selectedBrandId}>
-								<SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger>
-								<SelectContent>
-									{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
-								</SelectContent>
-							</Select>
-						</div>
-
-						<div>
-							<label>Available at Locations</label>
-							<ScrollArea className="h-32 rounded-md border">
-								<div className="p-4 space-y-2">
-									{availableLocations.length > 0 ? availableLocations.map((item) => (
-										<div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
-											<Checkbox
-												id={`loc-${item.id}`}
-												name="locationIds"
-												value={item.id}
-												checked={selectedLocationIds.includes(item.id)}
-												onCheckedChange={(checked) => {
-													setSelectedLocationIds(prev => checked ? [...prev, item.id] : prev.filter(id => id !== item.id));
-												}}
-											/>
-											<label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</label>
-										</div>
-									)) : <p className="text-sm text-center text-muted-foreground p-4">Select a brand to see locations.</p>}
-								</div>
-							</ScrollArea>
-						</div>
-
-					</CardContent>
-					<CardFooter className="flex justify-end gap-2">
-						<Button type="button" variant="outline" asChild>
-							<Link href="/superadmin/toppings">Cancel</Link>
-						</Button>
-						<SubmitButton isEditing={!!group} />
-					</CardFooter>
-				</Card>
-			</form>
-		</div>
-	);
+type Group = ToppingGroup & { displayName?: string; kind?: 'addition'|'removal'; selectionMode?: 'single'|'multiple'; sortOrder?: number };
+interface Props { group?: Group | null; locations: Location[]; brands: Brand[]; toppings?: Topping[]; usage?: { products: { id: string; name: string }[]; count: number }; }
+const selectClass = 'h-10 w-full rounded-md border bg-background px-3 text-sm';
+function SaveButton() { const { pending } = useFormStatus(); return <Button type="submit" disabled={pending}>{pending ? 'Gemmer…' : 'Gem tilvalgsgruppe'}</Button>; }
+export function ToppingGroupFormPage({ group, locations, brands, toppings = [], usage }: Props) {
+  const router = useRouter();
+  const [state, action] = useActionState(createOrUpdateToppingGroup, null);
+  const [brand, setBrand] = useState(locations.find(l => group?.locationIds.includes(l.id))?.brandId || '');
+  const [selectedLocations, setSelectedLocations] = useState(group?.locationIds || []);
+  const [name, setName] = useState(group?.groupName || '');
+  const [displayName, setDisplayName] = useState(group?.displayName || '');
+  const [kind, setKind] = useState(group?.kind || 'addition');
+  const [mode, setMode] = useState(group?.selectionMode || 'multiple');
+  const [minimum, setMinimum] = useState(String(group?.minSelection ?? 0));
+  const [maximum, setMaximum] = useState(String(group?.maxSelection ?? 0));
+  const [sortOrder, setSortOrder] = useState(String(group?.sortOrder ?? 0));
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, startDelete] = useTransition();
+  const used = (usage?.count ?? 0) > 0;
+  return <div className="space-y-6">
+    <Link href="/superadmin/toppings" className="text-sm underline">Tilbage til tilvalgsgrupper</Link>
+    <form action={action} className="space-y-6">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-4"><div><h1 className="text-2xl font-bold">{group ? 'Rediger tilvalgsgruppe' : 'Opret tilvalgsgruppe'}</h1><p className="text-sm text-muted-foreground">Indstil valgregler og hvor gruppen er tilgængelig.</p></div><SaveButton /></header>
+      {group && <input type="hidden" name="id" value={group.id} />}
+      {state?.error && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{state.message}</p>}
+      <section aria-labelledby="group-details" className="rounded-md border p-5"><h2 id="group-details" className="mb-4 font-semibold">Stamdata</h2><div className="grid gap-5 md:grid-cols-3">
+        <label className="space-y-1 text-sm">Internt navn<Input name="groupName" required minLength={2} maxLength={200} value={name} onChange={e => setName(e.target.value)} placeholder="Fx drikkevarer i menu" /></label>
+        <label className="space-y-1 text-sm">Visningsnavn<Input name="displayName" maxLength={200} value={displayName} onChange={e => setDisplayName(e.target.value)} placeholder="Fx vælg drikkevare" /><span className="block text-xs text-muted-foreground">Tomt felt bruger det interne navn.</span></label>
+        <label className="space-y-1 text-sm">Type<select aria-label="Type" name="kind" className={selectClass} value={kind} onChange={e => { setKind(e.target.value as 'addition'|'removal'); if (e.target.value === 'removal') setMinimum('0'); }}><option value="addition">Tilvalg</option><option value="removal">Fravalg af ingredienser</option></select></label>
+        <label className="space-y-1 text-sm">Valg af typer<select aria-label="Valg af typer" name="selectionMode" className={selectClass} value={mode} onChange={e => setMode(e.target.value as 'single'|'multiple')}><option value="multiple">Flere forskellige typer</option><option value="single">Kun én type</option></select><span className="block text-xs text-muted-foreground">Antallet af samme tilvalg styres på tilvalget.</span></label>
+        <label className="space-y-1 text-sm">Minimum, samlet antal<Input name="minSelection" type="number" required min={0} max={50} step={1} value={kind === 'removal' ? '0' : minimum} readOnly={kind === 'removal'} onChange={e => setMinimum(e.target.value)} /></label>
+        <label className="space-y-1 text-sm">Maksimum, samlet antal<Input name="maxSelection" type="number" required min={0} max={50} step={1} value={maximum} onChange={e => setMaximum(e.target.value)} /><span className="block text-xs text-muted-foreground">0 betyder ingen gruppegrænse.</span></label>
+        <label className="space-y-1 text-sm">Rækkefølge<Input name="sortOrder" type="number" min={0} step={1} value={sortOrder} onChange={e => setSortOrder(e.target.value)} /></label>
+      </div>{kind === 'removal' && <p className="mt-4 rounded-md bg-muted p-3 text-sm">Fravalg vises som “Uden …”. De er gratis, vælges aktivt af kunden og har højst ét af hver ingrediens.</p>}</section>
+      <section aria-labelledby="group-locations" className="rounded-md border p-5"><h2 id="group-locations" className="mb-4 font-semibold">Tilgængelighed</h2><label className="block max-w-sm space-y-1 text-sm">Brand<select aria-label="Brand" className={selectClass} required value={brand} onChange={e => { setBrand(e.target.value); setSelectedLocations([]); }}><option value="">Vælg brand</option>{[...brands].sort((a,b)=>a.name.localeCompare(b.name,'da')).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label><fieldset className="mt-4"><legend className="mb-2 text-sm font-medium">Lokationer</legend><div className="grid max-h-60 gap-3 overflow-y-auto md:grid-cols-3">{locations.filter(l => l.brandId === brand || selectedLocations.includes(l.id)).sort((a,b)=>a.name.localeCompare(b.name,'da')).map(l => <label key={l.id} className="flex items-center gap-2 text-sm"><input type="checkbox" name="locationIds" value={l.id} checked={selectedLocations.includes(l.id)} onChange={e => setSelectedLocations(ids => e.target.checked ? [...ids,l.id] : ids.filter(id=>id!==l.id))} />{l.name}</label>)}</div>{!brand && <p className="text-sm text-muted-foreground">Vælg et brand for at se lokationerne.</p>}</fieldset></section>
+      <div className="flex justify-end gap-3"><Button variant="outline" asChild><Link href="/superadmin/toppings">Annuller</Link></Button><SaveButton /></div>
+    </form>
+    {group && <><section className="rounded-md border p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="font-semibold">Tilvalg i gruppen ({toppings.length})</h2><Button asChild variant="outline"><Link href={`/superadmin/toppings/new-topping?groupId=${encodeURIComponent(group.id)}`}>Opret tilvalg</Link></Button></div><Table><TableHeader><TableRow><TableHead>Navn</TableHead><TableHead>Pris</TableHead><TableHead>Status</TableHead><TableHead>Handling</TableHead></TableRow></TableHeader><TableBody>{[...toppings].sort((a,b)=>(a.sortOrder??999)-(b.sortOrder??999)||a.toppingName.localeCompare(b.toppingName,'da')).map(t => <TableRow key={t.id}><TableCell>{t.toppingName}</TableCell><TableCell>{'productId' in t && t.productId ? 'Produktpris' : `${t.price.toLocaleString('da-DK',{minimumFractionDigits:2})} kr.`}</TableCell><TableCell>{t.isActive ? 'Aktiv' : 'Inaktiv'}</TableCell><TableCell><Link className="underline" href={`/superadmin/toppings/edit-topping/${t.id}`}>Rediger</Link></TableCell></TableRow>)}{!toppings.length && <TableRow><TableCell colSpan={4}>Der er endnu ingen tilvalg i gruppen.</TableCell></TableRow>}</TableBody></Table></section>
+    <section className="rounded-md border p-5"><h2 className="mb-3 font-semibold">Bruges på {usage?.count ?? 0} produkter</h2>{usage?.products.length ? <ul className="grid gap-2 md:grid-cols-3">{usage.products.map(p => <li key={p.id}><Link className="text-sm underline" href={`/superadmin/products/edit/${p.id}`}>{p.name}</Link></li>)}</ul> : <p className="text-sm text-muted-foreground">Ingen tilknyttede produkter.</p>}</section>
+    <section className="rounded-md border p-5"><h2 className="font-semibold">Slet tilvalgsgruppe</h2><p className="my-2 text-sm text-muted-foreground">Gruppen og dens tilvalg slettes permanent. En gruppe, der bruges på produkter, kan ikke slettes.</p>{deleteError && <p role="alert" className="mb-2 text-sm text-destructive">{deleteError}</p>}{confirmDelete ? <div className="flex flex-wrap items-center gap-3"><span className="text-sm">Slet “{group.groupName}” permanent?</span><Button variant="outline" disabled={deleting} onClick={()=>setConfirmDelete(false)}>Annuller</Button><Button variant="destructive" disabled={deleting || used} onClick={()=>startDelete(async()=>{try { const result=await deleteToppingGroup(group.id); if(result.error) setDeleteError(result.message); else {router.push('/superadmin/toppings');router.refresh();} } catch {setDeleteError('Gruppen kunne ikke slettes. Prøv igen.');}})}>Bekræft sletning</Button></div> : <Button variant="destructive" disabled={used} onClick={()=>setConfirmDelete(true)}>Slet gruppe</Button>}</section></>}
+  </div>;
 }

@@ -1,452 +1,82 @@
-
 'use client';
 
-import { useState, useMemo, useEffect, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from '@/components/superadmin/admin-link';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableRow, TableHead, TableHeader } from "@/components/ui/table";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Search, X, GripVertical, ChevronDown } from "lucide-react";
-import type { Topping, ToppingGroup, Location, Brand } from '@/types';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import { deleteTopping, deleteToppingGroup, updateToppingSortOrder } from './actions';
-import { useToast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { cn } from '@/lib/utils';
-import { ToppingFormPage } from '@/components/superadmin/topping-form-page';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { Topping, ToppingGroup, Location, Brand } from '@/types';
+import { duplicateTopping, duplicateToppingGroup } from './actions';
 
-
-function SortableToppingItem({ topping, onConfirmDelete }: { topping: Topping, onConfirmDelete: (toppingId: string) => void }) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-    } = useSortable({id: topping.id});
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-    };
-    
-    return (
-        <TableRow ref={setNodeRef} style={style} {...attributes}>
-             <TableCell className="w-12 pl-4">
-                <button {...listeners} className="p-2 text-muted-foreground hover:bg-accent rounded-md cursor-grab active:cursor-grabbing">
-                    <GripVertical className="h-5 w-5" />
-                </button>
-            </TableCell>
-            <TableCell className="font-medium">{topping.toppingName}</TableCell>
-            <TableCell>kr.{topping.price.toFixed(2)}</TableCell>
-            <TableCell>
-                <Badge variant={topping.isActive ? 'default' : 'secondary'}>{topping.isActive ? 'Active' : 'Inactive'}</Badge>
-            </TableCell>
-             <TableCell className="text-right pr-4">
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
-                        <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                           <Link href={`/superadmin/toppings/edit-topping/${topping.id}`}>
-                                <Edit className="mr-2 h-4 w-4" />
-                                Rediger tilvalg
-                           </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onConfirmDelete(topping.id) }} className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Slet tilvalg
-                        </DropdownMenuItem>
-                    </DropdownMenuContent>
-                </DropdownMenu>
-             </TableCell>
-        </TableRow>
-    );
+type Group = ToppingGroup & { displayName?: string; kind?: 'addition' | 'removal'; selectionMode?: 'single' | 'multiple' };
+type Option = Topping & { maxQuantity?: number; productId?: string };
+export type ToppingUsage = Record<string, { products: { id: string; name: string }[]; count: number }>;
+interface Props {
+  initialToppingGroups: Group[]; initialToppings: Option[]; initialLocations: Location[]; initialBrands: Brand[];
+  initialUsage?: ToppingUsage;
 }
-
-interface ToppingsClientPageProps {
-    initialToppingGroups: ToppingGroup[];
-    initialToppings: Topping[];
-    initialLocations: Location[];
-    initialBrands: Brand[];
-}
-
-export function ToppingsClientPage({ 
-    initialToppingGroups, 
-    initialToppings, 
-    initialLocations, 
-    initialBrands 
-}: ToppingsClientPageProps) {
-  const { toast } = useToast();
-  
-  const [isGroupAlertOpen, setIsGroupAlertOpen] = useState(false);
-  const [groupToDelete, setGroupToDelete] = useState<string | null>(null);
-
-  const [isToppingAlertOpen, setIsToppingAlertOpen] = useState(false);
-  const [toppingToDelete, setToppingToDelete] = useState<string | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [brandFilter, setBrandFilter] = useState('all');
-
-  const [isPending, startTransition] = useTransition();
-  const [isClient, setIsClient] = useState(false);
-
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const [activeGroups, setActiveGroups] = useState<ToppingGroup[]>(initialToppingGroups || []);
-  const [activeToppings, setActiveToppings] = useState<Topping[]>(initialToppings || []);
-  
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const { groupsWithDetails } = useMemo(() => {
-    if (!initialLocations || !initialBrands) {
-        return { groupsWithDetails: [] };
-    }
-
-    const locationMap = new Map(initialLocations.map(l => [l.id, { name: l.name, brandId: l.brandId }]));
-    const brandMap = new Map(initialBrands.map(b => [b.id, b.name]));
-
-    const getBrandInfo = (locationIds: string[]): { brandId?: string; brandName?: string } => {
-        if (!locationIds || locationIds.length === 0) return {};
-        const firstLocationId = locationIds[0];
-        const location = locationMap.get(firstLocationId);
-        if (!location) return {};
-        
-        const brandId = location.brandId;
-        const brandName = brandMap.get(brandId);
-        return { brandId, brandName };
-    };
-
-    const groupsWithDetailsData: (ToppingGroup & { brandId?: string, brandName?: string })[] = activeGroups.map(group => ({
-        ...group,
-        ...getBrandInfo(group.locationIds),
-    }));
-    
-    return { groupsWithDetails: groupsWithDetailsData };
-
-  }, [activeGroups, initialLocations, initialBrands]);
-
-  const filteredGroups = useMemo(() => {
-    return groupsWithDetails.filter(group => {
-      const searchMatch = searchQuery === '' || group.groupName.toLowerCase().includes(searchQuery.toLowerCase());
-      const brandMatch = brandFilter === 'all' || group.brandId === brandFilter;
-      return searchMatch && brandMatch;
-    });
-  }, [groupsWithDetails, searchQuery, brandFilter]);
-
-  const toppingsByGroup = useMemo(() => {
-    return activeToppings.reduce((acc, topping) => {
-        if (!acc[topping.groupId]) {
-            acc[topping.groupId] = [];
-        }
-        acc[topping.groupId].push(topping);
-        return acc;
-    }, {} as Record<string, Topping[]>);
-  }, [activeToppings]);
-  
-
-  const confirmDeleteGroup = (groupId: string) => {
-    setGroupToDelete(groupId);
-    setIsGroupAlertOpen(true);
-  }
-  
-  const handleDeleteGroup = async () => {
-    if (!groupToDelete) return;
-    const result = await deleteToppingGroup(groupToDelete);
-    if (result.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-    } else {
-        toast({ title: 'Success!', description: result.message });
-        const deletedGroupId = groupToDelete;
-        setActiveGroups(prev => prev.filter(g => g.id !== deletedGroupId));
-        setActiveToppings(prev => prev.filter(t => t.groupId !== deletedGroupId));
-    }
-    setIsGroupAlertOpen(false);
-    setGroupToDelete(null);
-  }
-  
-  const confirmDeleteTopping = (toppingId: string) => {
-    setToppingToDelete(toppingId);
-    setIsToppingAlertOpen(true);
-  };
-
-  const handleDeleteTopping = async () => {
-    if (!toppingToDelete) return;
-    const result = await deleteTopping(toppingToDelete);
-    if(result.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-    } else {
-        toast({ title: 'Success!', description: result.message });
-        const deletedToppingId = toppingToDelete;
-        setActiveToppings(prev => prev.filter(t => t.id !== deletedToppingId));
-    }
-    setIsToppingAlertOpen(false);
-    setToppingToDelete(null);
-  }
-  
-  const clearFilters = () => {
-    setSearchQuery('');
-    setBrandFilter('all');
-  }
-  
-  function handleDragEnd(event: DragEndEvent) {
-    const {active, over} = event;
-
-    if (over && active.id !== over.id) {
-      const activeGroupId = activeToppings.find(t => t.id === active.id)?.groupId;
-      const overGroupId = activeToppings.find(t => t.id === over.id)?.groupId;
-
-      if(activeGroupId !== overGroupId || !activeGroupId) {
-        toast({variant: 'destructive', title: 'Error', description: 'Tilvalg kan kun omarrangeres inden for samme tilvalgsgruppe.'});
-        return;
-      }
-      
-      const groupToppings = toppingsByGroup[activeGroupId].sort((a,b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
-      const oldIndex = groupToppings.findIndex((t) => t.id === active.id);
-      const newIndex = groupToppings.findIndex((t) => t.id === over!.id);
-      
-      const newOrderedToppingsForGroup = arrayMove(groupToppings, oldIndex, newIndex);
-      
-      const originalToppings = [...activeToppings];
-      const newActiveToppings = [
-        ...activeToppings.filter(t => t.groupId !== activeGroupId),
-        ...newOrderedToppingsForGroup
-      ];
-      setActiveToppings(newActiveToppings);
-
-      startTransition(async () => {
-        const result = await updateToppingSortOrder(newOrderedToppingsForGroup.map((t, index) => ({id: t.id, sortOrder: index})));
-        if(result.error) {
-            toast({variant: 'destructive', title: 'Update Failed', description: result.message});
-            setActiveToppings(originalToppings);
-        } else {
-            toast({title: 'Success!', description: result.message});
-            const updatedToppingsWithOrder = newActiveToppings.map(t => {
-                const newSortIndex = newOrderedToppingsForGroup.findIndex(nt => nt.id === t.id);
-                if(t.groupId === activeGroupId && newSortIndex !== -1) {
-                    return {...t, sortOrder: newSortIndex };
-                }
-                return t;
-            })
-            setActiveToppings(updatedToppingsWithOrder);
-        }
-      });
-    }
-  }
-
-  const isFiltered = searchQuery !== '' || brandFilter !== 'all';
-
-  return (
-    <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">Tilvalg og tilvalgsgrupper</h1>
-                <p className="text-muted-foreground">
-                Administrer tilvalgsgrupper og de enkelte tilvalg.
-                </p>
-            </div>
-             <div className="flex items-center gap-2 self-end sm:self-center">
-                <Button asChild size="sm">
-                    <Link href="/superadmin/toppings/new-group">
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Tilføj tilvalgsgruppe
-                    </Link>
-                </Button>
-                <Button asChild size="sm">
-                     <Link href="/superadmin/toppings/new-topping">
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Tilføj tilvalg
-                    </Link>
-                </Button>
-            </div>
-        </div>
-      
-       <div className="flex flex-col sm:flex-row items-center gap-4">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Søg efter tilvalg eller tilvalgsgruppe..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-         <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger className="w-full sm:w-[200px]">
-                <SelectValue placeholder="Filter by brand..." />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {(initialBrands || []).map(brand => (
-                <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
-                ))}
-            </SelectContent>
-            </Select>
-            {isFiltered && (
-                <Button variant="ghost" onClick={clearFilters}>
-                    <X className="mr-2 h-4 w-4" /> Clear
-                </Button>
-            )}
-        </div>
-      </div>
-
-        <div className="space-y-4">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <div className="space-y-4">
-                    {filteredGroups.map(group => (
-                        <Card key={group.id}>
-                            <Collapsible defaultOpen>
-                                <CardHeader className="flex flex-row items-center justify-between p-4">
-                                    <div className="flex-1">
-                                        <CollapsibleTrigger asChild>
-                                             <div className="flex items-center gap-2 group cursor-pointer">
-                                                <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-                                                <div className="flex flex-col">
-                                                    <CardTitle className="text-lg">{group.groupName}</CardTitle>
-                                                    <CardDescription className="text-xs">
-                                                        Min: {group.minSelection}, Max: {group.maxSelection === 0 ? 'Unlimited' : group.maxSelection}
-                                                        <Badge variant="outline" className="ml-2">{group.brandName}</Badge>
-                                                    </CardDescription>
-                                                </div>
-                                            </div>
-                                        </CollapsibleTrigger>
-                                     </div>
-                                     <div className="flex items-center gap-2">
-                                        <Button variant="ghost" size="icon" asChild>
-                                            <Link href={`/superadmin/toppings/edit-group/${group.id}`}>
-                                                <Edit className="h-4 w-4" />
-                                            </Link>
-                                        </Button>
-                                        <Button variant="ghost" size="icon" onClick={() => confirmDeleteGroup(group.id)} className="text-destructive">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                     </div>
-                                </CardHeader>
-                                <CollapsibleContent>
-                                    <CardContent className="p-0 border-t">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="w-[60px]"></TableHead>
-                                                    <TableHead>Tilvalg</TableHead>
-                                                    <TableHead>Price</TableHead>
-                                                    <TableHead>Status</TableHead>
-                                                    <TableHead className="text-right">Actions</TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            {isClient ? (
-                                                <SortableContext items={(toppingsByGroup[group.id] || []).map(t => t.id)} strategy={verticalListSortingStrategy}>
-                                                    <TableBody>
-                                                        {(toppingsByGroup[group.id] || []).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999)).map(topping => (
-                                                            <SortableToppingItem 
-                                                                key={topping.id} 
-                                                                topping={topping}
-                                                                onConfirmDelete={confirmDeleteTopping}
-                                                            />
-                                                        ))}
-                                                    </TableBody>
-                                                </SortableContext>
-                                            ) : (
-                                                <TableBody>
-                                                    {(toppingsByGroup[group.id] || []).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999)).map(topping => (
-                                                        <TableRow key={topping.id}>
-                                                            <TableCell><GripVertical className="h-5 w-5 text-muted-foreground" /></TableCell>
-                                                            <TableCell className="font-medium">{topping.toppingName}</TableCell>
-                                                            <TableCell>kr.{topping.price.toFixed(2)}</TableCell>
-                                                            <TableCell><Badge variant={topping.isActive ? 'default' : 'secondary'}>{topping.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
-                                                            <TableCell className="text-right pr-4">...</TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            )}
-                                        </Table>
-                                         {(toppingsByGroup[group.id] || []).length === 0 && (
-                                            <p className="text-center text-muted-foreground py-4 text-sm">Der er endnu ingen tilvalg i denne tilvalgsgruppe.</p>
-                                        )}
-                                    </CardContent>
-                                </CollapsibleContent>
-                            </Collapsible>
-                        </Card>
-                    ))}
-                </div>
-            </DndContext>
-             {filteredGroups.length === 0 && (
-                <div className="text-center text-muted-foreground py-10">
-                    <p>Ingen tilvalgsgrupper matcher dine filtre.</p>
-                </div>
-            )}
-        </div>
-      
-      <AlertDialog open={isGroupAlertOpen} onOpenChange={setIsGroupAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>Tilvalgsgruppen og alle dens tilvalg slettes permanent. Handlingen kan ikke fortrydes.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteGroup}>Continue</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={isToppingAlertOpen} onOpenChange={setIsToppingAlertOpen}>
-        <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                    Dette tilvalg slettes permanent.
-                </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setToppingToDelete(null)}>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteTopping}>Continue</AlertDialogAction>
-            </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+const selectClass = 'h-10 w-full rounded-md border bg-background px-3 text-sm';
+const currency = new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK' });
+export function ToppingsClientPage({ initialToppingGroups, initialToppings, initialLocations, initialBrands, initialUsage = {} }: Props) {
+  const router = useRouter();
+  const [tab, setTab] = useState('groups');
+  const [query, setQuery] = useState('');
+  const [brand, setBrand] = useState('all');
+  const [location, setLocation] = useState('all');
+  const [group, setGroup] = useState('all');
+  const [status, setStatus] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [message, setMessage] = useState('');
+  const [pending, startTransition] = useTransition();
+  useEffect(() => setPage(1), [tab, query, brand, location, group, status, pageSize]);
+  const groupMap = useMemo(() => new Map(initialToppingGroups.map(g => [g.id, g])), [initialToppingGroups]);
+  const locations = initialLocations.filter(l => brand === 'all' || l.brandId === brand);
+  const scoped = (ids: string[]) => (location === 'all' || ids.includes(location)) && (brand === 'all' || locations.some(l => ids.includes(l.id)));
+  const search = query.trim().toLocaleLowerCase('da-DK');
+  const groups = initialToppingGroups.filter(g => scoped(g.locationIds) && `${g.groupName} ${g.displayName || ''}`.toLocaleLowerCase('da-DK').includes(search)).sort((a, b) => a.groupName.localeCompare(b.groupName, 'da'));
+  const options = initialToppings.filter(t => scoped(t.locationIds) && (group === 'all' || t.groupId === group) && (status === 'all' || (status === 'active') === t.isActive) && `${t.toppingName} ${groupMap.get(t.groupId)?.groupName || ''}`.toLocaleLowerCase('da-DK').includes(search)).sort((a, b) => a.toppingName.localeCompare(b.toppingName, 'da'));
+  const count = tab === 'groups' ? groups.length : options.length;
+  const pages = Math.max(1, Math.ceil(count / pageSize));
+  const currentPage = Math.min(page, pages);
+  const start = (currentPage - 1) * pageSize;
+  const locationNames = (ids: string[]) => initialLocations.filter(l => ids.includes(l.id)).map(l => l.name).join(', ') || 'Ingen lokationer';
+  const copy = (id: string, isGroup: boolean) => startTransition(async () => {
+    setMessage('');
+    try {
+      const result = await (isGroup ? duplicateToppingGroup(id) : duplicateTopping(id));
+      if (result.error || !result.id) { setMessage(result.message); return; }
+      router.push(`/superadmin/toppings/${isGroup ? 'edit-group' : 'edit-topping'}/${result.id}`);
+      router.refresh();
+    } catch { setMessage('Kopieringen kunne ikke gennemføres. Prøv igen.'); }
+  });
+  return <div className="space-y-5">
+    <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-4">
+      <div><h1 className="text-2xl font-bold">Tilvalg og tilvalgsgrupper</h1><p className="text-sm text-muted-foreground">Find, organisér og rediger dine tilvalg.</p></div>
+      <Button asChild><Link href={`/superadmin/toppings/${tab === 'groups' ? 'new-group' : 'new-topping'}`}>{tab === 'groups' ? 'Opret tilvalgsgruppe' : 'Opret tilvalg'}</Link></Button>
+    </header>
+    <Tabs value={tab} onValueChange={setTab}><TabsList aria-label="Katalogvisning"><TabsTrigger value="groups">Tilvalgsgrupper ({initialToppingGroups.length})</TabsTrigger><TabsTrigger value="options">Tilvalg ({initialToppings.length})</TabsTrigger></TabsList></Tabs>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <label className="space-y-1 text-sm">Søg<Input value={query} onChange={e => setQuery(e.target.value)} placeholder="Søg efter navn eller gruppe" /></label>
+      <label className="space-y-1 text-sm">Brand<select aria-label="Brand" className={selectClass} value={brand} onChange={e => { setBrand(e.target.value); setLocation('all'); setGroup('all'); }}><option value="all">Alle brands</option>{[...initialBrands].sort((a,b) => a.name.localeCompare(b.name,'da')).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+      <label className="space-y-1 text-sm">Lokation<select aria-label="Lokation" className={selectClass} value={location} onChange={e => { setLocation(e.target.value); setGroup('all'); }}><option value="all">Alle lokationer</option>{[...locations].sort((a,b) => a.name.localeCompare(b.name,'da')).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></label>
+      {tab === 'options' && <><label className="space-y-1 text-sm">Tilvalgsgruppe<select aria-label="Tilvalgsgruppe" className={selectClass} value={group} onChange={e => setGroup(e.target.value)}><option value="all">Alle tilvalgsgrupper</option>{[...initialToppingGroups].filter(g => scoped(g.locationIds)).sort((a,b) => a.groupName.localeCompare(b.groupName,'da')).map(g => <option key={g.id} value={g.id}>{g.groupName}</option>)}</select></label><label className="space-y-1 text-sm">Status<select aria-label="Status" className={selectClass} value={status} onChange={e => setStatus(e.target.value)}><option value="all">Alle</option><option value="active">Aktive</option><option value="inactive">Inaktive</option></select></label></>}
     </div>
-  );
+    <div className="flex items-center justify-between gap-3 text-sm"><p aria-live="polite">{count} {tab === 'groups' ? 'tilvalgsgrupper' : 'tilvalg'}</p><Button variant="ghost" onClick={() => { setQuery(''); setBrand('all'); setLocation('all'); setGroup('all'); setStatus('all'); }}>Nulstil filtre</Button></div>
+    {message && <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">{message}</p>}
+    <p className="text-xs text-muted-foreground md:hidden">Rul tabellen sidelæns for at se alle kolonner.</p>
+    <div className="overflow-x-auto rounded-md border">
+      <Table><TableHeader><TableRow>{(tab === 'groups' ? ['Internt navn', 'Visningsnavn', 'Type', 'Antal tilvalg', 'Valgregler', 'Bruges på', 'Lokationer', 'Handlinger'] : ['Navn', 'Tilvalgsgruppe', 'Pris', 'Maks. antal', 'Standard', 'Status', 'Lokationer', 'Handlinger']).map(h => <TableHead key={h} className="whitespace-nowrap">{h}</TableHead>)}</TableRow></TableHeader>
+        <TableBody>{tab === 'groups' ? groups.slice(start, start + pageSize).map(g => <TableRow key={g.id}>
+          <TableCell><Link className="font-medium underline-offset-4 hover:underline" href={`/superadmin/toppings/edit-group/${g.id}`}>{g.groupName}</Link></TableCell><TableCell>{g.displayName || g.groupName}</TableCell><TableCell>{g.kind === 'removal' ? 'Fravalg' : 'Tilvalg'}</TableCell><TableCell>{initialToppings.filter(t => t.groupId === g.id).length}</TableCell><TableCell className="whitespace-nowrap">{g.minSelection}–{g.maxSelection || 'ubegrænset'}{g.selectionMode === 'single' ? ' · én type' : ''}</TableCell><TableCell>{initialUsage[g.id]?.count ?? 0} {(initialUsage[g.id]?.count ?? 0) === 1 ? 'produkt' : 'produkter'}</TableCell><TableCell className="max-w-60 break-words">{locationNames(g.locationIds)}</TableCell><TableCell><div className="flex gap-2"><Button asChild size="sm" variant="outline"><Link href={`/superadmin/toppings/edit-group/${g.id}`}>Åbn</Link></Button><Button size="sm" variant="ghost" disabled={pending} onClick={() => copy(g.id, true)} aria-label={`Kopiér ${g.groupName}`}>Kopiér</Button></div></TableCell>
+        </TableRow>) : options.slice(start, start + pageSize).map(t => <TableRow key={t.id}>
+          <TableCell><Link className="font-medium underline-offset-4 hover:underline" href={`/superadmin/toppings/edit-topping/${t.id}`}>{t.toppingName}</Link>{t.productId && <span className="block text-xs text-muted-foreground">Tilknyttet produkt</span>}</TableCell><TableCell>{groupMap.get(t.groupId)?.groupName || 'Gruppen findes ikke'}</TableCell><TableCell className="whitespace-nowrap">{t.productId ? 'Produktpris' : currency.format(t.price)}</TableCell><TableCell>{t.maxQuantity ?? 1}</TableCell><TableCell>{t.isDefault ? 'Ja' : 'Nej'}</TableCell><TableCell><Badge variant={t.isActive ? 'default' : 'secondary'}>{t.isActive ? 'Aktiv' : 'Inaktiv'}</Badge></TableCell><TableCell className="max-w-60 break-words">{locationNames(t.locationIds)}</TableCell><TableCell><div className="flex gap-2"><Button asChild size="sm" variant="outline"><Link href={`/superadmin/toppings/edit-topping/${t.id}`}>Åbn</Link></Button><Button size="sm" variant="ghost" disabled={pending} onClick={() => copy(t.id, false)} aria-label={`Kopiér ${t.toppingName}`}>Kopiér</Button></div></TableCell>
+        </TableRow>)}{count === 0 && <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground">Ingen resultater. Prøv at ændre dine filtre.</TableCell></TableRow>}</TableBody>
+      </Table>
+    </div>
+    <nav aria-label="Sideinddeling" className="flex flex-wrap items-center justify-between gap-3 text-sm"><label>Rækker pr. side <select aria-label="Rækker pr. side" className="ml-2 rounded border p-2" value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>{[25,50,100].map(n => <option key={n} value={n}>{n}</option>)}</select></label><div className="flex items-center gap-3"><Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Forrige</Button><span>Side {currentPage} af {pages}</span><Button variant="outline" size="sm" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Næste</Button></div></nav>
+  </div>;
 }
