@@ -23,7 +23,7 @@ function fixture(){
   '@/app/superadmin/brands/actions':{getBrands:async()=>brands},
   '@/app/superadmin/locations/actions':{getAllLocations:async()=>locations},
   '@/app/superadmin/categories/actions':{getCategories:async()=>categories},
-  '@/app/superadmin/toppings/actions':{getToppingGroups:async()=>toppingGroups,getToppings:async()=>[{id:'t',groupId:'g',toppingName:'QA topping',updatedAt:timestamp()}]},
+  '@/app/superadmin/toppings/actions':{getToppingGroups:async()=>toppingGroups,getToppings:async()=>[{id:'t',groupId:'g',toppingName:'QA topping',price:5,isActive:true,isDefault:false,locationIds:['l'],updatedAt:timestamp()}]},
   '@/app/superadmin/allergens/actions':{getAllergens:async()=>allergens},
   '@/app/superadmin/products/actions':products,'./actions':products,
   '@/lib/upsell-serialization':loadTs('src/lib/upsell-serialization.ts'),

@@ -323,3 +323,18 @@ test('managed delivered refresh removes ready card while history remains accessi
  await expect(page.getByText('ORD-DONE',{exact:true}).first()).toBeVisible();
  assert.equal(calls.filter(c=>c.kind==='status').length,0);assert.deepEqual(errors,[]);
 });
+
+// Option quantities are per parent item; display the canonical snapshot verbatim.
+test('terminal preserves quantity and removal labels without reversing exclusions', async t => {
+  const { page, calls, errors } = await fixture(t,1024,768,{orders:[order('ORD-OPTIONS',{
+    items:[{name:'Pizza',quantity:2,unitPrice:64.5,totalPrice:129,modifiers:['2 × Ost','Uden løg']}],
+  })]});
+  await page.getByRole('button',{name:'Åbn ordre ORD-OPTIONS',exact:true}).click();
+  const dialog=page.getByRole('dialog');
+  await expect(dialog.getByText('2 × Ost',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('Uden løg',{exact:true})).toBeVisible();
+  await expect(dialog.getByText('2× Pizza',{exact:true})).toBeVisible();
+  assert.doesNotMatch(await dialog.innerText(), /\+ Uden løg|\+ 2 × Ost|4 × Ost/);
+  assert.equal(calls.filter(c=>c.kind==='status'||c.kind==='payment').length,0);
+  assert.deepEqual(errors,[]);
+});
