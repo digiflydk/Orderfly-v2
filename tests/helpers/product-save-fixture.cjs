@@ -19,9 +19,9 @@ function fixture(){
  const snap=key=>({updateTime:{value:revisions.get(key)||1,isEqual(other){return this.value===other?.value}},id:key.split('/')[1],exists:records.has(key),data:()=>records.has(key)?{...records.get(key)}:undefined});
  const db={collection:name=>({
   get:async()=>({docs:[...records.keys()].filter(k=>k.startsWith(name+'/')).map(snap)}),
-  where:(field,op,value)=>({get:async()=>{
+  where:(field,op,value)=>({limit(){return this},get:async()=>{
    if(failure.readCollection===name)throw Error('Synthetic reference lookup failure');
-   return{docs:[...records.keys()].filter(k=>k.startsWith(name+'/')&&records.get(k)[field]===value).map(snap)};
+   const docs=[...records.keys()].filter(k=>k.startsWith(name+'/')&&records.get(k)[field]===value).map(snap);return{docs,empty:docs.length===0};
   }}),
   doc:(id=randomUUID())=>{
    const key=name+'/'+id;

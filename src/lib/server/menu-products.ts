@@ -7,8 +7,8 @@ import { isSyntheticProduct } from '@/lib/synthetic-product';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 export function menuProduct(product: Product): ProductForMenu {
-  const {id,productName,description,price,priceDelivery,imageUrl,isFeatured,isNew,isPopular,allergenIds,toppingGroupIds,toppingGroupConditions,categoryId,brandId,sortOrder} = product;
-  return {id,productName,description,price,priceDelivery,imageUrl,isFeatured,isNew,isPopular,allergenIds,toppingGroupIds,toppingGroupConditions,categoryId,brandId,sortOrder};
+  const {id,productName,description,price,priceDelivery,imageUrl,isFeatured,isNew,isPopular,allergenIds,toppingGroupIds,toppingGroupConditions,toppingOverrides,isActive,locationIds,categoryId,brandId,sortOrder} = product;
+  return {id,productName,description,price,priceDelivery,imageUrl,isFeatured,isNew,isPopular,allergenIds,toppingGroupIds,toppingGroupConditions,toppingOverrides,isActive,locationIds,categoryId,brandId,sortOrder};
 }
 
 export async function publicMenuProducts(locationId: string, productIds?: string[], brandId?: string): Promise<ProductForMenu[]> {
