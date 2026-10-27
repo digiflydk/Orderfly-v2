@@ -20,6 +20,7 @@ export async function issueCustomerQuote(draft:AuthoritativeDraft, deps:{
   createQuote:()=>Promise<StoredDeliveryQuote|CustomerQuoteFailure|null>;
   commitIfCurrent:(claim:CustomerQuoteClaim)=>Promise<boolean>;
   now:()=>number;
+  onFailure?:(error:unknown)=>void;
 }):Promise<CustomerQuoteDto|CustomerQuoteFailure>{
   try{
     if(!validDraft(draft))return failure('invalid_request');
@@ -37,7 +38,7 @@ export async function issueCustomerQuote(draft:AuthoritativeDraft, deps:{
     if(!await deps.commitIfCurrent(claim))return failure('quote_changed');
     if(deps.now()>=quote.expiresAtMs)return failure('quote_changed');
     return {ok:true,quoteId:quote.quoteRef,quoteToken:token,checkoutFingerprint:quote.fingerprint,customerFeeMinor:quote.economics.customerFee.amountMinor,currency:quote.economics.customerFee.currency,checkoutTotalMinor:total,deliveryInterval:quote.providerQuote.deliveryInterval,expiresAtMs:quote.expiresAtMs,routingSource:quote.economics.route.source};
-  }catch{return failure('delivery_unavailable');}
+  }catch(error){deps.onFailure?.(error);return failure('delivery_unavailable');}
 }
 /** Pure proof check invoked inside native final-checkout transaction, followed by one-time atomic claim. */
 export function verifyCustomerQuoteClaim(claim:CustomerQuoteClaim,proof:CustomerQuoteProof,current:AuthoritativeDraft,now:number):boolean {

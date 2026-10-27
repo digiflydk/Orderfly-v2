@@ -1,6 +1,7 @@
 import {deliveryPreparationMinutes,deliveryKitchenOpenAt,resolveDeliveryKitchenReadyTime} from '@/lib/fulfillment-time';
 import {deliveryScheduleAt} from '../settings/schedule';
 import {normalizeDeliveryPhone} from './phone';
+import type {QuoteTrace} from './diagnostic-schema';
 import {customerQuoteFailure} from './customer-failure';
 import 'server-only';
 import {randomBytes} from 'node:crypto';
@@ -39,21 +40,26 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
 
  return {draft,settings,pickup,dropoff,preparationMinutes,runtimeEnvironment};
 }
-export async function createNativeManagedCustomerQuote(input:NativeManagedPricing){
+export async function createNativeManagedCustomerQuote(input:NativeManagedPricing,trace:QuoteTrace=()=>{}){
  const scope={brandId:input.brand.id,locationId:input.location.id};
  if(!await managedDeliveryRuntimeAvailable(scope))return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+ trace('draft');
  const native=await prepareNativeManagedDraft(input),draft=await saveAuthoritativeCustomerDraft(native.draft);
- const runtime=await resolveManagedDeliveryRuntime(scope,draft,native.runtimeEnvironment);
+ trace('runtime');
+ const runtime=await resolveManagedDeliveryRuntime(scope,draft,native.runtimeEnvironment,trace);
  if(!runtime)return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+ let boundaryStage:'quote'|'claim'='quote';
  // Global aggregate budget is deliberately conservative until trusted edge identity is configured; never trust client IP headers.
- return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:persistCustomerQuoteClaim,createQuote:async()=>{
+ return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:async claim=>{boundaryStage='claim';trace('claim');return persistCustomerQuoteClaim(claim);},onFailure:error=>trace(boundaryStage,error),createQuote:async()=>{
+  trace('quote');
   const result=await quoteDelivery({...(input.freeDeliveryCampaignIds.length&&native.settings.pricingRules?{appliedCampaign:{kind:'native_free_delivery' as const,campaignIds:input.freeDeliveryCampaignIds,maxDistanceMeters:Math.min(native.settings.maxDistanceMeters,native.settings.pricingRules.maxDistanceMeters)}}:{}),settings:native.settings,binding:draft.binding,quoteRef:randomBytes(16).toString('hex'),itemSubtotalAfterDiscountMinor:draft.itemSubtotalAfterDiscountMinor,
    freshnessMs:300000,maxRouteAgeMs:60000,routeProfile:'car',fulfillment:{version:1,scope:{brandId:input.brand.id,locationId:input.location.id},checkoutRef:draft.binding.checkoutReference,providerId:draft.binding.providerId,
     pickup:native.pickup,dropoff:native.dropoff,pickupContact:runtime.pickupContact,dropoffContact:{name:input.customer.name,phone:normalizeDeliveryPhone(input.customer.phone)},instructions:input.customer.deliveryInstructions||'',readyAt:draft.binding.fulfillmentAt,
     ...(input.deliverySelection&&input.deliverySelection!=='asap'?{preparationMinutes:native.preparationMinutes}:{}),
     desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:input.cartItems.map(item=>({name:item.name,quantity:item.quantity})),bagCount:null,requirements:[]}},
    {routing:runtime.routing,provider:runtime.provider,now:()=>new Date(),areaAllows:()=>true});
-  if(!result.ok)return customerQuoteFailure(result.reason);
+  if(!result.ok){trace('quote',result.diagnostic??result.reason);return customerQuoteFailure(result.reason);}
+  if(result.quote.providerQuote.expiresAt===null)trace('quote','quote_missing_expiry');
   return result.quote.providerQuote.expiresAt!==null?result.quote:null;
  }});
 }

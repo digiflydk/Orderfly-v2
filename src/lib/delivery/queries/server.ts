@@ -1,4 +1,6 @@
 import 'server-only';
+import {quoteDiagnosticSchema} from '../quotes/diagnostic-schema';
+import {quoteDiagnosticId} from '../quotes/diagnostics';
 import { createHash } from 'node:crypto';
 import { FieldPath } from 'firebase-admin/firestore';
 import { z } from 'zod';
@@ -52,5 +54,7 @@ export async function readDeliveryOrders(raw: unknown) {
   }
   let query=db.collection('orders').where('brandId','==',q.brandId).where('locationId','==',q.locationId).orderBy(FieldPath.documentId());const after=decode(q.cursor,scope);if(after)query=query.startAfter(after);
   const snapshot=await query.limit(PAGE+1).get(),docs=snapshot.docs.slice(0,PAGE),orders=(await Promise.all(docs.map(project))).filter((v):v is DeliveryOrderRow=>v!==null),more=snapshot.docs.length>PAGE;
-  return {orders,nextCursor:more?encode(scope,docs.at(-1)!.id):null,hasMore:more,events:[],nextEventCursor:null,hasMoreEvents:false};
+  const rawDiagnostic=(await db.collection('deliveryQuoteDiagnostics').doc(quoteDiagnosticId(q)).get()).data();
+  const diagnostic=rawDiagnostic?.brandId===q.brandId&&rawDiagnostic?.locationId===q.locationId?quoteDiagnosticSchema.safeParse({stage:rawDiagnostic.stage,code:rawDiagnostic.code,atMs:rawDiagnostic.atMs,...(rawDiagnostic.field?{field:rawDiagnostic.field}:{})}):null;
+  return {quoteDiagnostic:diagnostic?.success?diagnostic.data:null,orders,nextCursor:more?encode(scope,docs.at(-1)!.id):null,hasMore:more,events:[],nextEventCursor:null,hasMoreEvents:false};
 }

@@ -78,3 +78,7 @@ Quote failures expose only fixed customer-actionable codes (closed, invalid addr
 Regression coverage: `delivery-customer-failure.cjs`, `delivery-native-checkout.cjs`, `checkout-browser.cjs`, `managed-delivery-checkout-ui-browser.cjs`. The browser fixture deliberately unmounts the form during delivery-mode repricing, matching the live cart behavior. A fixed-clock browser scenario verifies that next-day quote and payment use the same displayed time.
 
 Live QA remains in progress on Esmeralda's sandbox configuration with pickup at Borgergade 10. Do not restore Albaniensgade 6 until the full customer-flow matrix passes. Successful internal tests alone do not establish live Wolt/Geoapify/payment/callback completion.
+
+## Quote failure diagnostics
+
+The operator delivery log includes the latest failed quote before an order exists. It is one bounded record per managed location, throttled to one write per five seconds, containing only a fixed stage, allowlisted code and timestamp. No customer data, provider payload, credential, raw exception or price is recorded. Reads use the existing order-view authorization and exact brand/location checks; guest responses retain the customer-safe error projection. Diagnostic persistence is best effort and never changes quote acceptance.

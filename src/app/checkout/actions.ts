@@ -1,4 +1,6 @@
 'use server';
+import {recordQuoteDiagnostic} from '@/lib/delivery/quotes/diagnostics';
+import {quoteDiagnosticCode,type QuoteDiagnostic,type QuoteTrace} from '@/lib/delivery/quotes/diagnostic-schema';
 import {customerQuoteFailure} from '@/lib/delivery/quotes/customer-failure';
 import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
 import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
@@ -667,19 +669,33 @@ export async function requestManagedDeliveryQuoteAction(input: {
   const failure={ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
   if (!input || !/^[a-f0-9]{64}$/.test(input.checkoutKey)) return {...failure,code:'invalid_request'};
   const parsed=deliveryQuoteRequestSchema.safeParse([input.cartItems,input.customerInfo,'delivery',input.brandId,input.locationId,input.paymentDetails,input.appliedDiscountId,input.brandSlug,input.locationSlug,input.deliveryTime,undefined]);
-  if(!parsed.success)return {...failure,code:'invalid_request'};
+  if(!parsed.success){
+    const fields=['cart','customer','scope','scope','scope','payment','discount','brand_slug','location_slug','time'] as const;
+    const index=parsed.error.issues[0]?.path[0];
+    await recordQuoteDiagnostic({brandId:input.brandId,locationId:input.locationId},{stage:'request',code:'schema_invalid',atMs:Date.now(),field:typeof index==='number'?fields[index]??'unknown':'unknown'});
+    return {...failure,code:'invalid_request'};
+  }
   const [items,customer,,b,l,payment,discount,bs,ls,time]=parsed.data;
   input={...input,cartItems:items,customerInfo:customer,brandId:b,locationId:l,paymentDetails:payment,appliedDiscountId:discount,brandSlug:bs,locationSlug:ls,deliveryTime:time};
   try{input={...input,customerInfo:{...input.customerInfo,phone:normalizeDeliveryPhone(input.customerInfo.phone)}};}catch{return {...failure,code:'invalid_request',message:deliveryPhoneMessage};}
+  let scopeVerified=false;
+  let diagnostic:QuoteDiagnostic={stage:'configuration',code:'runtime_unavailable',atMs:Date.now()};
+  const trace:QuoteTrace=(stage,reason)=>{diagnostic={stage,code:quoteDiagnosticCode(reason),atMs:Date.now()};};
+  const report=()=>scopeVerified?recordQuoteDiagnostic({brandId:input.brandId,locationId:input.locationId},diagnostic):Promise.resolve();
   try {
-    if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId}))return failure;
     const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
+    scopeVerified=true;
+    if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId})){await report();return failure;}
+    trace('pricing');
     const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
+    trace('time');
     if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
-    return await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
-      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
-  }catch(error){return customerQuoteFailure(error instanceof Error?error.message:undefined);}
+    const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
+      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
+    if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
+    return result;
+  }catch(error){trace(diagnostic.stage,error);await report();return customerQuoteFailure(error instanceof Error?error.message:undefined);}
 }
 
 export async function createStripeCheckoutSessionAction(

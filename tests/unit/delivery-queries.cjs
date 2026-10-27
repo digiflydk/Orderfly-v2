@@ -38,3 +38,11 @@ test('manual reconciliation exposes strict boolean without native identifiers or
  assert.equal(list.orders.find(o=>o.id==='o00').deliveryReconciliationRequired,true);assert.equal(detail.orders[0].deliveryReconciliationRequired,true);assert.equal(list.orders.find(o=>o.id==='o01').deliveryReconciliationRequired,false);assert.equal(detail.orders[0].bookingState,null);assert.equal(detail.orders[0].deliveryStatus,null);
  for(const result of [list,detail])for(const secret of ['private-courier-id','private-request-id','providerCost','7200'])assert.equal(JSON.stringify(result).includes(secret),false);
 });
+
+test('quote diagnostics are authorized, scope checked and contain only the fixed projection',async()=>{
+ const f=fixture(),key=require('node:crypto').createHash('sha256').update(JSON.stringify(['a','a1'])).digest('hex');
+ f.rows.set('deliveryQuoteDiagnostics/'+key,{...scope,stage:'runtime',code:'schema_invalid',atMs:1000,secret:'never expose'});
+ assert.deepEqual((await f.readDeliveryOrders(scope)).quoteDiagnostic,{stage:'runtime',code:'schema_invalid',atMs:1000});
+ f.rows.get('deliveryQuoteDiagnostics/'+key).brandId='b';assert.equal((await f.readDeliveryOrders(scope)).quoteDiagnostic,null);
+ const g=fixture();g.revoke();await assert.rejects(g.readDeliveryOrders(scope));assert.equal(g.calls.length,0);
+});

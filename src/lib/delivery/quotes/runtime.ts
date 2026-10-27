@@ -1,4 +1,5 @@
 import 'server-only';
+import type {QuoteTrace} from './diagnostic-schema';
 import {readManagedDeliveryAdoption} from './adoption';
 import {createHash} from 'node:crypto';
 import {getAdminDb} from '@/lib/firebase-admin';
@@ -56,7 +57,7 @@ const resolver=createConfiguredManagedDeliveryRuntimeResolver({
 });
 /** Configuration only: no provider, geocoding or paid routing calls. */
 export const managedDeliveryRuntimeAvailable=resolver.available;
-export async function resolveManagedDeliveryRuntime(scope:{brandId:string;locationId:string},draft:AuthoritativeDraft,expectedEnvironment?:'sandbox'|'production'):Promise<ManagedDeliveryRuntime|null>{return resolver.resolve(scope,draft,expectedEnvironment);}
+export async function resolveManagedDeliveryRuntime(scope:{brandId:string;locationId:string},draft:AuthoritativeDraft,expectedEnvironment?:'sandbox'|'production',trace?:QuoteTrace):Promise<ManagedDeliveryRuntime|null>{return resolver.resolve(scope,draft,expectedEnvironment,trace);}
 
 /** Explicit native mode only; a missing or unknown environment never defaults to production or sandbox. */
 export function managedDeliveryRuntimeEnvironment(scope:{brandId:string;locationId:string}):Promise<'sandbox'|'production'|null>;
