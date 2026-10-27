@@ -1,4 +1,4 @@
-import { checkoutRequestSchema } from '@/lib/checkout-schema';
+import { checkoutSessionRequestSchema } from '@/lib/checkout-schema';
 import { runCheckoutAttempt } from '@/lib/checkout-attempt';
 import { createStripeCheckoutSessionAction } from '@/app/checkout/actions';
 import { getOrigin } from '@/lib/url';
@@ -33,10 +33,11 @@ export async function POST(request: Request) {
   }
   const key = request.headers.get('idempotency-key');
   if (!key || !/^[a-f0-9]{64}$/.test(key)) return reply({ success: false, retryable: true, error: 'Invalid payment attempt. Please retry.' }, 400);
-  const parsed = checkoutRequestSchema.safeParse(await readBody(request).catch(() => null));
+  const parsed = checkoutSessionRequestSchema.safeParse(await readBody(request).catch(() => null));
   if (!parsed.success) return reply({ success: false, retryable: true, error: 'Please check your basket and customer information.' }, 400);
   try {
-    const result = await runCheckoutAttempt(key, parsed.data, () => createStripeCheckoutSessionAction(...parsed.data));
+    const [items,customer,method,brandId,locationId,payment,discount,brandSlug,locationSlug,time,consent,deliveryProof]=parsed.data;
+    const result = await runCheckoutAttempt(key, parsed.data, () => createStripeCheckoutSessionAction(items,customer,method,brandId,locationId,payment,discount,brandSlug,locationSlug,time,consent,deliveryProof));
     return reply(result, result.pending ? 202 : 200);
   } catch {
     // An exception outside the action's recovery boundary may follow a write.

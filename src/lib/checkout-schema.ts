@@ -54,3 +54,8 @@ const [items,,method,brandId,locationId,payment,discount,brandSlug,locationSlug,
 export const deliveryQuoteRequestSchema = z.tuple([items,quoteCustomer,method,brandId,locationId,payment,discount,brandSlug,locationSlug,time,consent])
   .refine(args=>args[2]==='delivery'&&!!(args[1].street?.trim()&&args[1].zipCode?.trim()&&args[1].city?.trim()),'Delivery address required');
 export const managedDeliveryAcceptanceSchema=z.object({checkoutKey:z.string().regex(/^[a-f0-9]{64}$/),quoteId:z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),quoteToken:z.string().regex(/^[a-f0-9]{64}$/),checkoutFingerprint:z.string().regex(/^[a-f0-9]{64}$/),customerFeeMinor:z.number().int().nonnegative().safe(),checkoutTotalMinor:z.number().int().positive().safe(),currency:z.literal('DKK')}).strict();
+
+// The HTTP transport must retain the twelfth, server-verified delivery proof.
+export const checkoutSessionRequestSchema=z.union([checkoutRequestSchema,
+  z.tuple([...checkoutTupleSchema.items,managedDeliveryAcceptanceSchema])
+    .refine(args=>args[2]==='delivery'&&!!(args[1].street?.trim()&&args[1].zipCode?.trim()&&args[1].city?.trim()),'Managed delivery address required')]);
