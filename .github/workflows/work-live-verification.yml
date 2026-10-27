@@ -16,7 +16,9 @@ env:
 
 jobs:
   live-verify:
-    if: github.event.pull_request.merged == true
+    # pull_request_target does not honor commit skip directives. Respect the
+    # explicit internal-CI release marker before allocating any runner.
+    if: github.event.pull_request.merged == true && !contains(github.event.pull_request.title, '[skip ci]')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

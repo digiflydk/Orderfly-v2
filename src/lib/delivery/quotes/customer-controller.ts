@@ -1,6 +1,7 @@
 import {deliveryPreparationMinutes,deliveryKitchenOpenAt,resolveDeliveryKitchenReadyTime} from '@/lib/fulfillment-time';
 import {deliveryScheduleAt} from '../settings/schedule';
 import {normalizeDeliveryPhone} from './phone';
+import {customerQuoteFailure} from './customer-failure';
 import 'server-only';
 import {randomBytes} from 'node:crypto';
 import {getAdminDb} from '@/lib/firebase-admin';
@@ -52,7 +53,8 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
     ...(input.deliverySelection&&input.deliverySelection!=='asap'?{preparationMinutes:native.preparationMinutes}:{}),
     desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:input.cartItems.map(item=>({name:item.name,quantity:item.quantity})),bagCount:null,requirements:[]}},
    {routing:runtime.routing,provider:runtime.provider,now:()=>new Date(),areaAllows:()=>true});
-  return result.ok&&result.quote.providerQuote.expiresAt!==null?result.quote:null;
+  if(!result.ok)return customerQuoteFailure(result.reason);
+  return result.quote.providerQuote.expiresAt!==null?result.quote:null;
  }});
 }
 export async function currentNativeManagedDraft(input:NativeManagedPricing,expectedEnvironment?:'sandbox'|'production'):Promise<AuthoritativeDraft>{

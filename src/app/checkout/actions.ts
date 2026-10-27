@@ -1,4 +1,5 @@
 'use server';
+import {customerQuoteFailure} from '@/lib/delivery/quotes/customer-failure';
 import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
 import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
 import { getClubSignupDiscountEligibility, validateClubCheckoutSignup, prepareClubCheckoutSignup } from '@/lib/loyalty/stamp-card/club-signup';
@@ -678,7 +679,7 @@ export async function requestManagedDeliveryQuoteAction(input: {
     if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
     return await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
       subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'});
-  }catch{return failure;}
+  }catch(error){return customerQuoteFailure(error instanceof Error?error.message:undefined);}
 }
 
 export async function createStripeCheckoutSessionAction(
