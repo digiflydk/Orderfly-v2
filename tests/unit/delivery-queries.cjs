@@ -46,3 +46,16 @@ test('quote diagnostics are authorized, scope checked and contain only the fixed
  f.rows.get('deliveryQuoteDiagnostics/'+key).brandId='b';assert.equal((await f.readDeliveryOrders(scope)).quoteDiagnostic,null);
  const g=fixture();g.revoke();await assert.rejects(g.readDeliveryOrders(scope));assert.equal(g.calls.length,0);
 });
+
+test('booking rejection detail exposes only bound allowlisted code',async()=>{
+ const f=fixture(),order=f.rows.get('orders/o00'),attempt={schemaVersion:1,scope:{...scope,orderId:'o00'},provider:'test',intentId:'ref',reference:'ref',requestDigest:order.managedDelivery.requestDigest,revision:1,state:'rejected',providerDeliveryId:null,createdAt:1000,updatedAt:2000};
+ f.rows.set('orders/o00/deliveryAttempts/original',attempt);
+ const record={scope:attempt.scope,providerId:'test',requestDigest:attempt.requestDigest,attemptRef:'ref',result:{kind:'rejected',error:{code:'quote_expired',messageKey:'private',retry:'never',nativeCode:'secret'}}};
+ f.rows.set('orders/o00/deliveryDispatchResults/original',record);
+ const detail=()=>f.readDeliveryOrders({...scope,orderId:'o00'});
+ assert.equal((await detail()).orders[0].bookingFailureCode,'quote_expired');
+ assert.equal(JSON.stringify(await detail()).includes('secret'),false);
+ assert.equal((await f.readDeliveryOrders(scope)).orders[0].bookingFailureCode,null);
+ record.result.error.code='PRIVATE_UNKNOWN';assert.equal((await detail()).orders[0].bookingFailureCode,'booking_rejected');
+ record.scope={...attempt.scope,brandId:'foreign'};assert.equal((await detail()).orders[0].bookingFailureCode,null);
+});
