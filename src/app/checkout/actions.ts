@@ -695,7 +695,7 @@ export async function requestManagedDeliveryQuoteAction(input: {
       subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
     if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
     return result;
-  }catch(error){trace(diagnostic.stage,error);await report();return customerQuoteFailure(error instanceof Error?error.message:undefined);}
+  }catch(error){trace(diagnostic.stage,error);await report();return customerQuoteFailure(error);}
 }
 
 export async function createStripeCheckoutSessionAction(

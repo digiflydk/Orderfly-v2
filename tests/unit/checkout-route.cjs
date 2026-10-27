@@ -42,3 +42,14 @@ for(const raw of ['{broken','x'.repeat(128*1024+1)])test(`invalid or oversized b
 test('unexpected payment handler exception remains uncertain and cannot be retried blindly',async()=>{
  const r=await run({fail:true});assert.equal(r.status,503);assert.equal(r.body.retryable,false);assert.equal(r.calls.length,1);
 });
+
+const acceptance=()=>({checkoutKey:'c'.repeat(64),quoteId:'quote-a',quoteToken:'d'.repeat(64),checkoutFingerprint:'e'.repeat(64),customerFeeMinor:3900,checkoutTotalMinor:14300,currency:'DKK'});
+const managedInput=()=>{const body=input();body[2]='delivery';Object.assign(body[1],{street:'Test 1',zipCode:'1300',city:'Copenhagen'});body.push(acceptance());return body;};
+test('HTTP checkout preserves the accepted delivery proof as the twelfth action argument',async()=>{
+ const body=managedInput(),r=await run({body});assert.equal(r.status,200);assert.equal(r.calls.length,1);assert.deepEqual(r.calls[0][11],body[11]);
+});
+test('HTTP checkout rejects malformed delivery proofs and pickup proofs before creation',async()=>{
+ for(const change of [b=>b[11].customerFeeMinor=-1,b=>b[11].checkoutTotalMinor=1.5,b=>b[11].quoteToken='invalid',b=>b[11].currency='EUR',b=>b[11].private='unexpected',b=>b[2]='pickup',b=>b[1].street='',b=>b.push('extra')]){
+  const body=managedInput();change(body);const r=await run({body});assert.equal(r.status,400);assert.equal(r.calls.length,0);
+ }
+});

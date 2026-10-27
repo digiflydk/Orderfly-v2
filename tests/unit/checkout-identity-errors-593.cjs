@@ -63,3 +63,27 @@ test('discount validation explains an identity conflict and sanitizes unknown lo
     assert.doesNotMatch(result.message, /PRIVATE|scope conflict/i);
   }
 });
+
+test('delivery quote identity errors are actionable and stop before provider or payment', async () => {
+  for (const fault of ['identity-conflict', 'identity-unknown']) {
+    let providerCalls=0;
+    const f=await checkout({fault,createOnly:true,configureMocks:({mocks})=>{
+      mocks['@/lib/delivery/quotes/runtime'].managedDeliveryRuntimeAvailable=async()=>true;
+      mocks['@/lib/delivery/quotes/customer-controller']={createNativeManagedCustomerQuote:async()=>{providerCalls++;throw Error('must not reach provider');}};
+    }});
+    const result=await f.actions.requestManagedDeliveryQuoteAction({checkoutKey:'a'.repeat(64),cartItems:[{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100}],customerInfo:{name:'Test',email:'test@example.test',phone:'12345678',street:'Test 1',zipCode:'1300',city:'Copenhagen',subscribeToNewsletter:false,acceptTerms:false},brandId:'b',locationId:'l',paymentDetails:{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0},appliedDiscountId:null,brandSlug:'brand',locationSlug:'location',deliveryTime:'asap'});
+    assert.equal(result.ok,false);
+    assert.equal(result.code,fault==='identity-conflict'?'customer_identity_conflict':'delivery_unavailable');
+    if(fault==='identity-conflict')assert.equal(result.message,publicError.CUSTOMER_IDENTITY_CHECKOUT_MESSAGE);
+    assert.doesNotMatch(result.message,/PRIVATE|scope conflict/i);
+    assert.equal(providerCalls,0);assert.equal(f.events.includes('stripe'),false);assert.equal(f.writes.length,0);
+  }
+});
+test('all identity safeguards have one quote and diagnostic classification',()=>{
+  const {customerQuoteFailure}=loadTs('src/lib/delivery/quotes/customer-failure.ts');
+  const {quoteDiagnosticCode}=loadTs('src/lib/delivery/quotes/diagnostic-schema.ts');
+  for(const message of ['Customer identity scope conflict.','Customer email and phone point to different profiles.','Customer email identity scope conflict.','Customer phone identity scope conflict.','ambiguous_email_identity','ambiguous_phone_identity','customer_identity_conflict']){
+    assert.equal(customerQuoteFailure(new Error(message)).message,publicError.CUSTOMER_IDENTITY_CHECKOUT_MESSAGE);
+    assert.equal(quoteDiagnosticCode(new Error(message)),'customer_identity_conflict');
+  }
+});
