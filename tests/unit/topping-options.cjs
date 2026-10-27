@@ -81,6 +81,8 @@ test('linked native products inherit current delivery price and scoped availabil
  let opts=resolveToppingOptions(product,[group],[option],[linked],{...scope,deliveryType:'delivery'});
  assert.equal(opts[0].price,25);assert.equal(cartTopping(opts[0],2).name,'2 × Current drink');
  assert.equal(resolveToppingOptions({...product,toppingOverrides:{cheese:{price:0}}},[group],[option],[linked],scope)[0].price,0);
+ assert.equal(resolveToppingOptions(product,[group],[option],[{...linked,locationIds:[]}],scope).length,1);
+ assert.equal(resolveToppingOptions(product,[group],[option],[{...linked,locationIds:undefined}],scope).length,0);
  for(const row of [{...linked,brandId:'foreign'},{...linked,locationIds:['other']},{...linked,isActive:false},{...linked,toppingGroupIds:['nested']},{...linked,isTestData:true}]) assert.equal(resolveToppingOptions(product,[group],[option],[row],scope).length,0);
  assert.equal(resolveToppingOptions(product,[group],[option],[],scope).length,0);
 });

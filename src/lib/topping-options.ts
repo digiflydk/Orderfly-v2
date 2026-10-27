@@ -31,7 +31,8 @@ export function resolveToppingOptions(product: OptionProduct, groups: ToppingGro
       const brandId = scope?.brandId ?? product.brandId;
       if (matches.length !== 1 || !linked || !brandId || linked.brandId !== brandId || !linked.isActive || isSyntheticProduct(linked) ||
           linked.id === product.id || linked.toppingGroupIds?.length ||
-          (scope ? !linked.locationIds?.includes(scope.locationId) : !product.locationIds?.every(id => linked.locationIds?.includes(id)))) return [];
+          (!Array.isArray(linked.locationIds) || (linked.locationIds.length > 0 &&
+            (scope ? !linked.locationIds.includes(scope.locationId) : !product.locationIds?.every(id => linked.locationIds!.includes(id)))))) return [];
       const linkedPrice = scope?.deliveryType === 'delivery' ? linked.priceDelivery ?? linked.price : linked.price;
       if (typeof linked.productName !== 'string' || !validPrice(linkedPrice)) return [];
       name = linked.productName;
