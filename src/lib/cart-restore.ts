@@ -1,4 +1,4 @@
-import { activeToppingGroupIds } from './topping-conditions';
+import { resolveToppingOptions, cartTopping, toppingSelectionError } from './topping-options';
 import { money, sumMoney } from './money';
 import type { CartItem, ComboMenu, Product, StandardDiscount, Topping, ToppingGroup, Upsell } from '@/types';
 import type { CartChoice } from './cart-snapshot';
@@ -13,6 +13,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
   let removed = 0;
   const items: CartItem[] = [];
   for (const choice of choices) {
+    const quantities = (choice as CartChoice & { toppingQuantities?: number[] }).toppingQuantities;
     const product = choice.itemType === 'product' ? catalog.products.find(p => p.id === choice.id || `${p.id}-offer` === choice.id) : undefined;
     const combo = choice.itemType === 'combo' ? catalog.combos.find(c => c.id === choice.id) : undefined;
     const record = product || combo;
@@ -26,29 +27,24 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
     let valid = identities
       ? identities.length === choice.toppings.length && new Set(identities).size === identities.length
       : new Set(choice.toppings).size === choice.toppings.length;
+    if (quantities !== undefined && (!Array.isArray(quantities) || !identities || quantities.length !== identities.length || quantities.some(n => !Number.isSafeInteger(n) || n < 1))) valid = false;
     if (product) {
-      // Validate all groups configured for this location, including mandatory
-      // groups whose options have become unavailable.
       const groups = catalog.groups.filter(g => product.toppingGroupIds?.includes(g.id) && g.locationIds.includes(scope.locationId));
-      const allowed = catalog.toppings.filter(t => t.isActive && t.locationIds.includes(scope.locationId) && groups.some(g => g.id === t.groupId));
-      const selectedIds = new Set<string>();
+      const allowed = resolveToppingOptions(product, groups, catalog.toppings, catalog.products, scope);
+      const selected: Record<string, number> = Object.create(null);
       for (const [index, name] of choice.toppings.entries()) {
+        // Legacy labels resolve only when unambiguous. New quantity/removal labels use stable IDs.
         const matches = allowed.filter(t => identities ? t.id === identities[index] : t.toppingName === name);
-        if (matches.length !== 1 || !Number.isFinite(matches[0].price) || matches[0].price < 0 || selectedIds.has(matches[0].id)) { valid = false; break; }
-        selectedIds.add(matches[0].id);
-        toppings.push({ id: matches[0].id, name: matches[0].toppingName, price: money(matches[0].price) });
+        const quantity = quantities?.[index] ?? 1;
+        if (matches.length !== 1 || Object.hasOwn(selected, matches[0].id) || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > matches[0].maxQuantity) { valid = false; break; }
+        selected[matches[0].id] = quantity;
+        toppings.push(cartTopping(matches[0], quantity));
       }
-      const activeGroups = activeToppingGroupIds(product, groups, allowed, selectedIds);
-      if (allowed.some(t => selectedIds.has(t.id) && !activeGroups.has(t.groupId))) valid = false;
-      for (const group of groups.filter(g => activeGroups.has(g.id))) {
-        const options = allowed.filter(t => t.groupId === group.id);
-        const count = options.filter(t => selectedIds.has(t.id)).length;
-        if (count < group.minSelection || (group.maxSelection > 0 && count > group.maxSelection)) valid = false;
-      }
+      if (toppingSelectionError(product, groups, allowed, selected)) valid = false;
     }
     let comboSelections: CartItem['comboSelections'];
     if (combo) {
-      if (choice.toppings.length) valid = false;
+      if (choice.toppings.length || quantities?.length) valid = false;
       const selected = choice.comboSelections || [];
       const matchesGroup = (selection: typeof selected[number], group: typeof combo.productGroups[number]) =>
         selection.groupId ? selection.groupId === group.id : selection.groupName === group.groupName;

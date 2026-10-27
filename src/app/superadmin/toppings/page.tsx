@@ -1,17 +1,18 @@
 
 import { ToppingsClientPage } from './toppings-client-page';
-import { getToppingGroups, getToppings } from './actions';
+import { getToppingGroups, getToppings, getToppingUsage } from './actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 
 async function ToppingsPageContent() {
-    const [toppingGroups, toppings, locations, brands] = await Promise.all([
+    const [toppingGroups, toppings, locations, brands, usage] = await Promise.all([
         getToppingGroups(),
         getToppings(),
         getAllLocations(),
         getBrands(),
+        getToppingUsage(),
     ]);
 
     return (
@@ -20,6 +21,7 @@ async function ToppingsPageContent() {
             initialToppings={toppings}
             initialLocations={locations}
             initialBrands={brands}
+            initialUsage={usage}
         />
     );
 }

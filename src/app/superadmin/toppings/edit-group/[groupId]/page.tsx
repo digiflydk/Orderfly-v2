@@ -1,6 +1,6 @@
 
 import { notFound } from 'next/navigation';
-import { getToppingGroupById } from '@/app/superadmin/toppings/actions';
+import { getToppingGroupById, getToppings, getToppingUsage } from '@/app/superadmin/toppings/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { ToppingGroupFormPage } from '@/components/superadmin/topping-group-form-page';
@@ -12,10 +12,12 @@ export default async function EditToppingGroupPage({ params }: { params: Promise
         notFound();
     }
 
-    const [group, locations, brands] = await Promise.all([
+    const [group, locations, brands, toppings, usage] = await Promise.all([
         getToppingGroupById(groupId),
         getAllLocations(),
-        getBrands()
+        getBrands(),
+        getToppings(),
+        getToppingUsage()
     ]);
 
     if (!group) {
@@ -23,6 +25,6 @@ export default async function EditToppingGroupPage({ params }: { params: Promise
     }
 
     return (
-        <ToppingGroupFormPage group={group} locations={locations} brands={brands} />
+        <ToppingGroupFormPage group={group} locations={locations} brands={brands} toppings={toppings.filter(t => t.groupId === group.id)} usage={usage[group.id]} />
     );
 }

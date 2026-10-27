@@ -534,6 +534,16 @@ async function resolveAuthoritativeCheckoutPricing(input: {
       if (isSyntheticProduct(product)) throw new Error('Varen kan ikke bestilles fra denne restaurant.');
       catalogProducts.set(snapshot.id, product);
     }
+    // Native linked option products are resolved afresh, never from browser data.
+    const attachedGroupIds = new Set(resolvedLines.flatMap(line=>line.catalog?.toppingGroupIds || []));
+    const linkedIds = [...new Set(toppingRows.docs.filter(row=>attachedGroupIds.has(row.data().groupId)).map(row=>row.data().productId).filter((id): id is string=>typeof id==='string'))];
+    if(linkedIds.length>500 || linkedIds.some(id=>!/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('Ugyldige produktreferencer for tilvalg.');
+    const linkedProducts = await Promise.all(linkedIds.map(id=>getDoc(doc(db,'products',id))));
+    for(const snapshot of linkedProducts) if(snapshot.exists()) {
+      const product={...snapshot.data(),id:snapshot.id} as Product;
+      // Keep foreign/missing sources out; shared helper rejects selected unavailable links.
+      if(product.brandId===brandId && product.isActive===true && !isSyntheticProduct(product) && (!product.locationIds?.length || product.locationIds.includes(locationId))) catalogProducts.set(product.id,product);
+    }
     const validated = validateCheckoutItems(cartItems, {
       products: [...catalogProducts.values()], combos: resolvedLines.flatMap(line => line.combo ? [line.combo] : []),
       toppings: toppingRows.docs.map(row => ({ ...row.data(), id: row.id })) as Topping[],

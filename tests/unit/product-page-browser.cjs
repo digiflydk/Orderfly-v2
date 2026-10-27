@@ -1,7 +1,7 @@
 const {test,before,after}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
-const {chromium}=require('@playwright/test');
+const {chromium,expect}=require('@playwright/test');
 const {fixture}=require('../helpers/product-page-fixture.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin;
@@ -12,7 +12,7 @@ before(async()=>{
  import{ProductsClientPage}from ${JSON.stringify(path.join(root,'src/app/superadmin/products/client-page.tsx'))};
  import{ProductFormPage}from ${JSON.stringify(path.join(root,'src/components/superadmin/product-form-page.tsx'))};
  const kind=location.pathname.endsWith('/new')?'new':location.pathname.includes('/edit/')?'edit':'list';
- fetch('/data?kind='+kind).then(r=>r.json()).then(props=>createRoot(document.getElementById('root')).render(kind==='list'?<ProductsClientPage {...props}/>:<ProductFormPage {...props}/>));`);
+ fetch('/data?kind='+kind).then(r=>r.json()).then(props=>createRoot(document.getElementById('root'),{onUncaughtError:error=>window.dispatchEvent(new ErrorEvent('error',{error,message:error.message}))}).render(kind==='list'?<ProductsClientPage {...props}/>:<ProductFormPage {...props}/>));`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const actions=file('actions',`export const createOrUpdateProduct=async()=>{throw Error('Unexpected save');};export const duplicateProducts=async()=>{throw Error('Unexpected duplicate');};export const deleteProduct=async()=>{throw Error('Unexpected delete');};export const updateProductSortOrder=async()=>{throw Error('Unexpected reorder');};`);
  const aliases={
@@ -54,7 +54,7 @@ for(const width of [390,1280])test(`product overview opens and filters ordinary,
  await page.locator('tbody tr').filter({hasText:'QA Fries'}).waitFor();
  assert.match(await page.locator('tbody tr').filter({hasText:'QA Missing price'}).innerText(),/Pris mangler/);
  const pizza=page.locator('tbody tr').filter({has:page.getByText('QA Pizza',{exact:true})});
- assert.match(await pizza.innerText(),/kr.84.00/);
+ await expect(pizza.getByText('84,00 kr.',{exact:true})).toBeVisible();
  await page.getByPlaceholder(/Search by product name/).fill('Fries');
  assert.equal(await page.getByText('QA Pizza',{exact:true}).count(),0);assert.equal(await page.getByText('QA Fries',{exact:true}).count(),1);
  await page.getByRole('button',{name:'Clear',exact:true}).click();

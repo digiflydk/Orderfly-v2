@@ -1,264 +1,60 @@
-
-
 'use client';
 
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { useActionState, useEffect, useMemo, useTransition } from 'react';
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogDescription,
-	DialogFooter,
-} from '@/components/ui/dialog';
-import {
-	Form,
-	FormControl,
-	FormDescription,
-	FormField,
-	FormItem,
-	FormLabel,
-	FormMessage,
-} from '@/components/ui/form';
+import { useActionState, useState, useTransition } from 'react';
+import { useFormStatus } from 'react-dom';
+import { useRouter } from 'next/navigation';
+import Link from '@/components/superadmin/admin-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { Topping, ToppingGroup, Location } from '@/types';
-import { createOrUpdateTopping } from '@/app/superadmin/toppings/actions';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
-import { Switch } from '../ui/switch';
-import { ScrollArea } from '../ui/scroll-area';
-import { redirect } from 'next/navigation';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '../ui/card';
+import type { Topping, ToppingGroup, Location, Brand, Product } from '@/types';
+import { createOrUpdateTopping, deleteTopping } from '@/app/superadmin/toppings/actions';
 
-const toppingSchema = z.object({
-	id: z.string().optional(),
-	locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-	groupId: z.string().min(1, { message: 'A topping group must be selected.' }),
-	toppingName: z.string().min(2, { message: 'Topping name must be at least 2 characters.' }),
-	price: z.coerce.number().min(0, { message: 'Price must be a non-negative number.' }),
-	isActive: z.boolean().default(true),
-	isDefault: z.boolean().default(false),
-	sortOrder: z.coerce.number().optional(),
-});
-
-type ToppingFormValues = z.input<typeof toppingSchema>;
-
-interface ToppingFormPageProps {
-	topping?: Topping | null;
-	locations: Location[];
-	allGroups: ToppingGroup[];
-	brands: any[];
-}
-
-export function ToppingFormPage({ topping, locations, allGroups, brands }: ToppingFormPageProps) {
-	const [isPending, startTransition] = useTransition();
-	const { toast } = useToast();
-
-	const form = useForm<ToppingFormValues>({
-		resolver: zodResolver(toppingSchema),
-		defaultValues: {
-			locationIds: [],
-			groupId: '',
-			toppingName: '',
-			price: undefined,
-			isActive: true,
-			isDefault: false,
-			sortOrder: undefined,
-		},
-	});
-
-	const selectedLocationIds = form.watch('locationIds');
-
-	const availableGroups = useMemo(() => {
-		if (!selectedLocationIds || selectedLocationIds.length === 0) return [];
-		const selectedLocationSet = new Set(selectedLocationIds);
-		return allGroups.filter(g => g.locationIds.some(locId => selectedLocationSet.has(locId)));
-	}, [selectedLocationIds, allGroups]);
-
-	useEffect(() => {
-		if (topping) {
-			form.reset({
-				...topping,
-				locationIds: topping.locationIds || [],
-				isDefault: topping.isDefault || false,
-				sortOrder: topping.sortOrder || undefined,
-			});
-		} else {
-			form.reset({
-				locationIds: [],
-				groupId: '',
-				toppingName: '',
-				price: undefined,
-				isActive: true,
-				isDefault: false,
-				sortOrder: undefined,
-			});
-		}
-	}, [topping, form]);
-
-	useEffect(() => {
-		const currentGroupId = form.getValues('groupId');
-		if (currentGroupId && !availableGroups.some(g => g.id === currentGroupId)) {
-			form.setValue('groupId', '');
-		}
-	}, [selectedLocationIds, form, availableGroups]);
-
-	const onSubmit = (data: ToppingFormValues) => {
-		const formData = new FormData();
-
-		if (topping?.id) {
-			formData.append('id', topping.id);
-		}
-
-		Object.entries(data).forEach(([key, value]) => {
-			if (value !== undefined && value !== null) {
-				if (key === 'isActive' || key === 'isDefault') {
-					if (value) formData.append(key, 'on');
-				} else if (Array.isArray(value)) {
-					value.forEach(item => formData.append(key, String(item)));
-				} else {
-					formData.append(key, String(value));
-				}
-			}
-		});
-
-		startTransition(async () => {
-			const result = await createOrUpdateTopping(null, formData);
-			if (result.error) {
-				toast({ variant: 'destructive', title: 'Error', description: result.message });
-			} else {
-				toast({ title: 'Success!', description: result.message });
-				redirect('/superadmin/toppings');
-			}
-		});
-	}
-
-	const title = topping ? 'Edit Topping' : 'Create New Topping';
-	const description = topping ? `Editing details for ${topping.toppingName}.` : 'Fill in the details for the new topping.';
-
-	return (
-		<div className="space-y-6">
-			<div>
-				<h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-				<p className="text-muted-foreground">{description}</p>
-			</div>
-			<Form {...form}>
-				<form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-					<Card>
-						<CardContent className="pt-6 space-y-4">
-							<FormField control={form.control} name="toppingName" render={({ field }) => (
-								<FormItem><FormLabel>Topping Name</FormLabel><FormControl><Input placeholder="e.g., Extra Cheese" {...field} /></FormControl><FormMessage /></FormItem>
-							)} />
-
-							<FormField
-								control={form.control} name="groupId" render={({ field }) => (
-									<FormItem>
-										<FormLabel>Topping Group</FormLabel>
-										<Select onValueChange={field.onChange} value={field.value} disabled={!selectedLocationIds || selectedLocationIds.length === 0}>
-											<FormControl><SelectTrigger><SelectValue placeholder={(!selectedLocationIds || selectedLocationIds.length === 0) ? "Select locations first" : "Select a group"} /></SelectTrigger></FormControl>
-											<SelectContent>{availableGroups.map((group) => (<SelectItem key={group.id} value={group.id}>{group.groupName}</SelectItem>))}</SelectContent>
-										</Select>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-
-							<FormField
-								control={form.control}
-								name="locationIds"
-								render={() => (
-									<FormItem>
-										<FormLabel>Available at Locations</FormLabel>
-										<ScrollArea className="h-32 rounded-md border">
-											<div className="p-4 space-y-2">
-												{locations.map((item) => (
-													<FormField
-														key={item.id}
-														control={form.control}
-														name="locationIds"
-														render={({ field }) => {
-															return (
-																<FormItem
-																	key={item.id}
-																	className="flex flex-row items-start space-x-3 space-y-0"
-																>
-																	<FormControl>
-																		<Checkbox
-																			checked={field.value?.includes(item.id)}
-																			onCheckedChange={(checked) => {
-																				const currentValue = field.value || [];
-																				const newValue = checked
-																					? [...currentValue, item.id]
-																					: currentValue.filter((value) => value !== item.id);
-																				field.onChange(newValue);
-																			}}
-																		/>
-																	</FormControl>
-																	<FormLabel className="font-normal cursor-pointer">
-																		{item.name}
-																	</FormLabel>
-																</FormItem>
-															)
-														}}
-													/>
-												))}
-											</div>
-										</ScrollArea>
-										<FormMessage />
-									</FormItem>
-								)}
-							/>
-
-							<div className="grid grid-cols-2 gap-4">
-								<FormField control={form.control} name="price" render={({ field }) => (
-									<FormItem><FormLabel>Price (kr.)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-								)} />
-								<FormField control={form.control} name="sortOrder" render={({ field }) => (
-									<FormItem><FormLabel>Sort Order</FormLabel><FormControl><Input type="number" placeholder="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-								)} />
-							</div>
-
-							<div className="space-y-2">
-								<FormField
-									control={form.control}
-									name="isActive"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-											<div className="space-y-0.5">
-												<FormLabel>Active</FormLabel>
-												<FormDescription>Is this topping currently available?</FormDescription>
-											</div>
-											<FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-										</FormItem>
-									)}
-								/>
-								<FormField
-									control={form.control}
-									name="isDefault"
-									render={({ field }) => (
-										<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-											<div className="space-y-0.5">
-												<FormLabel>Select as Default</FormLabel>
-												<FormDescription>Is this topping selected by default?</FormDescription>
-											</div>
-											<FormControl><Switch name="isDefault" checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-										</FormItem>
-									)}
-								/>
-							</div>
-						</CardContent>
-						<CardFooter>
-							<Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" /> : (topping ? 'Save Changes' : 'Create Topping')}</Button>
-						</CardFooter>
-					</Card>
-				</form>
-			</Form>
-		</div>
-	);
+type Option = Topping & { maxQuantity?: number; productId?: string };
+type Group = ToppingGroup & { kind?: 'addition' | 'removal' };
+interface Props { topping?: Option | null; locations: Location[]; allGroups: Group[]; brands: Brand[]; products?: Product[]; initialGroupId?: string; }
+const selectClass = 'h-10 w-full rounded-md border bg-background px-3 text-sm';
+function SaveButton() { const { pending } = useFormStatus(); return <Button type="submit" disabled={pending}>{pending ? 'Gemmer…' : 'Gem tilvalg'}</Button>; }
+export function ToppingFormPage({ topping, locations, allGroups, brands, products = [], initialGroupId }: Props) {
+  const router = useRouter();
+  const initialGroup = allGroups.find(g => g.id === initialGroupId);
+  const initialLocations = topping?.locationIds || initialGroup?.locationIds || [];
+  const [state, action] = useActionState(createOrUpdateTopping, null);
+  const [name, setName] = useState(topping?.toppingName || '');
+  const [brand, setBrand] = useState(locations.find(l => initialLocations.includes(l.id))?.brandId || '');
+  const [selectedLocations, setSelectedLocations] = useState(initialLocations);
+  const [groupId, setGroupId] = useState(topping?.groupId || initialGroup?.id || '');
+  const [productId, setProductId] = useState(topping?.productId || '');
+  const [price, setPrice] = useState(String(topping?.price ?? 0));
+  const [maxQuantity, setMaxQuantity] = useState(String(topping?.maxQuantity ?? 1));
+  const [sortOrder, setSortOrder] = useState(String(topping?.sortOrder ?? 0));
+  const [isActive, setActive] = useState(topping?.isActive ?? true);
+  const [isDefault, setDefault] = useState(topping?.isDefault ?? false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, startDelete] = useTransition();
+  const group = allGroups.find(g => g.id === groupId);
+  const removal = group?.kind === 'removal';
+  const groups = allGroups.filter(g => selectedLocations.length > 0 && selectedLocations.every(id => g.locationIds.includes(id)));
+  const availableProduct = (p: Product, ids: string[]) => p.isActive && p.brandId === brand && !p.toppingGroupIds?.length && ids.length > 0 && Array.isArray(p.locationIds) && (p.locationIds.length === 0 || ids.every(id => p.locationIds.includes(id)));
+  const candidates = products.filter(p => availableProduct(p, selectedLocations));
+  const linked = candidates.find(p => p.id === productId);
+  const locationChanged = (ids: string[]) => { setSelectedLocations(ids); if (!allGroups.some(g => g.id === groupId && ids.length > 0 && ids.every(id => g.locationIds.includes(id)))) setGroupId(''); if (!products.some(p => p.id === productId && availableProduct(p, ids))) setProductId(''); };
+  return <div className="space-y-6"><Link href="/superadmin/toppings" className="text-sm underline">Tilbage til tilvalg</Link>
+    <form action={action} className="space-y-6">
+      <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-3 border-b bg-background py-4"><div><h1 className="text-2xl font-bold">{topping ? 'Rediger tilvalg' : 'Opret tilvalg'}</h1><p className="text-sm text-muted-foreground">Indstil pris, antal og tilgængelighed.</p></div><SaveButton /></header>
+      {topping && <input type="hidden" name="id" value={topping.id} />}
+      {state?.error && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{state.message}</p>}
+      <section className="rounded-md border p-5"><h2 className="mb-4 font-semibold">Tilgængelighed</h2><div className="grid gap-5 md:grid-cols-3"><label className="space-y-1 text-sm">Brand<select aria-label="Brand" className={selectClass} required value={brand} onChange={e=>{setBrand(e.target.value);locationChanged([]);setProductId('');}}><option value="">Vælg brand</option>{[...brands].sort((a,b)=>a.name.localeCompare(b.name,'da')).map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></label><label className="space-y-1 text-sm">Tilvalgsgruppe<select aria-label="Tilvalgsgruppe" className={selectClass} name="groupId" required value={groupId} onChange={e=>{setGroupId(e.target.value);if(allGroups.find(g=>g.id===e.target.value)?.kind==='removal'){setProductId('');setDefault(false);}}}><option value="">Vælg gruppe</option>{[...groups].sort((a,b)=>a.groupName.localeCompare(b.groupName,'da')).map(g=><option key={g.id} value={g.id}>{g.groupName}</option>)}</select><span className="block text-xs text-muted-foreground">Vælg lokationer først. Gruppen skal dække alle valgte lokationer.</span></label></div><fieldset className="mt-4"><legend className="mb-2 text-sm font-medium">Lokationer</legend><div className="grid max-h-60 gap-3 overflow-y-auto md:grid-cols-3">{locations.filter(l=>l.brandId===brand || selectedLocations.includes(l.id)).sort((a,b)=>a.name.localeCompare(b.name,'da')).map(l=><label key={l.id} className="flex items-center gap-2 text-sm"><input type="checkbox" name="locationIds" value={l.id} checked={selectedLocations.includes(l.id)} onChange={e=>locationChanged(e.target.checked?[...selectedLocations,l.id]:selectedLocations.filter(id=>id!==l.id))}/>{l.name}</label>)}</div>{!brand&&<p className="text-sm text-muted-foreground">Vælg et brand for at se lokationerne.</p>}</fieldset></section>
+      <section className="rounded-md border p-5"><h2 className="mb-4 font-semibold">Stamdata</h2><div className="grid gap-5 md:grid-cols-3">
+        <label className="space-y-1 text-sm">Tilvalgets navn<Input name="toppingName" required minLength={2} maxLength={200} value={name} onChange={e=>setName(e.target.value)} placeholder={removal?'Fx løg':'Fx ekstra ost'} /></label>
+        <label className="space-y-1 text-sm">Genbrug produkt<select aria-label="Genbrug produkt" className={selectClass} name="productId" value={removal?'':productId} disabled={removal} onChange={e=>{setProductId(e.target.value); const product=candidates.find(p=>p.id===e.target.value);if(product){setName(product.productName);setPrice(String(product.price));}}}><option value="">Intet, selvstændigt tilvalg</option>{productId && !linked && <option value={productId}>Tilknyttet produkt er ikke længere tilgængeligt</option>}{[...candidates].sort((a,b)=>a.productName.localeCompare(b.productName,'da')).map(p=><option key={p.id} value={p.id}>{p.productName}</option>)}</select>{removal&&<input type="hidden" name="productId" value=""/>}<span className="block text-xs text-muted-foreground">Et tilknyttet produkt leverer aktuelt navn og pris. Kun aktive produkter uden egne tilvalgsgrupper kan vælges.</span></label>
+        <label className="space-y-1 text-sm">Pris (kr.)<Input name="price" type="number" required min={0} step="0.01" value={removal?'0':linked?String(linked.price):price} readOnly={removal || !!linked} onChange={e=>setPrice(e.target.value)} /><span className="block text-xs text-muted-foreground">Prisen kan tilpasses på det enkelte moderprodukt.</span></label>
+        <label className="space-y-1 text-sm">Maks. antal af samme tilvalg<Input name="maxQuantity" type="number" required min={1} max={50} step={1} value={removal?'1':maxQuantity} readOnly={removal} onChange={e=>setMaxQuantity(e.target.value)} /></label>
+        <label className="space-y-1 text-sm">Rækkefølge<Input name="sortOrder" type="number" min={0} step={1} value={sortOrder} onChange={e=>setSortOrder(e.target.value)} /></label>
+      </div>{removal&&<p className="mt-4 rounded-md bg-muted p-3 text-sm">Kunden ser “Uden {name || 'ingrediens'}”. Fravalg er gratis og aldrig valgt som standard.</p>}</section>
+      <section className="grid gap-4 rounded-md border p-5 md:grid-cols-3"><label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isActive" checked={isActive} onChange={e=>setActive(e.target.checked)} />Aktivt tilvalg</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" name="isDefault" checked={!removal&&isDefault} disabled={removal} onChange={e=>setDefault(e.target.checked)} />Valgt som standard</label></section>
+      <div className="flex justify-end gap-3"><Button variant="outline" asChild><Link href="/superadmin/toppings">Annuller</Link></Button><SaveButton /></div>
+    </form>
+    {topping&&<section className="rounded-md border p-5"><h2 className="font-semibold">Slet tilvalg</h2><p className="my-2 text-sm text-muted-foreground">Sletning er permanent. Tilvalg med produktreferencer kan ikke slettes.</p>{deleteError&&<p role="alert" className="mb-2 text-sm text-destructive">{deleteError}</p>}{confirmDelete?<div className="flex flex-wrap items-center gap-3"><span className="text-sm">Slet “{topping.toppingName}” permanent?</span><Button variant="outline" disabled={deleting} onClick={()=>setConfirmDelete(false)}>Annuller</Button><Button variant="destructive" disabled={deleting} onClick={()=>startDelete(async()=>{try{const result=await deleteTopping(topping.id);if(result.error)setDeleteError(result.message);else{router.push('/superadmin/toppings');router.refresh();}}catch{setDeleteError('Tilvalget kunne ikke slettes. Prøv igen.');}})}>Bekræft sletning</Button></div>:<Button variant="destructive" onClick={()=>setConfirmDelete(true)}>Slet tilvalg</Button>}</section>}
+  </div>;
 }

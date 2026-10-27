@@ -136,3 +136,12 @@ test('native synthetic-check strings are bounded before canonical regex work',as
   Object.assign(f.rows.get('products/p1'),patch);await rejected(f,'invalid_catalog');assert.deepEqual(f.writes,[]);
  }
 });
+
+test('quantity and removal snapshots retain parent count and option labels through native routing',async()=>{
+ const f=fixture();f.order().productItems=[item({toppings:['2 × Ost','Uden løg'],toppingIds:['cheese','onion'],toppingQuantities:[2,1]})];
+ const result=await f.projectNativePrintCatalog(f.context,scope);
+ assert.equal(result.lines[0].quantity,2);
+ assert.deepEqual(result.lines[0].modifiers,['2 × Ost','Uden løg']);
+ assert.deepEqual(f.writes,[]);
+ assert.equal(result.dispatchAuthorized,false);
+});

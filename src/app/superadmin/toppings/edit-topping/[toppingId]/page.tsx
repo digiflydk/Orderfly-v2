@@ -1,7 +1,7 @@
 
 
 import { notFound } from 'next/navigation';
-import { getToppingById, getToppingGroups } from '@/app/superadmin/toppings/actions';
+import { getToppingById, getToppingGroups, getToppingProducts } from '@/app/superadmin/toppings/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { ToppingFormPage } from '@/components/superadmin/topping-form';
 import { getBrands } from '@/app/superadmin/brands/actions';
@@ -14,11 +14,12 @@ export default async function EditToppingPage({ params }: { params: Promise<{ to
         notFound();
     }
 
-    const [topping, locations, allGroups, brands] = await Promise.all([
+    const [topping, locations, allGroups, brands, products] = await Promise.all([
         getToppingById(toppingId),
         getAllLocations(),
         getToppingGroups(),
-        getBrands()
+        getBrands(),
+        getToppingProducts()
     ]);
     
     if (!topping) {
@@ -31,6 +32,7 @@ export default async function EditToppingPage({ params }: { params: Promise<{ to
             locations={locations}
             allGroups={allGroups}
             brands={brands}
+            products={products}
         />
     );
 }
