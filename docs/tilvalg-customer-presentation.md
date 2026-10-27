@@ -1,0 +1,9 @@
+# Customer option presentation
+
+ProductDialog keeps the shared catalog resolver, quantity reconciler and checkout contract. Presentation now puts required groups first, retaining product order within required and optional groups. Required groups stay expanded; submitting incomplete choices focuses the first unmet group. The footer shows completed required groups and the current total.
+
+Single-choice groups use native radios and keyboard arrow navigation. Optional single-choice groups include an explicit `Ingen` choice. Optional groups initially collapse and display the quantity selected and readable selection summary. Expanding, collapsing and searching never changes selections or introduces defaults.
+
+Groups with more than six options initially show six plus any selected options. `Vis alle` / `Vis færre` adjusts the list. Groups with more than ten options also offer search; selected options remain visible even outside the search results. Quantity controls are at least 44 × 44 pixels. Existing group conditions, removals, product-specific prices/defaults, edit restoration and global quantity limits remain authoritative.
+
+Validation: `npm run typecheck`; `CART_CHROMIUM_PATH=<chromium> node --test tests/unit/tilvalg-storefront-browser.cjs`. The browser harness compiles production Tailwind and commerce CSS, uses synthetic data and renders the actual ProductDialog at 390 and 1280 pixels. It covers required-first order, newly activated required groups and error focus, radio keyboard navigation, optional clearing, search/shortening without hidden selections, dependent choice removal, quantity/default/removal/edit regressions, 44px controls, modal overflow and reachable submit footer. Set `TILVALG_SCREENSHOT_DIR` for screenshots. No production mutations or GitHub Actions are used. Independent review and coordinator acceptance precede merge/deployment; live verification remains a separate read-only gate.

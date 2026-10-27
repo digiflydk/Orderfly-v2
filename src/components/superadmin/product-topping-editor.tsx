@@ -20,6 +20,14 @@ type Props = {
 };
 
 function inheritedChoice(value: boolean | undefined) { return value === undefined ? 'inherit' : value ? 'yes' : 'no'; }
+export function normalizeProductToppingOverrides(overrides: ProductToppingOverrides, toppings: Option[]): ProductToppingOverrides {
+  const linkedIds = new Set(toppings.filter(option => option.productId).map(option => option.id));
+  return Object.fromEntries(Object.entries(overrides).flatMap(([id, value]) => {
+    const next = { ...value };
+    if (linkedIds.has(id)) delete next.price;
+    return Object.keys(next).length ? [[id, next]] : [];
+  }));
+}
 const selectClass = 'h-10 w-full min-w-32 rounded-md border border-input bg-background px-2 text-sm';
 
 export function ProductToppingEditor({ groups, toppings, selectedGroupIds, overrides, onGroupsChange, onOverridesChange }: Props) {
@@ -67,7 +75,7 @@ export function ProductToppingEditor({ groups, toppings, selectedGroupIds, overr
       <span>Side {currentPage + 1} af {pageCount}</span>
       <Button type="button" variant="outline" size="sm" disabled={currentPage + 1 === pageCount} onClick={() => setPage(currentPage + 1)}>Næste grupper</Button>
     </div>}
-    {selectedGroupIds.length > 0 && <p className="text-sm text-muted-foreground">Rækkefølgen nedenfor bruges hos kunden. Åbn en gruppe for priser og standardvalg. Tom pris arver standardprisen; 0 kr. betyder gratis.</p>}
+    {selectedGroupIds.length > 0 && <div className="space-y-1 text-sm text-muted-foreground"><p>Rækkefølgen nedenfor bruges hos kunden. Åbn en gruppe for priser og standardvalg. Tom pris arver standardprisen; 0 kr. betyder gratis.</p><p>Gratis standardvalg: Sæt et selvstændigt tilvalg til 0 kr. og vælg “Valgt” under Standardvalg. Produktkoblede tilvalg følger altid produktets pris.</p></div>}
     {selectedGroupIds.map((id, index) => {
       const group = groups.find(g => g.id === id);
       if (!group) return null;
@@ -109,7 +117,7 @@ function GroupOptions({ group, options, overrides, setField }: {
             <td className="p-2 min-w-36">{option.toppingName}{!option.isActive && <span className="block text-xs text-muted-foreground">Inaktiv i kataloget</span>}</td>
             <td className="p-2"><select className={selectClass} aria-label={`Tilgængelighed: ${option.toppingName}`} value={inheritedChoice(override.isAvailable)} onChange={e => setField(option.id, 'isAvailable', e.target.value === 'inherit' ? undefined : e.target.value === 'yes')}><option value="inherit">Arv (tilgængeligt)</option><option value="yes">Vis</option><option value="no">Skjul</option></select></td>
             {!removal && <>
-              <td className="p-2 min-w-36"><Input aria-label={`Pris: ${option.toppingName}`} type="number" min="0" max="100000" step="0.01" placeholder={option.productId ? 'Produktpris' : `${option.price.toFixed(2)} kr.`} value={override.price ?? ''} onChange={e => setField(option.id, 'price', e.target.value === '' ? undefined : Number(e.target.value))} /><span className="text-xs text-muted-foreground">{option.productId ? 'Arver tilknyttet produkts pris' : `Standard: ${option.price.toLocaleString('da-DK')} kr.`}</span></td>
+              <td className="p-2 min-w-36">{option.productId ? <><span className="block font-medium">Følger produktets pris</span><span className="text-xs text-muted-foreground">Aktuel pris for afhentning eller levering. Ændres på det tilknyttede produkt.</span></> : <><Input aria-label={`Pris: ${option.toppingName}`} type="number" min="0" max="100000" step="0.01" placeholder={`${option.price.toFixed(2)} kr.`} value={override.price ?? ''} onChange={e => setField(option.id, 'price', e.target.value === '' ? undefined : Number(e.target.value))} /><span className="text-xs text-muted-foreground">Standard: {option.price.toLocaleString('da-DK')} kr.</span></>}</td>
               <td className="p-2"><select className={selectClass} aria-label={`Standardvalg: ${option.toppingName}`} value={inheritedChoice(override.isDefault)} onChange={e => setField(option.id, 'isDefault', e.target.value === 'inherit' ? undefined : e.target.value === 'yes')}><option value="inherit">Arv ({option.isDefault ? 'valgt' : 'ikke valgt'})</option><option value="yes">Valgt</option><option value="no">Ikke valgt</option></select></td>
               <td className="p-2 min-w-32"><Input aria-label={`Standardantal: ${option.toppingName}`} type="number" min="1" max={option.maxQuantity ?? 1} step="1" placeholder="1" value={override.defaultQuantity ?? ''} disabled={override.isDefault === false || (override.isDefault === undefined && !option.isDefault)} onChange={e => setField(option.id, 'defaultQuantity', e.target.value === '' ? undefined : Number(e.target.value))} /><span className="text-xs text-muted-foreground">Maks. {option.maxQuantity ?? 1}</span></td>
             </>}

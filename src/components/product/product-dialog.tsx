@@ -2,12 +2,12 @@
 'use client';
 import { lineMoney, money, sumMoney } from '@/lib/money';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
-import { resolveToppingOptions, cartTopping, toppingLabel, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
+import { resolveToppingOptions, cartTopping, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
 import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
-import { Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus } from 'lucide-react';
 import type { CartItem, ComboMenu, Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
@@ -20,8 +20,7 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '../ui/checkbox';
-import { Label } from '../ui/label';
+import { ProductOptionGroup } from './product-option-group';
 import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { CategoryIcon as DynamicIcon } from '../catalog/category-icon';
@@ -87,7 +86,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
   const relevantToppingGroups = useMemo(() => {
     const active = activeToppingGroupIds(product, configuredToppingGroups, effectiveOptions, Object.keys(selectedToppings));
-    return configuredToppingGroups.filter(group => active.has(group.id));
+    return configuredToppingGroups.filter(group => active.has(group.id))
+      .sort((a, b) => Number(b.minSelection > 0) - Number(a.minSelection > 0));
   }, [product, configuredToppingGroups, effectiveOptions, selectedToppings]);
 
   const quantities = (selected: Record<string, CartItemTopping>) =>
@@ -171,6 +171,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const totalItemPrice = lineMoney(finalPrice, quantity, [toppingsTotal]);
   const selectionError = toppingSelectionError(product, configuredToppingGroups, effectiveOptions, quantities(selectedToppings), MAX_TOPPINGS_PER_ITEM);
   const isSelectionValid = selectionError === null;
+  const requiredGroups = relevantToppingGroups.filter(group => group.minSelection > 0);
+  const completedRequiredGroups = requiredGroups.filter(group => {
+    const count = group.toppings.reduce((sum, option) => sum + (selectedToppings[option.id]?.quantity ?? 0), 0);
+    return count >= group.minSelection && (group.maxSelection === 0 || count <= group.maxSelection);
+  }).length;
 
   const handleAddToCart = () => {
     if (!cartReady || committed.current) return;
@@ -235,48 +240,9 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                 </div>
                             )}
 
-                            {relevantToppingGroups.map(group => {
-                              const single = group.selectionMode === 'single' || group.maxSelection === 1;
-                              const count = group.toppings.reduce((sum, option) => sum + (selectedToppings[option.id]?.quantity ?? 0), 0);
-                              const total = Object.values(selectedToppings).reduce((sum, option) => sum + (option.quantity ?? 1), 0);
-                              const invalid = count < group.minSelection || (group.maxSelection > 0 && count > group.maxSelection);
-                              return (
-                                <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && invalid}>
-                                  <div className="mb-1">
-                                    <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.displayName || group.groupName}</h3>
-                                    <p className="text-sm text-muted-foreground">{group.minSelection > 0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}{single && group.maxSelection !== 1 ? ' · Én slags ad gangen' : ''}</p>
-                                    {group.kind === 'removal' && <p className="text-xs text-muted-foreground">Markér de ingredienser, du ønsker fjernet.</p>}
-                                    {showErrors && invalid && <p role="alert" className="text-sm text-destructive">{getSelectionText(group)} for at fortsætte.</p>}
-                                  </div>
-                                  <div className="space-y-0">
-                                    {group.toppings.map(topping => {
-                                      const selectedQuantity = selectedToppings[topping.id]?.quantity ?? 0;
-                                      const selected = selectedQuantity > 0;
-                                      const replacing = single && !selected;
-                                      const groupRemaining = group.maxSelection === 0 || count < group.maxSelection || replacing;
-                                      const totalRemaining = total < MAX_TOPPINGS_PER_ITEM || (replacing && count > 0);
-                                      const label = toppingLabel(topping);
-                                      return (
-                                        <div key={topping.id} data-option-row className="flex flex-wrap items-center justify-between gap-2 min-h-12 px-2 py-2 rounded-md hover:bg-accent">
-                                          <label htmlFor={`${dialogId}-${topping.id}`} className="flex flex-1 items-center gap-3 min-w-0 cursor-pointer">
-                                            <Checkbox id={`${dialogId}-${topping.id}`} checked={selected}
-                                              onCheckedChange={checked => handleToppingQuantity(topping, checked === true ? 1 : 0)}
-                                              disabled={!selected && (!groupRemaining || !totalRemaining)} />
-                                            <span className="font-normal break-words">{label}</span>
-                                          </label>
-                                          {topping.kind !== 'removal' && <span className="text-sm text-muted-foreground">{topping.price === 0 ? 'Inkluderet' : `+${formatPrice(topping.price)}${topping.maxQuantity > 1 ? ' / stk.' : ''}`}</span>}
-                                          {topping.maxQuantity > 1 && selected && <div className="flex items-center gap-1" role="group" aria-label={`Antal ${label}`}>
-                                            <Button type="button" variant="outline" size="icon" className="h-10 w-10" aria-label={`Færre ${label}`} onClick={() => handleToppingQuantity(topping, selectedQuantity - 1)}><Minus className="h-4 w-4" /></Button>
-                                            <output className="w-6 text-center tabular-nums" aria-label={`Valgt antal ${label}`}>{selectedQuantity}</output>
-                                            <Button type="button" variant="outline" size="icon" className="h-10 w-10" aria-label={`Flere ${label}`} disabled={selectedQuantity >= topping.maxQuantity || !groupRemaining || !totalRemaining} onClick={() => handleToppingQuantity(topping, selectedQuantity + 1)}><Plus className="h-4 w-4" /></Button>
-                                          </div>}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </section>
-                              );
-                            })}
+                            {relevantToppingGroups.map(group => <ProductOptionGroup key={group.id}
+                              group={group} dialogId={dialogId} selectedToppings={selectedToppings}
+                              showErrors={showErrors} selectionText={getSelectionText(group)} onQuantity={handleToppingQuantity} />)}
                         </>
                     )}
                   {combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id))).slice(0,2).map(c => {
@@ -292,7 +258,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                   })}
                 </div>
             </ScrollArea>
-             <div className="w-full mt-auto sticky bottom-0">
+             <div className="w-full mt-auto sticky bottom-0 bg-inherit">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-sm">
+                  {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus">{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
+                  <p className="font-semibold">I alt: {formatPrice(totalItemPrice)}</p>
+                </div>
                 <div className="commerce-option-quantity flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"
