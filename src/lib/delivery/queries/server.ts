@@ -42,7 +42,7 @@ export async function readDeliveryOrders(raw: unknown) {
     const allowedCodes=['quote_expired','quote_changed','settings_changed','quote_changed_or_expired','binding_changed_before_dispatch','invalid_create_payload','invalid_request','authentication','configuration','unavailable','rate_limited','provider_error'];
     const bookingFailureCode=boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?(allowedCodes.includes(result.data.error.code)?result.data.error.code:'booking_rejected'):null;
     return {bookingFailureCode,id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:boundState?state.status:null,
-      paymentStatus:['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
+      paymentStatus:typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'Refunded':['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
       kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true};
   }
   if(q.orderId){

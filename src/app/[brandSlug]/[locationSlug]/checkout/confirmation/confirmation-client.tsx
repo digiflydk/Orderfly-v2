@@ -214,7 +214,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                              <CardContent className="space-y-4">
                                 <InfoItem icon={deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Bestillingstype">{deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</InfoItem>
                                 {deliveryTime && (
-                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? "Forventet levering" : "Forventet afhentning"}>
+                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? tracking ? "Valgt leveringstid" : "Forventet levering" : "Forventet afhentning"}>
                                         {formatDisplayTime(deliveryTime)}
                                     </InfoItem>
                                 )}

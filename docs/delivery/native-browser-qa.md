@@ -91,3 +91,7 @@ Live checkout then exposed an HTTP transport mismatch: the storefront sends the 
 ### Paid booking follow-up, 2026-10-27 UTC
 
 Live sandbox order ORD-292972 passed a declined-card retry and successful DKK 201 payment, then booking rejection and automatic full refund. The receipt previously still said paid and checking delivery after refund; it now reflects refund/rejection and separates paid-awaiting-booking from awaiting payment. Authorized order detail exposes only an allowlisted, scope/digest/attempt-bound booking rejection code, without provider payloads or customer data. The booking root cause and successful courier flow remain under investigation; this is not a completed end-to-end acceptance. Borgergade remains the test pickup.
+
+### Accepted courier booking, 28 October 2026
+
+Live sandbox ORD-929615 passed checkout at DKK201, Stripe test payment, Wolt booking, native Received status, genuine order.received/handshake/ETA callbacks and customer tracking-link projection. Selected11:35 versus updated Wolt12:01–12:11 exposed ambiguous duplicated expected-time labels; the immutable selection is now labeled separately. Fully compensated ORD-292972 is now projected as Refunded in operator queries, matching customer receipt. Cancellation test was blocked by automatic action approval because its checkbox accepts an unknown possible cancellation fee; no workaround or cancellation submission was performed. Pickup stays Borgergade10; no physical delivery/completion claim.
