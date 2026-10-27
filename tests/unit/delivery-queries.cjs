@@ -59,3 +59,11 @@ test('booking rejection detail exposes only bound allowlisted code',async()=>{
  record.result.error.code='PRIVATE_UNKNOWN';assert.equal((await detail()).orders[0].bookingFailureCode,'booking_rejected');
  record.scope={...attempt.scope,brandId:'foreign'};assert.equal((await detail()).orders[0].bookingFailureCode,null);
 });
+
+
+test('full refund is reflected in operator payment status without leaking money',async()=>{
+ const f=fixture(),order=f.rows.get('orders/o00');Object.assign(order,{totalAmount:201,refundedAmountOre:20100});
+ assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].paymentStatus,'Refunded');
+ order.refundedAmountOre=20099;assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].paymentStatus,'Paid');
+ order.refundedAmountOre='20100';assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].paymentStatus,'Paid');
+});
