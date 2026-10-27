@@ -11,6 +11,7 @@ const mod={exports:{}};
 const code=ts.transpileModule(fs.readFileSync('src/components/checkout/managed-delivery-quote.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 new Function('require','module','exports',code)(name=>{
   if(name==='@/lib/delivery/routing/attribution')return attribution;
+  if(name==='@/lib/checkout-public-error')return loadTs('src/lib/checkout-public-error.ts');
   if(name==='@/components/ui/button')return {Button:({variant,...props})=>React.createElement('button',props)};
   return require(name);
 },mod,mod.exports);
