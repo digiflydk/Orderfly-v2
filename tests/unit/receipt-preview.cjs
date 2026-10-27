@@ -102,3 +102,19 @@ test('orders without invoice use brand seller fields and logo', () => {
  assert.deepEqual(result.seller, { name: brand.name, registrationNumber: brand.registrationNumber, address: brand.address });
  assert.equal(result.logoUrl, brand.logoUrl);
 });
+
+test('quantity and removal snapshots survive customer and kitchen projection without recalculating saved charges',()=>{
+ const input=order();
+ input.productItems[0].toppings=['2 × Ost','Uden løg'];
+ input.productItems[0].toppingIds=['cheese','onion'];
+ input.productItems[0].toppingQuantities=[2,1];
+ const {projectKitchenReceipt}=loadTs('src/lib/receipts/kitchen-preview.ts');
+ const customer=projectReceipt(input),kitchen=projectKitchenReceipt(input);
+ for(const result of [customer,kitchen]){
+  assert.equal(result.lines[0].quantity,2);
+  assert.deepEqual(result.lines[0].modifiers,['2 × Ost','Uden løg']);
+ }
+ assert.equal(customer.total,105);
+ input.productItems[0].toppings.push('Later change');
+ assert.deepEqual(kitchen.lines[0].modifiers,['2 × Ost','Uden løg']);
+});
