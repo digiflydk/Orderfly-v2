@@ -53,6 +53,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
   '@/lib/delivery/quotes/phone':loadTs('src/lib/delivery/quotes/phone.ts'),
+  '@/lib/delivery/quotes/diagnostics':{recordQuoteDiagnostic:async()=>{}},
+  '@/lib/delivery/quotes/diagnostic-schema':loadTs('src/lib/delivery/quotes/diagnostic-schema.ts'),
   '@/lib/delivery/quotes/customer-failure':loadTs('src/lib/delivery/quotes/customer-failure.ts'),
   '@/lib/delivery/quotes/adoption':{managedDeliveryRequired:async()=>false},
   '@/lib/delivery/quotes/runtime':{managedDeliveryRuntimeAvailable:async()=>false,resolveManagedDeliveryRuntime:async()=>null},

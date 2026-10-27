@@ -16,7 +16,7 @@ export function quoteAddressBinding(pickup:AddressInput,dropoff:AddressInput):st
   const fields=(a:AddressInput)=>[a.country,a.postcode,a.city,a.street,a.building,a.unit];
   return JSON.stringify([fields(pickup),fields(dropoff)]);
 }
-export type QuoteServiceResult = {ok:true;quote:BoundQuote} | {ok:false;reason:string};
+export type QuoteServiceResult = {ok:true;quote:BoundQuote} | {ok:false;reason:string;diagnostic?:string};
 /** Internal composition only: authenticate scope/load settings and cart before calling. No public DTO is authoritative. */
 export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
   routing:RoutingAdapter|null;provider:DeliveryProvider|null;now:()=>Date;
@@ -55,7 +55,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const initialCoverage=checkDeliveryCoverage({settings,schedule,route,areaAllowed,providerAvailable:true,nowMs:deps.now().getTime(),maxRouteAgeMs:input.maxRouteAgeMs});
     if (!initialCoverage.eligible) return {ok:false,reason:initialCoverage.reason};
     const providerQuote=deliveryQuoteResultSchema.parse(await deps.provider.quote(fulfillment));
-    if (providerQuote.kind==='error') return {ok:false,reason:'provider_error'};
+    if (providerQuote.kind==='error') return {ok:false,reason:'provider_error',diagnostic:providerQuote.error.code};
     if (providerQuote.kind==='unavailable') return {ok:false,reason:`provider_${providerQuote.reason}`};
     if (providerQuote.providerId!==settings.providerId) return {ok:false,reason:'provider_mismatch'};
     if (providerQuote.cost.taxBasis==='unknown') return {ok:false,reason:'incompatible_money'};

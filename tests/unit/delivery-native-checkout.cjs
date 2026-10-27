@@ -60,3 +60,10 @@ test('customer receives actionable quote rejection without payment or a claim',a
  const minimum=await g.actions.requestManagedDeliveryQuoteAction(g.input);assert.equal(minimum.code,'minimum_not_met');
  assert.equal(g.events.includes('stripe'),false);assert.equal([...g.records.keys()].some(k=>k.startsWith('deliveryQuotes/')),false);
 });
+
+test('invalid public quote request reports only schema stage and fixed field to operators',async()=>{
+ let diagnostic;const f=await checkout({createOnly:true,configureMocks:({mocks})=>{mocks['@/lib/delivery/quotes/diagnostics']={recordQuoteDiagnostic:async(scope,data)=>{diagnostic={scope,data};}};}});
+ const result=await f.actions.requestManagedDeliveryQuoteAction({checkoutKey:'a'.repeat(64),brandId:'b',locationId:'l',cartItems:[]});
+ assert.equal(result.ok,false);assert.equal(result.code,'invalid_request');assert.equal(diagnostic.data.stage,'request');assert.equal(diagnostic.data.field,'cart');assert.equal(diagnostic.data.code,'schema_invalid');
+ assert.deepEqual(Object.keys(diagnostic.data).sort(),['atMs','code','field','stage']);
+});

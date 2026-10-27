@@ -1,4 +1,5 @@
 import 'server-only';
+import type {QuoteTrace} from './diagnostic-schema';
 import type {AuthoritativeDraft} from './customer-boundary';
 import type {ManagedDeliveryRuntime} from './runtime';
 type Scope={brandId:string;locationId:string};
@@ -28,12 +29,12 @@ export function createConfiguredManagedDeliveryRuntimeResolver(deps:ManagedRunti
  }
  return {
   async available(scope:Scope){try{return !!await config(scope);}catch{return false;}},
-  async resolve(scope:Scope,draft:AuthoritativeDraft,expectedEnvironment?:'sandbox'|'production'):Promise<ManagedDeliveryRuntime|null>{
+  async resolve(scope:Scope,draft:AuthoritativeDraft,expectedEnvironment?:'sandbox'|'production',trace:QuoteTrace=()=>{}):Promise<ManagedDeliveryRuntime|null>{
    try{const c=await config(scope);if(!c||expectedEnvironment!==undefined&&c.environment!==expectedEnvironment||draft.binding.brandId!==scope.brandId||draft.binding.locationId!==scope.locationId)return null;
-    const routing=await deps.createRouting(c);if(!routing||routing.source!==c.routingSource)return null;
-    const provider=await deps.createQuoteProvider(c,draft);if(!provider||provider.providerId!==draft.binding.providerId)return null;
+    const routing=await deps.createRouting(c);if(!routing||routing.source!==c.routingSource){trace('runtime','routing_adapter_unavailable');return null;}
+    const provider=await deps.createQuoteProvider(c,draft);if(!provider||provider.providerId!==draft.binding.providerId){trace('runtime','provider_adapter_unavailable');return null;}
     return {routing,provider,pickupContact:{name:c.pickupContact.name,phone:c.pickupContact.phone}};
-   }catch{return null;}
+   }catch(error){trace('runtime',error);return null;}
   }
  };
 }
