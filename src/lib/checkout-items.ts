@@ -10,7 +10,7 @@ export function checkoutItems(items: CartItem[]): MinimalCartItem[] {
     quantity: item.quantity, unitPrice: money(item.price),
     totalPrice: lineMoney(item.price, item.quantity, item.toppings.map(topping => topping.price)),
     toppings: item.toppings.map(topping => topping.name),
-    ...(item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
+    ...(item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!), toppingQuantities: item.toppings.map(topping => topping.quantity ?? 1) } : {}),
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
       groupId: group.groupId, groupName: group.groupName,
       products: group.products.map(product => ({ id: product.id, name: product.name })),
@@ -29,7 +29,7 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
         (product && item.comboSelections?.length)) throw new Error('Basket selections have changed. Please review your basket.');
     return {
       id: item.id || '', cartItemId: `line-${index}`, itemType: combo ? 'combo' as const : 'product' as const,
-      quantity: item.quantity, toppings: item.toppings || [], toppingIds: item.toppingIds,
+      quantity: item.quantity, toppings: item.toppings || [], toppingIds: item.toppingIds, toppingQuantities: item.toppingQuantities,
       comboSelections: item.comboSelections, offered: false,
     };
   });
@@ -47,6 +47,7 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
       listUnitPrice: money(line.basePrice), listTotalPrice: lineMoney(line.basePrice, item.quantity, toppingPrices),
       id: line.id, itemType: line.itemType, name: line.productName,
       toppings: line.toppings.map(topping => topping.name), toppingIds: line.toppings.map(topping => topping.id!),
+      toppingQuantities: line.toppings.map(topping => topping.quantity ?? 1),
       ...(line.comboSelections ? { comboSelections: line.comboSelections } : {}),
     };
   });

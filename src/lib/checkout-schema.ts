@@ -33,11 +33,12 @@ const checkoutTupleSchema = z.tuple([
   z.array(z.object({ id, upsellId: id.optional(), name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
     itemType: z.enum(['product', 'combo']).optional(),
     toppingIds: z.array(id).max(MAX_TOPPINGS_PER_ITEM).optional(),
+    toppingQuantities: z.array(z.number().int().min(1).max(MAX_TOPPINGS_PER_ITEM)).max(MAX_TOPPINGS_PER_ITEM).optional(),
     comboSelections: z.array(z.object({ groupId: id.optional(), groupName: z.string().min(1).max(200),
       products: z.array(z.object({ id, name: z.string().max(200) })).max(40),
     })).max(20).optional(),
     unitPrice: amount, totalPrice: amount, toppings: z.array(z.string().max(200)).max(MAX_TOPPINGS_PER_ITEM).optional(),
-  })).min(1).max(97), // Stripe supports 100 lines, leaving room for the three fees.
+  }).refine(item => !item.toppingQuantities || (!!item.toppingIds && item.toppingIds.length === item.toppingQuantities.length && item.toppingIds.length === (item.toppings || []).length && item.toppingQuantities.reduce((sum, n) => sum + n, 0) <= MAX_TOPPINGS_PER_ITEM), 'Invalid topping quantities.')).min(1).max(97), // Stripe supports 100 lines, leaving room for the three fees.
   customer, z.enum(['pickup', 'delivery']), id, id,
   z.object({ subtotal: amount, deliveryFee: amount, bagFee: amount.optional(), adminFee: amount.optional(),
     vatAmount: amount.optional(), discountTotal: amount, itemDiscountTotal: amount.optional(),
