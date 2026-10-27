@@ -171,10 +171,12 @@ test('legacy analytics route sanitizes public events before the server write',as
  assert.equal(forged.status,400);
 });
 test('public product options require the native restaurant owner and preserve default selection and ordering',async()=>{
- const query=name=>({where(){return this;},get:async()=>({docs:name==='toppings'?[{id:'t',data:()=>({brandId:'b',toppingName:'Extra',price:1.005,isDefault:true,sortOrder:4,groupId:'g',secret:'private'})}]:[{id:'g',data:()=>({groupName:'Extras',minSelection:1,maxSelection:1})}]})});
+ const query=name=>({where(){return this;},get:async()=>({docs:name==='toppings'?[{id:'t',data:()=>({brandId:'b',toppingName:'Extra',price:1.005,isDefault:true,sortOrder:4,groupId:'g',maxQuantity:3,productId:'native',secret:'private'})}]:[{id:'g',data:()=>({groupName:'Extras',displayName:'Choose extras',kind:'addition',selectionMode:'single',sortOrder:2,minSelection:1,maxSelection:3,secret:'private'})}]})});
  let owner='b',reads=0;
  const db={collection:name=>name==='locations'?{doc:()=>({get:async()=>({exists:true,data:()=>({brandId:owner,isActive:true})})})}:(reads++,query(name))};
  const {GET}=loadTs('src/app/api/public/product-options/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>db},'next/cache':{unstable_cache:fn=>fn}});
  const valid=await GET(new Request('https://test/api/public/product-options?brandId=b&locationId=l'));assert.equal(valid.status,200);const options=await valid.json();assert.equal(options.toppings[0].isDefault,true);assert.equal(options.toppings[0].sortOrder,4);assert.equal(options.toppings[0].price,1.01);assert.equal(options.toppings[0].secret,undefined);
+ assert.equal(options.toppings[0].maxQuantity,3);assert.equal(options.toppings[0].productId,'native');
+ assert.deepEqual(options.groups[0],{id:'g',groupName:'Extras',displayName:'Choose extras',kind:'addition',selectionMode:'single',sortOrder:2,minSelection:1,maxSelection:3,locationIds:['l']});
  owner='other';reads=0;assert.equal((await GET(new Request('https://test/api/public/product-options?brandId=b&locationId=l'))).status,503);assert.equal(reads,0);
 });
