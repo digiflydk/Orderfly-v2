@@ -175,6 +175,12 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     const formattedCreatedAt = new Intl.DateTimeFormat('da-DK', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Copenhagen' }).format(new Date(createdAt));
 
     const fullAddress = customerDetails.address;
+    const tracking = order.managedDeliveryTracking;
+    const refunded = tracking?.paymentStatus === 'refunded';
+    const rejected = tracking?.bookingState === 'rejected';
+    const unconfirmed = !!tracking && tracking.bookingState !== 'accepted';
+    const receiptTitle = refunded ? 'Din betaling er refunderet' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
+    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
 
     return (
         <div className="min-h-screen w-full bg-background">
@@ -184,10 +190,10 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
                            {order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight">{order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?'Vi kontrollerer din levering':'Tak for din bestilling!'}</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">{receiptTitle}</h1>
                         {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
-                           Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span>{order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?' er betalt. Leveringen er endnu ikke bekræftet.':' er bekræftet.'}
+                           Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span>{receiptSummary}
                         </p>
                     </div>
 
@@ -212,7 +218,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                         {formatDisplayTime(deliveryTime)}
                                     </InfoItem>
                                 )}
-                                <InfoItem icon={Hash} label="Ordrestatus"><Badge>{{Pending:'Afventer betaling',Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Afventer betaling'}</Badge></InfoItem>
+                                <InfoItem icon={Hash} label="Ordrestatus"><Badge>{tracking?.paymentStatus==='paid'&&status==='Pending'?'Afventer levering':{Pending:'Afventer betaling',Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Afventer betaling'}</Badge></InfoItem>
                                 <InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
                              </CardContent>
                         </Card>

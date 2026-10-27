@@ -69,3 +69,9 @@ test('identity mismatch explains correction and retry preserves basket',async t=
  await page.getByRole('button',{name:'Hent leveringspris'}).click();await respond(page,quote(),1);await page.getByRole('checkbox').check();
  await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();await expect(page.getByText('Kurv: 2 pizzaer')).toBeVisible();
 });
+
+test('refunded rejected delivery receipt never claims paid or confirmed',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
+ await page.addInitScript(()=>{window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test kunde',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',status:'Canceled',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'rejected',deliveryStatus:null,paymentStatus:'refunded',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};});
+ await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Din betaling er refunderet'})).toBeVisible();await expect(page.getByText(/er annulleret, og betalingen er refunderet/)).toBeVisible();await expect(page.getByText('Betaling: Refunderet')).toBeVisible();await expect(page.getByText(/er betalt. Leveringen/)).toHaveCount(0);
+});
