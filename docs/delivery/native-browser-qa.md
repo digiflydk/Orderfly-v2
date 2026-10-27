@@ -68,3 +68,13 @@ passed. The shared admin shell's external logo fetch was blocked by the unchange
 server network guard and returned an image error; no external access was enabled.
 This does not affect the bounded delivery-control assertions and is not a claim
 that the complete shared shell rendered without missing assets.
+
+## Closed-hours checkout and failure feedback (2026-10-27)
+
+Managed checkout converts its next-opening-day ASAP display into an explicit scheduled instant when the native kitchen is closed. The same instant is submitted for the delivery quote and payment; native slot validation, delivery hours, preparation/transport lead time and Wolt scheduling restrictions remain authoritative. Open-kitchen ASAP behavior is unchanged.
+
+Quote failures expose only fixed customer-actionable codes (closed, invalid address, route unavailable, minimum, pricing cap, unsupported schedule). Unknown errors and upstream payloads stay private. Checkout form state now lives above cart readiness so switching from delivery to pickup preserves entered customer fields while repricing; nothing is persisted to browser storage by this change. Changing restaurant resets the form.
+
+Regression coverage: `delivery-customer-failure.cjs`, `delivery-native-checkout.cjs`, `checkout-browser.cjs`, `managed-delivery-checkout-ui-browser.cjs`. The browser fixture deliberately unmounts the form during delivery-mode repricing, matching the live cart behavior. A fixed-clock browser scenario verifies that next-day quote and payment use the same displayed time.
+
+Live QA remains in progress on Esmeralda's sandbox configuration with pickup at Borgergade 10. Do not restore Albaniensgade 6 until the full customer-flow matrix passes. Successful internal tests alone do not establish live Wolt/Geoapify/payment/callback completion.

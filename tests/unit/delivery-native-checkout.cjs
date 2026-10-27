@@ -1,4 +1,7 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const {checkout}=require('../helpers/checkout-fixture.cjs');const {moduleGraph}=require('../helpers/load-ts-graph.cjs');
+const {test,before,after,mock}=require('node:test');const assert=require('node:assert/strict');const {checkout}=require('../helpers/checkout-fixture.cjs');const {moduleGraph}=require('../helpers/load-ts-graph.cjs');
+// Preparation assertions must not depend on whether the suite runs near midnight.
+before(()=>mock.timers.enable({apis:['Date'],now:new Date('2026-10-27T12:00:00Z').getTime()}));
+after(()=>mock.timers.reset());
 async function fixture(standardDiscounts,runtimeAvailable=true,adopted=true,environment='sandbox',livemode=false,locationOverrides={},providerOverride){
  let gatewayHook;
  const caps={quote:true,create:true,readByProviderId:true,lookupByInternalReference:true,enforcedCreateIdempotency:true,cancellation:true,cancellationPricePreview:false,scheduledDeliveries:false,readyForPickup:false,trackingLinks:true,authenticatedWebhooks:true,sequenceNumbers:false};
@@ -49,3 +52,11 @@ test('environment switch during Stripe gateway resolution cannot charge a quote 
 });
 
 test('missing scoped runtime environment denies quote creation before provider or payment',async()=>{const f=await fixture(undefined,true,true,null,false);const q=await f.actions.requestManagedDeliveryQuoteAction(f.input);assert.equal(q.ok,false);assert.equal([...f.records.keys()].some(key=>key.startsWith('deliveryQuotes/')),false);assert.equal(f.events.includes('stripe'),false);});
+
+test('customer receives actionable quote rejection without payment or a claim',async()=>{
+ const f=await fixture();f.records.get('deliverySettings/b').settings.weeklyHours.forEach(day=>day.intervals=[]);
+ const closed=await f.actions.requestManagedDeliveryQuoteAction(f.input);assert.equal(closed.code,'closed');
+ const g=await fixture();g.records.get('deliverySettings/b').settings.pricingRules.minimumMinor=10001;
+ const minimum=await g.actions.requestManagedDeliveryQuoteAction(g.input);assert.equal(minimum.code,'minimum_not_met');
+ assert.equal(g.events.includes('stripe'),false);assert.equal([...g.records.keys()].some(k=>k.startsWith('deliveryQuotes/')),false);
+});

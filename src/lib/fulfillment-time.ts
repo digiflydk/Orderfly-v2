@@ -71,6 +71,18 @@ export function deliveryKitchenOpenAt(location:Location,now=new Date()):boolean{
   return !!((current&&(current.start<current.end?minute>=current.start&&minute<current.end:current.start>current.end&&minute>=current.start))
     ||(previous&&previous.start>previous.end&&minute<previous.end));
 }
+/** Checkout's "as soon as possible" label can mean the next opening day.
+ * Send that displayed future slot explicitly; a courier ASAP request means now.
+ * Server-side slot, delivery-hours and provider constraints still apply. */
+export function managedDeliverySelection(location:Location,selection:string,now=new Date()):string{
+  if(selection!=='asap')return selection;
+  const next=resolveFulfillmentTime(location,'delivery','asap',now);
+  if(!deliveryKitchenOpenAt(location,now))return next;
+  // Near closing the kitchen may still be open, but all today's slots are gone.
+  try { resolveFulfillmentTime({...location,allowPreOrder:false},'delivery','asap',now); }
+  catch { return next; }
+  return selection;
+}
 /** Kitchen slots retain native opening/DST rules; the customer pickup offering is independent. */
 export function resolveDeliveryKitchenReadyTime(location:Location,now=new Date(),configuredFloor=0):string{
   if(!location.isActive||!location.deliveryTypes?.includes('delivery'))throw new Error(unavailableTime);
