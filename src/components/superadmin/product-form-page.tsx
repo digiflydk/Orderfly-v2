@@ -1,6 +1,8 @@
 'use client';
 
 import { z } from 'zod';
+import { ProductToppingEditor } from './product-topping-editor';
+import { toppingOverridesSchema, validateToppingOverrides } from '@/lib/superadmin/topping-catalog-schema';
 import { ToppingConditionEditor } from './topping-condition-editor';
 import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -144,6 +146,7 @@ const baseFields = {
     .default([]),
 
   toppingGroupConditions: toppingConditionsSchema,
+  toppingOverrides: toppingOverridesSchema.default({}),
   isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
@@ -275,12 +278,15 @@ export function ProductFormPage({
     const conditionError = validateToppingConditions(values.toppingGroupConditions, values.toppingGroupIds,
       brandToppingGroups, toppings, values.locationIds.length ? values.locationIds : brandLocations.map(l => l.id));
     if (conditionError) { setState({ ok: false, error: { message: conditionError } }); return; }
+    const overrideError = validateToppingOverrides(values.toppingOverrides, values.toppingGroupIds,
+      brandToppingGroups, toppings, values.locationIds.length ? values.locationIds : brandLocations.map(l => l.id));
+    if (overrideError) { setState({ ok: false, error: { message: overrideError } }); return; }
     const data = new FormData(event.currentTarget);
     // Serialize controlled values, including the brand and unchecked flags.
     for (const [key, value] of Object.entries(form.getValues())) {
       if (key === 'imageUrl') continue; // Keep the actual file from the native input.
       data.delete(key);
-      if (key === 'toppingGroupConditions') data.set(key, JSON.stringify(value));
+      if (key === 'toppingGroupConditions' || key === 'toppingOverrides') data.set(key, JSON.stringify(value));
       else if (Array.isArray(value)) value.forEach(item => data.append(key, String(item)));
       else if (key === 'priceDelivery' && value === undefined) data.set(key, '');
       else if (value !== undefined && value !== null) data.set(key, String(value));
@@ -357,6 +363,7 @@ export function ProductFormPage({
             product.toppingGroupIds,
           ),
           toppingGroupConditions: product.toppingGroupConditions || {},
+          toppingOverrides: (product as Product & { toppingOverrides?: z.infer<typeof toppingOverridesSchema> }).toppingOverrides || {},
           imageUrl: product.imageUrl,
         }
       : {
@@ -376,6 +383,7 @@ export function ProductFormPage({
           allergenIds: [],
           toppingGroupIds: [],
           toppingGroupConditions: {},
+          toppingOverrides: {},
           imageUrl: undefined,
         },
   });
@@ -1168,113 +1176,6 @@ export function ProductFormPage({
 
                   <FormField
                     control={form.control}
-                    name="toppingGroupIds"
-                    render={({ field }) => {
-                      const selectedValues =
-                        Array.isArray(
-                          field.value,
-                        )
-                          ? field.value
-                          : [];
-
-                      return (
-                        <FormItem>
-                          <FormLabel>
-                            Tilvalgsgrupper
-                          </FormLabel>
-
-                          <ScrollArea className="h-40 rounded-md border">
-                            <div className="p-4">
-                              {brandToppingGroups.map(
-                                toppingGroup => {
-                                  const toppingGroupId =
-                                    toppingGroup.id;
-
-                                  if (
-                                    !toppingGroupId
-                                  ) {
-                                    return null;
-                                  }
-
-                                  const checkboxId = `tg-${toppingGroupId}`;
-
-                                  return (
-                                    <div
-                                      key={
-                                        toppingGroupId
-                                      }
-                                      className="mb-2 flex flex-row items-start space-x-3 space-y-0"
-                                    >
-                                      <Checkbox
-                                        id={
-                                          checkboxId
-                                        }
-                                        name="toppingGroupIds"
-                                        value={
-                                          toppingGroupId
-                                        }
-                                        checked={selectedValues.includes(
-                                          toppingGroupId,
-                                        )}
-                                        onCheckedChange={checked => {
-                                          const nextValues =
-                                            checked ===
-                                            true
-                                              ? uniq(
-                                                  [
-                                                    ...selectedValues,
-                                                    toppingGroupId,
-                                                  ],
-                                                )
-                                              : selectedValues.filter(
-                                                  (
-                                                    value: string,
-                                                  ) =>
-                                                    value !==
-                                                    toppingGroupId,
-                                                );
-
-                                          field.onChange(
-                                            nextValues,
-                                          );
-                                        }}
-                                      />
-
-                                      <Label
-                                        htmlFor={
-                                          checkboxId
-                                        }
-                                        className="font-normal"
-                                      >
-                                        {
-                                          toppingGroup.groupName
-                                        }
-                                      </Label>
-                                    </div>
-                                  );
-                                },
-                              )}
-                            </div>
-                          </ScrollArea>
-
-                          <FormMessage />
-                        </FormItem>
-                      );
-                    }}
-                  />
-
-                  <ToppingConditionEditor
-                    groups={brandToppingGroups.filter(group => form.watch('toppingGroupIds').includes(group.id))}
-                    toppings={toppings.filter(topping => {
-                      const ids = form.watch('locationIds');
-                      return (ids.length ? ids : brandLocations.map(l => l.id)).every(id => topping.locationIds.includes(id));
-                    })}
-                    value={form.watch('toppingGroupConditions')}
-                    onChange={value => form.setValue('toppingGroupConditions', value, { shouldDirty: true })}
-                  />
-
-                  <FormField
-                    control={form.control}
                     name="allergenIds"
                     render={() => (
                       <FormItem>
@@ -1511,6 +1412,39 @@ export function ProductFormPage({
                 </CardContent>
               </Card>
             </div>
+            <Card className="min-w-0 lg:col-span-3">
+              <CardHeader><CardTitle>Tilvalg på produktet</CardTitle><CardDescription>Grupper, rækkefølge, priser og standardvalg.</CardDescription></CardHeader>
+              <CardContent className="space-y-6">
+                  <ProductToppingEditor
+                    groups={brandToppingGroups}
+                    toppings={toppings.filter(topping => {
+                      const ids = form.watch('locationIds');
+                      return (ids.length ? ids : brandLocations.map(l => l.id)).every(id => topping.locationIds.includes(id));
+                    })}
+                    selectedGroupIds={form.watch('toppingGroupIds')}
+                    overrides={form.watch('toppingOverrides')}
+                    onGroupsChange={ids => {
+                      form.setValue('toppingGroupIds', ids, { shouldDirty: true });
+                      const attached = new Set(ids);
+                      form.setValue('toppingGroupConditions', Object.fromEntries(Object.entries(form.getValues('toppingGroupConditions')).filter(([id]) => attached.has(id))), { shouldDirty: true });
+                      const allowedOptions = new Set(toppings.filter(t => attached.has(t.groupId)).map(t => t.id));
+                      form.setValue('toppingOverrides', Object.fromEntries(Object.entries(form.getValues('toppingOverrides')).filter(([id]) => allowedOptions.has(id))), { shouldDirty: true });
+                    }}
+                    onOverridesChange={value => form.setValue('toppingOverrides', value, { shouldDirty: true })}
+                  />
+
+                  <ToppingConditionEditor
+                    groups={brandToppingGroups.filter(group => form.watch('toppingGroupIds').includes(group.id))}
+                    toppings={toppings.filter(topping => {
+                      const ids = form.watch('locationIds');
+                      return (ids.length ? ids : brandLocations.map(l => l.id)).every(id => topping.locationIds.includes(id));
+                    })}
+                    value={form.watch('toppingGroupConditions')}
+                    onChange={value => form.setValue('toppingGroupConditions', value, { shouldDirty: true })}
+                  />
+
+              </CardContent>
+            </Card>
           </fieldset>
         </form>
       </Form>
