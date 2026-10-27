@@ -1,7 +1,7 @@
 'use client';
 
 import { z } from 'zod';
-import { ProductToppingEditor } from './product-topping-editor';
+import { ProductToppingEditor, normalizeProductToppingOverrides } from './product-topping-editor';
 import { toppingOverridesSchema, validateToppingOverrides } from '@/lib/superadmin/topping-catalog-schema';
 import { ToppingConditionEditor } from './topping-condition-editor';
 import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
@@ -275,6 +275,8 @@ export function ProductFormPage({
     event.preventDefault();
     if (submitting.current) return;
     const values = form.getValues();
+    values.toppingOverrides = normalizeProductToppingOverrides(values.toppingOverrides, toppings);
+    form.setValue('toppingOverrides', values.toppingOverrides);
     const conditionError = validateToppingConditions(values.toppingGroupConditions, values.toppingGroupIds,
       brandToppingGroups, toppings, values.locationIds.length ? values.locationIds : brandLocations.map(l => l.id));
     if (conditionError) { setState({ ok: false, error: { message: conditionError } }); return; }
@@ -283,7 +285,7 @@ export function ProductFormPage({
     if (overrideError) { setState({ ok: false, error: { message: overrideError } }); return; }
     const data = new FormData(event.currentTarget);
     // Serialize controlled values, including the brand and unchecked flags.
-    for (const [key, value] of Object.entries(form.getValues())) {
+    for (const [key, value] of Object.entries(values)) {
       if (key === 'imageUrl') continue; // Keep the actual file from the native input.
       data.delete(key);
       if (key === 'toppingGroupConditions' || key === 'toppingOverrides') data.set(key, JSON.stringify(value));

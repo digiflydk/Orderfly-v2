@@ -80,7 +80,7 @@ test('linked native products inherit current delivery price and scoped availabil
  const option={...cheese,productId:'drink',price:0,toppingName:'Old'};
  let opts=resolveToppingOptions(product,[group],[option],[linked],{...scope,deliveryType:'delivery'});
  assert.equal(opts[0].price,25);assert.equal(cartTopping(opts[0],2).name,'2 × Current drink');
- assert.equal(resolveToppingOptions({...product,toppingOverrides:{cheese:{price:0}}},[group],[option],[linked],scope)[0].price,0);
+ assert.equal(resolveToppingOptions({...product,toppingOverrides:{cheese:{price:0}}},[group],[option],[linked],scope)[0].price,20);
  assert.equal(resolveToppingOptions(product,[group],[option],[{...linked,locationIds:[]}],scope).length,1);
  assert.equal(resolveToppingOptions(product,[group],[option],[{...linked,locationIds:undefined}],scope).length,0);
  for(const row of [{...linked,brandId:'foreign'},{...linked,locationIds:['other']},{...linked,isActive:false},{...linked,toppingGroupIds:['nested']},{...linked,isTestData:true}]) assert.equal(resolveToppingOptions(product,[group],[option],[row],scope).length,0);
@@ -105,3 +105,21 @@ test('root defaults activate dependent defaults in one reconciliation call',()=>
  const groups=[group,parent],opts=resolveToppingOptions(p,groups,[cheese,trigger],[],scope);
  assert.deepEqual({...reconcileToppingQuantities(p,groups,opts,{})},{large:1,cheese:2});
 });
+
+ test('linked stale price overrides cannot alter restored or checked-out channel totals',()=>{
+  const linked={id:'drink',productName:'Drink',price:20,priceDelivery:25,brandId:'b',locationIds:['l'],isActive:true};
+  const option={...cheese,productId:'drink',price:1};
+  for(const price of [0,7,99]) for(const deliveryType of ['pickup','delivery']) {
+   const currentScope={...scope,deliveryType};
+   const parent={...product,toppingOverrides:{cheese:{price}}};
+   const expected=deliveryType==='delivery'?25:20;
+   const currentCatalog=catalog(parent,{products:[parent,linked],toppings:[option]});
+   assert.equal(resolveToppingOptions(parent,[group],[option],[linked],currentScope)[0].price,expected);
+   const restored=restoreCartItems([choice(['cheese'],[2])],currentCatalog,currentScope);
+   assert.equal(restored.removed,0);
+   assert.equal(restored.items[0].toppings[0].unitPrice,expected);
+   const wire=checkoutItems(restored.items);
+   assert.equal(validateCheckoutItems(wire,currentCatalog,currentScope).subtotal,2*((deliveryType==='delivery'?90:80)+2*expected));
+   assert.throws(()=>validateCheckoutItems([{...wire[0],totalPrice:1}],currentCatalog,currentScope),/prices/);
+  }
+ });

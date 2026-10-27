@@ -39,7 +39,8 @@ export function resolveToppingOptions(product: OptionProduct, groups: ToppingGro
       price = linkedPrice;
     }
     if (typeof name !== 'string' || !name.trim() || name.length > 200 || /[\u0000-\u001f\u007f]/u.test(name)) return [];
-    if (override?.price !== undefined) price = override.price;
+    // Linked native products always retain their current fulfillment-channel price.
+    if (option.productId === undefined && override?.price !== undefined) price = override.price;
     const kind = group.kind ?? 'addition';
     const maxQuantity = option.maxQuantity ?? 1;
     if (!validQuantity(maxQuantity) || !validPrice(price) || toppingLabel({toppingName:name,kind},maxQuantity).length > 200) return [];

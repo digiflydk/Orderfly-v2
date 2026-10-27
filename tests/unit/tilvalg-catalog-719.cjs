@@ -94,3 +94,16 @@ test('native product cannot transfer brand while referenced by an option',async(
  const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',brandId:'c',categoryId:'foreign',locationIds:['foreign']}));
  assert.equal(result.ok,false);assert.match(result.error.detail,/bruges som tilvalg/);assert.equal(f.writes.length,0);
 });
+
+test('linked options reject price overrides while preserving other product settings',()=>{
+ const groups=[{id:'g'}],options=[{id:'t',groupId:'g',productId:'native',price:20,maxQuantity:3,locationIds:['l']}];
+ for(const price of [0,7,20]) assert.match(schemas.validateToppingOverrides({t:{price}},['g'],groups,options,['l']),/aktuelle pris/);
+ for(const override of [{isDefault:true,defaultQuantity:2},{isAvailable:false},{isDefault:false}]) assert.equal(schemas.validateToppingOverrides({t:override},['g'],groups,options,['l']),null);
+});
+test('product save rejects linked price override atomically',async()=>{
+ const {fixture,form}=require('../helpers/product-save-fixture.cjs');const f=fixture();
+ f.records.set('toppings/extra',{groupId:'g',locationIds:['l'],productId:'native',price:5,maxQuantity:3});
+ const before=f.writes.length;
+ const result=await f.actions.createOrUpdateProduct(null,form({toppingGroupIds:['g'],toppingOverrides:JSON.stringify({extra:{price:0}})}));
+ assert.equal(result.ok,false);assert.equal(f.writes.length,before);
+});
