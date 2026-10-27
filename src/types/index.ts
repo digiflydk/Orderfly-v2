@@ -236,6 +236,7 @@ export type Product = {
   toppingGroupIds?: string[];
   /** Group ID -> any selected option ID from an unconditional group on this product. */
   toppingGroupConditions?: Record<string, string[]>;
+  toppingOverrides?: Record<string, ToppingOverride>;
   isFeatured?: boolean;
   isNew?: boolean;
   isPopular?: boolean;
@@ -248,7 +249,7 @@ export type Product = {
 export type ProductForMenu = Pick<Product, 
     'id' | 'productName' | 'description' | 'price' | 'priceDelivery' | 
     'imageUrl' | 'isFeatured' | 'isNew' | 'isPopular' | 'allergenIds' | 
-    'toppingGroupIds' | 'toppingGroupConditions' | 'categoryId' | 'brandId' | 'sortOrder'
+    'toppingGroupIds' | 'toppingGroupConditions' | 'toppingOverrides' | 'categoryId' | 'brandId' | 'sortOrder' | 'isActive' | 'locationIds'
 >;
 
 
@@ -282,7 +283,18 @@ export type Allergen = {
  * @description A group of toppings that can be added to a product.
  * @collection topping_groups
  */
+export type ToppingOverride = {
+  price?: number;
+  isDefault?: boolean;
+  defaultQuantity?: number;
+  isAvailable?: boolean;
+};
+
 export type ToppingGroup = {
+  kind?: 'addition' | 'removal';
+  displayName?: string;
+  selectionMode?: 'single' | 'multiple';
+  sortOrder?: number;
   id: string;
   groupName: string;
   locationIds: string[];
@@ -295,6 +307,10 @@ export type ToppingGroup = {
  * @collection toppings
  */
 export type Topping = {
+  /** Defaults to one for existing catalog entries. */
+  maxQuantity?: number;
+  /** Optional native product used for the current name, price and availability. */
+  productId?: string;
   id: string;
   toppingName: string;
   price: number;
@@ -309,6 +325,9 @@ export type Topping = {
  * @description A selected topping for a specific item in the cart.
  */
 export type CartItemTopping = {
+    quantity?: number;
+    unitPrice?: number;
+    // price below remains the extended amount for one parent product.
     id?: string; // Stable catalog identity; optional for legacy saved baskets.
     name: string;
     price: number;
@@ -545,6 +564,7 @@ export type MinimalCartItem = {
     id?: string;
     itemType?: 'product' | 'combo';
     toppingIds?: string[];
+    toppingQuantities?: number[];
     comboSelections?: ComboSelection[];
     name: string;
     quantity: number;
