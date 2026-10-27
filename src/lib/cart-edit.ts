@@ -9,7 +9,7 @@ export function putCartItem(items: CartItem[], next: CartItem, expected?: CartIt
             return null;
         return items.map(item => item.cartItemId === expected.cartItemId ? { ...next, cartItemId: item.cartItemId } : item);
     }
-    const key = (item: CartItem) => JSON.stringify([item.id, item.price, item.toppings.map(t => [t.id || t.name, t.price]).sort()]);
+    const key = (item: CartItem) => JSON.stringify([item.id, item.price, item.toppings.map(t => [t.id || t.name, t.price, t.quantity ?? 1]).sort()]);
     const match = next.itemType === 'product' ? items.find(item => item.itemType === 'product' && key(item) === key(next)) : undefined;
     if (match && match.quantity + next.quantity > 100)
         return null;
