@@ -1,4 +1,5 @@
 'use client';
+import { CUSTOMER_IDENTITY_CHECKOUT_MESSAGE } from '@/lib/checkout-public-error';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { deliveryRoutingAttribution } from '@/lib/delivery/routing/attribution';
@@ -24,6 +25,7 @@ export type ManagedQuoteState =
   | {kind:'ready';quote:ManagedDeliveryQuoteView};
 export type ManagedQuoteAcceptance = {quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;checkoutTotalMinor:number;currency:string};
 const messages:Record<string,string>={
+ customer_identity_conflict:CUSTOMER_IDENTITY_CHECKOUT_MESSAGE,
  closed:'Restauranten har lukket for levering på det valgte tidspunkt.',
  unsupported_schedule:'Vælg et senere leveringstidspunkt, så der er tid til klargøring og transport.',
  rate_limited:'Vent lidt, før du beregner levering igen.',
