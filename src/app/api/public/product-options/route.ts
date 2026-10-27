@@ -12,14 +12,14 @@ const read = unstable_cache(async (brandId: string, locationId: string) => {
   ]);
   return {
     toppings: tops.docs.filter(doc => !doc.data().brandId || doc.data().brandId === brandId).map(doc => {
-      const t = doc.data(); return {id: doc.id, toppingName: t.toppingName, price: money(t.price), isDefault: !!t.isDefault, sortOrder: t.sortOrder, groupId: t.groupId, locationIds: [locationId], isActive: true};
+      const t = doc.data(); return {id: doc.id, toppingName: t.toppingName, price: money(t.price), isDefault: !!t.isDefault, sortOrder: t.sortOrder, groupId: t.groupId, maxQuantity: t.maxQuantity, productId: t.productId, locationIds: [locationId], isActive: true};
     }),
     groups: groups.docs.filter(doc => !doc.data().brandId || doc.data().brandId === brandId).map(doc => {
       const g = doc.data(); return {id: doc.id, groupName: g.groupName, minSelection: g.minSelection, maxSelection: g.maxSelection,
-        selectionType: g.selectionType, sortOrder: g.sortOrder, locationIds: [locationId]};
+        displayName: g.displayName, kind: g.kind, selectionMode: g.selectionMode, selectionType: g.selectionType, sortOrder: g.sortOrder, locationIds: [locationId]};
     }),
   };
-}, ['public-options-v1'], {revalidate: 60, tags: ['storefront']});
+}, ['public-options-v2'], {revalidate: 60, tags: ['storefront']});
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams, brand = params.get('brandId') || '', location = params.get('locationId') || '';
   if (![brand, location].every(id => /^[^/\\?#]{1,160}$/.test(id))) return Response.json({error: 'Invalid restaurant'}, {status: 400});
