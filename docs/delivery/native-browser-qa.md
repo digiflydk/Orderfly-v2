@@ -95,3 +95,5 @@ Live sandbox order ORD-292972 passed a declined-card retry and successful DKK 20
 ### Accepted courier booking, 28 October 2026
 
 Live sandbox ORD-929615 passed checkout at DKK201, Stripe test payment, Wolt booking, native Received status, genuine order.received/handshake/ETA callbacks and customer tracking-link projection. Selected11:35 versus updated Wolt12:01–12:11 exposed ambiguous duplicated expected-time labels; the immutable selection is now labeled separately. Fully compensated ORD-292972 is now projected as Refunded in operator queries, matching customer receipt. Cancellation test was blocked by automatic action approval because its checkbox accepts an unknown possible cancellation fee; no workaround or cancellation submission was performed. Pickup stays Borgergade10; no physical delivery/completion claim.
+
+The broader delivery/Wolt regression run exposed one harness import failure after the shared public checkout error module was added. The attribution renderer now resolves that real module through the existing TypeScript loader; assertions remain unchanged. Live ORD-292972 rejection is confirmed as quote_expired.
