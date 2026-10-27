@@ -18,6 +18,6 @@ export const isLockedItem = (item: CartItem) => {
 export const cartPriceSignature = (items: CartItem[]) => JSON.stringify(items.map(item => [
   item.cartItemId, item.id, item.itemType, item.quantity, item.basePrice, item.price, item.itemTotal,
   item.categoryId ?? null, [...(item.tags || [])].sort(),
-  item.toppings.map(topping => [topping.id ?? topping.name, topping.price]),
+  item.toppings.map(topping => [topping.id ?? topping.name, topping.price, topping.quantity ?? 1]),
   (item.comboSelections || []).map(group => [group.groupId ?? group.groupName, group.products.map(product => product.id)]),
 ]));
