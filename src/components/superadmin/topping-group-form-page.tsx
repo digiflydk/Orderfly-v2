@@ -32,7 +32,7 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 	const { pending } = useFormStatus();
 	return (
 		<Button type="submit" disabled={pending}>
-			{pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Group')}
+			{pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Opret tilvalgsgruppe')}
 		</Button>
 	);
 }
@@ -62,8 +62,8 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
 		}
 	}, [state, toast]);
 
-	const title = group ? 'Edit Topping Group' : 'Create New Topping Group';
-	const description = group ? `Editing details for ${group.groupName}.` : 'Fill in the details for the new group.';
+	const title = group ? 'Rediger tilvalgsgruppe' : 'Opret tilvalgsgruppe';
+	const description = group ? `Editing details for ${group.groupName}.` : 'Udfyld oplysningerne om den nye tilvalgsgruppe.';
 
 	return (
 		<div className="space-y-6">
@@ -78,8 +78,8 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
 				<Card>
 					<CardContent className="pt-6 space-y-4">
 						<div>
-							<label htmlFor="groupName">Group Name</label>
-							<Input id="groupName" name="groupName" placeholder="e.g., Sauces, Extra Toppings" defaultValue={group?.groupName} />
+							<label htmlFor="groupName">Tilvalgsgruppens navn</label>
+							<Input id="groupName" name="groupName" placeholder="Fx saucer eller ekstra tilbehør" defaultValue={group?.groupName} />
 						</div>
 						<div className="grid grid-cols-2 gap-4">
 							<div>

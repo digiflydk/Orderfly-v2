@@ -25,8 +25,8 @@ const toppingGroupSchema = z.object({
 const toppingSchema = z.object({
   id: z.string().optional(),
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-  groupId: z.string().min(1, { message: 'A topping group must be selected.' }),
-  toppingName: z.string().min(2, { message: 'Topping name must be at least 2 characters.' }),
+  groupId: z.string().min(1, { message: 'Vælg en tilvalgsgruppe.' }),
+  toppingName: z.string().min(2, { message: 'Tilvalgets navn skal være mindst 2 tegn.' }),
   price: z.coerce.number().min(0, { message: 'Price must be a non-negative number.' }),
   isActive: z.boolean().default(true),
   isDefault: z.boolean().default(false),
@@ -69,7 +69,7 @@ export async function createOrUpdateToppingGroup(
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return { message: `Failed to save topping group: ${errorMessage}`, error: true };
+    return { message: `Kunne ikke gemme tilvalgsgruppen: ${errorMessage}`, error: true };
   }
   revalidatePath('/superadmin/toppings');
   redirect('/superadmin/toppings');
@@ -91,10 +91,10 @@ export async function deleteToppingGroup(groupId: string) {
         });
 
         revalidatePath("/superadmin/toppings");
-        return { message: "Topping group and its toppings deleted successfully.", error: false };
+        return { message: "Tilvalgsgruppen og dens tilvalg er slettet.", error: false };
     } catch (e) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        return { message: `Failed to delete topping group: ${errorMessage}`, error: true };
+        return { message: `Kunne ikke slette tilvalgsgruppen: ${errorMessage}`, error: true };
     }
 }
 
@@ -149,7 +149,7 @@ export async function createOrUpdateTopping(
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return { message: `Failed to save topping: ${errorMessage}`, error: true };
+    return { message: `Kunne ikke gemme tilvalget: ${errorMessage}`, error: true };
   }
 
   revalidatePath('/superadmin/toppings');
@@ -160,11 +160,11 @@ export async function deleteTopping(toppingId: string) {
     try {
         await mutateLocationCatalog('toppings',toppingId,'orderfly.catalog:delete',()=>null);
         revalidatePath("/superadmin/toppings");
-        return { message: "Topping deleted successfully.", error: false };
+        return { message: "Tilvalget er slettet.", error: false };
     } catch (e) {
         console.error(e);
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        return { message: `Failed to delete topping: ${errorMessage}`, error: true };
+        return { message: `Kunne ikke slette tilvalget: ${errorMessage}`, error: true };
     }
 }
 
@@ -172,10 +172,10 @@ export async function updateToppingSortOrder(orderedToppings: {id: string, sortO
     try {
         await reorderLocationCatalog('toppings',orderedToppings);
         revalidatePath('/superadmin/toppings');
-        return { message: 'Topping order updated.', error: false };
+        return { message: 'Rækkefølgen af tilvalg er opdateret.', error: false };
     } catch(e) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        return { message: `Failed to update topping order: ${errorMessage}`, error: true };
+        return { message: `Kunne ikke opdatere rækkefølgen af tilvalg: ${errorMessage}`, error: true };
     }
 }
 

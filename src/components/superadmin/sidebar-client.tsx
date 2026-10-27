@@ -120,7 +120,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/locations', label: 'Locations', icon: MapPin },
         { href: '/superadmin/categories', label: 'Categories', icon: SquareStack },
         { href: '/superadmin/food-categories', label: 'Food Categories', icon: Utensils },
-        { href: '/superadmin/toppings', label: 'Toppings', icon: Layers },
+        { href: '/superadmin/toppings', label: 'Tilvalg', icon: Layers },
         { href: '/superadmin/allergens', label: 'Allergens', icon: ShieldCheck },
       ],
     },

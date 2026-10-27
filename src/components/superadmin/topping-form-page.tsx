@@ -24,8 +24,8 @@ import { ScrollArea } from '../ui/scroll-area';
 const toppingSchema = z.object({
   id: z.string().optional(),
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-  groupId: z.string().min(1, { message: 'A topping group must be selected.' }),
-  toppingName: z.string().min(2, { message: 'Topping name must be at least 2 characters.' }),
+  groupId: z.string().min(1, { message: 'Vælg en tilvalgsgruppe.' }),
+  toppingName: z.string().min(2, { message: 'Tilvalgets navn skal være mindst 2 tegn.' }),
   price: z.coerce.number().min(0, { message: 'Price must be a non-negative number.' }),
   isActive: z.boolean().default(true),
   isDefault: z.boolean().default(false),
@@ -123,8 +123,8 @@ export function ToppingFormPage({ topping, locations, allGroups, brands }: Toppi
     });
   }
 
-  const title = topping ? 'Edit Topping' : 'Create New Topping';
-  const description = topping ? `Editing details for ${topping.toppingName}.` : 'Fill in the details for the new topping.';
+  const title = topping ? 'Rediger tilvalg' : 'Opret tilvalg';
+  const description = topping ? `Editing details for ${topping.toppingName}.` : 'Udfyld oplysningerne om det nye tilvalg.';
 
   return (
     <div className="space-y-6">
@@ -137,7 +137,7 @@ export function ToppingFormPage({ topping, locations, allGroups, brands }: Toppi
                 <Button variant="outline" asChild>
                     <Link href="/superadmin/toppings">Cancel</Link>
                 </Button>
-                <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>{isPending ? <Loader2 className="animate-spin" /> : (topping ? 'Save Changes' : 'Create Topping')}</Button>
+                <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>{isPending ? <Loader2 className="animate-spin" /> : (topping ? 'Save Changes' : 'Opret tilvalg')}</Button>
             </div>
         </div>
         <Form {...form}>
@@ -145,13 +145,13 @@ export function ToppingFormPage({ topping, locations, allGroups, brands }: Toppi
                 <Card>
                     <CardContent className="pt-6 space-y-4">
                         <FormField control={form.control} name="toppingName" render={({ field }) => (
-                        <FormItem><FormLabel>Topping Name</FormLabel><FormControl><Input placeholder="e.g., Extra Cheese" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormItem><FormLabel>Tilvalgets navn</FormLabel><FormControl><Input placeholder="e.g., Extra Cheese" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         
                         <FormField
                         control={form.control} name="groupId" render={({ field }) => (
                             <FormItem>
-                            <FormLabel>Topping Group</FormLabel>
+                            <FormLabel>Tilvalgsgruppe</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value} disabled={!selectedLocationIds || selectedLocationIds.length === 0}>
                                 <FormControl><SelectTrigger><SelectValue placeholder={(!selectedLocationIds || selectedLocationIds.length === 0) ? "Select locations first" : "Select a group"} /></SelectTrigger></FormControl>
                                 <SelectContent>{availableGroups.map((group) => (<SelectItem key={group.id} value={group.id}>{group.groupName}</SelectItem>))}</SelectContent>
@@ -224,7 +224,7 @@ export function ToppingFormPage({ topping, locations, allGroups, brands }: Toppi
                                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-0.5">
                                             <FormLabel>Active</FormLabel>
-                                            <FormDescription>Is this topping currently available?</FormDescription>
+                                            <FormDescription>Er dette tilvalg tilgængeligt?</FormDescription>
                                         </div>
                                         <FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                                     </FormItem>
@@ -237,7 +237,7 @@ export function ToppingFormPage({ topping, locations, allGroups, brands }: Toppi
                                     <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                         <div className="space-y-0.5">
                                             <FormLabel>Select as Default</FormLabel>
-                                            <FormDescription>Is this topping selected by default?</FormDescription>
+                                            <FormDescription>Er dette tilvalg valgt som standard?</FormDescription>
                                         </div>
                                         <FormControl><Switch name="isDefault" checked={field.value} onCheckedChange={field.onChange}/></FormControl>
                                     </FormItem>

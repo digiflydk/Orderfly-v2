@@ -1180,7 +1180,7 @@ export function ProductFormPage({
                       return (
                         <FormItem>
                           <FormLabel>
-                            Topping Groups
+                            Tilvalgsgrupper
                           </FormLabel>
 
                           <ScrollArea className="h-40 rounded-md border">

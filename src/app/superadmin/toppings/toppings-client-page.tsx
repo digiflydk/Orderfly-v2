@@ -91,12 +91,12 @@ function SortableToppingItem({ topping, onConfirmDelete }: { topping: Topping, o
                         <DropdownMenuItem asChild>
                            <Link href={`/superadmin/toppings/edit-topping/${topping.id}`}>
                                 <Edit className="mr-2 h-4 w-4" />
-                                Edit Topping
+                                Rediger tilvalg
                            </Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onConfirmDelete(topping.id) }} className="text-destructive">
                             <Trash2 className="mr-2 h-4 w-4" />
-                            Delete Topping
+                            Slet tilvalg
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -245,7 +245,7 @@ export function ToppingsClientPage({
       const overGroupId = activeToppings.find(t => t.id === over.id)?.groupId;
 
       if(activeGroupId !== overGroupId || !activeGroupId) {
-        toast({variant: 'destructive', title: 'Error', description: 'Toppings can only be reordered within the same group.'});
+        toast({variant: 'destructive', title: 'Error', description: 'Tilvalg kan kun omarrangeres inden for samme tilvalgsgruppe.'});
         return;
       }
       
@@ -288,22 +288,22 @@ export function ToppingsClientPage({
     <div className="space-y-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Toppings Management</h1>
+                <h1 className="text-2xl font-bold tracking-tight">Tilvalg og tilvalgsgrupper</h1>
                 <p className="text-muted-foreground">
-                Manage topping groups and individual topping options.
+                Administrer tilvalgsgrupper og de enkelte tilvalg.
                 </p>
             </div>
              <div className="flex items-center gap-2 self-end sm:self-center">
                 <Button asChild size="sm">
                     <Link href="/superadmin/toppings/new-group">
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Group
+                        Tilføj tilvalgsgruppe
                     </Link>
                 </Button>
                 <Button asChild size="sm">
                      <Link href="/superadmin/toppings/new-topping">
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Topping
+                        Tilføj tilvalg
                     </Link>
                 </Button>
             </div>
@@ -313,7 +313,7 @@ export function ToppingsClientPage({
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by group or topping name..."
+            placeholder="Søg efter tilvalg eller tilvalgsgruppe..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -377,7 +377,7 @@ export function ToppingsClientPage({
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead className="w-[60px]"></TableHead>
-                                                    <TableHead>Topping</TableHead>
+                                                    <TableHead>Tilvalg</TableHead>
                                                     <TableHead>Price</TableHead>
                                                     <TableHead>Status</TableHead>
                                                     <TableHead className="text-right">Actions</TableHead>
@@ -410,7 +410,7 @@ export function ToppingsClientPage({
                                             )}
                                         </Table>
                                          {(toppingsByGroup[group.id] || []).length === 0 && (
-                                            <p className="text-center text-muted-foreground py-4 text-sm">No toppings in this group yet.</p>
+                                            <p className="text-center text-muted-foreground py-4 text-sm">Der er endnu ingen tilvalg i denne tilvalgsgruppe.</p>
                                         )}
                                     </CardContent>
                                 </CollapsibleContent>
@@ -421,14 +421,14 @@ export function ToppingsClientPage({
             </DndContext>
              {filteredGroups.length === 0 && (
                 <div className="text-center text-muted-foreground py-10">
-                    <p>No topping groups match your filters.</p>
+                    <p>Ingen tilvalgsgrupper matcher dine filtre.</p>
                 </div>
             )}
         </div>
       
       <AlertDialog open={isGroupAlertOpen} onOpenChange={setIsGroupAlertOpen}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>This will permanently delete the topping group and all toppings within it. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle><AlertDialogDescription>Tilvalgsgruppen og alle dens tilvalg slettes permanent. Handlingen kan ikke fortrydes.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDeleteGroup}>Continue</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -438,7 +438,7 @@ export function ToppingsClientPage({
             <AlertDialogHeader>
                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    This action will permanently delete the topping.
+                    Dette tilvalg slettes permanent.
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
