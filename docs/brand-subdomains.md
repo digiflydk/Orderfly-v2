@@ -91,6 +91,20 @@ are 104 HTML pages, 269 assets and robots.txt. Source bytes, design and producti
 canonical URLs are unchanged. No private/admin pages or source manifests are
 served. A failed integrity/read check returns 503, never app content.
 
+The preview has one explicit legacy-route exception: `GET`/`HEAD /book-bord`
+returns a temporary 307 to `/bordbooking` on the same host. The old captured
+page contains an inert booking mount and lacks its source-owned handoff. This
+restores the existing canonical booking contract documented in Ops
+`webflow/book-bord-legacy-redirect-head.html` (blob
+`954e6fedebd07b01c05e8228c8ef27672c6baf74`), rather than introducing a second
+booking flow. Encoded query bytes are preserved; the relative Location contains
+no fragment, so a browser retains the original fragment. This is preview-host
+only, does not relax CSP, does not activate booking submissions, and leaves the
+immutable source payload unchanged. Unsafe methods remain 405 before the
+handoff. Real Next HTTP regression covers the redirect, encoded query and
+tampering cases as well as the 373 remaining exact-byte responses. Browser
+fragment preservation is a separate live coordinator check.
+
 All preview responses carry noindex/nofollow/noarchive and no-store. CSP permits
 only same-origin resources/connections and blocks forms/frames; same-origin APIs
 are denied by the static allowlist. Inline scripts/eval remain necessary for the

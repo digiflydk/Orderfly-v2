@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "origin": "https://mpanel.esmeraldapizza.dk",
+  "routes": [
+    {
+      "module": "dashboard",
+      "source_path": "/mpanel",
+      "target_path": "/",
+      "source_file": "mpanel.html",
+      "aliases": [
+        "/mpanel"
+      ],
+      "legacy_paths": [
+        "/mpanel"
+      ]
+    },
+    {
+      "module": "hr-admin",
+      "source_path": "/hr/admin",
+      "target_path": "/hr/admin",
+      "source_file": "hr__admin.html",
+      "aliases": [
+        "/admin-v2"
+      ],
+      "legacy_paths": [
+        "/hr/admin",
+        "/admin-v2",
+        "/mpanel/hr/admin"
+      ]
+    },
+    {
+      "module": "timelog",
+      "source_path": "/hr/timelog",
+      "target_path": "/hr/timelog",
+      "source_file": "hr__timelog.html",
+      "aliases": [],
+      "legacy_paths": [
+        "/hr/timelog",
+        "/mpanel/hr/timelog"
+      ]
+    },
+    {
+      "module": "booking",
+      "source_path": "/bordbooking-admin",
+      "target_path": "/bordbooking-admin",
+      "source_file": "bordbooking-admin.html",
+      "aliases": [],
+      "legacy_paths": [
+        "/bordbooking-admin",
+        "/mpanel/bordbooking-admin"
+      ]
+    },
+    {
+      "module": "production",
+      "source_path": "/produktion-admin",
+      "target_path": "/produktion-admin",
+      "source_file": "produktion-admin.html",
+      "aliases": [
+        "/produktion",
+        "/mpanel/produktion"
+      ],
+      "legacy_paths": [
+        "/produktion-admin",
+        "/mpanel/produktion"
+      ]
+    },
+    {
+      "module": "customers",
+      "source_path": "/kunder-admin",
+      "target_path": "/kunder-admin",
+      "source_file": "kunder-admin.html",
+      "aliases": [
+        "/kunder",
+        "/mpanel/kunder"
+      ],
+      "legacy_paths": [
+        "/kunder-admin",
+        "/mpanel/kunder"
+      ]
+    },
+    {
+      "module": "finance",
+      "source_path": "/finance-admin",
+      "target_path": "/finance-admin",
+      "source_file": "finance-admin.html",
+      "aliases": [],
+      "legacy_paths": [
+        "/finance-admin",
+        "/mpanel/finance-admin"
+      ]
+    }
+  ]
+}
+

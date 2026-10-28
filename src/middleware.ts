@@ -4,6 +4,10 @@ import { brandSlugFromHost, brandSubdomainRewrite } from '@/lib/brand-subdomain'
 
 import { isWebDesignPreviewHost, WEB_PREVIEW_INTERNAL, WEB_PREVIEW_HEADERS } from '@/lib/web-design-preview';
 
+import { isEsmeraldaPublicHost, esmeraldaPublicEnabled, esmeraldaPublicHeaders, ESMERALDA_UNAVAILABLE_HEADERS } from '@/lib/esmeralda-public-host';
+
+import { isMpanelHost, MPANEL_INTERNAL, MPANEL_HEADERS } from '@/lib/mpanel-host';
+
 const CANONICAL_HOST = 'orderfly.dk';
 const WWW_HOST = `www.${CANONICAL_HOST}`;
 
@@ -39,8 +43,25 @@ export function middleware(request: NextRequest) {
   const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
   const previewHost = isWebDesignPreviewHost(host);
   // This endpoint is reachable only through our rewrite, never by its public URL.
-  if (incomingPath === WEB_PREVIEW_INTERNAL || incomingPath.startsWith(`${WEB_PREVIEW_INTERNAL}/`)) {
-    return new NextResponse('Not found', {status:404, headers: previewHost ? WEB_PREVIEW_HEADERS : undefined});
+  if ([WEB_PREVIEW_INTERNAL, MPANEL_INTERNAL].some(path => incomingPath === path || incomingPath.startsWith(`${path}/`))) {
+    return new NextResponse('Not found', {status:404, headers: previewHost ? WEB_PREVIEW_HEADERS : ESMERALDA_UNAVAILABLE_HEADERS});
+  }
+  if (isMpanelHost(host)) {
+    if (!esmeraldaPublicEnabled()) return new NextResponse('Website unavailable', {status:503, headers:ESMERALDA_UNAVAILABLE_HEADERS});
+    if (!['GET','HEAD'].includes(request.method)) return new NextResponse('Method not allowed', {status:405, headers:{...MPANEL_HEADERS, Allow:'GET, HEAD'}});
+    const rewritten = request.nextUrl.clone();
+    rewritten.pathname = MPANEL_INTERNAL;
+    rewritten.search = '';
+    return NextResponse.rewrite(rewritten, {headers:MPANEL_HEADERS});
+  }
+  if (isEsmeraldaPublicHost(host)) {
+    if (!esmeraldaPublicEnabled()) return new NextResponse('Website unavailable', {status:503, headers:ESMERALDA_UNAVAILABLE_HEADERS});
+    const headers = esmeraldaPublicHeaders(incomingPath);
+    if (!['GET','HEAD'].includes(request.method)) return new NextResponse('Method not allowed', {status:405, headers:{...headers, ...ESMERALDA_UNAVAILABLE_HEADERS, Allow:'GET, HEAD'}});
+    const rewritten = request.nextUrl.clone();
+    rewritten.pathname = WEB_PREVIEW_INTERNAL;
+    rewritten.search = '';
+    return NextResponse.rewrite(rewritten, {headers});
   }
   if (previewHost) {
     if (!['GET', 'HEAD'].includes(request.method)) return new NextResponse('Method not allowed', {

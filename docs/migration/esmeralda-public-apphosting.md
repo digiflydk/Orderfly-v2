@@ -1,0 +1,35 @@
+# Esmeralda public host on existing App Hosting (#64)
+
+This adds exact `esmeraldapizza.dk` / `www.esmeraldapizza.dk` and `mpanel.esmeraldapizza.dk` routing to the existing Orderfly studio backend. Firebase hosting project remains `orderfly-v21-10334086-b3076`; data project remains `orderfly-39325`. No data configuration, API authorization or merchant routing changes.
+
+The public host reuses the immutable combined PR746 payload (v8 source plus reviewed navigation/contact anchor and legacy booking handoff). It does not promote the preview robots file. `production-discovery.json` retains the 104 canonical `https://www.esmeraldapizza.dk` URLs from Website PR55, with source-manifest provenance. Discovery requests verify exact equality to the runtime HTML route set and source manifest. Apex and HTTP requests redirect to HTTPS www, preserving encoded query bytes. Known old administrative paths redirect directly to the fixed mPanel origin through the separately owned adapter. Unknown/API/private paths have no application or SPA fallback.
+
+Production hosts remain **503/noindex/no-store unless `ESMERALDA_PUBLIC_ENABLED=true`**. This non-secret switch must be set consistently for the deployed middleware/server runtime only after the coordinator's release gates; no configuration is changed by this PR. It also gates dedicated mPanel routing. The internal routes are inaccessible by public URL on every hostname. There is no query parameter or client header to enable release. The design preview stays noindex, disallow-all, no-store and offline CSP regardless of the switch.
+
+Successful production pages/assets and discovery allow indexing and revalidate caching. Unknown/error pages remain noindex. mPanel always remains noindex/no-store. The exact route allowlists and compressed payload/entry hashes are checked independently by each server handler; payloads stay outside public and are included in standalone output tracing. GET/HEAD only; unsafe methods are refused before rewriting/redirecting. No generic API passthrough is added.
+
+## Integration policy and release gaps
+
+Production CSP is separate from preview policy. It allows only the observed Omnisend launcher, Meta loader/pixel and GTM loader sources, the exact booking-api path only on `/bordbooking`, and the Google Maps embed path only on `/kontakt`. Local fonts/assets remain same origin. No `https:` or wildcard service allowlist is introduced. External destination links do not need CSP fetch permissions.
+
+This is **not full provider acceptance**: Omnisend's dynamically loaded dependencies and tracking endpoints have not been observed/approved, so they remain blocked; coordinator browser QA must identify necessary exact origins and review policy before activation. The contact form remains blocked (`form-action 'none'`), pending #46 durable admission/CAPTCHA/template configuration and a separately reviewed frontend adapter. Do not enable production while those required flows are unresolved. No contact submission, booking, newsletter subscription or other production write was performed.
+
+## Dependencies and verification
+
+Includes current main `85fe46b8`, combined navigation/booking candidate PR746 `38767d1` and mPanel module `570298fe` (separately owned/reviewed). Do not merge the original booking/navigation changes twice. The mPanel owner supplies shells, manifest and adapter; this task owns shared middleware/tracing and public policy only.
+
+Run `node --test tests/unit/esmeralda-public-host.cjs tests/unit/web-design-preview.cjs tests/unit/brand-subdomains-12.cjs`, `node scripts/test-mpanel-host.cjs`, `npm run typecheck`, `npm run build`, then `node --test tests/unit/esmeralda-public-host-http.cjs tests/unit/web-design-preview-http.cjs`. The HTTP test launches a real standalone Next server on loopback, checks disabled and enabled modes, every content hash, discovery, redirects, mPanel files, unsafe methods and direct internal denial. It executes no provider/browser scripts or data writes.
+
+Build/review/HTTP tests are not deployed browser acceptance. Root owns independent review on the final combined head, serial merge, deployed commit verification, browser/provider/auth QA, authorized domain association/certificate/DNS cutover and rollback. Existing Webflow service must remain available until final acceptance. No Actions, deployment, DNS, secret or paid integration changes are part of this implementation.
+
+## Activation and rollback checklist (coordinator owned)
+
+1. Close the required provider gaps above and independently review the final exact head. Confirm current main is included and all required/internal gates pass. No switch/DNS change is included here.
+2. Register the exact apex, www and mPanel domains on existing App Hosting studio using the authorized Firebase account. Obtain its actual required DNS records and certificate status; do not guess IPs or change MX/mail records. Preserve a copy of existing Webflow DNS values before cutover.
+3. Set non-secret `ESMERALDA_PUBLIC_ENABLED=true` for both build and runtime availability on that backend and deploy the approved commit. Verify the actual resulting release and exact-host responses before routing public traffic. This needs authorized console/CLI access; the flag has not been provisioned.
+4. Complete read-only browser/HTTP indexability, mobile, redirects/query, provider and mPanel login/auth acceptance. Production write scenarios need their own authorized controlled data. Do not infer acceptance from these local HTTP tests.
+5. Change only verified website DNS records after the release and certificate gates. Recheck www/apex/mPanel HTTPS and public robots/sitemap/canonical, unknown404, noindex admin and existing merchant isolation. Keep Webflow subscribed/available during acceptance.
+
+Rollback: restore the captured website DNS records to the unchanged Webflow site if cutover acceptance fails; retain mail DNS. Disable the release switch to fail closed on Firebase (503, not merchant fallback) while investigating. If a code regression affects existing merchants, root prepares a reviewed revert of this additive change and verifies actual redeployed commit. Do not delete existing backend, domains, data or the Webflow source. DNS/certificate propagation time is separate wait time and can delay rollback visibility.
+
+Raw-query redirects run in the App Router server handlers, not middleware: Next 15's middleware adapter normalizes `URLSearchParams` even when removing an absent internal key, which can reserialize spaces/escape casing and drop an empty query delimiter. The handlers use the original `Request.url`; HTTP coverage includes `%20`, lowercase `%2f`, literal `~`, `%252F` and duplicate keys. A wire-level bare `?` is tested with Node HTTP's explicit path and is still normalized away by Next before the handler. This semantically empty delimiter has no query parameters; the coordinator accepted documenting that framework limitation instead of changing global framework behavior. Do not claim every URL byte is preserved for an empty delimiter. The new internal mPanel route name is reserved from merchant slug creation.
