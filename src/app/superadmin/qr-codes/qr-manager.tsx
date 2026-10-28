@@ -86,7 +86,7 @@ function QrThumbnail({ code, api, enabled }: { code: QrCodeSummary; api: QrManag
   const key = JSON.stringify([code.brandId, code.id, code.revision, code.publicUrl]);
   useEffect(() => {
     let active = true; setImage(''); setFailed(false);
-    if (!enabled || !/^https:\/\/orderfly\.dk\/q\/[a-f0-9]{32}$/.test(code.publicUrl || '')) return;
+    if (!enabled || !/^https:\/\/orderfly\.dk\/q\/(?:[a-f0-9]{32}|[A-Za-z0-9_-]{21}[AQgw])$/.test(code.publicUrl || '')) return;
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return;
       observer.disconnect();

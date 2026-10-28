@@ -236,3 +236,11 @@ test('actual route resolves async params and defaults module OFF without touchin
     assert.equal((await mod.exports.HEAD(proxy, { params: Promise.resolve({ code: slug }) })).status, 404); assert.equal(dbCalls, 2);
   } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 });
+
+test('compact 128-bit slugs redirect and record metrics alongside legacy slugs',async()=>{
+ const f=fixture(),compact=Buffer.from(slug,'hex').toString('base64url');
+ f.db.rows.set(`${QR_PATHS.publicCodes}/${compact}`,{brandId:'brandA',codeId});
+ f.db.rows.set(f.prefix,{...f.db.rows.get(f.prefix),slug:compact});
+ const response=await handleQrRedirect(request('GET',{},`https://orderfly.dk/q/${compact}`),compact,f.options);
+ assert.equal(response.status,302);assert.equal(events(f.db).length,1);
+});

@@ -100,7 +100,7 @@ export function createQrBulkStore(db: QrDatabase, options: QrBulkStoreOptions) {
         const records: QrRecord[] = entries.map(entry => {
           const id = newId(), slug = newId();
           if (!validId(id) || !/^[a-f0-9]{32}$/.test(slug)) fail('invalid_id_source', 500);
-          return { ...entry, id, slug, status: 'active', expiresAt: null, revision: 1, createdAt: at, updatedAt: at, lifetime: emptyQrLifetime() };
+          return { ...entry, id, slug: Buffer.from(slug, 'hex').toString('base64url'), status: 'active', expiresAt: null, revision: 1, createdAt: at, updatedAt: at, lifetime: emptyQrLifetime() };
         });
         if (new Set(records.map(row => row.id)).size !== records.length || new Set(records.map(row => row.slug)).size !== records.length) fail('id_collision', 409);
         for (const row of records) {

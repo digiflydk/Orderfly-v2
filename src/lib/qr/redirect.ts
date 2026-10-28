@@ -81,7 +81,7 @@ async function executeQrRedirect(request: Request, slug: string, dependencies: Q
   if (!dependencies.enabled || !isQrCanonicalRequest(request, dependencies.environment, dependencies.appHosting)) return errorResponse(404);
   const method = request.method.toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') return errorResponse(405, { Allow: 'GET, HEAD' });
-  if (!/^[a-f0-9]{32}$/.test(slug)) return errorResponse(404);
+  if (!/^(?:[a-f0-9]{32}|[A-Za-z0-9_-]{21}[AQgw])$/.test(slug)) return errorResponse(404);
   const clock = dependencies.now ?? Date.now;
   const classification = classifyQrRequest({ method, userAgent: request.headers.get('user-agent'),
     purpose: request.headers.get('purpose'), secPurpose: request.headers.get('sec-purpose'), referrer: request.headers.get('referer') });

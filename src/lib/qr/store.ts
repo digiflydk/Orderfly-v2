@@ -129,7 +129,7 @@ export function createQrStore(db: QrDatabase, options: {
       return { ...parsed, id: key(newId()), slug: newSlug(), brandId: scope.brandId, status: 'active', revision: 1, createdAt: at, updatedAt: at, lifetime: emptyQrLifetime() };
     });
   }
-  function newSlug() { const slug = newId(); if (!/^[a-f0-9]{32}$/.test(slug)) fail('invalid_slug_source', 500); return slug; }
+  function newSlug() { const slug = newId(); if (!/^[a-f0-9]{32}$/.test(slug)) fail('invalid_slug_source', 500); return Buffer.from(slug, 'hex').toString('base64url'); }
   async function update(scope: QrScope, id: string, value: QrInput, revision: number, requestId: string) {
     const parsed = input(scope, value);
     return mutate(scope, key(id), 'update', parsed, requestId, revision, async (tx, current, at) => {
@@ -163,7 +163,7 @@ export function createQrStore(db: QrDatabase, options: {
   }
   /** Internal transaction read phase for B2: append the event only AFTER this returns. */
   async function resolveInTransaction(tx: QrTransaction, slug: string): Promise<QrResolvedTarget> {
-    if (!/^[a-f0-9]{32}$/.test(slug)) return fail('not_found', 404);
+    if (!/^(?:[a-f0-9]{32}|[A-Za-z0-9_-]{21}[AQgw])$/.test(slug)) return fail('not_found', 404);
       const index = await tx.get(indexRef(slug));
       if (!index.exists) return fail('not_found', 404);
       const { brandId, codeId } = index.data()!;
