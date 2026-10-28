@@ -18,9 +18,22 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
   for(let i=0;i<100;i++){if(child.exitCode!==null)throw Error(output);try{await get('/robots.txt');ready=true;break;}catch{await new Promise(r=>setTimeout(r,100));}}
   assert.ok(ready,'standalone started: '+output);
   for(const [route,entry] of Object.entries(manifest.routes)) {
+   if(route === '/book-bord') {
+    const r=await get(route);assert.equal(r.status,307);assert.equal(r.headers.get('location'),'/bordbooking');
+    continue;
+   }
    const r=await get(route);assert.equal(r.status,200,route);
    const bytes=Buffer.from(await r.arrayBuffer());assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),entry.sha256,route);
    assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
+  }
+  for(const query of ['', '?utm_source=test&return=%2Fmenu%3Fx%3D1&literal=%252F', '?path=%2Fmpanel&next=https%3A%2F%2Fevil.example%2F']) {
+   for(const method of ['GET','HEAD']) {
+    const r=await get('/book-bord'+query,{method});assert.equal(r.status,307);
+    assert.equal(r.headers.get('location'),'/bordbooking'+query);assert.equal(await r.text(),'');
+    assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
+    const target=await get(r.headers.get('location'));assert.equal(target.status,200);
+    assert.equal(crypto.createHash('sha256').update(Buffer.from(await target.arrayBuffer())).digest('hex'),manifest.routes['/bordbooking'].sha256);
+   }
   }
   for(const route of ['/','/menu','/dishes/1-margherita-v']) {
    const r=await get(route+'?path=/unknown');assert.equal(r.status,200,route);
@@ -29,6 +42,7 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
   }
   for(const route of ['/api/health','/_next/image?url=https://example.com/x','/mpanel','/internal-web-preview?path=/','/unknown?path=/']) assert.equal((await get(route)).status,404,route);
   for(const method of ['POST','PUT','PATCH','DELETE','OPTIONS']) assert.equal((await get('/api/health',{method,headers:{'next-action':'synthetic-action'}})).status,405,method);
+  for(const method of ['POST','PUT','PATCH','DELETE','OPTIONS']) assert.equal((await get('/book-bord',{method})).status,405,method);
   for(const host of ['orderfly.dk','esmeralda.orderfly.dk']) assert.equal((await get('/internal-web-preview?path=/',{headers:{host,'x-forwarded-host':host}})).status,404,host);
  } catch(error) {console.error('Standalone output:',output);throw error;} finally {child.kill('SIGTERM');await new Promise(r=>child.exitCode!==null?r():child.once('exit',r));}
 });

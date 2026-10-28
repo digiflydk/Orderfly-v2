@@ -27,7 +27,15 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     headers.set('Allow','GET, HEAD');
     return new Response('Method not allowed', {status:405, headers});
   }
-  const path = new URL(request.url).pathname;
+  const url = new URL(request.url);
+  const path = url.pathname;
+  // Restore the source-owned legacy handoff instead of serving its inert mount.
+  // A relative Location keeps the preview host; omitting a fragment lets browsers
+  // carry the original fragment forward. Keep encoded query bytes untouched.
+  if (path === '/book-bord') {
+    headers.set('Location', '/bordbooking' + url.search);
+    return new Response(null, {status:307, headers});
+  }
   // Exact route keys only: no decoding, path joining, extension fallback or SPA fallback.
   if (!Object.hasOwn(routes,path)) return new Response(request.method === 'HEAD' ? null : 'Not found', {status:404,headers});
   try {
