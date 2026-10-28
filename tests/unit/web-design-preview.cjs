@@ -41,8 +41,8 @@ test('apex and merchants retain routing and excluded asset behavior',()=>{
   for(const host of ['orderfly.dk','esmeralda.orderfly.dk','www.orderfly.dk']) for(const path of ['/_next/image','/_next/static/x.js','/favicon.ico']) assert.equal(mw('https://'+host+path).kind,'next');
   assert.equal(mw('https://www.orderfly.dk/').status,308);
 });
-test('103 served HTML and269 assets retain exact hashes, plus robots; legacy booking redirects',async()=>{
-  assert.equal(Object.keys(manifest.routes).length,374);
+test('103 served HTML and270 assets retain exact hashes, plus robots; legacy booking redirects',async()=>{
+  assert.equal(Object.keys(manifest.routes).length,375);
   for(const [path,entry] of Object.entries(manifest.routes)) {
     if(path === '/book-bord') {
       const r=await server.webDesignPreviewResponse(req(path));

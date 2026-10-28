@@ -405,7 +405,8 @@
     "/kontakt": {
       "source_sha256": "511d5f2a257d280f4776e50ff84530d42467ebf25e1fd700dd5c911835ec8613",
       "internal_links": 1,
-      "contact_anchor_added": true
+      "contact_anchor_added": true,
+      "contact_adapter_version": 1
     },
     "/menu": {
       "source_sha256": "97a66b2cf7ee0e4a91b3062038e5905c180f0a501b22e4d764308c37c2a1a732",
@@ -523,7 +524,7 @@
       "contact_anchor_added": false
     }
   },
-  "payload_sha256": "2e9e8060907c47ae0cf47c35ca8f0f5aa9e67ccc50d2f6eb9ac983fdad6927fa",
+  "payload_sha256": "9493a656d2451ed65be6dfd5e59c43951657d798451962064fcf486b52280653",
   "routes": {
     "/": {
       "sha256": "687b3f319f61a2b86afc7d75f7a0d9acec253048213856029a2e0277bd7e9129",
@@ -2271,9 +2272,9 @@
       "size": 37896
     },
     "/kontakt": {
-      "sha256": "d0c6b75c5ee010c7199f13c08322c5ec90a179ac7abc7ae5609915a9a9a128fb",
+      "sha256": "92bb68e5b779ae591baaaf4e108d0ff5345e72a59118807a962e6f277e68182a",
       "file": "kontakt.html",
-      "size": 42862
+      "size": 42811
     },
     "/menu": {
       "sha256": "0ed0c7272ecd9cc017bc9e46f53acf754db4b058e5aadc4885418afba11c3b2d",
@@ -2394,6 +2395,19 @@
       "sha256": "6731948f9c417a9de4f11bfae1edb218d5ab70725395145a959533ee3f30a8bb",
       "file": "weekendbrunch.html",
       "size": 39561
+    },
+    "/_assets/website-contact-adapter.js": {
+      "sha256": "eb6ec999568ddea7e312638f3c46bdc58672cbe6566fd1569ce856953acd3ef9",
+      "file": "_assets/website-contact-adapter.js",
+      "size": 5627
+    }
+  },
+  "added_assets": {
+    "/_assets/website-contact-adapter.js": {
+      "sha256": "eb6ec999568ddea7e312638f3c46bdc58672cbe6566fd1569ce856953acd3ef9",
+      "source": "preview/esmeralda/adapters/website-contact-adapter.js",
+      "upstream": "Esmeralda-Website#46; esmeralda-restaurant-operations/webflow/website-contact-adapter.js",
+      "activation": "disabled"
     }
   }
 }

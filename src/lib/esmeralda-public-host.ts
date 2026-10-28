@@ -23,10 +23,13 @@ export function esmeraldaPublicHeaders(pathname: string): Record<string, string>
   // Provider dynamic dependencies must pass browser QA before the release switch.
   const booking = pathname === '/bordbooking' ? ' https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/booking-api' : '';
   const map = pathname === '/kontakt' ? ' https://www.google.com/maps/embed' : '';
+  const contactScript = pathname === '/kontakt' ? ' https://challenges.cloudflare.com/turnstile/v0/api.js' : '';
+  const contactFrame = pathname === '/kontakt' ? ' https://challenges.cloudflare.com' : '';
+  const contactConnect = pathname === '/kontakt' ? ' https://challenges.cloudflare.com https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/website-contact' : '';
   return {
     'Cache-Control': 'public, max-age=0, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://omnisnippet1.com/inshop/launcher-v2.js https://connect.facebook.net/en_US/fbevents.js https://www.googletagmanager.com/gtm.js; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com/tr; font-src 'self' data:; connect-src 'self'" + booking + "; form-action 'none'; frame-src 'self'" + map + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://omnisnippet1.com/inshop/launcher-v2.js https://connect.facebook.net/en_US/fbevents.js https://www.googletagmanager.com/gtm.js" + contactScript + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com/tr; font-src 'self' data:; connect-src 'self'" + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
   };
 }
