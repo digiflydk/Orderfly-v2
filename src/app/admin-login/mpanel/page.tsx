@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-const origins=new Set(['https://www.esmeraldapizza.dk','https://esmeraldapizza.dk']);
+const origins=new Set(['https://www.esmeraldapizza.dk','https://esmeraldapizza.dk','https://mpanel.esmeraldapizza.dk']);
 export default function MpanelLogin() {
   const [error,setError]=useState('');
   useEffect(()=>{
