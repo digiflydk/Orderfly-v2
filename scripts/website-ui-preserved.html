@@ -1,0 +1,13 @@
+<script>
+(function(){
+var adminPath=/^(\/mpanel|\/hr\/admin|\/bordbooking-admin|\/admin-v2|\/produktion-admin)\/?$/.test(location.pathname);
+function idle(fn,t){if('requestIdleCallback'in window)requestIdleCallback(fn,{timeout:t||3000});else setTimeout(fn,t||1500)}
+function cta(){if(adminPath||location.pathname.replace(/\/$/,'')==='/bordbooking'||document.querySelector('.esmeralda-mobile-cta'))return;var n=document.createElement('nav');n.className='esmeralda-mobile-cta';n.setAttribute('aria-label','Hurtige handlinger');n.innerHTML='<a class="esmeralda-mobile-cta__button esmeralda-mobile-cta__book" href="/bordbooking">Bestil bord</a><a class="esmeralda-mobile-cta__button esmeralda-mobile-cta__order" href="https://esmeralda.dully.io/">Bestil her</a>';document.body.appendChild(n)}
+var swiperPromise;
+function swiper(){if(swiperPromise)return swiperPromise;swiperPromise=new Promise(function(ok){var s=document.createElement('script');s.src='/_assets/13cf11a4182d0bc51f091cbc.js';s.async=true;s.onload=ok;document.body.appendChild(s)});return swiperPromise}
+function make(sel,opt){var el=document.querySelector(sel);if(!el||el.dataset.swiperReady)return;el.dataset.swiperReady='1';swiper().then(function(){new Swiper(sel,opt)})}
+function initHero(){var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;make('.swiper-container',{loop:false,rewind:true,speed:600,slidesPerView:'auto',spaceBetween:0,autoplay:reduce?false:{delay:3000,disableOnInteraction:false,pauseOnMouseEnter:true,waitForTransition:true},navigation:{nextEl:'.swiper-button-next',prevEl:'.swiper-button-prev'},pagination:{el:'.pagination-dot',clickable:true,bulletClass:'swiper-dot',bulletActiveClass:'active'}})}
+function observe(sel,opt){var el=document.querySelector(sel);if(!el)return;var io=new IntersectionObserver(function(e){if(e[0].isIntersecting){io.disconnect();make(sel,opt)}},{rootMargin:'250px'});io.observe(el)}
+document.addEventListener('DOMContentLoaded',function(){if(adminPath)return;cta();idle(initHero,1800);observe('.dish-slider',{loop:false,speed:400,slidesPerView:'auto',spaceBetween:0,autoplay:false,navigation:{nextEl:'.dish-slider-next-1',prevEl:'.dish-slider-prev-1'},pagination:{el:'.dish-slider-pagination',clickable:true,bulletClass:'swiper-dot-1',bulletActiveClass:'active'}});observe('.recommend-slider',{loop:false,speed:400,slidesPerView:'auto',autoplay:false,navigation:{nextEl:'.recommend-button-next',prevEl:'.recommend-button-prev'}});observe('.similar-slider',{loop:false,speed:400,slidesPerView:'auto',autoplay:false,navigation:{nextEl:'.similar-button-next',prevEl:'.similar-button-prev'}})});
+})();
+</script>

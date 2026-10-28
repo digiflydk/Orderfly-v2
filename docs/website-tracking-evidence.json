@@ -1,0 +1,60 @@
+{
+  "checked_date": "2026-10-28",
+  "website_main": "7a5a2fb40ae593783b616cee92ccc5b239745a99",
+  "capture_payload_sha256": "abf960936b1e791fdab8b7bfaae64fa5600136cec040a8bf7c6536b4286cca2b",
+  "capture_ids": {
+    "gtm": "GTM-52G3QF76",
+    "ga4": "G-F9XCDW2586",
+    "meta": "773544982454626",
+    "omnisend_brand": "69618ede8284682be9bb5290"
+  },
+  "published_container": {
+    "version": "22",
+    "tag_count": 13,
+    "init_tag_ids": [
+      5,
+      20,
+      23
+    ],
+    "google_ads_id": "AW-17906276961",
+    "consent_init_tag_id": 22,
+    "linker_domains": [
+      "dully.io",
+      "esmeraldapizza.dk"
+    ],
+    "linker_cross_domain": true,
+    "linker_url_passthrough": true
+  },
+  "read_only_scripts": [
+    {
+      "url": "https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76",
+      "status": 200,
+      "bytes": 473769,
+      "sha256": "1acb71a861261e1de419ab70823e9dcd97aeee72a4f5fe15f4a86f293c84046b",
+      "executed": false
+    },
+    {
+      "url": "https://www.googletagmanager.com/gtag/js?id=G-F9XCDW2586",
+      "status": 200,
+      "bytes": 612991,
+      "sha256": "51257f1e11fe0f9f4af88088a7cc5c596f8c95aa1f2985cee3e055bfedb5a6af",
+      "executed": false
+    },
+    {
+      "url": "https://connect.facebook.net/en_US/fbevents.js",
+      "status": 200,
+      "bytes": 437143,
+      "sha256": "5e0747daae9c60fbe0aafbc2c2e4c75339b2586fc17189e1af0825be9cd6b013",
+      "executed": false
+    }
+  ],
+  "not_verified": [
+    "provider delivery",
+    "runtime network/cookie behavior by consent category",
+    "complete dynamic CSP inventory",
+    "Meta per-pixel config/plugin execution",
+    "Google Ads country-specific/optional features",
+    "Omnisend popup/render/delivery"
+  ],
+  "events_sent": false
+}
