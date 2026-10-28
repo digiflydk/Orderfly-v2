@@ -18,6 +18,12 @@ Current v8 input produces 184 localized anchor occurrences across 104 pages and 
 
 ## Validation of this candidate
 
-Six focused Python test groups cover known hosts, query/fragment preservation, URL lookalikes/private paths, quoted/unquoted values, attribute injection, script/comment/RCDATA preservation and fail-closed contact IDs. All passed. The existing 27 preview/brand checks, production build with typecheck and the real standalone Next HTTP suite over all 374 routes plus denial cases passed. Comparing every transformed page with the verified input confirmed unchanged script/link/meta bytes on all 104 pages; 269 assets and robots were byte-identical. The emitted aggregate payload SHA256 is `2e9e8060907c47ae0cf47c35ca8f0f5aa9e67ccc50d2f6eb9ac983fdad6927fa`.
+Six focused Python test groups cover known hosts, query/fragment preservation, URL lookalikes/private paths, quoted/unquoted values, attribute injection, script/comment/RCDATA preservation and fail-closed contact IDs. All passed. The combined candidate includes the reviewed legacy booking handoff from PR745. All 28 preview/brand checks, production build with typecheck and the real standalone Next HTTP suite over 373 content routes plus the temporary booking redirect and denial cases passed. Comparing every transformed page with the verified input confirmed unchanged script/link/meta bytes on all 104 pages; 269 assets and robots were byte-identical. The emitted aggregate payload SHA256 is `2e9e8060907c47ae0cf47c35ca8f0f5aa9e67ccc50d2f6eb9ac983fdad6927fa`.
 
 These are local package/runtime checks, not live browser or service acceptance. The coordinator still verifies the deployed commit, product-card navigation, contact scrolling and preserved external links after release.
+
+## Combined release boundary
+
+PR746 retains both navigation-fix and booking-handoff commit histories. `/book-bord` remains in the immutable input inventory but the exact preview host now returns the reviewed 307 to `/bordbooking`, preserving query and browser fragment inheritance; its former placeholder HTML is not served. Contact/navigation transformations and booking redirect use separate layers and are exercised together.
+
+The current cloud browser and external HTTP access are unavailable in the coordinator environment. This candidate must not be merged to main or deployed until the coordinator can complete required live verification. No live/mobile/booking/contact service acceptance is claimed by local tests. PR745 remains open until the combined PR is eventually merged.
