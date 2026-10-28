@@ -1,5 +1,6 @@
 'use server';
 
+import { optionExperience } from './option-experience';
 import { listScopedDocuments } from '@/lib/access/scoped-data';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnalyticsEvent, FunnelFilters, FunnelOutput } from '@/types';
@@ -91,5 +92,5 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
   if (totals.paidOrders && !totals.click_purchase) dataQualityWarnings.push(
     'Der er betalte ordrer, men ingen målte betalingsklik i det valgte udsnit. Det kan skyldes manglende samtykke, ældre ordrer eller manglende tracking. Betalte ordrer må ikke bruges til at genskabe klik.');
 
-  return { totals, daily, byLocation, attribution, dataQualityWarnings };
+  return { totals, daily, byLocation, attribution, dataQualityWarnings, optionExperience: optionExperience(events) };
 }

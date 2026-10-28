@@ -3,6 +3,7 @@
 import { lineMoney, money, sumMoney } from '@/lib/money';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, cartTopping, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
+import { orderPresentedOptions } from '@/lib/option-presentation';
 import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
@@ -33,6 +34,7 @@ import {ComboBuilderDialog} from './combo-builder-dialog';
 interface ProductDialogProps {
   product: ProductForMenu;
   initialItem?: CartItem;
+  upsellId?: string;
   onAdded?: () => void;
   allToppingGroups: ToppingGroup[];
   allToppings: Topping[];
@@ -55,12 +57,14 @@ const getSelectionText = (group: ToppingGroup): string => {
 };
 
 
-export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount, initialItem, onAdded }: ProductDialogProps) {
+export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount, initialItem, onAdded, upsellId }: ProductDialogProps) {
   const {combos, products} = useStorefrontCatalog();
   const [upgrade, setUpgrade] = useState<ComboMenu | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const initialized = useRef('');
   const committed = useRef(false);
+  const interactionId = useRef('');
+  const pendingUserSelection = useRef(false);
   const dialogId = useId();
   const [quantity, setQuantity] = useState(1);
   const [selectedToppings, setSelectedToppings] = useState<Record<string, CartItemTopping>>({});
@@ -78,8 +82,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     const ids = product.toppingGroupIds || [];
     return ids.flatMap(id => allToppingGroups.filter(group => group.id === id)).map(group => ({
       ...group,
-      toppings: effectiveOptions.filter(option => option.groupId === group.id)
-        .sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999)),
+      toppings: orderPresentedOptions(effectiveOptions.filter(option => option.groupId === group.id)),
     })).filter(group => group.toppings.length > 0 || group.minSelection > 0);
   }, [product.toppingGroupIds, allToppingGroups, effectiveOptions]);
 
@@ -105,6 +108,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     if (isOpen && location && initialized.current !== key) {
       if (initialized.current) {setIsOpen(false); return;}
       initialized.current = key; committed.current = false; setShowErrors(false);
+      interactionId.current = crypto.randomUUID();
+      pendingUserSelection.current = false;
       setQuantity(initialItem?.quantity || 1);
 
       const selected = initialItem ? Object.fromEntries(initialItem.toppings.flatMap(option => {
@@ -141,6 +146,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     const key = `${product.id}/${location.id}/${measurementKey}`;
     if (trackedView.current !== key && trackEvent('view_product', {productId: product.id, locationId: location.id})) {
       trackedView.current = key;
+      if (relevantToppingGroups.length > 0) trackEvent('option_dialog_opened', {productId: product.id, locationId: location.id, interactionId: interactionId.current, interactionMode: initialItem ? 'edit' : 'add'});
     }
   }, [isOpen, product.id, location?.id, trackEvent, measurementKey]);
 
@@ -162,9 +168,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       const groupTotal = group.toppings.reduce((sum, option) => sum + (next[option.id]?.quantity ?? 0), 0);
       const total = Object.values(next).reduce((sum, option) => sum + (option.quantity ?? 1), 0);
       if (total > MAX_TOPPINGS_PER_ITEM || (group.maxSelection > 0 && groupTotal > group.maxSelection)) return previous;
-      return reconcileSelection(next, previous);
+      const reconciled = reconcileSelection(next, previous);
+      if (JSON.stringify(quantities(previous)) !== JSON.stringify(quantities(reconciled))) pendingUserSelection.current = true;
+      return reconciled;
     });
   };
+
+  useEffect(() => {
+    if (!pendingUserSelection.current) return;
+    pendingUserSelection.current = false;
+    trackEvent('option_selection_changed', {productId: product.id, locationId: location?.id, interactionId: interactionId.current, interactionMode: initialItem ? 'edit' : 'add'});
+  }, [selectedToppings, trackEvent, product.id, location?.id]);
 
   const toppingsTotal = sumMoney(Object.values(selectedToppings).map(topping => topping.price));
   const totalItemPrice = lineMoney(finalPrice, quantity, [toppingsTotal]);
@@ -189,9 +203,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       return;
     }
     const finalToppings = Object.values(selectedToppings);
-    const saved = addToCart(product, quantity, finalToppings, basePrice, finalPrice, initialItem);
+    const saved = addToCart(product, quantity, finalToppings, basePrice, finalPrice, initialItem, upsellId);
     if (saved === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen for at fortsætte.'}); return;}
     committed.current = true;
+    if (relevantToppingGroups.length > 0) trackEvent('option_product_added', {productId: product.id, locationId: location?.id, interactionId: interactionId.current, interactionMode: initialItem ? 'edit' : 'add'});
     onAdded?.();
     toast({title: initialItem ? 'Kurven er opdateret' : 'Tilføjet til kurven', description: `${quantity} × ${product.productName}`, duration: 2200});
 
@@ -258,7 +273,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
             </div>
             <div className="commerce-product-footer shrink-0 border-t bg-inherit px-3 py-3">
-              {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className="mb-2 text-xs text-muted-foreground">{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
+              {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className={completedRequiredGroups === requiredGroups.length ? "sr-only" : "mb-2 text-xs text-muted-foreground"}>{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
               <div className="flex items-center gap-3">
                 <div className="commerce-option-quantity flex shrink-0 items-center gap-1" role="group" aria-label="Antal produkter">
                   <Button type="button" variant="outline" size="icon" aria-label="Reducer antal" disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-11 w-11 rounded-lg"><Minus className="h-4 w-4" /></Button>

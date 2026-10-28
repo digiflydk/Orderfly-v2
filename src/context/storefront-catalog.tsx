@@ -43,6 +43,7 @@ export function StorefrontCatalog({ products, combos, children }: {
                 const response = await fetch('/api/public/upsell', { method: 'POST', headers: { 'Content-Type': 'application/json' }, cache: 'no-store', signal: AbortSignal.timeout(2000), body: JSON.stringify({
                         brandId: brand.id, locationId: location.id, deliveryType,
                         cartItems: cartItems.map(item => ({ id: item.id, categoryId: item.categoryId, itemType: item.itemType, tags: item.tags,
+                            toppingIds: item.toppings.map(t => t.id).filter((id): id is string => !!id).slice(0, 50),
                             includedProductIds: item.comboSelections?.flatMap(g => g.products.map(p => p.id)) })),
                         cartTotal: cartItems.filter(item => !isLockedItem(item)).reduce((sum, item) => sum + (item.basePrice + item.toppings.reduce((n, t) => n + t.price, 0)) * item.quantity, 0),
                         excludedUpsellIds: handledUpsells(),

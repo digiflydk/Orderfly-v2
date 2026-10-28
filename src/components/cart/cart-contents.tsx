@@ -26,11 +26,11 @@ export function CartContents({ onEdit }: {
           <Button variant="link" className="px-0 h-11" onClick={() => { setEditingItem(item); onEdit?.(); }} aria-label={`Rediger ${item.productName}`}>Rediger</Button>
           <div className="flex items-center justify-between gap-1">
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" aria-label={`Fjern én ${item.productName}`} onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}><Minus className="size-4"/></Button>
+              <Button variant="outline" size="icon" className="h-11 w-11" aria-label={`Fjern én ${item.productName}`} onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}><Minus className="size-4"/></Button>
               <span className="tabular-nums">{item.quantity}</span>
-              <Button variant="outline" size="icon" aria-label={`Tilføj én ${item.productName}`} disabled={item.quantity >= 100} onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}><Plus className="size-4"/></Button>
+              <Button variant="outline" size="icon" className="h-11 w-11" aria-label={`Tilføj én ${item.productName}`} disabled={item.quantity >= 100} onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}><Plus className="size-4"/></Button>
             </div>
-            <Button variant="ghost" size="icon" aria-label={`Fjern ${item.productName}`} onClick={() => removeFromCart(item.cartItemId)}><Trash2 className="size-4"/></Button>
+            <Button variant="ghost" size="icon" className="h-11 w-11" aria-label={`Fjern ${item.productName}`} onClick={() => removeFromCart(item.cartItemId)}><Trash2 className="size-4"/></Button>
           </div>
         </div>
       </article>;

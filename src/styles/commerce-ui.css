@@ -224,3 +224,11 @@ body:has([data-commerce-root]) [data-product-options] [data-option-row]:has([dat
 [data-product-options] > button:last-child { top: 4px; right: 4px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
 
 body:has([data-commerce-root]) [data-product-options] [data-option-stepper] button:focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; box-shadow: none; }
+
+/* Keep the mobile basket close control reachable without crowding its title. */
+[data-commerce-panel="cart"] > button:last-child {
+  width: 44px;
+  height: 44px;
+  top: 4px;
+  right: 4px;
+}

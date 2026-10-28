@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useCart } from '@/context/cart-context';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
@@ -8,8 +8,15 @@ import { formatPrice, itemCountLabel } from '@/lib/storefront-format';
 export function MobileFloatingCart({ floating = true }: {
     floating?: boolean;
 }) {
-    const { itemCount, checkoutTotal, bagFee } = useCart();
+    const { itemCount, checkoutTotal, bagFee, editingItem } = useCart();
     const [open, setOpen] = useState(false);
+    const returnAfterEdit = useRef(false);
+    useEffect(() => {
+        if (returnAfterEdit.current && !editingItem) {
+            returnAfterEdit.current = false;
+            setOpen(true);
+        }
+    }, [editingItem]);
     if (!itemCount && floating)
         return null;
     return <>
@@ -21,9 +28,9 @@ export function MobileFloatingCart({ floating = true }: {
         </Button>
       </SheetTrigger>
       <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
-        <SheetHeader className="p-4"><SheetTitle>Din kurv · {itemCountLabel(itemCount)}</SheetTitle><SheetDescription>Rediger dine varer, eller gå videre til kassen.</SheetDescription></SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto"><CartContents onEdit={() => setOpen(false)}/><CartTotals onBrowse={() => setOpen(false)}/></div>
-        <div className="shrink-0 p-4 pt-2"><CartCheckoutButton /></div>
+        <SheetHeader className="p-4 pr-14 shrink-0"><SheetTitle>Din kurv · {itemCountLabel(itemCount)}</SheetTitle><SheetDescription>Rediger dine varer, eller gå videre til kassen.</SheetDescription></SheetHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto"><CartContents onEdit={() => { returnAfterEdit.current = true; setOpen(false); }}/><CartTotals onBrowse={() => setOpen(false)}/></div>
+        <div className="shrink-0 border-t bg-background p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"><CartCheckoutButton /></div>
       </SheetContent>
     </Sheet>
   </>;

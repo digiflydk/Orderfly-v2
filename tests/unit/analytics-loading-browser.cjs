@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const {execFileSync} = require('node:child_process');
 const { chromium, expect } = require('@playwright/test');
 const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
@@ -30,6 +31,7 @@ function result(sessions = 12) {
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'analytics-loading-browser-'));
+  execFileSync(path.join(root,'node_modules/.bin/tailwindcss'), ['-c',path.join(root,'tailwind.config.ts'),'-i',path.join(root,'src/app/globals.css'),'-o',path.join(dir,'styles.css'),'--minify'], {cwd:root,stdio:'pipe'});
   const navigation = file('navigation', `import React from 'react';
     export const RouterContext = React.createContext(null);
     export const useRouter = () => React.useContext(RouterContext);
@@ -83,12 +85,13 @@ before(async () => {
     module: {rules: [{test: /\.[jt]sx?$/, exclude: /node_modules/, use: [loader]}]},
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({all:false, errors:true}))) : resolve()));
   server = http.createServer((req, res) => {
+    if (req.url === '/styles.css') { res.setHeader('content-type','text/css'); return res.end(fs.readFileSync(path.join(dir,'styles.css'))); }
     if (req.url === '/bundle.js') {
       res.setHeader('content-type', 'application/javascript');
       return res.end(fs.readFileSync(path.join(dir, 'bundle.js')));
     }
     res.setHeader('content-type', 'text/html');
-    res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
+    res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -101,7 +104,7 @@ after(async () => {
   if (dir) fs.rmSync(dir, {recursive:true, force:true});
 });
 
-async function setup(t) {
+async function setup(t, query = initialQuery) {
   const context = await browser.newContext();
   t.after(() => context.close());
   const page = await context.newPage();
@@ -113,7 +116,7 @@ async function setup(t) {
     return requests.shift();
   };
   const complete = (route, data = result()) => route.fulfill({json:data});
-  await page.goto(origin + '/superadmin/analytics/cust-funnel' + initialQuery);
+  await page.goto(origin + '/superadmin/analytics/cust-funnel' + query);
   return {page, nextRequest, complete};
 }
 
@@ -176,4 +179,41 @@ test('a failed filter read replaces the spinner with the existing error UI', asy
   await expect(page.getByRole('heading', {name:'Noget gik galt i Superadmin'})).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   await expect(page.getByRole('button', {name:'Prøv igen'})).toBeVisible();
+});
+
+
+test('option dashboard separates new additions from edits and shows unmeasurable empty cohorts', async t => {
+  const {page,nextRequest,complete}=await setup(t);
+  const data=result();
+  data.optionExperience={opened:10,changed:7,added:4,withoutAdd:6,editedOpened:3,savedEdits:2,offers:5,accepted:1,rejected:2};
+  await complete(await nextRequest(),data);
+  const card=page.locator('div.rounded-lg').filter({has:page.getByText('Tilvalg og mersalg',{exact:true})}).first();
+  await expect(card.getByText('Nye produkter lagt i kurven',{exact:true})).toBeVisible();
+  await expect(card.getByText('4 / 10',{exact:true})).toBeVisible();
+  await expect(card.getByText('40.0 %',{exact:true})).toBeVisible();
+  await expect(card.getByText('2 gemt / 3 åbnet',{exact:true})).toBeVisible();
+  await expect(card.getByText('1 / 5',{exact:true})).toBeVisible();
+  await expect(card).toContainText('ikke betalte køb');
+  await expect(card).not.toContainText(/NaN|Infinity/);
+  await page.getByRole('combobox',{name:'Counting',exact:true}).click();
+  await page.getByRole('option',{name:'Unique Sessions',exact:true}).click();
+  data.optionExperience={opened:0,changed:0,added:0,withoutAdd:0,editedOpened:0,savedEdits:0,offers:0,accepted:0,rejected:0};
+  await complete(await nextRequest(),data);
+  await expect(card.getByText('Endnu ikke målbart',{exact:true})).toBeVisible();
+  await expect(card).not.toContainText(/NaN|Infinity|40.0/);
+});
+
+test('mobile option cards fit viewport and device changes preserve tenant and date filters',async t=>{
+ const {page,nextRequest,complete}=await setup(t,initialQuery+'&brandId=b&locationId=l&utmSource=newsletter&counting=unique');
+ await page.setViewportSize({width:390,height:844});
+ const data=result();data.optionExperience={opened:10,changed:7,added:4,withoutAdd:6,editedOpened:3,savedEdits:2,offers:5,accepted:1,rejected:2};
+ await complete(await nextRequest(),data);
+ const card=page.locator('div.rounded-lg').filter({has:page.getByText('Tilvalg og mersalg',{exact:true})}).first();
+ await card.scrollIntoViewIfNeeded();
+ const geometry=await card.evaluate(el=>{const r=el.getBoundingClientRect();return {left:r.left,right:r.right,width:innerWidth,overflow:el.scrollWidth>el.clientWidth};});
+ assert.ok(geometry.left>=0&&geometry.right<=geometry.width,JSON.stringify(geometry));assert.equal(geometry.overflow,false);
+ await page.getByRole('combobox',{name:'Enhed',exact:true}).click();await page.getByRole('option',{name:'Mobil',exact:true}).click();
+ const request=await nextRequest();const params=new URL(request.request().url()).searchParams;
+ for(const [key,value]of Object.entries({brandId:'b',locationId:'l',dateFrom:'2026-09-01',dateTo:'2026-09-21',utmSource:'newsletter',counting:'unique',device:'mobile'}))assert.equal(params.get(key),value);
+ await complete(request,data);await expect(card.getByText('4 / 10',{exact:true})).toBeVisible();
 });

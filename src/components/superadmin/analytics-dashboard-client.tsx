@@ -205,6 +205,22 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
             <KpiCard title="Alle betalte ordrer" value={totals.paidOrders ?? totals.payment_succeeded} tooltipText="Betalte ordrer fra serveren. Indeholder også køb uden analytics-samtykke." />
             <KpiCard title="Målt konvertering" value={totalCR} tooltipText="Andel målte sessions med en betalt ordre i perioden. Køb uden en matchende målt session indgår kun i salgstallet." />
        </div>
+       {data.optionExperience && <Card>
+         <CardHeader><CardTitle>Tilvalg og mersalg</CardTitle>
+           <p className="text-sm text-muted-foreground">Sammenhængende forløb med statistik-samtykke i det valgte udsnit. Hver åbning eller tilbudsvisning tælles én gang, uanset tælleindstillingen ovenfor.</p>
+         </CardHeader>
+         <CardContent className="space-y-4">
+           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+             <div><p className="text-sm text-muted-foreground">Tilvalg åbnet for nyt produkt</p><p className="text-2xl font-semibold">{data.optionExperience.opened}</p></div>
+             <div><p className="text-sm text-muted-foreground">Valg ændret</p><p className="text-2xl font-semibold">{data.optionExperience.changed}</p></div>
+             <div><p className="text-sm text-muted-foreground">Nye produkter lagt i kurven</p><p className="text-2xl font-semibold">{data.optionExperience.added} / {data.optionExperience.opened}</p><p className="text-xs text-muted-foreground">{data.optionExperience.opened ? `${(data.optionExperience.added / data.optionExperience.opened * 100).toFixed(1)} %` : 'Endnu ikke målbart'}</p></div>
+             <div><p className="text-sm text-muted-foreground">Uden målt tilføjelse</p><p className="text-2xl font-semibold">{data.optionExperience.withoutAdd}</p></div>
+           </div>
+           <p className="text-sm">Redigeringer af eksisterende kurvvarer: <strong>{data.optionExperience.savedEdits} gemt / {data.optionExperience.editedOpened} åbnet</strong>. Disse tæller ikke som nye tilføjelser ovenfor.</p>
+           <p className="text-sm">Mersalg accepteret: <strong>{data.optionExperience.accepted} / {data.optionExperience.offers}</strong> målte tilbud {data.optionExperience.offers ? `(${(data.optionExperience.accepted / data.optionExperience.offers * 100).toFixed(1)} %)` : '— endnu ikke målbart'}. Afvist: {data.optionExperience.rejected}.</p>
+           <p className="text-xs text-muted-foreground">Kun handlinger med samme besøg, produkt/tilbud og visning matches. Uden tilføjelse kan også betyde et igangværende forløb eller manglende måling. Periodens grænser kan afskære et forløb. Tilføjelser og accepterede tilbud er ikke betalte køb. Sammenhold med verificeret salg og gennemsnitsordre nedenfor; tallene dokumenterer ikke i sig selv en salgseffekt.</p>
+         </CardContent>
+       </Card>}
        <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
         <Card>
           <CardHeader><CardTitle>Målte handlinger</CardTitle><p className="text-sm text-muted-foreground">{isUniqueCount ? "Unikke sessions pr. handling" : "Antal hændelser pr. handling"}. Gentagne besøg og genoptagne kurve kan give flere checkout-hændelser end tilføjelser til kurven. Produktvisning kan springes over ved hurtig tilføjelse.</p></CardHeader>

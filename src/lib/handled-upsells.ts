@@ -8,4 +8,5 @@ export function handledUpsells(): string[] {
 }
 export function markUpsellHandled(id: string) {
   try { sessionStorage.setItem('orderfly_handled_upsell', JSON.stringify([...new Set([...handledUpsells(), id])])); } catch {}
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('orderfly:upsell-handled'));
 }
