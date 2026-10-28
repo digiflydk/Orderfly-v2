@@ -86,7 +86,7 @@ function QrThumbnail({ code, api, enabled }: { code: QrCodeSummary; api: QrManag
   const key = JSON.stringify([code.brandId, code.id, code.revision, code.publicUrl]);
   useEffect(() => {
     let active = true; setImage(''); setFailed(false);
-    if (!enabled || !/^https:\/\/orderfly\.dk\/q\/(?:[a-f0-9]{32}|[A-Za-z0-9_-]{21}[AQgw])$/.test(code.publicUrl || '')) return;
+    if (!enabled || !/^(?:https:\/\/orderfly\.dk\/q\/(?:[a-f0-9]{32}|[A-Za-z0-9_-]{21}[AQgw])|HTTPS:\/\/ORDERFLY\.DK\/R\/[LC][0-9A-Z]{25})$/.test(code.publicUrl || '')) return;
     const observer = new IntersectionObserver(entries => {
       if (!entries.some(entry => entry.isIntersecting)) return;
       observer.disconnect();
@@ -272,7 +272,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
       {rows.map(code => <li key={`${code.brandId}/${code.id}`} className="qr-card" style={{ overflowWrap: 'anywhere' }}>
         <QrThumbnail code={code} api={api} enabled={dynamicEnabled && code.status !== 'archived'} />
         <div className="qr-card-content"><h2>{code.name}</h2><div className="qr-card-meta"><span>{brands.find(brand => brand.id === code.brandId)?.name || code.brandId}</span><span>{code.kind === 'dynamic' ? 'Dynamisk' : 'Statisk'}</span><span className={`qr-badge qr-badge-${code.status}`}>{STATUS_NAMES[code.status]}</span></div>
-          {code.publicUrl && <div className="qr-permanent"><span>{code.publicUrl.replace('https://', '')}</span><button type="button" className="qr-copy" aria-label={`Kopiér link til ${code.name}`} onClick={() => { void copyLink(code); }}>Kopiér</button></div>}
+          {code.publicUrl && <div className="qr-permanent"><span>{code.publicUrl.replace(/^https:\/\//i, '')}</span><button type="button" className="qr-copy" aria-label={`Kopiér link til ${code.name}`} onClick={() => { void copyLink(code); }}>Kopiér</button></div>}
           <p className="qr-destination"><span>Destination</span> {code.destination}</p>
           {(code.campaign || code.tags.length > 0) && <p className="qr-card-tags">{code.campaign}{code.tags.length ? ` · ${code.tags.join(', ')}` : ''}</p>}
         </div>

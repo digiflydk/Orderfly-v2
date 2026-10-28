@@ -39,3 +39,27 @@ The existing additive index workflow accepts `docs/qr-firestore-indexes.json` fo
 ## Compact QR links
 
 New individual and bulk-created codes encode the same 128 random bits as 22 base64url characters instead of 32 hexadecimal characters. Resolution and thumbnails accept both formats. Existing printed URLs and stored slugs remain unchanged. Shorter links improve density but do not guarantee arbitrary physical reduction: logo, module shape, quiet zone and printer quality still matter. There is no size-specific export mode.
+
+### Scale-efficient scan URLs
+
+Dynamic previews, PNG/SVG/print exports, thumbnails and copied links use
+`HTTPS://ORDERFLY.DK/R/{L|C}{25 uppercase base36 digits}`. Uppercase scheme and
+host are URL-equivalent; the dedicated case-sensitive `/R/` endpoint decodes the
+identifier before delegating to the original QR redirect handler. `L` selects
+an existing 32-character hex index key and `C` an existing 22-character base64url
+key. All 128 bits, including leading zeroes, are preserved. Overflow and
+noncanonical tokens are rejected. No alias records or data migration are needed.
+
+The entire URL fits QR alphanumeric encoding: at correction level H it uses
+33×33 modules instead of the compact byte-mode link's 37×37 (legacy links were
+41×41). H correction, logo settings, quiet zones, original record IDs, status,
+expiry, metrics, rate limits, attribution and tenant checks remain unchanged.
+Previously printed `/q/` URLs continue working. Existing records receive the
+improvement on re-export without creating or saving another QR record. Static
+payloads remain exact and are never rewritten.
+
+Tests cover both identifier formats, boundary values, random round trips,
+invalid tokens, route delegation and PNG/SVG logo decoding after resampling to
+multiple pixel dimensions. These are digital regression checks, not a guarantee
+for every physical size, printer, paper or scanner. No millimetre-specific mode
+has been introduced. A physical sample is still needed before a print run.
