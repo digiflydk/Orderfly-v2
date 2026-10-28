@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getM3PizzaOrderEntryUrl } from '@/lib/m3pizza-order-flow';
 import { brandSlugFromHost, brandSubdomainRewrite } from '@/lib/brand-subdomain';
 
+import { isWebDesignPreviewHost, WEB_PREVIEW_INTERNAL, WEB_PREVIEW_HEADERS } from '@/lib/web-design-preview';
+
 const CANONICAL_HOST = 'orderfly.dk';
 const WWW_HOST = `www.${CANONICAL_HOST}`;
 
@@ -33,6 +35,26 @@ export function resolveProductionRedirect(url: URL, hostHeader: string | null, f
 }
 
 export function middleware(request: NextRequest) {
+  const incomingPath = request.nextUrl.pathname;
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  const previewHost = isWebDesignPreviewHost(host);
+  // This endpoint is reachable only through our rewrite, never by its public URL.
+  if (incomingPath === WEB_PREVIEW_INTERNAL || incomingPath.startsWith(`${WEB_PREVIEW_INTERNAL}/`)) {
+    return new NextResponse('Not found', {status:404, headers: previewHost ? WEB_PREVIEW_HEADERS : undefined});
+  }
+  if (previewHost) {
+    if (!['GET', 'HEAD'].includes(request.method)) return new NextResponse('Method not allowed', {
+      status:405, headers: {...WEB_PREVIEW_HEADERS, Allow:'GET, HEAD'},
+    });
+    const redirect = resolveProductionRedirect(new URL(request.url), host, request.headers.get('x-forwarded-proto'));
+    if (redirect) return NextResponse.redirect(redirect, 308);
+    const rewritten = request.nextUrl.clone();
+    rewritten.pathname = WEB_PREVIEW_INTERNAL;
+    rewritten.search = '';
+    return NextResponse.rewrite(rewritten, {headers:WEB_PREVIEW_HEADERS});
+  }
+  // Preserve the previous matcher exclusions on every non-preview host.
+  if (/^\/(?:_next\/(?:static|image)|favicon\.ico)/.test(incomingPath)) return NextResponse.next();
   const redirectTarget = resolveProductionRedirect(
     new URL(request.url),
     request.headers.get('x-forwarded-host') ?? request.headers.get('host'),
@@ -75,5 +97,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/:path*'],
 };

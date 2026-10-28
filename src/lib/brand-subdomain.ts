@@ -10,7 +10,7 @@ export const BRAND_SLUG_MAX = 40;
 // aliases (`/m3pizza`), which a brand
 // slug must never shadow on the apex domain (/{slug}) or as a subdomain.
 export const RESERVED_BRAND_SLUGS = new Set([
-  'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
+  'web', 'internal-web-preview', 'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
   'superadmin', 'superadmin-safe', 'merchant', 'terminal', 'mapp', 'admin-login', 'feedback', 'feedback-admin',
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
   // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
