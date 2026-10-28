@@ -248,13 +248,13 @@ for (const width of [360,390,768,820,1023,1280]) test(`#71 cart is reachable and
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1,'draft is not written before save');
  await page.keyboard.press('Escape');
- if(width<1024)await page.getByRole('button',{name:/Se kurv/}).click();
+ if(width<1024)await expect(page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Soda',exact:true})).toBeVisible();
  await (width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'})).getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].quantity,2);
- if(width<1024)await page.getByRole('button',{name:/Se kurv/}).click();
+ if(width<1024)await expect(page.getByRole('dialog').getByRole('button',{name:'Til kassen',exact:true})).toBeVisible();
  const cta=(width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'})).getByRole('button',{name:'Til kassen',exact:true});
  assert.ok(await cta.isVisible());assert.ok((await cta.boundingBox()).height>=55);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal page overflow');
@@ -290,6 +290,7 @@ test('#71 inline quick upsell removes itself after add without a popup',async t=
  await offers.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  await offers.waitFor({state:'hidden'});assert.equal(await page.getByRole('dialog').count(),1,'cart stays open without an upsell modal');
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(saved.choices.find(item=>item.id==='drink').upsellId,'u');
 });
 test('#71 a hanging recommendation request cannot delay checkout navigation',async t=>{
  const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=hang');
@@ -315,7 +316,7 @@ test('#71 recommended product requires options and cannot add twice',async t=>{
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).evaluate(node=>{node.click();node.click();});
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));
- assert.equal(stored.choices.filter(i=>i.id==='p').length,1);assert.deepEqual(stored.choices.find(i=>i.id==='p').toppingIds,['base']);
+ assert.equal(stored.choices.filter(i=>i.id==='p').length,1);assert.deepEqual(stored.choices.find(i=>i.id==='p').toppingIds,['base']);assert.equal(stored.choices.find(i=>i.id==='p').upsellId,'u-required');
 });
 
 test('#71 editing one combo part preserves the other selected parts',async t=>{
@@ -397,7 +398,7 @@ for(const width of [1280,390])test(`#123 late consent restores current views wit
  assert.deepEqual(await events(),[]);
  // The fixture grants consent through the same event/storage contract as CookieConsent.
  await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true}));window.dispatchEvent(new Event('orderfly:consent'));});
- await expect.poll(async()=> (await events()).map(e=>e.name).sort()).toEqual(['view_menu','view_product']);
+ await expect.poll(async()=> (await events()).map(e=>e.name).sort()).toEqual(['option_dialog_opened','view_menu','view_product']);
  await page.getByRole('checkbox',{name:/Bacon/}).check();
  assert.equal((await events()).filter(e=>e.name==='view_product').length,1,'option changes do not duplicate views');
  await page.keyboard.press('Escape');
@@ -497,4 +498,79 @@ for(const width of [1280,390])test(`#223 brand selector navigation stays in its 
   }else await expect(page.getByRole('navigation',{name:'Bestilling'})).toBeVisible();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  }
+});
+
+test('dismissed recommendation stays hidden when the mobile cart reopens',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=active');
+ const events=()=>page.locator('#funnel-events').evaluate(node=>JSON.parse(node.textContent));
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
+ await page.getByRole('button',{name:/Se kurv/}).click();
+ const offers=page.getByRole('region',{name:'Anbefalet til din ordre'});
+ await offers.scrollIntoViewIfNeeded();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_offer_shown').length).toBe(1);
+ const shown=(await events()).find(e=>e.name==='upsell_offer_shown');
+ await offers.getByRole('button',{name:'Skjul anbefaling',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_rejected').length).toBe(1);
+ const rejected=(await events()).find(e=>e.name==='upsell_rejected');
+ assert.equal(shown.params.locationId,'l');assert.equal(rejected.params.locationId,'l');assert.equal(rejected.params.interactionId,shown.params.interactionId);
+ assert.equal(rejected.params.sessionId,shown.params.sessionId);assert.equal(rejected.params.upsellId,'u');
+ await expect(offers).toHaveCount(0);
+ const choices=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')).choices);
+ await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.getByRole('button',{name:/Se kurv/}).click();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:/Din kurv/})).toBeVisible();
+ await expect(offers).toHaveCount(0);
+ assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')).choices),choices);
+});
+
+test('option analytics match consented add and edit interactions without replay or duplicate writes',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup');
+ const events=()=>page.locator('#funnel-events').evaluate(node=>JSON.parse(node.textContent));
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Se Fixture Pizza',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Bacon',exact:true}).check();
+ assert.deepEqual(await events(),[],'no analytics before consent, including option changes');
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true}));window.dispatchEvent(new Event('orderfly:consent'));});
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='option_dialog_opened').length).toBe(1);
+ assert.equal((await events()).filter(e=>e.name==='option_selection_changed').length,0,'pre-consent actions never replay');
+ await page.getByRole('checkbox',{name:'Bacon',exact:true}).uncheck();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='option_selection_changed').length).toBe(1);
+ await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).evaluate(button=>{button.click();button.click();});
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='option_product_added').length).toBe(1);
+ const add=(await events()).filter(e=>e.name.startsWith('option_'));
+ assert.equal(new Set(add.map(e=>e.params.interactionId)).size,1);
+ for(const event of add){assert.equal(event.params.interactionMode,'add');assert.equal(event.params.productId,'p');assert.equal(event.params.brandId,'b');assert.equal(event.params.locationId,'l');assert.ok(event.params.sessionId);}
+ await page.getByRole('button',{name:/Se kurv/}).click();
+ await page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Pizza',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='option_dialog_opened').length).toBe(2);
+ await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='option_product_added').length).toBe(2);
+ const edit=(await events()).filter(e=>e.name.startsWith('option_')&&e.params.interactionMode==='edit');
+ assert.equal(edit.length,2);assert.equal(new Set(edit.map(e=>e.params.interactionId)).size,1);assert.notEqual(edit[0].params.interactionId,add[0].params.interactionId);
+ assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1,'saving edit is not an additional item');
+ assert.doesNotMatch(JSON.stringify([...add,...edit]),/Bacon|Ost|Fixture Pizza|customer|phone|address/);
+});
+
+test('visible recommendation acceptance keeps the same measured interaction and saved offer identity',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=active');
+ const events=()=>page.locator('#funnel-events').evaluate(node=>JSON.parse(node.textContent));
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
+ await page.getByRole('button',{name:/Se kurv/}).click();
+ const offers=page.getByRole('dialog').getByRole('region',{name:'Anbefalet til din ordre'});
+ await offers.scrollIntoViewIfNeeded();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_offer_shown').length).toBe(1);
+ const shown=(await events()).find(e=>e.name==='upsell_offer_shown');
+ await offers.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_accepted').length).toBe(1);
+ const accepted=(await events()).find(e=>e.name==='upsell_accepted');
+ assert.equal(accepted.params.interactionId,shown.params.interactionId);assert.equal(accepted.params.upsellId,'u');
+ assert.equal(shown.params.locationId,'l');assert.equal(accepted.params.locationId,'l');
+ assert.equal(accepted.params.sessionId,shown.params.sessionId);
+ assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')))).choices.find(c=>c.id==='drink').upsellId,'u');
 });

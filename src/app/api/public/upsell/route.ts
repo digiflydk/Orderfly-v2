@@ -4,7 +4,7 @@ import { getOrigin } from '@/lib/url';
 import { getAdminDb } from '@/lib/firebase-admin';
 const id = z.string().min(1).max(160).regex(/^[^/\\?#]+$/);
 const schema = z.object({ brandId: id, locationId: id, deliveryType: z.enum(['pickup', 'delivery']),
-    cartItems: z.array(z.object({ id, categoryId: id.optional(), itemType: z.enum(['product', 'combo']).optional(), tags: z.array(z.string().max(50)).max(10).optional(), includedProductIds: z.array(id).max(40).optional() })).max(100),
+    cartItems: z.array(z.object({ id, categoryId: id.optional(), itemType: z.enum(['product', 'combo']).optional(), tags: z.array(z.string().max(50)).max(10).optional(), includedProductIds: z.array(id).max(40).optional(), toppingIds: z.array(id).max(50).optional() })).max(100),
     cartTotal: z.number().finite().nonnegative().max(1000000), excludedUpsellIds: z.array(id).max(100).optional() });
 export const runtime = 'nodejs';
 export async function POST(request: Request) {

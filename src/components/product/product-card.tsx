@@ -25,6 +25,8 @@ interface ProductCardProps {
   product: ProductForMenu;
   activeDiscounts: StandardDiscount[];
   upsellId?: string;
+  upsellInteractionId?: string;
+  compact?: boolean;
 }
 
 export function ProductCardSkeleton() {
@@ -45,7 +47,7 @@ export function ProductCardSkeleton() {
 }
 
 
-export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardProps) {
+export function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false }: ProductCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
   const [allToppings, setAllToppings] = useState<any[]>([]);
@@ -59,7 +61,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
   const { deliveryType, location, cartReady, cartItems, addToCart } = useCart();
   const {trackEvent} = useAnalytics();
   const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
-  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id});};
+  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id});};
 
   const priceData = useMemo(() => productPriceData(product, activeDiscounts, deliveryType), [product, activeDiscounts, deliveryType]);
 
@@ -107,15 +109,15 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
   return (
     <>
       <article
-        className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
+        className={cn("group flex w-full items-start gap-4 cursor-pointer border-b", compact ? "py-3" : "py-4")}
         onClick={handleCardClick}
       >
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
+        <div className={cn("relative shrink-0 overflow-hidden rounded-md", compact ? "h-16 w-16" : "h-24 w-24")}>
           <Image
             src={safeImage(product.imageUrl)}
             alt={product.productName || 'Produktbillede'}
             fill
-            sizes="96px"
+            sizes={compact ? "64px" : "96px"}
             className="object-cover"
             data-ai-hint="delicious food"
           />
@@ -132,7 +134,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
         <div className="min-w-0 flex-1 flex flex-col h-full">
           <div className="flex-1">
             <h4 className="font-semibold"><button type="button" className="text-left" aria-label={`Se ${product.productName}`} onClick={event=>{event.stopPropagation();void handleCardClick();}}>{product.productName}</button></h4>{count > 0 && <span className="text-xs font-medium">{count} i kurven</span>}
-            <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+            <p className={cn("text-sm text-muted-foreground", compact ? "line-clamp-1" : "line-clamp-2")}>{product.description}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
             <div>
@@ -149,7 +151,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
               event.stopPropagation();
               if(upsellId && upsellAdded.current)return;
               if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
-              if (addToCart(product,1,[],basePrice,finalPrice) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
+              if (addToCart(product,1,[],basePrice,finalPrice,undefined,upsellId) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
               trackEvent('add_to_cart', {productId: product.id, locationId: location?.id, itemsCount: 1, cartValue: finalPrice, deliveryType});
               onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
             }} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
@@ -167,6 +169,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
         setIsOpen={setIsDialogOpen}
         applicableDiscount={applicableDiscount}
         onAdded={onAdded}
+        upsellId={upsellId}
       />}
     </>
   );

@@ -1,5 +1,6 @@
 
 'use server';
+import { linkedCartProductIds } from '@/lib/server/upsell-linked-options';
 import { promotionBoundary } from '@/lib/promotion-calendar';
 import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
 
@@ -250,7 +251,7 @@ type GetActiveUpsellParams = {
   brandId: string;
   locationId: string;
   deliveryType: 'pickup' | 'delivery';
-  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[]; includedProductIds?: string[] }[];
+  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[]; includedProductIds?: string[]; toppingIds?: string[] }[];
   cartTotal: number;
   excludedUpsellIds?: string[];
 };
@@ -306,6 +307,9 @@ export async function getActiveUpsellForCart({
   
   if (activeNowUpsells.length === 0) return null;
 
+  // Linked add-ons only suppress repeat recommendations; they never activate offers.
+  const linkedIds = await linkedCartProductIds(db, brandId, locationId, cartItems, getProductsByIds);
+  const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || [])]), ...linkedIds]);
   const cartProductIds = cartItems.map(item => item.id);
   const cartCategoryIds = new Set(cartItems.map(item => item.categoryId).filter(Boolean));
   
@@ -340,7 +344,6 @@ export async function getActiveUpsellForCart({
           }
           
           // 5. Suppression Logic: Filter out products already in the cart
-          const currentCartProductIds = new Set(cartItems.flatMap(item => [item.id, ...(item.includedProductIds || [])]));
           const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id));
 
           if (finalProductIds.length > 0) {

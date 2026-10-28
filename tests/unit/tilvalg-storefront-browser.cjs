@@ -61,6 +61,7 @@ for(const width of [390,1280])test(`quantity, product-specific price/default, re
  await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();assert.equal(await page.evaluate(()=>window.saved),undefined);
  await page.getByRole('button',{name:'Flere Ost',exact:true}).click();assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'3');
  assert.equal(await page.getByRole('button',{name:'Flere Ost',exact:true}).isEnabled(),false);
+ assert.equal(await page.getByText('Du har valgt 3 af 3. Fjern et valg for at vælge noget andet.',{exact:true}).isVisible(),true);
  await page.getByRole('checkbox',{name:'Uden løg',exact:true}).check();
  await page.locator('[data-option-row]').filter({has:page.getByRole('radio',{name:'Cola',exact:true})}).locator('[data-option-price]').click();
  assert.equal(await page.getByRole('radio',{name:'Cola',exact:true}).isChecked(),true);
@@ -112,6 +113,14 @@ for(const width of [390,1280])test(`required progress, keyboard single choice an
  await page.getByRole('textbox',{name:'Søg i Saucer',exact:true}).fill('Sauce 3');
  assert.equal(await sauces.getByRole('radio',{name:'Sauce 12',exact:true}).isVisible(),true);
  assert.equal(await sauces.getByRole('radio',{name:'Sauce 3',exact:true}).isVisible(),true);
+ assert.equal(await page.getByText('1 resultat',{exact:true}).isVisible(),true);
+ await page.getByRole('textbox',{name:'Søg i Saucer',exact:true}).fill('ingen træffere');
+ assert.equal(await page.getByText('0 resultater',{exact:true}).isVisible(),true);
+ assert.equal(await sauces.getByRole('radio',{name:'Sauce 12',exact:true}).isChecked(),true);
+ assert.equal(await sauces.getByRole('radio').count(),2,'Ingen plus preserved selected choice');
+ await page.getByRole('button',{name:'Ryd søgning',exact:true}).click();
+ assert.equal(await page.getByRole('textbox',{name:'Søg i Saucer',exact:true}).inputValue(),'');
+ assert.equal(await sauces.getByRole('radio',{name:'Sauce 12',exact:true}).isChecked(),true);
  await page.getByRole('button',{name:'Saucer',exact:true}).click();
  const section=page.getByRole('region',{name:'Saucer',exact:true});assert.match(await section.innerText(),/Sauce 12/);
  await page.getByRole('button',{name:'Saucer',exact:true}).click();await sauces.getByRole('radio',{name:'Ingen',exact:true}).check();

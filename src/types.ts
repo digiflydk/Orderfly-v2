@@ -926,7 +926,8 @@ export type CookieTexts = {
 };
 
 // Analytics Event Types
-export type AnalyticsEventName = 
+export type AnalyticsEventName =
+  | 'option_dialog_opened' | 'option_selection_changed' | 'option_product_added'
   | 'view_menu' 
   | 'view_product' 
   | 'add_to_cart' 
@@ -1025,6 +1026,7 @@ export type AnalyticsDaily = {
 };
 
 export type FunnelOutput = {
+  optionExperience?: { editedOpened: number; savedEdits: number; opened: number; changed: number; added: number; withoutAdd: number; offers: number; accepted: number; rejected: number };
   totals: {
     sessions: number;
     measuredPurchasingSessions?: number;
