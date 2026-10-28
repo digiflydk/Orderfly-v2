@@ -72,3 +72,10 @@ test('operator log shows quote failures even when no order has been created',asy
  await page.getByRole('combobox',{name:'Restaurant',exact:true}).selectOption('la');await page.getByRole('button',{name:'Log',exact:true}).click();
  await expect(page.getByRole('heading',{name:'Seneste fejl ved leveringspris'})).toBeVisible();await expect(page.getByText('Trin: runtime · Fejlkode: schema_invalid')).toBeVisible();
 });
+test('persisted cancellation survives operator remount and refresh without another write',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();let writes=0,state='unknown';
+ await page.route('**/api/delivery/cancel',route=>{writes++;return route.abort();});await setup(page);
+ await page.route('**/api/delivery/orders?*',route=>route.fulfill({json:{orders:[{id:'order-persisted',providerId:'wolt',bookingState:'booked',deliveryStatus:state==='cancelled'?'cancelled':'booked',cancellationState:state,paymentStatus:'Paid',kitchenStatus:'Ready',trackingUrl:null,deliveryReconciliationRequired:state==='unknown',costReviewRequired:false}],nextCursor:null,hasMore:false,events:[],nextEventCursor:null,hasMoreEvents:false,cancellation:{available:false}}}));
+ async function open(){await page.getByRole('combobox',{name:'Brand',exact:true}).selectOption('a');await page.getByRole('combobox',{name:'Restaurant',exact:true}).selectOption('la');await page.getByRole('button',{name:'Leveringer',exact:true}).click();await page.getByRole('button',{name:'Vis ordre order-persisted'}).click();}
+ await open();await expect(page.getByText(/Resultatet af annulleringen er ukendt/)).toBeVisible();await page.reload();await open();await expect(page.getByText(/Resultatet af annulleringen er ukendt/)).toBeVisible();state='cancelled';await page.getByRole('button',{name:'Opdater ordren',exact:true}).click();await expect(page.getByText('Leveringen er annulleret hos leverandøren. Kundens betaling er ikke automatisk refunderet.')).toBeVisible();await expect(page.getByRole('button',{name:'Annuller levering',exact:true})).toHaveCount(0);assert.equal(writes,0);
+});

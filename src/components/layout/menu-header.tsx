@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Brand, Location } from '@/types';
 import { useCart } from '@/context/cart-context';
+import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
 import { safeImage } from '@/lib/images';
 import { formatPrice } from '@/lib/storefront-format';
 import { locationHeaderDetails } from '@/lib/location-header';
@@ -18,6 +19,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   initialNow?: number;
 }) {
   const { location: cartLocation } = useCart();
+  const managed = useManagedDeliveryPrice();
   // The route owns the location; a restored cart may still belong to another branch.
   const candidate = initialLocation ?? cartLocation;
   const location = candidate?.brandId === brand.id ? candidate : null;
@@ -61,8 +63,8 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
           className="mt-2 inline-block break-words text-base text-white/90 underline decoration-dotted underline-offset-4 hover:text-white sm:text-xl"
         >{details.address}</a>}
         {now && details.opening && <p className="mt-2 text-sm text-white/90 sm:text-base">Åbningstid i dag: {details.opening}</p>}
-        {details.delivery && (Number.isFinite(location.deliveryFee) || (Number.isFinite(location.minOrder) && location.minOrder > 0)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
-          {details.delivery && Number.isFinite(location.deliveryFee) && <p className="rounded-lg border border-white/70 px-3 py-2">Levering fra: {formatPrice(location.deliveryFee)}</p>}
+        {details.delivery && (managed || Number.isFinite(location.deliveryFee) || (Number.isFinite(location.minOrder) && location.minOrder > 0)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
+          {details.delivery && (managed || Number.isFinite(location.deliveryFee)) && <p className="rounded-lg border border-white/70 px-3 py-2">{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
           {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p className="rounded-lg border border-white/70 px-3 py-2">Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
         </div>}
       </div>

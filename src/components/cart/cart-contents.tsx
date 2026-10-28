@@ -2,6 +2,7 @@
 import Image from 'next/image';
 import { Loader2, Minus, Plus, Trash2 } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
+import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
 import { useMenuCheckout } from '@/hooks/use-menu-checkout';
 import { Button } from '@/components/ui/button';
 import { safeImage } from '@/lib/images';
@@ -41,6 +42,7 @@ export function CartTotals({ onBrowse }: {
     onBrowse?: () => void;
 } = {}) {
     const { subtotal, itemDiscount, cartDiscount, voucherDiscount, checkoutTotal, bagFee, deliveryType, deliveryFee, freeDeliveryDiscountApplied, adminFee, location } = useCart();
+    const managed = useManagedDeliveryPrice() && deliveryType === 'delivery';
     const minimum = deliveryType === 'delivery' ? Math.max(0, location?.minOrder || 0) : 0;
     const rows: [
         string,
@@ -52,13 +54,14 @@ export function CartTotals({ onBrowse }: {
         rows.push([cartDiscount.name, -cartDiscount.amount]);
     if (voucherDiscount)
         rows.push([voucherDiscount.name, -voucherDiscount.amount]);
-    if (deliveryType === 'delivery')
+    if (deliveryType === 'delivery' && !managed)
         rows.push(['Levering', freeDeliveryDiscountApplied ? 0 : deliveryFee]);
     if (adminFee > 0)
         rows.push(['Servicegebyr', adminFee]);
     return <div className="border-t p-4 space-y-2 text-sm">
     {rows.map(([label, amount], i) => <div key={i} className="flex justify-between gap-3"><span>{label}</span><span className="commerce-cart-total">{formatPrice(amount)}</span></div>)}
-    <div className="flex justify-between gap-3 pt-3 border-t text-base font-bold"><span>Foreløbigt beløb</span><span className="commerce-cart-total">{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span></div>
+    {managed && <div className="flex justify-between gap-3"><span>Levering</span><span>Beregnes i kassen</span></div>}
+    <div className="flex justify-between gap-3 pt-3 border-t text-base font-bold"><span>Foreløbigt beløb</span><span className="commerce-cart-total">{managed ? 'Afventer leveringspris' : formatPrice(Math.max(0, checkoutTotal - bagFee))}</span></div>
     {minimum > subtotal && <div><p role="status">Tilføj varer for {formatPrice(minimum - subtotal)} for at nå minimumsbestillingen til levering på {formatPrice(minimum)} før rabatter.</p><Button variant="outline" className="mt-2" onClick={() => { onBrowse?.(); window.scrollTo({ top: 0, behavior: 'auto' }); }}>Find flere varer</Button></div>}
   </div>;
 }

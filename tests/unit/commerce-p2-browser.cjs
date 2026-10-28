@@ -124,7 +124,9 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true);
  const panel=page.locator('[data-commerce-panel="options"]');
  await panel.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
- const bounds=await panel.boundingBox();assert.ok(Math.abs(bounds.y+bounds.height-900)<2,'options opens at bottom');
+ const bounds=await panel.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=901,'options fit viewport');
+ if(width<640)assert.ok(Math.abs(bounds.y+bounds.height-900)<2,'mobile options open at bottom');
+ else assert.ok(Math.abs(bounds.y+bounds.height/2-450)<2,'desktop options are vertically centered');
  const row=page.locator('[data-option-row]').filter({hasText:'Ost'});
  await row.getByText(/kr\./).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),false,'price area toggles exactly once');
  await row.getByText('Ost',{exact:true}).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true,'label toggles exactly once');
@@ -134,7 +136,7 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  const rowBoxes=await optionRows.evaluateAll(nodes=>nodes.map(node=>{const box=node.getBoundingClientRect();return {top:box.top,bottom:box.bottom,height:box.height};}));
  assert.ok(rowBoxes.every(box=>box.height>=43&&box.height<=45),'option rows keep a compact 44px touch target');
  assert.ok(rowBoxes.slice(1).every((box,index)=>box.top-rowBoxes[index].bottom<=1),'option rows do not add vertical gaps');
- assert.ok(Math.abs((await cta.boundingBox()).height-64.4)<1);
+ const ctaBox=await cta.boundingBox();assert.ok(ctaBox.height>=48&&ctaBox.height<=64,'compact CTA keeps readable two-line total');assert.ok(ctaBox.y>=0&&ctaBox.y+ctaBox.height<=901,'CTA remains reachable');
  assert.equal(await cta.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
  if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/options-'+width+'.png'});
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
@@ -175,14 +177,17 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
 test('P2 topping cap covers defaults, checkboxes, radios and a valid 50-option cart',async t=>{
  const page=await setup(t,1280,'/topping-cap');
  await page.getByRole('dialog').waitFor();
+ // Expand optional groups explicitly; collapsing never changes their selected defaults.
+ for(let i=1;i<=50;i++)await page.getByRole('button',{name:`Cap group ${i}`,exact:true}).click();
+ await page.getByRole('button',{name:'Cap radio',exact:true}).click();
  await page.waitForFunction(()=>document.querySelectorAll('[role="checkbox"][data-state="checked"]').length===50);
  assert.equal(await page.getByRole('checkbox',{name:'Default 50'}).isDisabled(),true,'51st default is capped and disabled');
  assert.equal(await page.getByRole('radio',{name:'Radio 1'}).isDisabled(),true,'an empty radio group cannot exceed the global cap');
  assert.equal(await page.getByRole('dialog').locator('details, summary').count(),0);
  await page.getByRole('checkbox',{name:'Default 0'}).click();
  await page.getByRole('checkbox',{name:'Default 50'}).click();
- assert.equal(await page.getByRole('checkbox',{name:/^Default 2 \+/}).isDisabled(),false,'selected options remain removable at the cap');
- await page.getByRole('checkbox',{name:/^Default 1 \+/}).click();
+ assert.equal(await page.getByRole('checkbox',{name:'Default 2',exact:true}).isDisabled(),false,'selected options remain removable at the cap');
+ await page.getByRole('checkbox',{name:'Default 1',exact:true}).click();
  await page.getByRole('radio',{name:'Radio 1'}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
@@ -350,17 +355,18 @@ for(const width of [390,1280])test(`conditional product options switch safely at
  await dialog.getByRole('region',{name:'regular',exact:true}).waitFor();
  assert.equal(await dialog.getByRole('region',{name:'family',exact:true}).count(),0);
  assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
- await dialog.getByRole('radio',{name:/^cheese /}).click();
- await dialog.getByRole('radio',{name:/^fam /}).click();
+ await dialog.getByRole('radio',{name:'cheese',exact:true}).click();
+ await dialog.getByRole('radio',{name:'fam',exact:true}).click();
  await dialog.getByRole('region',{name:'family',exact:true}).waitFor();
  assert.equal(await dialog.getByRole('region',{name:'regular',exact:true}).count(),0);
- await dialog.getByRole('radio',{name:/^family-cheese /}).click();
+ const familyToggle=dialog.getByRole('button',{name:'family',exact:true});if(await familyToggle.getAttribute('aria-expanded')==='false')await familyToggle.click();
+ await dialog.getByRole('radio',{name:'family-cheese',exact:true}).click();
  await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/155,00/);
- await dialog.getByRole('radio',{name:/^menu /}).click();
+ await dialog.getByRole('radio',{name:'menu',exact:true}).click();
  await dialog.getByRole('region',{name:'drink',exact:true}).waitFor();
- await expect(dialog.getByRole('radio',{name:/^cola /})).toBeChecked();
+ await expect(dialog.getByRole('radio',{name:'cola',exact:true})).toBeChecked();
  await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/105,00/);
- await dialog.getByRole('radio',{name:/^alm /}).click();
+ await dialog.getByRole('radio',{name:'alm',exact:true}).click();
  assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
  await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/75,00/);
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();

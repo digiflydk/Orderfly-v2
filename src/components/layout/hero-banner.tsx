@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Clock, Truck, Store, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCart } from '@/context/cart-context';
+import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
@@ -18,6 +19,7 @@ const DANISH_DAYS = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'freda
 
 export function HeroBanner({ location }: HeroBannerProps) {
   const { deliveryType } = useCart();
+  const managed = useManagedDeliveryPrice();
   const [openingStatusText, setOpeningStatusText] = useState('Tjekker…');
   const [statusVariant, setStatusVariant] = useState<'default' | 'destructive' | 'outline'>('outline');
   
@@ -123,7 +125,7 @@ export function HeroBanner({ location }: HeroBannerProps) {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {deliveryType === 'delivery' && (
                  <Badge variant="outline" className="border-white/50 bg-black/20 text-white backdrop-blur-sm font-normal text-[11px]">
-                    Levering fra {location.deliveryFee.toFixed(0)} kr. · Minimumsbestilling {location.minOrder.toFixed(0)} kr.
+                    {managed ? 'Leveringspris beregnes i kassen' : `Levering fra ${location.deliveryFee.toFixed(0)} kr.`} · Minimumsbestilling {location.minOrder.toFixed(0)} kr.
                 </Badge>
               )}
             </div>
