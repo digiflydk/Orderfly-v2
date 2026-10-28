@@ -134,7 +134,7 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-commerce-root]
   color-scheme: dark;
   background-color: #000;
   color: #fff;
-  font-family: "Brandon Text Office Regular", Arial, sans-serif !important;
+  font-family: "Esmeralda Inter", Arial, sans-serif !important;
 }
 /* Body-mounted portals share the active public brand palette. */
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-header] {
@@ -146,9 +146,9 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-commerce-root]
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-header] > div { max-width: 1180px; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-location] { background-color: #000; color: #fff; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(h1, h2, [role="dialog"] h3) {
-    font-family: "Bourton Base", Impact, Arial Black, sans-serif;
-    text-transform: uppercase;
-    letter-spacing: .025em;
+    font-family: "Esmeralda Inter", Arial, sans-serif;
+    text-transform: none;
+    letter-spacing: -.02em;
   }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) article { border-color: #3d3d3d; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) article img { border-radius: 10px; }
@@ -232,3 +232,72 @@ body:has([data-commerce-root]) [data-product-options] [data-option-stepper] butt
   top: 4px;
   right: 4px;
 }
+
+/* Self-hosted Inter variable font. OFL license ships alongside the files. */
+@font-face {
+  font-family: 'Esmeralda Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('/fonts/inter/inter-latin-wght-normal.woff2') format('woff2');
+}
+/* #756: match esmeraldapizza.dk's 1540px frame and 52px desktop gutters. */
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) .storefront-frame {
+  width: calc(100% - 104px);
+  max-width: 1540px;
+  margin-inline: auto;
+}
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-header][data-menu-refresh] { height: auto; }
+.storefront-order-toolbar { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; align-items: center; gap: 24px; padding-block: 12px; }
+.storefront-order-controls { min-width: 0; }
+.storefront-top-cart { justify-self: end; }
+[data-time-selector][data-compact] { gap: 12px; }
+[data-time-selector][data-compact] > div:first-child { flex-shrink: 0; }
+[data-time-selector][data-compact] .storefront-time-control { flex: 0 1 auto; min-height: 46px; padding-block: 0; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-hero] {
+  width: calc(100% - 104px); max-width: 1540px; margin: 16px auto 24px; border-radius: 12px;
+  display: flex; align-items: end; min-height: clamp(260px, 25vw, 380px);
+}
+.storefront-hero-copy { padding: 32px; width: 100%; }
+.storefront-hero-copy h1 { font-size: clamp(28px, 3.2vw, 48px); line-height: 1.1; font-weight: 750; letter-spacing: -.035em; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-categories] { top: var(--storefront-header-height, 76px); margin-inline: 0; padding-inline: 0; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-cart] { top: calc(var(--storefront-header-height, 76px) + 84px); }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-grid] { grid-template-columns: minmax(0, 1fr) 340px; gap: 32px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-grid] > div { grid-column: auto; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(h1,h2,h3) { text-wrap: balance; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) input { font-family: inherit; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(a,input):focus-visible { outline: 2px solid #f5aa24; outline-offset: 3px; }
+@media (max-width: 1100px) {
+  .storefront-order-toolbar { grid-template-columns: 80px minmax(0, 1fr) auto; gap: 12px; }
+  [data-time-selector][data-compact] { gap: 8px; }
+}
+@media (max-width: 1023px) {
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(.storefront-frame,[data-menu-hero]) { width: calc(100% - 48px); }
+  .storefront-order-toolbar { grid-template-columns: 1fr auto; gap: 10px; }
+  .storefront-order-controls { grid-column: 1 / -1; grid-row: 2; }
+  .storefront-top-cart { grid-column: 2; grid-row: 1; }
+  [data-time-selector][data-compact] .storefront-time-control { flex: 1; }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-grid] { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 639px) {
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(.storefront-frame,[data-menu-hero]) { width: calc(100% - 32px); }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-menu-hero] { margin-top: 12px; min-height: 250px; }
+  .storefront-hero-copy { padding: 20px; }
+  .storefront-hero-copy a { font-size: 14px; }
+  .storefront-order-toolbar { padding-block: 8px; }
+  [data-time-selector][data-compact] { gap: 6px; }
+  [data-time-selector][data-compact] .storefront-time-control { padding-inline: 10px; }
+}
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-header][data-menu-refresh] > .storefront-frame { max-width: 1540px; min-height: 72px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) [id^="category-"] { scroll-margin-top: calc(var(--storefront-header-height, 76px) + 84px); }
+@media (max-width: 767px) {
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) [id^="category-"] { scroll-margin-top: calc(var(--storefront-header-height, 76px) + 136px); }
+}
+/* Keep the food visible on small screens: only the category/search bar sticks. */
+@media (max-width: 639px) {
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-storefront-header][data-menu-refresh] { position: relative; }
+}
+/* Reserve the hydrated toolbar's space to avoid moving the hero on first load. */
+[data-menu-controls-slot] { min-height: 54px; }
+[data-menu-cart-slot] { min-width: 140px; min-height: 44px; }
+@media (max-width: 639px) { [data-menu-controls-slot] { min-height: 106px; } }

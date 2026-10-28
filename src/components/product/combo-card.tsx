@@ -56,9 +56,9 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
             </div>
         </div>
 
-        <div className="flex-1 flex flex-col h-full">
+        <div className="min-w-0 flex-1 flex flex-col h-full">
           <div className="flex-1">
-            <h4 className="font-semibold"><button type="button" aria-label={`Se ${combo.comboName}`} onClick={event=>{event.stopPropagation();if(price!==undefined)setIsDialogOpen(true);}}>{combo.comboName}</button></h4>
+            <h3 className="font-semibold"><button type="button" aria-label={`Se ${combo.comboName}`} onClick={event=>{event.stopPropagation();if(price!==undefined)setIsDialogOpen(true);}}>{combo.comboName}</button></h3>
             <p className="text-sm text-muted-foreground line-clamp-2">{combo.description}</p>
           </div>
           <div className="flex items-center justify-between mt-2">

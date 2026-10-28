@@ -20,7 +20,7 @@ before(async()=>{
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/lib/delivery/quotes/adoption':file('adoption',`export const managedDeliveryRequired=async()=>!!globalThis.fixture.managed;`),
-  '@/context/cart-context':file('cart',`import{useEffect,useState}from'react';export const useCart=()=>{const [location,setLocation]=useState(null);useEffect(()=>{setLocation(globalThis.fixture.location)},[]);return{location}};`),
+  '@/context/cart-context':file('cart',`import{useEffect,useState}from'react';export const useCart=()=>{const [location,setLocation]=useState(null);useEffect(()=>{setLocation(globalThis.fixture.location)},[]);return{location,deliveryType:'delivery',cartReady:!!location&&globalThis.fixture.deliveryReady}};`),
   '@/lib/data/brand-location':file('data',`export const getBrandAndLocation=async(brandSlug,locationSlug)=>{const f=globalThis.fixture;if(brandSlug!==f.brand.slug||locationSlug!==f.initialLocation.slug)throw Error('Incorrect route lookup');return{brand:f.brand,location:f.initialLocation,brandMatchesLocation:f.initialLocation.brandId===f.brand.id}};`),
   '@/components/layout/footer':file('footer',`export const Footer=()=>null;`),
   '@/components/layout/header':file('header',`import React from'react';export const Header=()=> <header>Global</header>;`),
@@ -56,7 +56,7 @@ before(async()=>{
   const initialLocation={...location};
   if(mode==='stale-cart'){location.name='Another branch';location.slug='another';}
   if(mode==='cross-brand-cart')location.brandId='different-brand';
-  const fixture={managed:mode==='managed',brand,location:mode==='empty-cart'?null:location,initialLocation:url.pathname==='/esmeralda/checkout'?undefined:initialLocation,pathname:url.pathname};
+  const fixture={deliveryReady:!['empty-cart','stale-cart','cross-brand-cart'].includes(mode),managed:mode==='managed',brand,location:mode==='empty-cart'?null:location,initialLocation:url.pathname==='/esmeralda/checkout'?undefined:initialLocation,pathname:url.pathname};
   let markup;try{markup=await render(fixture);}catch(error){if(error.message==='NOT_FOUND'){res.statusCode=404;return res.end('Not found');}throw error;}
   res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root">'+markup+'</div><script>globalThis.fixture='+JSON.stringify(fixture)+'</script><script src="/bundle.js"></script></body></html>');
  });

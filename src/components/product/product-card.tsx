@@ -133,7 +133,7 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
 
         <div className="min-w-0 flex-1 flex flex-col h-full">
           <div className="flex-1">
-            <h4 className="font-semibold"><button type="button" className="text-left" aria-label={`Se ${product.productName}`} onClick={event=>{event.stopPropagation();void handleCardClick();}}>{product.productName}</button></h4>{count > 0 && <span className="text-xs font-medium">{count} i kurven</span>}
+            <h3 className="font-semibold"><button type="button" className="text-left" aria-label={`Se ${product.productName}`} onClick={event=>{event.stopPropagation();void handleCardClick();}}>{product.productName}</button></h3>{count > 0 && <span className="text-xs font-medium">{count} i kurven</span>}
             <p className={cn("text-sm text-muted-foreground", compact ? "line-clamp-1" : "line-clamp-2")}>{product.description}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
