@@ -14,6 +14,16 @@ On 2026-10-26 at 08:43:28 UTC, the resumed coordinator independently fetched `ma
 
 The same existing Firebase App Hosting deployment follows main. The data project remains `orderfly-39325`, separate from hosting project `orderfly-v21-10334086-b3076`. This release adds no production migration, index/rules deployment or secret/configuration mutation.
 
+## Current continuation checkpoint, 28 October 2026
+
+The foundation checkpoints above are historical. [PR #742](https://github.com/digiflydk/Orderfly-v2/pull/742) records deployed release `fe15e1130a1aead7f39da61a4c4d6a97ea54e036` and a successful native sandbox checkout at 01:08 UTC: ORD-390182 paid DKK 201, booked with Wolt, reached kitchen Received and exposed sandbox tracking in the customer receipt. The operator showed payment Paid and booking/delivery Booked. The order was intentionally left uncancelled; pickup/delivered callbacks were still pending at that checkpoint. This establishes successful booking, not the complete courier lifecycle or which execution path won the dispatch claim.
+
+[Native browser QA](native-browser-qa.md) separately records ORD-929615's successful payment/booking and genuine order.received, handshake and ETA callbacks. Its later authorized Wolt cancellation was confirmed and projected after #740; payment remained Paid, with no refund requested. ORD-292972 and ORD-769540 instead exercised rejected booking with `quote_expired` and automatic full refund. Courier cancellation and financial compensation are separate results, and neither is evidence of delivery completion, physical print or feedback delivery.
+
+The resumed coordinator verified fetched main and production health at `e9e5bcb979bc9dff933c15531da7d2d58c2ad24a` on 28 October at 08:40:21 UTC. Authenticated read-only portal inspection showed the Esmeralda Amager **sandbox** enrollment already Active and Merchant API verified (displayed 27 October, 23:38). No activation action was taken by this inspection. Existing sandbox activation is not production customer-delivery approval. Preserve the documented Borgergade test pickup and ongoing order until their authorized test/recovery procedure is complete; do not replace them with the historical Amager address without reconciliation.
+
+The remaining #691/#694 work is the unproven lifecycle, operations and failure-matrix acceptance and controlled production pilot, not rebuilding the modules or repeating already documented successful booking. Reverify current configuration and the isolation of any proposed new test before writes; do not infer that a separate external-test runtime is absent merely from the older checklist.
+
 ## Activation prerequisites
 
 - Approve and configure a real route/geocoding source, costs, retention and attribution. Fixture distances are not deployable routing. Optional adapter code does not grant paid-service approval or establish licensing compliance.
@@ -23,9 +33,9 @@ The same existing Firebase App Hosting deployment follows main. The data project
 - Complete the integrated Stripe/Wolt sandbox checkout, including delayed payment, rejected and unknown dispatch, actual callbacks, cancellation and recovery. Controlled Wolt ASAP and scheduled quote/create/cancel evidence exists in #690, but is not complete Orderfly checkout acceptance.
 - Approve real prices, hours, coverage, location adoption and customer terms. Scoped activation creates the independent `deliveryAdoptions/{sha256(JSON.stringify([brandId,locationId]))}` marker; choosing a provider in preparatory settings does not activate checkout. Physical courier/device/receipt acceptance is distinct from Chromium viewport and mocked print tests.
 
-## Test and production configuration checklist
+## Configuration prerequisites and legacy setup checklist
 
-All configuration below is server-owned. This document does not provision records, approve a service or enable a flag. Inspect the current composition roots before provisioning; flags alone are insufficient.
+All configuration below is server-owned. This document does not provision records, approve a service or enable a flag. The table records the original isolated-test and legacy environment-variable setup. For portal-enrolled merchants, `deliveryScopeRuntimeAllowed` uses the matching persisted enrollment instead of those legacy gates: new orders require active/provisioned enrollment, separate API/signing references, verified connection and registered callback; production also requires recorded approval. Adoption, runtime configuration, routing approval, pickup contact and effective delivery settings remain prerequisites. Use [Merchant administration](merchant-portal.md) for the current configuration and lifecycle path. The table is a prerequisite checklist, not a claim that every item is still missing.
 
 | Requirement | Isolated integrated sandbox | Production pilot |
 |---|---|---|
@@ -44,15 +54,25 @@ All configuration below is server-owned. This document does not provision record
 | Print and feedback | Synthetic target/policy; existing `ORDERFLY_PRINT_INTENTS_ENABLED` gate if testing intents; safe controlled feedback configuration | Existing approved printer/feedback configuration; intent creation is not evidence of physical print or email receipt |
 | Delivery settings | Effective scoped settings must have `enabled=true`, `paused=false` and `providerId='wolt'`, with synthetic approved test prices, hours, minimum and coverage | Same effective settings only for the approved pilot location, with explicitly approved prices, hours, coverage, minimum, customer terms and stop procedure |
 
-The current runtime composition supports `google_maps` and explicitly approved sandbox-only `geoapify`. Geoapify requires its separate server gates/key, stable global quota namespace and scoped approval records; production Geoapify is rejected. See [Geoapify sandbox](geoapify-sandbox.md). Google additionally requires `ORDERFLY_DELIVERY_GOOGLE_RETENTION_APPROVED=true` and server-only `ORDERFLY_DELIVERY_GOOGLE_MAPS_API_KEY`. Approval references must represent a real decision about the actual immutable quote/provider storage, not placeholder strings used to bypass checks. See [Google routing option](google-routing-option.md) and [customer quote boundary](customer-quote-boundary.md).
+The current runtime composition supports `google_maps` and `geoapify`. Shared portal Geoapify configuration can serve sandbox and explicitly approved production enrollments; the environment-variable Geoapify fallback is sandbox-only and rejects production. Both require the relevant approved configuration and stable global quota namespace. Adapter availability does not authorize production usage or customer activation. See [Geoapify sandbox](geoapify-sandbox.md). Google additionally requires `ORDERFLY_DELIVERY_GOOGLE_RETENTION_APPROVED=true` and server-only `ORDERFLY_DELIVERY_GOOGLE_MAPS_API_KEY`. Approval references must represent a real decision about the actual immutable quote/provider storage, not placeholder strings used to bypass checks. See [Google routing option](google-routing-option.md) and [customer quote boundary](customer-quote-boundary.md).
 
-The existing QA0 runtime is reusable for synthetic native/browser acceptance only. Its explicit demo project, credential rejection and loopback guard intentionally prohibit external Stripe/Wolt calls and production credentials. Do not loosen that runtime to claim external integrated acceptance. A separate safely isolated runtime is needed for actual external test services; this checklist does not assume that one exists.
+The existing QA0 runtime is reusable for synthetic native/browser acceptance only. Its explicit demo project, credential rejection and loopback guard intentionally prohibit external Stripe/Wolt calls and production credentials. Do not loosen that runtime to claim external integrated acceptance. Any new external-services test needs a verified isolation plan; the successful deployed sandbox checkpoints above must be evaluated separately from this offline harness. Do not repeat their already-completed configuration as new work.
 
 The protected `POST /api/internal/delivery/dispatch` and existing `POST /api/internal/feedback/send` heartbeat use the existing timing-safe bearer policy with `ORDERFLY_FEEDBACK_WORKER_SECRET` or `ORDERFLY_NOTIFICATION_SECRET` (at least 32 characters). The latter runs other workers too, so do not invoke it as a read-only production diagnostic. No new scheduler or worker secret is implied. Verify the existing scheduler's actual invocation and successful bounded progress in the isolated runtime.
 
 Query acceptance includes pending/submitting jobs, booked jobs with incomplete acceptance or inbox replay, rejected jobs with incomplete refund and no review flag, inbox reference pagination, scoped orders and due delivery feedback requests. Actual hosted query/index readiness must be checked; emulator success is not hosted index evidence. The release adds no production index deployment.
 
 ## Recovery and rollback
+
+### Portal-enrolled merchants
+
+Use the selected enrollment's **Deactivate** action to stop new quotes and final managed checkout validation. Confirm the resulting inactive state and scope. Legacy `ORDERFLY_DELIVERY_*` flags are not a reliable stop for an enrollment: its persisted record takes precedence. Preserve adoption/runtime records, canonical bindings, callbacks and pinned credentials. Inactive and archived provisioned enrollments remain eligible for recovery, callbacks and cancellation, including dispatch of already-paid orders; deactivation is not cancellation of a courier, payment or existing Stripe session.
+
+Inspect pending/paid/in-flight orders and unknown provider/refund outcomes when stopping. Already-created Stripe sessions can still settle and their original jobs can proceed. Do not delete bindings or disable shared credentials to simulate a pause. If existing dispatch must also stop, assign an explicit incident-specific reconciliation/compensation plan; the enrollment lifecycle provides no separate dispatch-versus-recovery stop.
+
+Before resuming, reconcile affected jobs and recheck prices, hours, coverage, pickup venue/contact and approval scope. Use the normal activation action with the current revision and required pickup confirmation (plus production approval for production). It rechecks provider/callback provisioning, routing, effective settings and absence of an active opposite environment. Restoring an archived enrollment returns it to inactive and does not resume checkout by itself.
+
+### Legacy installations without an enrollment
 
 For a customer-entry stop, first disable `ORDERFLY_DELIVERY_CHECKOUT_ENABLED` to stop new quotes and final managed checkout revalidation. Retain the adopted marker and the configuration/bindings needed to process existing orders. Already-created Stripe sessions can still settle; inspect pending and paid jobs and decide their handling explicitly.
 
@@ -61,5 +81,7 @@ Do not treat `ORDERFLY_DELIVERY_DISPATCH_ENABLED` as a new-orders-only switch: i
 Keep `ORDERFLY_DELIVERY_CALLBACK_ENABLED` and necessary cancellation enabled for existing deliveries. For production work, retain `ORDERFLY_DELIVERY_PRODUCTION_ENABLED`: turning it off also rejects production callbacks and disables production cancellation. Active canonical bindings and callback records remain prerequisites. Disabling all flags or deleting bindings is not a safe routine pause.
 
 Unknown create/cancel/refund outcomes must not be retried as new operations. Inspect their native immutable records and provider/payment evidence; a timeout does not prove absence. Courier cancellation does not itself refund or cancel a customer order. Before reopening checkout, verify backlog recovery, unresolved financial/provider outcomes and the intended location configuration.
+
+### Source rollback for either configuration path
 
 A source rollback is an ordinary reviewed revert PR of the integration merge, followed by exact health-SHA verification and read-only live checks. Retain immutable quotes, attempts, payment/refund ledgers and event records; do not delete them as a rollback shortcut. Returning to code without managed-order support can strand in-flight work, so assess existing managed records before reverting.
