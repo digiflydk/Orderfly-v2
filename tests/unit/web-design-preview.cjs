@@ -7,7 +7,7 @@ const manifest = require('../../preview/esmeralda/manifest.json');
 const lib = loadTs('src/lib/web-design-preview.ts');
 const server = loadTs('src/lib/web-design-preview-server.ts', {'../../preview/esmeralda/manifest.json':{default:manifest}});
 function req(path, method='GET', host='web.orderfly.dk') {
-  return new Request('https://backend.internal/internal-web-preview?path='+encodeURIComponent(path),{method,headers:{'x-forwarded-host':host}});
+  return new Request('https://backend.internal'+path,{method,headers:{'x-forwarded-host':host}});
 }
 function mw(url,method='GET',headers={}) {
   class NextResponse extends Response {
@@ -26,7 +26,7 @@ test('exact preview host and reserved slug; no lookalike or comma-list hosts',()
 });
 test('all web paths intercepted; query cannot override original route; internal URL denied',()=>{
   for(const p of ['/','/api/health','/merchant','/_next/image','/_next/static/foo.js','/favicon.ico','/mpanel/hr/timelog']) {
-    const r=mw('https://web.orderfly.dk'+p+'?path=/');assert.equal(r.kind,'rewrite');assert.equal(r.url.pathname,lib.WEB_PREVIEW_INTERNAL);assert.equal(r.url.searchParams.get('path'),p);assert.equal(r.options.headers['X-Robots-Tag'],'noindex, nofollow, noarchive');
+    const r=mw('https://web.orderfly.dk'+p+'?path=/');assert.equal(r.kind,'rewrite');assert.equal(r.url.pathname,lib.WEB_PREVIEW_INTERNAL);assert.equal(r.url.search,'');assert.equal(r.options.headers['X-Robots-Tag'],'noindex, nofollow, noarchive');
   }
   assert.equal(mw('http://web.orderfly.dk/menu').status,308);
   assert.equal(mw('https://web.orderfly.dk/internal-web-preview').status,404);
@@ -55,7 +55,7 @@ test('104 HTML and269 assets retain exact hashes, plus robots; correct MIME and 
 test('server independently denies off-host, methods, traversal, private/API and unknown routes',async()=>{
   for(const host of ['orderfly.dk','esmeralda.orderfly.dk','web.orderfly.dk.evil']) assert.equal((await server.webDesignPreviewResponse(req('/','GET',host))).status,404);
   assert.equal((await server.webDesignPreviewResponse(req('/','POST'))).status,405);
-  for(const path of ['/api/health','/_next/image','/mpanel','/finance-admin','/internal-web-preview','/unknown','/../index.html','/%2e%2e/index.html','/%','/index.html','//','/menu/']) assert.equal((await server.webDesignPreviewResponse(req(path))).status,404,path);
+  for(const path of ['/api/health','/_next/image','/mpanel','/finance-admin','/internal-web-preview','/unknown','/%2e%2e/index.html','/%','/index.html','//','/menu/']) assert.equal((await server.webDesignPreviewResponse(req(path))).status,404,path);
   assert.equal(await (await server.webDesignPreviewResponse(req('/missing','HEAD'))).text(),'');
 });
 test('payload corruption fails closed; tracing and policy retain deployment isolation',async()=>{

@@ -51,7 +51,6 @@ export function middleware(request: NextRequest) {
     const rewritten = request.nextUrl.clone();
     rewritten.pathname = WEB_PREVIEW_INTERNAL;
     rewritten.search = '';
-    rewritten.searchParams.set('path', incomingPath);
     return NextResponse.rewrite(rewritten, {headers:WEB_PREVIEW_HEADERS});
   }
   // Preserve the previous matcher exclusions on every non-preview host.

@@ -27,7 +27,7 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     headers.set('Allow','GET, HEAD');
     return new Response('Method not allowed', {status:405, headers});
   }
-  const path = new URL(request.url).searchParams.get('path') ?? '';
+  const path = new URL(request.url).pathname;
   // Exact route keys only: no decoding, path joining, extension fallback or SPA fallback.
   if (!Object.hasOwn(routes,path)) return new Response(request.method === 'HEAD' ? null : 'Not found', {status:404,headers});
   try {

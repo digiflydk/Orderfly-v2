@@ -76,7 +76,7 @@ Middleware intercepts **every** preview path (including `/api`, `/_next/image`,
 admin and unknown paths) before merchant routing. Only GET/HEAD reach a static
 allowlist; all other methods receive 405. Unknown paths receive 404, with no
 app/API fallback. The internal route also checks the host and exact allowlist.
-Direct access to `/internal-web-preview` is denied on all hosts. Existing
+The handler selects the original request pathname (Next15 preserves it through rewrites); client query parameters never select a file. Direct access to `/internal-web-preview` is denied on all hosts. Existing
 non-preview routing and its prior asset exclusions are retained. HTTPS
 redirection remains in place. Host precedence follows existing App Hosting
 routing: `x-forwarded-host`, otherwise `host`; preview host comparison rejects
@@ -104,6 +104,8 @@ Reproduce with Website PR59's output and the accepted v8 manifest:
 python scripts/package-web-preview.py /path/to/sites-preview /path/to/asset-manifest.json
 node --test tests/unit/web-design-preview.cjs tests/unit/brand-subdomains-12.cjs
 npm run typecheck
+npm run build
+node --test tests/unit/web-design-preview-http.cjs
 ```
 
 The packager checks the original source-manifest SHA256
