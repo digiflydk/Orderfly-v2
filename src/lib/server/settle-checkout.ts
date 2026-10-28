@@ -2,6 +2,7 @@ import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
 import { managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/stripe-authority';
 import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import 'server-only';
+import { after } from 'next/server';
 import type Stripe from 'stripe';
 import type { Transaction } from 'firebase-admin/firestore';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
@@ -99,6 +100,7 @@ async function settleOrder(proof: PaymentProof) {
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
   const managedSnapshot = session ? (await orderRef.get()).data() : undefined;
   const managedProof = managedSnapshot?.managedDelivery !== undefined ? await verifyManagedPaidOrder(metadata.orderId, managedSnapshot) : null;
+  let dispatchAfterCommit = false;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
   // Disabled installations retain the old settlement path without print reads or
@@ -120,6 +122,7 @@ async function settleOrder(proof: PaymentProof) {
   // Private plan owns the actual settlement writes. Nothing supplied by a caller
   // can replace the mutation, projected state or apply callback. Rebuilt on retry.
   const prepareSettlement = async (context: NativeTransactionContext, transition?: { kind: 'stripe'; value: StripePrintTransition } | { kind: 'pickup'; value: PickupPrintTransition }) => {
+    dispatchAfterCommit = false; // Transaction retries must not retain a previous attempt's eligibility.
     const transaction: Transaction = context.transaction;
     const writes: Array<() => void> = [];
     let writeCount = 0;
@@ -220,6 +223,7 @@ async function settleOrder(proof: PaymentProof) {
     if (deliveryJob?.exists && (deliveryJob.data()?.brandId !== order.brandId || deliveryJob.data()?.locationId !== order.locationId
       || deliveryJob.data()?.orderId !== metadata.orderId || deliveryJob.data()?.providerId !== managed!.providerId || deliveryJob.data()?.requestDigest !== managed!.requestDigest)) throw new Error('Managed dispatch job mismatch');
     const ensureDeliveryJob = () => {
+      if (managedProof && order.status === 'Pending' && (!deliveryJob?.exists || deliveryJob.data()?.state === 'pending')) dispatchAfterCommit = true;
       if (deliveryJobRef && !deliveryJob?.exists) {
         const now = Date.now();
         addWrite(() => transaction.create(deliveryJobRef, { version: 1, orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
@@ -389,6 +393,19 @@ async function settleOrder(proof: PaymentProof) {
     printPlan?.apply();
     return prepared.fulfilled;
   });
+  if (dispatchAfterCommit) {
+    // The durable job is committed. Next owns this awaited callback's lifetime,
+    // so courier I/O neither delays the webhook response nor runs untracked.
+    // Every ingress uses the same original claim; the heartbeat remains fallback.
+    try {
+      after(async () => {
+        try {
+          const { dispatchManagedDelivery } = await import('@/lib/delivery/booking/dispatcher');
+          await dispatchManagedDelivery(metadata);
+        } catch { /* Durable pending/unknown state owns recovery; never retry a create here. */ }
+      });
+    } catch { /* No request lifecycle (e.g. an offline worker): retain the durable heartbeat job. */ }
+  }
   if (fulfilled && session) {
     // Analytics are optional after an authoritative, idempotent settlement.
     try { await trackServerEvent('payment_succeeded', {

@@ -16,6 +16,8 @@ function fixture() {
   let event, settlements=0;
   class Stripe {webhooks={constructEventAsync:async()=>event};}
   const route=loadTs('src/app/api/stripe/webhook/route.ts',{
+    // Legacy webhook cases use the primary Stripe verifier; managed fallback has its own native tests.
+    '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('Unexpected managed webhook fallback');}},
     'stripe':{default:Stripe},'next/headers':{headers:async()=>({get:()=> 'signed'})},
     '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test',getActiveStripeWebhookSecret:async()=> 'test'},
     '@/lib/discount-reservations':{releaseDiscount:release},
