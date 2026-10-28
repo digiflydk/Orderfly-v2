@@ -1,0 +1,10 @@
+import { webDesignPreviewResponse } from '@/lib/web-design-preview-server';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const GET = webDesignPreviewResponse;
+export const HEAD = webDesignPreviewResponse;
+export const POST = webDesignPreviewResponse;
+export const PUT = webDesignPreviewResponse;
+export const PATCH = webDesignPreviewResponse;
+export const DELETE = webDesignPreviewResponse;
+export const OPTIONS = webDesignPreviewResponse;

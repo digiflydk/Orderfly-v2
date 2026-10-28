@@ -64,3 +64,54 @@ Browsers resolve `*.localhost` to the local machine. With `npm run dev`, open `h
 ## Rollback
 
 Remove the `*.orderfly.dk` custom domain in App Hosting, or its DNS records. Subdomains then stop resolving, while `orderfly.dk/{slug}` keeps working. Reverting the code change alone is safe: without the middleware rewrite, a brand subdomain would show the apex landing page instead of the brand.
+
+## Esmeralda design preview (`web.orderfly.dk`, Website #60)
+
+`web` is reserved infrastructure, not a merchant slug. The existing wildcard
+App Hosting domain serves the reviewed Esmeralda v8 public snapshot on this
+exact host. No DNS or Firebase data configuration is changed. This is a visual
+preview, not acceptance of the migration or a working booking/contact service.
+
+Middleware intercepts **every** preview path (including `/api`, `/_next/image`,
+admin and unknown paths) before merchant routing. Only GET/HEAD reach a static
+allowlist; all other methods receive 405. Unknown paths receive 404, with no
+app/API fallback. The internal route also checks the host and exact allowlist.
+Direct access to `/internal-web-preview` is denied on all hosts. Existing
+non-preview routing and its prior asset exclusions are retained. HTTPS
+redirection remains in place. Host precedence follows existing App Hosting
+routing: `x-forwarded-host`, otherwise `host`; preview host comparison rejects
+comma lists, lookalikes and alternate ports.
+
+The immutable gzip JSON payload is **outside `public`**, at
+`preview/esmeralda/payload.json.gz.part-*` (three transport parts). `outputFileTracingIncludes` retains it in
+the standalone App Hosting deployment. Its pinned SHA256 is verified before
+bounded decompression (100 MiB maximum), and each requested entry is checked
+against its byte size/SHA256. It is cached only when this host is used. There
+are 104 HTML pages, 269 assets and robots.txt. Source bytes, design and production
+canonical URLs are unchanged. No private/admin pages or source manifests are
+served. A failed integrity/read check returns 503, never app content.
+
+All preview responses carry noindex/nofollow/noarchive and no-store. CSP permits
+only same-origin resources/connections and blocks forms/frames; same-origin APIs
+are denied by the static allowlist. Inline scripts/eval remain necessary for the
+existing Webflow design. Third-party tracking, booking, contact, newsletter and
+external widgets are intentionally unavailable; normal external navigation links
+remain links. This public preview is not an authentication boundary.
+
+Reproduce with Website PR59's output and the accepted v8 manifest:
+
+```sh
+python scripts/package-web-preview.py /path/to/sites-preview /path/to/asset-manifest.json
+node --test tests/unit/web-design-preview.cjs tests/unit/brand-subdomains-12.cjs
+npm run typecheck
+```
+
+The packager checks the original source-manifest SHA256
+`d4461a074d59ab035e005035ed9aa33e64327a6cff26d953ac7c680a60afd4fc`,
+all page hashes and all asset hashes/sizes, with no network. Original accepted
+archive SHA256 is `ce08640b677a4f3a2cc7232068258bfe9323935086e5694e8b6888303edecf0c`.
+Browser/live QA is a separate coordinator gate: desktop/mobile design, menu and
+dish visibility, local asset loading, no external tracking/form requests, preview
+API denial, and unchanged apex/merchant behavior. Release identity is checked
+on the apex `/api/health`; the preview host intentionally returns 404 there.
+Rollback is reverting this scoped code/payload change, with no DNS/data rollback.
