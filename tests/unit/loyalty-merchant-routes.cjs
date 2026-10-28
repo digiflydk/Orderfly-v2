@@ -47,7 +47,8 @@ test('invalid bodies are 400; business rejections keep their code; unknown failu
 
 test('the worker heartbeat runs stamp-card work and isolates its failure from the other workers',async()=>{
   const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='y'.repeat(32);
-  const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
+  const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
+    '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
     '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>({})},
     '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:worker}});
   const call=route=>route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+'y'.repeat(32)}}));
@@ -57,6 +58,7 @@ test('the worker heartbeat runs stamp-card work and isolates its failure from th
     response=await call(load(async()=>{throw new Error('private');}));
     const body=await response.json();
     assert.equal(response.status,200);assert.deepEqual(body.loyalty,{failed:true});assert.deepEqual(body.feedback,{sent:1});
+    assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});
     assert.doesNotMatch(JSON.stringify(body),/private/);
   }finally{if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });
