@@ -10,6 +10,7 @@
   const failed = new Set();
   const pending = new Map();
   let reloading = false;
+  let newsletterTimer = null, newsletterTimedOut = false;
   window.dataLayer = window.dataLayer || [];
   function gtag() { window.dataLayer.push(arguments); }
   const consent = (command, value) => { gtag('consent',command,value); };
@@ -72,9 +73,22 @@
   });
   const newsletter = () => {
     const el = find('[data-newsletter-consent-fallback]');
-    if (el) el.hidden = allowedHost && state.ad_storage === 'granted' && !failed.has('omnisend');
+    if (!el) return;
+    const permitted = allowedHost && state.ad_storage === 'granted';
+    const mount = find('#omnisend-embedded-v2-69676d920d7f53dc4d707a29');
+    const field = mount && mount.querySelector('input[type="email"]');
+    // A downloaded launcher is not proof that its downstream form rendered.
+    const ready = permitted && field && !field.disabled && field.getClientRects().length > 0;
+    el.hidden = !!ready;
+    if ((!permitted || ready) && newsletterTimer !== null) { clearTimeout(newsletterTimer); newsletterTimer = null; }
+    if (permitted && !ready && !newsletterTimedOut && newsletterTimer === null) {
+      newsletterTimer = setTimeout(() => { newsletterTimer = null; newsletterTimedOut = true; newsletter(); }, 10000);
+    }
     const message = find('[data-newsletter-consent-message]');
-    if (message) message.textContent = failed.has('omnisend') ? 'Tilmeldingsformularen kunne ikke indlæses. Prøv igen senere.' : 'Tilmeldingsformularen er ikke indlæst uden marketingcookies.';
+    const text = !permitted ? 'Tilmeldingsformularen er ikke indlæst uden marketingcookies.'
+      : failed.has('omnisend') || newsletterTimedOut ? 'Tilmeldingsformularen kunne ikke indlæses. Prøv igen senere.'
+      : 'Tilmeldingsformularen indlæses. Vent venligst.';
+    if (message && message.textContent !== text) message.textContent = text;
   };
   const selected = all => {
     const value = denied();
@@ -105,6 +119,12 @@
   };
   const boot = () => {
     if (!find('[flowappz-cookie-consent-container]')) return;
+    const mount = find('#omnisend-embedded-v2-69676d920d7f53dc4d707a29');
+    if (mount && typeof MutationObserver === 'function') {
+      new MutationObserver(newsletter).observe(mount, { childList:true, subtree:true, attributes:true });
+    }
+    const fallback = find('[data-newsletter-consent-fallback]');
+    if (fallback) { fallback.setAttribute('role','status'); fallback.setAttribute('aria-live','polite'); }
     apply(read(), false);
     if (stored()) { hide(popup()); show(sticky()); } else { hide(sticky()); show(popup()); }
     document.addEventListener('click', event => {

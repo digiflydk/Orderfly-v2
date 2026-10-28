@@ -38,7 +38,11 @@ their bytes. The contact form remains disabled pending its separate activation.
   document. Already sent/in-flight requests cannot be undone. No vendor cookies
   or server data are deleted by this change.
 * Newsletter has a visible settings/fallback message without marketing consent
-  and an honest failure message if its provider script fails. No subscription
+  and loading feedback until a visible, enabled email field exists in the exact
+  embedded mount. A MutationObserver rechecks downstream rendering. A 10-second
+  deadline or launcher error retains an accessible failure message; late rendering
+  can recover it. A hidden field or merely successful launcher never hides it.
+  No subscription
   is submitted by the adapter or tests.
 
 ## Google configuration gate — not complete

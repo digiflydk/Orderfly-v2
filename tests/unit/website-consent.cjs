@@ -4,15 +4,16 @@ const fs=require('node:fs');
 const vm=require('node:vm');
 const code=fs.readFileSync('preview/esmeralda/adapters/website-consent.js','utf8');
 function fixture(initial={}, origin='https://www.esmeraldapizza.dk') {
- const jar={...initial},timers=new Map(),listeners={},scripts=[],scriptNodes=[],nodes=new Map();let sequence=0,reloads=0;
+ const jar={...initial},timers=new Map(),listeners={},scripts=[],scriptNodes=[],nodes=new Map();let sequence=0,reloads=0, observerCallback;
  const node=()=>({hidden:false,checked:false,attrs:{},classList:{add(){},remove(){}},style:{removeProperty(){}},setAttribute(k,v){this.attrs[k]=v;},getAttribute(k){return this.attrs[k];}});
  const choices=['marketing','analytics','personalization'].map(c=>{const n=node();n.attrs['flowappz-cookie-choice']=c;return n;});
  for(const key of ['[flowappz-cookie-consent-container]','[flowappz-cookie-popup]','[flowappz-cookie-settings-wrapper]','[flowappz-cookie-consent-sticky-cookie-button]','[data-newsletter-consent-fallback]','[data-newsletter-consent-message]'])nodes.set(key,node());
+ const mount=node(); let emailField=null; mount.querySelector=()=>emailField; nodes.set('#omnisend-embedded-v2-69676d920d7f53dc4d707a29',mount);
  const document={readyState:'complete',querySelector:q=>nodes.get(q),querySelectorAll:q=>q==='[flowappz-cookie-choice]'?choices:[],createElement:()=>node(),head:{append:el=>{scripts.push(el.src);scriptNodes.push(el);}},addEventListener:(type,fn)=>{(listeners[type]??=[]).push(fn);}};
  Object.defineProperty(document,'cookie',{get:()=>Object.entries(jar).map(([k,v])=>k+'='+v).join('; '),set:text=>{const [k,v]=text.split(';')[0].split('=');jar[k]=v;}});
- const window={};const context={window,document,location:{origin,reload:()=>{reloads++;}},setTimeout:fn=>{timers.set(++sequence,fn);return sequence;},clearTimeout:id=>timers.delete(id)};
+ const window={};const context={MutationObserver:class {constructor(fn){observerCallback=fn;} observe(){}},window,document,location:{origin,reload:()=>{reloads++;}},setTimeout:fn=>{timers.set(++sequence,fn);return sequence;},clearTimeout:id=>timers.delete(id)};
  vm.createContext(context);vm.runInContext(code,context);
- return {window,jar,scripts,scriptNodes,choices,nodes,reloads:()=>reloads,rerun:()=>vm.runInContext(code,context),flush:()=>{for(const [id,fn]of [...timers]){timers.delete(id);fn();}},click:command=>{for(const fn of listeners.click||[])fn({preventDefault(){},target:{closest:()=>({getAttribute:()=>command})}});}};
+ return {renderForm:(visible=true)=>{emailField={disabled:false,getClientRects:()=>visible?[{}]:[]};observerCallback();},window,jar,scripts,scriptNodes,choices,nodes,reloads:()=>reloads,rerun:()=>vm.runInContext(code,context),flush:()=>{for(const [id,fn]of [...timers]){timers.delete(id);fn();}},click:command=>{for(const fn of listeners.click||[])fn({preventDefault(){},target:{closest:()=>({getAttribute:()=>command})}});}};
 }
 test('initial denial, no optional providers, default Google consent before updates',()=>{
  const f=fixture();f.flush();assert.deepEqual(f.scripts,[]);
@@ -31,7 +32,8 @@ test('accept-all loads each provider once and one Meta PageView despite repeated
  assert.equal(f.window.fbq.queue.filter(x=>x[0]==='track'&&x[1]==='PageView').length,1);
  assert.equal(f.window.omnisend.filter(x=>x[0]==='track').length,1);
  assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,1);
- assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,true);
+ assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);
+ f.renderForm();assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,true);
 });
 test('accept then revoke before scheduled work makes zero requests',()=>{
  const f=fixture();f.click('accept-all');f.click('reject-all');f.flush();assert.deepEqual(f.scripts,[]);assert.equal(f.reloads(),0);
@@ -52,4 +54,13 @@ test('provider load failure keeps newsletter fallback visible without repeated l
  const f=fixture();f.click('accept-all');f.flush();f.scriptNodes.find(n=>n.src.includes('omnisnippet')).onerror();
  assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);assert.match(f.nodes.get('[data-newsletter-consent-message]').textContent,/kunne ikke indlæses/);
  f.click('accept-all');f.flush();assert.equal(f.scripts.length,3);
+});
+
+test('successful launcher without downstream form retains feedback; late visible form resolves it',()=>{
+ const f=fixture();f.click('accept-all');f.flush();
+ assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);
+ assert.match(f.nodes.get('[data-newsletter-consent-message]').textContent,/kunne ikke indlæses/);
+ f.renderForm(false);assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);
+ f.renderForm();assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,true);
+ f.click('reject-all');assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);
 });
