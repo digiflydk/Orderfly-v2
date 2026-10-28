@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const {loadTs} = require('../helpers/load-ts.cjs');
 const manifest = require('../../preview/esmeralda/manifest.json');
 const lib = loadTs('src/lib/web-design-preview.ts');
-const server = loadTs('src/lib/web-design-preview-server.ts', {'../../preview/esmeralda/manifest.json':{default:manifest}});
+const server = loadTs('src/lib/web-design-preview-server.ts', {'../../preview/esmeralda/production-discovery.json':{default:require('../../preview/esmeralda/production-discovery.json')},'../../preview/esmeralda/manifest.json':{default:manifest}});
 function req(path, method='GET', host='web.orderfly.dk') {
   return new Request('https://backend.internal'+path,{method,headers:{'x-forwarded-host':host}});
 }
@@ -41,9 +41,14 @@ test('apex and merchants retain routing and excluded asset behavior',()=>{
   for(const host of ['orderfly.dk','esmeralda.orderfly.dk','www.orderfly.dk']) for(const path of ['/_next/image','/_next/static/x.js','/favicon.ico']) assert.equal(mw('https://'+host+path).kind,'next');
   assert.equal(mw('https://www.orderfly.dk/').status,308);
 });
-test('104 HTML and269 assets retain exact hashes, plus robots; correct MIME and HEAD',async()=>{
-  assert.equal(Object.keys(manifest.routes).length,374);
+test('103 served HTML and270 assets retain exact hashes, plus robots; legacy booking redirects',async()=>{
+  assert.equal(Object.keys(manifest.routes).length,375);
   for(const [path,entry] of Object.entries(manifest.routes)) {
+    if(path === '/book-bord') {
+      const r=await server.webDesignPreviewResponse(req(path));
+      assert.equal(r.status,307);assert.equal(r.headers.get('location'),'/bordbooking');
+      continue;
+    }
     const r=await server.webDesignPreviewResponse(req(path));assert.equal(r.status,200,path);
     const bytes=Buffer.from(await r.arrayBuffer());assert.equal(bytes.length,entry.size,path);
     assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),entry.sha256,path);
@@ -52,6 +57,19 @@ test('104 HTML and269 assets retain exact hashes, plus robots; correct MIME and 
     assert.notEqual(r.headers.get('content-type'),'application/octet-stream',entry.file);
   }
 });
+test('legacy booking handoff is preview-only, read-only and preserves opaque query bytes',async()=>{
+  for(const query of ['', '?utm_source=test&return=%2Fmenu%3Fx%3D1&literal=%252F', '?path=%2Fmpanel&next=https%3A%2F%2Fevil.example%2F']) {
+    for(const method of ['GET','HEAD']) {
+      const r=await server.webDesignPreviewResponse(req('/book-bord'+query,method));
+      assert.equal(r.status,307);assert.equal(r.headers.get('location'),'/bordbooking'+query);
+      assert.equal(await r.text(),'');assert.equal(r.headers.get('cache-control'),'no-store');
+      assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
+    }
+  }
+  for(const method of ['POST','PUT','PATCH','DELETE','OPTIONS']) assert.equal((await server.webDesignPreviewResponse(req('/book-bord',method))).status,405);
+  for(const host of ['orderfly.dk','esmeralda.orderfly.dk','web.orderfly.dk.evil']) assert.equal((await server.webDesignPreviewResponse(req('/book-bord','GET',host))).status,404);
+  assert.equal((await server.webDesignPreviewResponse(req('/book-bordish'))).status,404);
+});
 test('server independently denies off-host, methods, traversal, private/API and unknown routes',async()=>{
   for(const host of ['orderfly.dk','esmeralda.orderfly.dk','web.orderfly.dk.evil']) assert.equal((await server.webDesignPreviewResponse(req('/','GET',host))).status,404);
   assert.equal((await server.webDesignPreviewResponse(req('/','POST'))).status,405);
@@ -59,7 +77,7 @@ test('server independently denies off-host, methods, traversal, private/API and 
   assert.equal(await (await server.webDesignPreviewResponse(req('/missing','HEAD'))).text(),'');
 });
 test('payload corruption fails closed; tracing and policy retain deployment isolation',async()=>{
-  const bad=loadTs('src/lib/web-design-preview-server.ts',{'../../preview/esmeralda/manifest.json':{default:manifest},'node:fs/promises':{readFile:async()=>Buffer.from('corrupt')}});
+  const bad=loadTs('src/lib/web-design-preview-server.ts',{'../../preview/esmeralda/production-discovery.json':{default:require('../../preview/esmeralda/production-discovery.json')},'../../preview/esmeralda/manifest.json':{default:manifest},'node:fs/promises':{readFile:async()=>Buffer.from('corrupt')}});
   assert.equal((await bad.webDesignPreviewResponse(req('/'))).status,503);
   assert.match(fs.readFileSync('next.config.js','utf8'),/preview\/esmeralda\/payload.json.gz/);
   assert.match(lib.WEB_PREVIEW_HEADERS['Content-Security-Policy'],/connect-src 'self'; form-action 'none'; frame-src 'none'/);

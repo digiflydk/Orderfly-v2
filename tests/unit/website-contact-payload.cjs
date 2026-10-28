@@ -1,0 +1,35 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const zlib=require('node:zlib');
+const crypto=require('node:crypto');
+const {loadTs}=require('../helpers/load-ts.cjs');
+const manifest=require('../../preview/esmeralda/manifest.json');
+const entries=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`)))));
+test('packaged contact disables native GET, only owns exact contact form, preserves cookie form',()=>{
+ const html=Buffer.from(entries['/kontakt'].data,'base64').toString();
+ const forms=[...html.matchAll(/<form\b[^>]*>/g)].map(m=>m[0]);
+ const owned=forms.filter(f=>f.includes('data-website-contact='));assert.equal(owned.length,1);
+ assert.match(owned[0],/method="post"/);assert.doesNotMatch(owned[0],/\saction=|data-wf-|data-turnstile-|data-website-contact-(enabled|sitekey)/);
+ const cookie=forms.find(f=>!f.includes('data-website-contact='));assert.ok(cookie);assert.match(cookie,/id="email-form"/);assert.match(cookie,/data-wf-element-id=/);
+ const ownedBody=html.match(/<form\b[^>]*data-website-contact=""[^>]*>.*?<\/form>/s)[0];
+ assert.doesNotMatch(ownedBody,/turnstile|cf-turnstile|data-sitekey/);
+ assert.match(ownedBody,/<label for="contact-message"[^>]*>Besked<\/label>/);
+ assert.match(html,/<input[^>]*type="submit"[^>]* disabled\/?\s*>/);
+ assert.match(html,/<head><script src="\/_assets\/website-contact-adapter.js"><\/script>/);
+ assert.equal(Object.values(manifest.page_patches).filter(p=>p.contact_adapter_version).length,1);
+ const asset=Buffer.from(entries['/_assets/website-contact-adapter.js'].data,'base64');
+ assert.equal(crypto.createHash('sha256').update(asset).digest('hex'),'eb6ec999568ddea7e312638f3c46bdc58672cbe6566fd1569ce856953acd3ef9');
+});
+test('only exact public contact path permits owned contact providers; preview remains offline',async()=>{
+ const lib=loadTs('src/lib/esmeralda-public-host.ts');
+ const contact=lib.esmeraldaPublicHeaders('/kontakt')['Content-Security-Policy'];
+ assert.match(contact,/script-src[^;]* https:\/\/challenges.cloudflare.com\/turnstile\/v0\/api.js;/);
+ assert.match(contact,/connect-src[^;]* https:\/\/bdemvarwpfcxyczunchx.supabase.co\/functions\/v1\/website-contact;/);
+ assert.match(contact,/frame-src[^;]* https:\/\/challenges.cloudflare.com;/);
+ assert.match(contact,/form-action 'none'/);assert.doesNotMatch(contact,/\*/);
+ for(const path of ['/','/kontakt/','/Kontakt','/kontakt?x=1','/bordbooking'])assert.doesNotMatch(lib.esmeraldaPublicHeaders(path)['Content-Security-Policy'],/website-contact|challenges.cloudflare.com/);
+ const server=loadTs('src/lib/web-design-preview-server.ts',{'../../preview/esmeralda/manifest.json':{default:manifest}});
+ const response=await server.webDesignPreviewResponse(new Request('https://web.orderfly.dk/kontakt',{headers:{host:'web.orderfly.dk'}}));
+ const csp=response.headers.get('content-security-policy');assert.doesNotMatch(csp,/website-contact|challenges.cloudflare.com/);assert.match(csp,/connect-src 'self';/);assert.match(csp,/frame-src 'none'/);
+});

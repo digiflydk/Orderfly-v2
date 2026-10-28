@@ -14,6 +14,7 @@ function loadTs(filename, mocks = {}) {
     if (name === 'react') return require('next/dist/compiled/react');
     const local = name.startsWith('@/') ? path.resolve('src', name.slice(2))
       : name.startsWith('.') ? path.resolve(path.dirname(filename), name) : null;
+    if (local?.endsWith('.json')) return {default: JSON.parse(fs.readFileSync(local, 'utf8'))};
     if (local) return loadTs(`${local}.ts`, mocks);
     return require(name);
   }, mod, mod.exports);
