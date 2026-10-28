@@ -5,6 +5,8 @@ spec = importlib.util.spec_from_file_location('preview_navigation', Path(__file_
 navigation = importlib.util.module_from_spec(spec); spec.loader.exec_module(navigation)
 spec = importlib.util.spec_from_file_location('preview_contact', Path(__file__).with_name('preview-contact.py'))
 contact = importlib.util.module_from_spec(spec); spec.loader.exec_module(contact)
+spec = importlib.util.spec_from_file_location('preview_responsive', Path(__file__).with_name('preview-responsive.py'))
+responsive = importlib.util.module_from_spec(spec); spec.loader.exec_module(responsive)
 source = Path(sys.argv[1]); dest = Path('preview/esmeralda')
 report = json.loads((source / 'preview-manifest.json').read_text())
 assert report['source_manifest_sha256'] == 'd4461a074d59ab035e005035ed9aa33e64327a6cff26d953ac7c680a60afd4fc'
@@ -39,6 +41,8 @@ for route, name in sorted(routes.items()):
         if route == '/kontakt':
             data = contact.patch_contact(data)
             changes['contact_adapter_version'] = 1
+        data, responsive_changes = responsive.patch_responsive(data, route)
+        changes.update(responsive_changes)
         patches[route] = {'source_sha256': original_sha, **changes}
     entries[route] = {'data': base64.b64encode(data).decode(), 'sha256': hashlib.sha256(data).hexdigest(), 'file': name, 'size': len(data)}
 adapter = Path('preview/esmeralda/adapters/website-contact-adapter.js').read_bytes()

@@ -400,7 +400,8 @@
     "/handelsbetingelser": {
       "source_sha256": "4f8fa8dabb719d7d60dc4734bed6daabd691aecf40380fa07471fe2ede0498b7",
       "internal_links": 3,
-      "contact_anchor_added": false
+      "contact_anchor_added": false,
+      "responsive_patch_version": 1
     },
     "/kontakt": {
       "source_sha256": "511d5f2a257d280f4776e50ff84530d42467ebf25e1fd700dd5c911835ec8613",
@@ -491,12 +492,14 @@
     "/privatlivspolitik": {
       "source_sha256": "2902f730818c6edce64e6f2f67771be251860d8df59c21f49cbbee5fe02d8306",
       "internal_links": 1,
-      "contact_anchor_added": false
+      "contact_anchor_added": false,
+      "responsive_patch_version": 1
     },
     "/produkter": {
       "source_sha256": "4fb2ae6c60a0a30ddbe61aa790120db046f084af915f4ecb2d5402c84cc097d6",
       "internal_links": 1,
-      "contact_anchor_added": false
+      "contact_anchor_added": false,
+      "responsive_patch_version": 1
     },
     "/produkter/halal-kylling-frostpizza": {
       "source_sha256": "1a5378483ac283ff866e240cdf8cf7be742700e1a11510c19c9e8c87ad1a8cce",
@@ -511,7 +514,9 @@
     "/produkter/tiramisu": {
       "source_sha256": "951781bdc501c1f5d8b1c1da1c35d7b343c400e01c8ba2e867326b73680a8798",
       "internal_links": 1,
-      "contact_anchor_added": false
+      "contact_anchor_added": false,
+      "responsive_patch_version": 1,
+      "empty_image_fallbacks": 1
     },
     "/ramadan": {
       "source_sha256": "b27f0cc5345e519bdefbfa640286063ef7518738d2067c701a23137a5e983231",
@@ -524,7 +529,7 @@
       "contact_anchor_added": false
     }
   },
-  "payload_sha256": "9493a656d2451ed65be6dfd5e59c43951657d798451962064fcf486b52280653",
+  "payload_sha256": "abf960936b1e791fdab8b7bfaae64fa5600136cec040a8bf7c6536b4286cca2b",
   "routes": {
     "/": {
       "sha256": "687b3f319f61a2b86afc7d75f7a0d9acec253048213856029a2e0277bd7e9129",
@@ -2267,9 +2272,9 @@
       "size": 53764
     },
     "/handelsbetingelser": {
-      "sha256": "81c9f3754e75261d24461ea6294ac1f7ecefaebd9ef927562787336421c2aa66",
+      "sha256": "6e3d34d8fa360c7370eacae776a6f2058e9eb052008aca96c7feb7696686eca7",
       "file": "handelsbetingelser.html",
-      "size": 37896
+      "size": 38052
     },
     "/kontakt": {
       "sha256": "92bb68e5b779ae591baaaf4e108d0ff5345e72a59118807a962e6f277e68182a",
@@ -2357,14 +2362,14 @@
       "size": 35530
     },
     "/privatlivspolitik": {
-      "sha256": "852cf2d1bbe8d556e23f5b6468c78bec84456a15e403160f06a37a2475c0b5ef",
+      "sha256": "6720359e2bb08ae375cc892770e4670f9ef69eb645b4c4dcebcb477ebc55e12a",
       "file": "privatlivspolitik.html",
-      "size": 40168
+      "size": 40324
     },
     "/produkter": {
-      "sha256": "e64a42158aac1edbf044ece8d5b4f00e80652a1168a8dc78e9c036d4637a7993",
+      "sha256": "010b07c8df5902f2c184ab015ca214dc0376b3146693ae4743c437d57edaa135",
       "file": "produkter.html",
-      "size": 61143
+      "size": 61444
     },
     "/produkter/halal-kylling-frostpizza": {
       "sha256": "fa9d3e27957d95c0ff1fdc9a26b3e9a70634c56977130baa014277df9efc1b4b",
@@ -2377,9 +2382,9 @@
       "size": 45552
     },
     "/produkter/tiramisu": {
-      "sha256": "f9c531c573c88e96a3355d1a92ca2b3cce797c9bc3679073dc5e3f613d55894f",
+      "sha256": "078fb59714fd65051cdd362a4482a8b05a2e6ff5fb22cc30a88b703b1fe88c41",
       "file": "produkter/tiramisu.html",
-      "size": 45524
+      "size": 45505
     },
     "/ramadan": {
       "sha256": "217f99725fb9085d4befe0e8d7a0bf9718cad810d1677d7d8af329503b3ff8aa",
