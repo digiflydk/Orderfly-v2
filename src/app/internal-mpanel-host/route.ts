@@ -1,0 +1,10 @@
+import { mpanelHostResponse } from '@/lib/mpanel-host-server';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const GET = mpanelHostResponse;
+export const HEAD = mpanelHostResponse;
+export const POST = mpanelHostResponse;
+export const PUT = mpanelHostResponse;
+export const PATCH = mpanelHostResponse;
+export const DELETE = mpanelHostResponse;
+export const OPTIONS = mpanelHostResponse;
