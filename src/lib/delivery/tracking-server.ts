@@ -7,8 +7,8 @@ export async function loadAuthorizedDeliveryTracking(tx:FirebaseFirestore.Transa
  if(!order.managedDelivery)return null;
  deliveryIdSchema.parse(orderId);
  const ref=getAdminDb().collection('orders').doc(orderId);
- const [attempt,result,state,estimates]=await Promise.all([tx.get(ref.collection('deliveryAttempts').doc('original')),tx.get(ref.collection('deliveryDispatchResults').doc('original')),tx.get(ref.collection('deliveryState').doc('current')),tx.get(ref.collection('deliveryEstimates').doc('current'))]);
- return projectCustomerDeliveryTracking(orderId,order,attempt.data(),result.data(),state.data(),estimates.data());
+ const [attempt,result,state,estimates,cancellation]=await Promise.all([tx.get(ref.collection('deliveryAttempts').doc('original')),tx.get(ref.collection('deliveryDispatchResults').doc('original')),tx.get(ref.collection('deliveryState').doc('current')),tx.get(ref.collection('deliveryEstimates').doc('current')),tx.get(ref.collection('deliveryCancellation').doc('original'))]);
+ return projectCustomerDeliveryTracking(orderId,order,attempt.data(),result.data(),state.data(),estimates.data(),cancellation.data());
 }
 /** Receipt-only helper, never a server action. Receipt proof was checked by readGuestReceipt. */
 export async function readReceiptDeliveryTracking(verifiedOrder:Record<string,any>){

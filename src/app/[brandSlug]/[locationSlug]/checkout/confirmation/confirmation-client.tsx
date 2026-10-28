@@ -177,10 +177,12 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     const fullAddress = customerDetails.address;
     const tracking = order.managedDeliveryTracking;
     const refunded = tracking?.paymentStatus === 'refunded';
+    const cancelled = tracking?.deliveryStatus === 'cancelled';
+    const cancellationPending = tracking?.cancellationState === 'unknown' || tracking?.cancellationState === 'submitting';
     const rejected = tracking?.bookingState === 'rejected';
     const unconfirmed = !!tracking && tracking.bookingState !== 'accepted';
-    const receiptTitle = refunded ? 'Din betaling er refunderet' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
-    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
+    const receiptTitle = refunded ? 'Din betaling er refunderet' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
+    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
 
     return (
         <div className="min-h-screen w-full bg-background">
@@ -188,7 +190,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                 <div className="w-full max-w-3xl mx-auto space-y-8">
                      <div className="text-center">
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
-                           {order.managedDeliveryTracking&&order.managedDeliveryTracking.bookingState!=='accepted'?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
+                           {order.managedDeliveryTracking&&(order.managedDeliveryTracking.bookingState!=='accepted'||cancelled||cancellationPending)?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
                         </div>
                         <h1 className="text-3xl font-bold tracking-tight">{receiptTitle}</h1>
                         {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
