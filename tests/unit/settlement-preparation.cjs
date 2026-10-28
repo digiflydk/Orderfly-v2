@@ -47,7 +47,8 @@ async function fixture(kind = 'stripe', options = {}) {
       return run();
     }
   };
-  const mocks = { ...f.mocks, '@/lib/marketing/config': { paidOrderMarketingEnabled: () => !!options.marketing } };
+  const afterCallbacks=[];
+  const mocks = { ...f.mocks, 'next/server':{after:callback=>afterCallbacks.push(callback)}, '@/lib/marketing/config': { paidOrderMarketingEnabled: () => !!options.marketing } };
   if (Object.hasOwn(options, 'capacityReservation')) {
     const actual = loadTs('src/lib/server/discount-capacity.ts', { 'server-only': {} });
     mocks['@/lib/server/discount-capacity'] = { prepareAdminCapacitySettlement: async (...args) => {
@@ -60,7 +61,7 @@ async function fixture(kind = 'stripe', options = {}) {
   const api = loadTs('src/lib/server/settle-checkout.ts', mocks);
   const session = { id: 'cs_test_settlement_346', payment_status: 'paid', currency: 'dkk', amount_total: Math.round(order.totalAmount * 100),
     metadata: { orderId: f.orderId, brandId: 'b', locationId: 'l' } };
-  return { ...f, attempts, api, session, settle: () => kind === 'stripe' ? api.settlePaidCheckoutSession(session) : api.settlePaidPickupOrder(f.orderId, 'cash') };
+  return { ...f, afterCallbacks, attempts, api, session, settle: () => kind === 'stripe' ? api.settlePaidCheckoutSession(session) : api.settlePaidPickupOrder(f.orderId, 'cash') };
 }
 const writes = attempt => attempt.filter(event => event.method !== 'get');
 
@@ -148,4 +149,9 @@ test('#346 invalid budget preparation cannot apply partial writes', async () => 
     await assert.rejects(f.settle(), /Settlement write budget exceeded/); assert.equal(writes(f.attempts[0]).length, 0);
     assert.deepEqual([...f.records], before);
   }
+});
+
+test('legacy committed or failed settlement never schedules a managed courier callback',async()=>{
+ const legacy=await fixture();await legacy.settle();assert.equal(legacy.afterCallbacks.length,0);
+ const failed=await fixture('stripe',{failPath:'orders/'});await assert.rejects(failed.settle(),/fixture atomic failure/);assert.equal(failed.afterCallbacks.length,0);
 });

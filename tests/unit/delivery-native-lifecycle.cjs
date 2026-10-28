@@ -57,7 +57,8 @@ async function fixture(options = {}) {
     paymentIntents={retrieve:async()=>({id:'pi_test',status:'succeeded',livemode:false,currency:'dkk',amount:session.amount_total,amount_received:session.amount_total,metadata:scope,
       latest_charge:{id:'ch_test',paid:true,disputed:false,livemode:false,currency:'dkk',amount:session.amount_total,amount_refunded:0,payment_intent:'pi_test'}})};
   }
-  const load = moduleGraph({ ...f.mocks, 'next/headers': { cookies: async () => ({ get: () => undefined }) }, stripe: { default: Provider },
+  const afterCallbacks=[];
+  const load = moduleGraph({ ...f.mocks, 'next/server':{after:callback=>{assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.records.get('deliveryDispatchJobs/'+f.orderId)?.state,'pending');if(options.scheduleFailure)throw Error('no request lifecycle');afterCallbacks.push(callback);}}, 'next/headers': { cookies: async () => ({ get: () => undefined }) }, stripe: { default: Provider },
     '@google-cloud/secret-manager': { SecretManagerServiceClient: class { async accessSecretVersion() { return [{payload:{data:Buffer.from('fixture-secret-with-at-least-32-characters')}}]; } } },
     '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => 'sk_test_fake' },
     'firebase-admin/firestore': { FieldPath: { documentId: () => '__name__' }, FieldValue: { serverTimestamp: () => 'fixture-server-time' } },
@@ -99,7 +100,7 @@ async function fixture(options = {}) {
     const signature=createHmac('sha256','fixture-secret-with-at-least-32-characters').update(`${h}.${p}`).digest('base64url');
     return new Request('https://fixture.test/callback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:`${h}.${p}.${signature}`})});
   };
-  return {...f,scope,session,feedbackDrain:load('src/lib/feedback/delivery-requests.ts').drainDeliveryFeedbackRequests,terminal:load('src/lib/orders/terminal-read.ts'),settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
+  return {...f,afterCallbacks,scope,session,feedbackDrain:load('src/lib/feedback/delivery-requests.ts').drainDeliveryFeedbackRequests,terminal:load('src/lib/orders/terminal-read.ts'),settlement:load('src/lib/server/settle-checkout.ts'),dispatcher,inbox,refunds,key,request,network,fetch, jobs:()=>[...f.records].filter(([path])=>path.includes('/jobs/'))};
 }
 
 test('real dispatcher, private binding, provider, payment acceptance and signed callback share one native lifecycle',async t=>{
@@ -157,14 +158,15 @@ test('first native managed settlement resolves PI from saved session then queues
  assert.equal(await f.settlement.settlePaidCheckoutSession(f.session),false);
  assert.deepEqual(f.order().invoice,invoice);assert.deepEqual(f.records.get('customers/'+customerId),customer);
  assert.equal(f.jobs().length,0);assert.equal(f.network.length,0);
- assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'booked');
+ assert.equal(f.afterCallbacks.length,2);
+ await Promise.all([...f.afterCallbacks.map(callback=>callback()),f.dispatcher.runDeliveryDispatchWorker()]);
  assert.equal(f.network.length,1);assert.equal(f.jobs().length,1);assert.equal(f.order().status,'Received');
 });
 test('first managed settlement rejects stored PI or authoritative session scope conflicts without writes',async()=>{
  for(const mutate of [f=>f.order().psp.paymentIntentId='pi_other',f=>f.session.metadata={...f.session.metadata,brandId:'foreign'},f=>f.session.payment_intent='pi_other']){
   const f=await fixture();f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);mutate(f);
   const before=structuredClone([...f.records]);await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session));
-  assert.deepEqual([...f.records],before);assert.equal(f.network.length,0);
+  assert.deepEqual([...f.records],before);assert.equal(f.network.length,0);assert.equal(f.afterCallbacks.length,0);
  }
 });
 
@@ -270,4 +272,34 @@ test('inactive portal enrollment completes already-paid sandbox dispatch and cal
  assert.equal((await f.inbox.receiveNativeWoltCallback(f.request(),f.key)).status,200);
  assert.equal(f.records.get('orders/'+f.orderId+'/deliveryState/current').status,'picked_up');
  await f.dispatcher.runDeliveryDispatchWorker();assert.equal(f.network.length,1);assert.equal(f.jobs().length,1);
+});
+test('immediate lifecycle callback preserves rejected and unknown outcomes with no create retry',async t=>{
+ const originalFetch=global.fetch;t.after(()=>global.fetch=originalFetch);
+ for(const options of [{lostResponse:true},{changedPrivateQuote:true}]){
+  const f=await fixture(options);global.fetch=f.fetch;
+  await f.settlement.settlePaidCheckoutSession(f.session);assert.equal(f.afterCallbacks.length,1);assert.equal(f.network.length,0);
+  await f.afterCallbacks[0]();await f.afterCallbacks[0]();await f.dispatcher.runDeliveryDispatchWorker();
+  assert.equal(f.records.get('deliveryDispatchJobs/'+f.orderId).state,options.lostResponse?'unknown':'rejected');assert.equal(f.network.length,options.lostResponse?1:0);assert.equal(f.refunds.length,options.lostResponse?0:1);
+ }
+});
+test('scheduling failure leaves committed payment and pending job for heartbeat',async t=>{
+ const f=await fixture({scheduleFailure:true}),originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
+ f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);
+ assert.equal(await f.settlement.settlePaidCheckoutSession(f.session),true);assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.afterCallbacks.length,0);assert.equal(f.network.length,0);assert.equal(f.records.get('deliveryDispatchJobs/'+f.orderId).state,'pending');
+ await f.dispatcher.runDeliveryDispatchWorker();assert.equal(f.network.length,1);assert.equal(f.order().status,'Received');
+});
+test('after dispatch does not extend an expired promise, and unpaid or terminal replays schedule nothing',async t=>{
+ const originalFetch=global.fetch;t.after(()=>global.fetch=originalFetch);
+ const expired=await fixture();global.fetch=expired.fetch;await expired.settlement.settlePaidCheckoutSession(expired.session);
+ const quote=expired.records.get('deliveryQuotes/Q');
+ const originalNow=Date.now;Date.now=()=>quote.expiresAtMs+1;
+ try{await expired.afterCallbacks[0]();}finally{Date.now=originalNow;}assert.equal(expired.network.length,0);assert.equal(expired.records.get('orders/'+expired.orderId+'/deliveryDispatchResults/original').result.error.code,'quote_expired');assert.equal(expired.refunds.length,1);
+ const unpaid=await fixture();unpaid.session.payment_status='unpaid';assert.equal(await unpaid.settlement.settlePaidCheckoutSession(unpaid.session),false);assert.equal(unpaid.afterCallbacks.length,0);
+ const terminal=await fixture();terminal.order().status='Delivered';await terminal.settlement.settlePaidCheckoutSession(terminal.session);assert.equal(terminal.afterCallbacks.length,0);
+});
+
+test('failed managed settlement commit does not register callback or send courier request',async()=>{
+ const f=await fixture();f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);
+ const native=f.db.runTransaction.bind(f.db);f.db.runTransaction=fn=>native(async tx=>fn({...tx,create:(ref,value)=>{if(ref.path.startsWith('deliveryDispatchJobs/'))throw Error('commit rejected');return tx.create(ref,value);}}));
+ await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session),/commit rejected/);assert.equal(f.afterCallbacks.length,0);assert.equal(f.network.length,0);assert.equal(f.order().paymentStatus,'Pending');
 });
