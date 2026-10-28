@@ -19,8 +19,12 @@ export function esmeraldaCanonicalRedirect(url: URL, host: string | null, proto:
     ? ESMERALDA_PUBLIC_ORIGIN + url.pathname + (url.href.includes('?') ? url.href.slice(url.href.indexOf('?')).split('#')[0] : '') : null;
 }
 export function esmeraldaPublicHeaders(pathname: string): Record<string, string> {
-  // Only origins actually present in the reviewed source. No service-wide wildcard.
-  // Provider dynamic dependencies must pass browser QA before the release switch.
+  // Website-only provider sources verified against captured IDs, public SDKs and
+  // Google's CSP guide; see docs/website-tracking-policy.md. This is not consent
+  // enforcement or proof of provider delivery. Preview and merchant policies are separate.
+  const trackingScripts = 'https://omnisnippet1.com/inshop/launcher-v2.js https://connect.facebook.net/en_US/fbevents.js https://connect.facebook.net/signals/config/773544982454626 https://www.googletagmanager.com';
+  const trackingImages = 'https://www.facebook.com/tr https://www.facebook.com/tr/ https://www.googletagmanager.com https://www.google-analytics.com/g/collect https://region1.google-analytics.com/g/collect';
+  const trackingConnect = 'https://www.facebook.com/tr/ https://www.googletagmanager.com https://www.google.com https://www.google-analytics.com/g/collect https://region1.google-analytics.com/g/collect';
   const booking = pathname === '/bordbooking' ? ' https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/booking-api' : '';
   const map = pathname === '/kontakt' ? ' https://www.google.com/maps/embed' : '';
   const contactScript = pathname === '/kontakt' ? ' https://challenges.cloudflare.com/turnstile/v0/api.js' : '';
@@ -30,6 +34,6 @@ export function esmeraldaPublicHeaders(pathname: string): Record<string, string>
     'Cache-Control': 'public, max-age=0, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://omnisnippet1.com/inshop/launcher-v2.js https://connect.facebook.net/en_US/fbevents.js https://www.googletagmanager.com/gtm.js" + contactScript + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://www.facebook.com/tr; font-src 'self' data:; connect-src 'self'" + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' " + trackingScripts + contactScript + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: " + trackingImages + "; font-src 'self' data:; connect-src 'self' " + trackingConnect + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
   };
 }
