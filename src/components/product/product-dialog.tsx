@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ProductOptionGroup } from './product-option-group';
-import { ScrollArea } from '../ui/scroll-area';
 import { Badge } from '../ui/badge';
 import { CategoryIcon as DynamicIcon } from '../catalog/category-icon';
 import { publicRead } from '@/lib/public-read';
@@ -215,14 +214,14 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
-        <div className="flex-1 flex flex-col overflow-hidden">
-            <ScrollArea className="flex-1">
-                <div className="commerce-option-header">
+      <DialogContent data-commerce-panel="options" data-product-options className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
+        <div className="flex min-h-0 flex-col overflow-hidden">
+            <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
-                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
+                  <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>
-                <div className="p-4 space-y-3">
+            <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
+                <div className="px-4 pb-3 pt-2 space-y-2">
                     {hasOptions && (
                         <>
                             {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
@@ -241,7 +240,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                             )}
 
                             {relevantToppingGroups.map(group => <ProductOptionGroup key={group.id}
-                              group={group} dialogId={dialogId} selectedToppings={selectedToppings}
+                              group={group} initiallyExpanded={group.id === relevantToppingGroups.find(candidate => candidate.minSelection === 0)?.id} dialogId={dialogId} selectedToppings={selectedToppings}
                               showErrors={showErrors} selectionText={getSelectionText(group)} onQuantity={handleToppingQuantity} />)}
                         </>
                     )}
@@ -257,40 +256,22 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </section>;
                   })}
                 </div>
-            </ScrollArea>
-             <div className="w-full mt-auto sticky bottom-0 bg-inherit">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-t px-4 py-2 text-sm">
-                  {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus">{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
-                  <p className="font-semibold">I alt: {formatPrice(totalItemPrice)}</p>
+            </div>
+            <div className="commerce-product-footer shrink-0 border-t bg-inherit px-3 py-3">
+              {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className="mb-2 text-xs text-muted-foreground">{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
+              <div className="flex items-center gap-3">
+                <div className="commerce-option-quantity flex shrink-0 items-center gap-1" role="group" aria-label="Antal produkter">
+                  <Button type="button" variant="outline" size="icon" aria-label="Reducer antal" disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-11 w-11 rounded-lg"><Minus className="h-4 w-4" /></Button>
+                  <span className="w-7 text-center text-lg font-semibold tabular-nums">{quantity}</span>
+                  <Button type="button" variant="outline" size="icon" aria-label="Øg antal" disabled={quantity >= 100} onClick={() => setQuantity(q => Math.min(100,q + 1))} className="h-11 w-11 rounded-lg"><Plus className="h-4 w-4" /></Button>
                 </div>
-                <div className="commerce-option-quantity flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
-                    <Button
-                        variant="outline"
-                        aria-label="Reducer antal" onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
-                    >
-                        <Minus className="h-6 w-6" />
-                    </Button>
-                    <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
-                    <Button
-                        variant="outline"
-                        aria-label="Øg antal" disabled={quantity >= 100} onClick={() => setQuantity(q => Math.min(100,q + 1))}
-                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
-                    >
-                        <Plus className="h-6 w-6" />
-                    </Button>
-                </div>
-                <Button
-                    size="lg"
-                    className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
-                    onClick={handleAddToCart}
-                    disabled={!cartReady}
-                >
-                    <div className="flex w-full justify-between items-center">
-                        <span>{!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
-                        <span>{formatPrice(totalItemPrice)}</span>
-                    </div>
+                <Button size="lg" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
+                  onClick={handleAddToCart} disabled={!cartReady}
+                  aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
+                  <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                  <span className="text-sm tabular-nums">{formatPrice(totalItemPrice)}</span>
                 </Button>
+              </div>
             </div>
         </div>
       </DialogContent>
