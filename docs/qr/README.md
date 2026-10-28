@@ -63,3 +63,5 @@ invalid tokens, route delegation and PNG/SVG logo decoding after resampling to
 multiple pixel dimensions. These are digital regression checks, not a guarantee
 for every physical size, printer, paper or scanner. No millimetre-specific mode
 has been introduced. A physical sample is still needed before a print run.
+
+The existing destination loop guard blocks both own `/q/` and `/R/` links, including decoded path aliases and configured blocked origins. A copied scan URL cannot be saved as another QR destination.

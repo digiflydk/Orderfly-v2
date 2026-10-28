@@ -56,7 +56,7 @@ export function normalizeDestination(input: string, options: DestinationOptions 
     || (options.blockedOrigins ?? []).some(origin => { try { const blocked = new URL(origin); blocked.hostname = blocked.hostname.replace(/\.$/, ''); return blocked.origin === url.origin; } catch { return false; } });
   let path: string;
   try { path = decodeURIComponent(url.pathname); } catch { throw new QrPayloadError('invalid_url', 'url'); }
-  if (own && /^\/+q(?:\/|$)/i.test(path)) throw new QrPayloadError('blocked_destination', 'url');
+  if (own && /^\/+[qr](?:\/|$)/i.test(path)) throw new QrPayloadError('blocked_destination', 'url');
   return bounded(url.toString());
 }
 

@@ -59,3 +59,15 @@ test('UTF-8 byte capacity, controls and malformed runtime input are bounded', ()
   rejects(() => buildStaticPayload({type:'unknown'}),'invalid_input');rejects(() => buildStaticPayload(null),'invalid_input');
   rejects(() => normalizeDestination(42),'invalid_input');
 });
+
+ test('alphanumeric scan links and encoded aliases cannot become QR destinations', () => {
+  const token='C3I37XBBCC2R7GZ864QCLI9NKE';
+  for (const host of ['ORDERFLY.DK','orderfly.dk.','esmeralda.orderfly.dk']) {
+    for (const path of ['/R/','/%52/','/%2fR/','/a/../R/']) {
+      rejects(() => normalizeDestination(`https://${host}${path}${token}`), 'blocked_destination');
+    }
+  }
+  rejects(() => normalizeDestination(`https://qr.esmeraldapizza.dk/R/${token}`, {blockedOrigins:['https://qr.esmeraldapizza.dk']}), 'blocked_destination');
+  assert.equal(normalizeDestination(`https://example.org/R/${token}`), `https://example.org/R/${token}`);
+  assert.equal(normalizeDestination('https://orderfly.dk/restaurant'), 'https://orderfly.dk/restaurant');
+});

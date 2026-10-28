@@ -75,3 +75,10 @@ test('HTTP unknown write outcome is503, native errors stay deny and all response
   assert.equal(response.status,status);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.text()).includes('secret'),false);
  }
 });
+
+test('copied alphanumeric scan URL is rejected before a dynamic destination is saved',async()=>{
+ const {execute,calls}=fixture();
+ const destination=loadTs('src/lib/qr/scan-url.ts').qrScanUrl(saved.slug);
+ await assert.rejects(()=>execute({action:'save',draft:{...draft,destination},context:{requestId}}),e=>e.code==='blocked_destination');
+ assert.equal(calls.some(x=>x[0]==='create'||x[0]==='update'),false);
+});
