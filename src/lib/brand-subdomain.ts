@@ -80,7 +80,7 @@ export function brandSlugFromHost(hostHeader: string | null | undefined): string
 
 // App-wide paths keep their own routes on a brand subdomain.
 const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/terminal', '/mapp', '/verify'];
-const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json', '/fonts/inter/inter-latin-wght-normal.woff2']);
+const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json']);
 
 /**
  * Internal path for a request on a brand subdomain, or null when no rewrite is

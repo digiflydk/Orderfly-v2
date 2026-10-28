@@ -40,7 +40,7 @@ test('#12 subdomain paths are scoped to that brand; app-wide paths pass through'
   assert.equal(lib.brandSubdomainRewrite('/esmeralda/esmeralda-pizza-amager', 'esmeralda'), null);
   // Another brand's path never escapes this brand's scope.
   assert.equal(lib.brandSubdomainRewrite('/other-brand/amager', 'esmeralda'), '/esmeralda/other-brand/amager');
-  for (const path of ['/_next/static/x.js', '/fonts/inter/inter-latin-wght-normal.woff2', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/terminal/login', '/terminal/orders', '/robots.txt', '/icon.png'])
+  for (const path of ['/_next/static/x.js', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/terminal/login', '/terminal/orders', '/robots.txt', '/icon.png'])
     assert.equal(lib.brandSubdomainRewrite(path, 'esmeralda'), null, path);
 });
 
