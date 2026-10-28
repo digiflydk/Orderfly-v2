@@ -1,5 +1,6 @@
 'use client';
 
+import { createPortal } from 'react-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Brand,
@@ -52,6 +53,13 @@ export function MenuClient({
 }: MenuClientProps) {
   const { setCartContext, deliveryType, itemCount, standardDiscounts, cartReady } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
+  const [toolbarSlots, setToolbarSlots] = useState<{controls: Element; cart: Element} | null>(null);
+  useEffect(() => {
+    if (brand.slug !== 'esmeralda') return;
+    const controls = document.querySelector('[data-menu-controls-slot]');
+    const cart = document.querySelector('[data-menu-cart-slot]');
+    if (controls && cart) setToolbarSlots({controls, cart});
+  }, [brand.slug, location.id]);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeCategory, setActiveCategory] = useState<string>('offers');
   const [search, setSearch] = useState('');
@@ -143,12 +151,15 @@ export function MenuClient({
   );
 
   return (
-    <StorefrontCatalog products={initialProducts} combos={activeCombos}><div data-commerce-root className="bg-[var(--storefront-menu-background,#FFF8F0)]">
-      <div className="container mx-auto max-w-[1140px] px-4">
-        <div className="py-4">
+    <StorefrontCatalog products={initialProducts} combos={activeCombos}>
+      {toolbarSlots && createPortal(<TimeSelector timeSlots={timeSlots} compact />, toolbarSlots.controls)}
+      {toolbarSlots && createPortal(<MobileFloatingCart floating={false} compact />, toolbarSlots.cart)}
+      <div data-commerce-root className="bg-[var(--storefront-menu-background,#FFF8F0)]">
+      <div className={brand.slug === 'esmeralda' ? "storefront-frame" : "container mx-auto max-w-[1140px] px-4"}>
+        {brand.slug !== 'esmeralda' && <div className="py-4">
           <TimeSelector timeSlots={timeSlots} />
           {mode === 'delivery' && location.minOrder > 0 && <p className="mt-2 text-sm text-muted-foreground">Minimumsbestilling til levering: {formatPrice(location.minOrder)} før rabatter.</p>}
-        </div>
+        </div>}
 
         <div data-storefront-categories className="sticky top-16 z-30 bg-[var(--storefront-nav-background,#fff8f0e6)] backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
           <CategoryNav categories={visibleCategories} hasCombos={visibleCombos.length > 0}
@@ -156,7 +167,7 @@ export function MenuClient({
             search={search} onSearchChange={changeSearch} />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6">
+        <div data-menu-grid className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6">
           <div className="lg:col-span-2 min-w-0">
             {!search && <PromotionStrip discounts={activeStandardDiscounts} products={initialProducts} />}
             <div className="space-y-12 py-6">
@@ -202,7 +213,7 @@ export function MenuClient({
           </div>
 
           <div className="hidden lg:block lg:col-span-1 py-6">
-            <div className="sticky top-32 h-auto">
+            <div data-menu-cart className="sticky top-32 h-auto">
               <DesktopCart />
             </div>
           </div>

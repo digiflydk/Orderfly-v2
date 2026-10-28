@@ -29,10 +29,11 @@ function TimeSlotSkeleton() {
 
 interface TimeSelectorProps {
     timeSlots: TimeSlotResponse | null;
+    compact?: boolean;
 }
 
 
-export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
+export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: TimeSelectorProps) {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     
@@ -52,7 +53,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
     const displayTime = selectedTime === 'asap' ? asapText : displayFulfillmentTime(selectedTime);
 
     return (
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        <div data-time-selector data-compact={compact || undefined} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
              <div className="grid grid-cols-2 gap-1 rounded-lg border p-1 bg-background">
                  <Button
                     aria-pressed={deliveryType === 'pickup'}
@@ -61,7 +62,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     onClick={() => setDeliveryType('pickup')}
                     disabled={!location.deliveryTypes.includes('pickup')}
                     className={cn(
-                        "h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
+                        "min-h-11 h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
                         deliveryType !== 'pickup' && "bg-transparent text-muted-foreground hover:bg-muted"
                     )}
                 >
@@ -75,7 +76,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     onClick={() => setDeliveryType('delivery')}
                     disabled={!location.deliveryTypes.includes('delivery')}
                     className={cn(
-                        "h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
+                        "min-h-11 h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
                          deliveryType !== 'delivery' && "bg-transparent text-muted-foreground hover:bg-muted"
                     )}
                 >
@@ -83,7 +84,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     <span>Levering</span>
                 </Button>
             </div>
-            <div className="flex items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
+            <div className="storefront-time-control flex min-w-0 items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
                  {!timeSlots ? (
                     <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><Skeleton className="h-5 w-24" /></div>
                  ) : (
@@ -92,7 +93,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                             <Clock className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-semibold">{localizeTime(displayTime)}</span>
                         </div>
-                        <Button variant="link" size="sm" className="h-auto p-0 ml-2 text-xs" onClick={() => setIsTimeDialogOpen(true)}>
+                        <Button variant="link" size="sm" className="min-h-11 h-auto px-2 ml-2 text-xs shrink-0" onClick={() => setIsTimeDialogOpen(true)}>
                             Ændr tidspunkt
                         </Button>
                     </>

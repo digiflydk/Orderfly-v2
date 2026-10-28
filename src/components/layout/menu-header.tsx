@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Brand, Location } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
@@ -11,6 +11,7 @@ import { safeImage } from '@/lib/images';
 import { formatPrice } from '@/lib/storefront-format';
 import { locationHeaderDetails } from '@/lib/location-header';
 import { PublicReviewsLink } from '@/components/feedback/public-reviews-link';
+import { storefrontSegments } from '@/lib/brand-subdomain';
 import { useStorefrontPath } from '@/hooks/use-storefront-path';
 
 export function MenuHeader({ brand, initialLocation, initialNow }: {
@@ -18,13 +19,27 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   initialLocation?: Location;
   initialNow?: number;
 }) {
-  const { location: cartLocation } = useCart();
+  const { location: cartLocation, deliveryType, cartReady } = useCart();
   const managed = useManagedDeliveryPrice();
   // The route owns the location; a restored cart may still belong to another branch.
   const candidate = initialLocation ?? cartLocation;
   const location = candidate?.brandId === brand.id ? candidate : null;
   const pathname = usePathname();
   const checkout = pathname?.includes('/checkout');
+  const segments = storefrontSegments(pathname, brand.slug);
+  const refreshedMenu = brand.slug === 'esmeralda' && !!location && segments.length === 1 && segments[0] === location.slug;
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!refreshedMenu || !headerRef.current) return;
+    const header = headerRef.current;
+    const frame = header.closest<HTMLElement>('[data-commerce-root][data-brand-slug]');
+    if (!frame) return;
+    const measure = () => frame.style.setProperty('--storefront-header-height', `${getComputedStyle(header).position === 'sticky' ? header.getBoundingClientRect().height : 0}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => { observer.disconnect(); frame.style.removeProperty('--storefront-header-height'); };
+  }, [refreshedMenu]);
   const storefront = useStorefrontPath(brand.slug);
   const href = location ? storefront(location.slug) : storefront();
   const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));
@@ -34,27 +49,29 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
     const timer = window.setInterval(update, 60_000);
     return () => window.clearInterval(timer);
   }, []);
+  const showDelivery = !refreshedMenu || (cartReady && cartLocation?.id === location?.id && deliveryType === 'delivery');
   const details = location ? locationHeaderDetails(location, now || new Date(0)) : null;
   const logo = brand.logoUrl
     ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="144px" priority className="object-contain object-left" />
     : <span className="text-xl font-bold">{brand.name}</span>;
 
   return <>
-    <header data-storefront-header data-brand-slug={brand.slug} className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
-      <div className="mx-auto flex h-full max-w-[1140px] items-center justify-between gap-4 px-4">
+    <header ref={headerRef} data-menu-refresh={refreshedMenu || undefined} data-storefront-header data-brand-slug={brand.slug} className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
+      <div className={refreshedMenu ? "storefront-frame storefront-order-toolbar" : "mx-auto flex h-full max-w-[1140px] items-center justify-between gap-4 px-4"}>
         {checkout
           ? <div className="relative flex h-10 w-36 shrink-0 items-center">{logo}</div>
-          : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-36 shrink-0 items-center">{logo}</Link>}
+          : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>}
+        {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}
         {checkout && <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>}
       </div>
     </header>
-    {!checkout && location && details && <section data-storefront-location data-brand-slug={brand.slug} aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
+    {!checkout && location && details && <section data-storefront-location data-brand-slug={brand.slug} data-menu-hero={refreshedMenu || undefined} aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
         {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
         <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />
-        <div className="absolute inset-0 -z-10 bg-black/65" />
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/90 via-black/45 to-black/10" />
       </>}
-      <div className="mx-auto max-w-[1140px] px-4 py-6 sm:py-8">
+      <div className={refreshedMenu ? "storefront-hero-copy" : "mx-auto max-w-[1140px] px-4 py-6 sm:py-8"}>
         <h1 className="break-words text-2xl font-bold tracking-tight sm:text-4xl">{location.name}</h1>
         <PublicReviewsLink brandId={brand.id} href={`${href}/reviews`} />
         {details.address && <a
@@ -63,7 +80,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
           className="mt-2 inline-block break-words text-base text-white/90 underline decoration-dotted underline-offset-4 hover:text-white sm:text-xl"
         >{details.address}</a>}
         {now && details.opening && <p className="mt-2 text-sm text-white/90 sm:text-base">Åbningstid i dag: {details.opening}</p>}
-        {details.delivery && (managed || Number.isFinite(location.deliveryFee) || (Number.isFinite(location.minOrder) && location.minOrder > 0)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
+        {showDelivery && details.delivery && (managed || Number.isFinite(location.deliveryFee) || (Number.isFinite(location.minOrder) && location.minOrder > 0)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
           {details.delivery && (managed || Number.isFinite(location.deliveryFee)) && <p className="rounded-lg border border-white/70 px-3 py-2">{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
           {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p className="rounded-lg border border-white/70 px-3 py-2">Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
         </div>}
