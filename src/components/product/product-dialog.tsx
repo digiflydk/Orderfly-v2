@@ -216,11 +216,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent data-commerce-panel="options" data-product-options className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
         <div className="flex min-h-0 flex-col overflow-hidden">
-            <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
-                <div className="commerce-option-header">
+            <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>
+            <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
                 <div className="px-4 pb-3 pt-2 space-y-2">
                     {hasOptions && (
                         <>

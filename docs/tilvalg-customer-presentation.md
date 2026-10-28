@@ -11,7 +11,7 @@ Validation: `npm run typecheck`; `CART_CHROMIUM_PATH=<chromium> node --test test
 
 ## Compact product modal
 
-The product modal uses its content height, capped at 90dvh. Desktop centers the modal; mobile keeps a bottom sheet. Only `data-product-options` receives this sizing, leaving combo builders and cart sheets unchanged. A native scroll area contains the product and options, with a non-scrolling compact footer combining quantity controls and a two-line action/total. Required progress remains accessible above that row. Standard option rows are 44px high; long labels may wrap. The selected fill is subtle; only keyboard focus outlines the row. Search text stays 16px on mobile to avoid input zoom.
+The product modal uses its content height, capped at 90dvh. Desktop centers the modal; mobile keeps a bottom sheet. Only `data-product-options` receives this sizing, leaving combo builders and cart sheets unchanged. A native scroll area contains the options below an independent product header, with a non-scrolling compact footer combining quantity controls and a two-line action/total. Required progress remains accessible above that row. Standard option rows are 44px high; long labels may wrap. The selected fill is subtle; only keyboard focus outlines the row. Search text stays 16px on mobile to avoid input zoom.
 
 Styled tests additionally cover 320×568 and 390×480, full modal/submit bounds, actual scrolling to the last option, collapsed content height, 44–48px normal rows, long labels and quantity 100/high totals. Optional `TILVALG_FONT_DIR` points to locally downloaded `heading.woff2` and `body.ttf` from the existing brand asset URLs; screenshots can then use the actual Bourton/Brandon fonts without making tests depend on network availability. Synthetic pizza artwork avoids external image requests. The screenshots and fonts are local review artifacts, not repository assets.
 
@@ -23,3 +23,5 @@ opening of optional groups before inspecting their controls. Exact option names
 are asserted independently of price descriptions. The existing price-click,
 50-option cap, conditional-price totals, saved identities, cache/retry, cart and
 combo-upgrade behavior assertions remain in place.
+
+The product header sits outside the option scroller, reserving the close target permanently even when lists scroll. The header itself is bounded to 35dvh and scrollable for unusually long names/descriptions on short screens. Keyboard focus on quantity minus/plus buttons highlights the individual button; choice controls retain the row highlight. Regression checks verify the visible price area never intersects the fixed close target after scrolling and that keyboard focus identifies the exact stepper button.

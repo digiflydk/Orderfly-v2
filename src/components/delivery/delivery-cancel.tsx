@@ -3,8 +3,9 @@ import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 type CancelResult='submitting'|'cancelled'|'not_cancellable'|'unknown'|'unsupported';
 const messages:Record<CancelResult,string>={submitting:'Annulleringen behandles. Opdater ordren for at se resultatet.',cancelled:'Leveringen er annulleret hos leverandøren. Kundens betaling er ikke automatisk refunderet.',not_cancellable:'Leveringen kan ikke længere annulleres. Opdater ordren og kontrollér status.',unknown:'Resultatet af annulleringen er ukendt. Start ikke en ny annullering. Opdater ordren, eller kontakt den ansvarlige.',unsupported:'Leverandøren understøtter ikke denne annullering. Kontakt den ansvarlige.'};
-export function DeliveryCancel({brandId,locationId,orderId,available,onRefresh}:{brandId:string;locationId:string;orderId:string;available:boolean;onRefresh:()=>void}){
- const [open,setOpen]=useState(false),[reason,setReason]=useState(''),[acknowledged,setAcknowledged]=useState(false),[busy,setBusy]=useState(false),[result,setResult]=useState<CancelResult|null>(null);
+export function DeliveryCancel({brandId,locationId,orderId,available,persistedState=null,onRefresh}:{brandId:string;locationId:string;orderId:string;available:boolean;persistedState?:CancelResult|null;onRefresh:()=>void}){
+ const [open,setOpen]=useState(false),[reason,setReason]=useState(''),[acknowledged,setAcknowledged]=useState(false),[busy,setBusy]=useState(false),[localResult,setResult]=useState<CancelResult|null>(null);
+ const result=persistedState??localResult;
  const lock=useRef(false),requestId=useRef<string|null>(null);
  async function cancel(){
   if(lock.current||busy||result||!available||!acknowledged||!reason.trim()||reason.length>500)return;

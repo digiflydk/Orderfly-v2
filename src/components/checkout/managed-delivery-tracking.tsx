@@ -13,16 +13,18 @@ export function ManagedDeliveryTracking({enabled,orderId,data,loading=false,erro
  const headingId=useId();
  if(!enabled)return null;
  const valid=!!data&&data.orderId===orderId&&(data.updatedAt===null||isTime(data.updatedAt))&&['pending','submitting','accepted','rejected','unknown'].includes(data.bookingState)&&['pending','paid','refunded','failed'].includes(data.paymentStatus)&&(data.deliveryStatus===null||Object.hasOwn(states,data.deliveryStatus));
- const tracking=valid?safeTracking(data!.trackingUrl):null;
- const eta=valid&&data!.deliveryInterval&&isTime(data!.deliveryInterval.earliest)&&isTime(data!.deliveryInterval.latest)&&Date.parse(data!.deliveryInterval.earliest)<=Date.parse(data!.deliveryInterval.latest)?data!.deliveryInterval:null;
+ const cancelled=valid&&data!.deliveryStatus==='cancelled';
+ const tracking=valid&&!cancelled?safeTracking(data!.trackingUrl):null;
+ const eta=valid&&!cancelled&&data!.deliveryInterval&&isTime(data!.deliveryInterval.earliest)&&isTime(data!.deliveryInterval.latest)&&Date.parse(data!.deliveryInterval.earliest)<=Date.parse(data!.deliveryInterval.latest)?data!.deliveryInterval:null;
  return <section className="space-y-3 rounded-lg border p-4" aria-labelledby={headingId} aria-busy={loading}><h2 id={headingId} className="text-xl font-semibold">{variant==='merchant'?'Leveringsstatus':'Følg din levering'}</h2>
  {error&&<p role="alert">Leveringsstatus kunne ikke opdateres. Oplysningerne kan være forsinkede.</p>}
  {!valid?<p role="status">{loading?'Henter leveringsstatus…':'Vi kan ikke vise en bekræftet leveringsstatus lige nu.'}</p>:<>
  <p role="status" className="font-semibold">{data!.bookingState==='unknown'?'Vi afklarer, om leveringen er bestilt. Start ikke en ny bestilling.':data!.bookingState==='rejected'?'Leveringen kunne ikke bestilles.':data!.bookingState!=='accepted'?'Vi afventer bekræftelse fra leverandøren.':data!.deliveryStatus?states[data!.deliveryStatus]:'Leveringen er bestilt. Vi afventer kurérstatus.'}</p>
+ {(data!.cancellationState==='unknown'||data!.cancellationState==='submitting')&&<p role="alert">{data!.cancellationState==='unknown'?'Resultatet af annulleringen er ukendt. Kontakt restauranten for afklaring.':'Annulleringen behandles. Afvent bekræftelse fra restauranten.'}</p>}
  <p>Betaling: {data!.paymentStatus==='paid'?'Betalt':data!.paymentStatus==='refunded'?'Refunderet':data!.paymentStatus==='failed'?'Mislykket':'Afventer'}</p>
  {eta&&<p>Forventet levering: {format(eta.earliest)} – {format(eta.latest)}.</p>}
  <p className="text-sm text-muted-foreground">{data!.updatedAt?`Senest opdateret: ${format(data!.updatedAt)}.`:'Opdateringstidspunktet er ikke oplyst.'}</p>
- {variant==='merchant'&&<p>{data!.pickupReliable&&data!.pickupInterval&&isTime(data!.pickupInterval.earliest)&&isTime(data!.pickupInterval.latest)?`Bekræftet afhentningsinterval: ${format(data!.pickupInterval.earliest)} – ${format(data!.pickupInterval.latest)}.`:'Kurérens afhentningstid er endnu ikke bekræftet.'}</p>}
+ {variant==='merchant'&&!cancelled&&<p>{data!.pickupReliable&&data!.pickupInterval&&isTime(data!.pickupInterval.earliest)&&isTime(data!.pickupInterval.latest)?`Bekræftet afhentningsinterval: ${format(data!.pickupInterval.earliest)} – ${format(data!.pickupInterval.latest)}.`:'Kurérens afhentningstid er endnu ikke bekræftet.'}</p>}
  {tracking&&data!.bookingState==='accepted'&&<a href={tracking} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded border px-4 underline focus-visible:outline">Åbn kurérens tracking (nyt vindue)</a>}
  {(data!.bookingState==='unknown'||data!.bookingState==='rejected'||data!.deliveryStatus==='failed')&&<p>Kontakt restauranten, hvis du har brug for hjælp. En betaling alene bekræfter ikke, at en kurér er bestilt.</p>}
  </>}

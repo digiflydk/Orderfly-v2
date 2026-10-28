@@ -17,7 +17,7 @@ before(async()=>{
  const product=${JSON.stringify(product)},groups=${JSON.stringify(groups)},toppings=${JSON.stringify(toppings)};
  if(location.search.includes('long')){product.toppingGroupIds.push('sauces','side');product.toppingGroupConditions={side:['sauce12']};groups.push({id:'side',groupName:'Tilbehør til sauce',minSelection:1,maxSelection:1,locationIds:['l']});toppings.push({id:'side1',groupId:'side',toppingName:'Brød',price:0,isActive:true,locationIds:['l']});groups.push({id:'sauces',groupName:'Saucer',minSelection:0,maxSelection:1,locationIds:['l']});for(let n=1;n<=12;n++)toppings.push({id:'sauce'+n,groupId:'sauces',toppingName:'Sauce '+n,price:n,isActive:true,locationIds:['l']});}
  if(location.search.includes('compact')){product.toppingGroupIds=['extras','removals'];product.toppingOverrides={};}
- if(location.search.includes('wide')){product.productName='Pizza med ekstra mozzarella, grøntsager og friske krydderurter';product.price=12345.5;toppings[0].toppingName='Ekstra frisk mozzarella og grillede grøntsager';}
+ if(location.search.includes('wide')){product.productName='Pizza med ekstra mozzarella, grøntsager og friske krydderurter';product.price=12345.5;product.description='En fyldig pizza med grøntsager og frisk mozzarella. '.repeat(8);toppings[0].toppingName='Ekstra frisk mozzarella og grillede grøntsager';}
  function App(){const[open,setOpen]=useState(true);const[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved?{...window.saved,id:product.id,cartItemId:'saved',itemType:'product',productName:product.productName,brandId:product.brandId,price:75,itemTotal:75}:undefined);setOpen(true);}}>Rediger gemt</button><ProductDialog product={product} initialItem={initialItem} allToppingGroups={groups} allToppings={toppings} isOpen={open} setIsOpen={setOpen}/></>};createRoot(document.getElementById('root')).render(<App/>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const cart=file('cart',`const value={cartReady:true,deliveryType:'pickup',location:{id:'l'},cartTotal:0,addToCart:(product,quantity,toppings,basePrice,finalPrice)=>{window.saved={productId:product.id,quantity,toppings,basePrice,finalPrice};return true;}};export const useCart=()=>value;`);
@@ -134,6 +134,10 @@ for(const [width,height] of [[320,568],[390,480],[390,850],[1280,850]])test(`com
  assert.equal(await page.getByRole('checkbox',{name:'Ost',exact:true}).isChecked(),true);
  const close=page.getByRole('button',{name:'Luk',exact:true});const closeBox=await close.boundingBox();assert.ok(closeBox.width>=44&&closeBox.height>=44);
  assert.equal(await row.evaluate(el=>getComputedStyle(el).boxShadow),'none');
+ await page.getByRole('button',{name:'Færre Ost',exact:true}).focus();await page.keyboard.press('Tab');
+ assert.equal(await page.evaluate(()=>document.activeElement?.getAttribute('aria-label')),'Flere Ost');
+ assert.equal(await page.getByRole('button',{name:'Flere Ost',exact:true}).evaluate(el=>getComputedStyle(el).outlineStyle),'solid');
+ assert.equal(await row.evaluate(el=>getComputedStyle(el).outlineStyle),'none');
  await extras.click();
  const collapsed=await panel.boundingBox();assert.ok(collapsed.height<430,`collapsed modal height ${collapsed.height}`);
  assert.ok(collapsed.y>=0&&collapsed.y+collapsed.height<=height+1);
@@ -146,6 +150,15 @@ for(const [width,height] of [[320,568],[390,480],[390,850],[1280,850]])test(`com
  assert.equal(await scroller.evaluate(el=>el.scrollHeight>el.clientHeight),true);
  await page.getByRole('radio',{name:'Sauce 12',exact:true}).check();
  assert.ok(await scroller.evaluate(el=>el.scrollTop)>0);
+ const overlap=await page.evaluate(()=>{
+   const close=document.querySelector('[data-product-options] > button:last-child').getBoundingClientRect();
+   const clip=document.querySelector('[data-product-options-scroll]').getBoundingClientRect();
+   return [...document.querySelectorAll('[data-option-price]')].some(el=>{
+     const r=el.getBoundingClientRect(),top=Math.max(r.top,clip.top),bottom=Math.min(r.bottom,clip.bottom);
+     return bottom>top&&Math.min(r.right,close.right)>Math.max(r.left,close.left)&&Math.min(bottom,close.bottom)>Math.max(top,close.top);
+   });
+ });assert.equal(overlap,false,'visible option price must not intersect the close target');
+ const scrollerBox=await scroller.boundingBox(),fixedCloseBox=await page.getByRole('button',{name:'Luk',exact:true}).boundingBox();assert.ok(scrollerBox.y>=fixedCloseBox.y+fixedCloseBox.height);
  const submit=page.getByRole('button',{name:/Vælg de påkrævede tilvalg/});const submitBox=await submit.boundingBox();
  assert.ok(submitBox.y>=0&&submitBox.y+submitBox.height<=height+1,`submit bounds ${JSON.stringify(submitBox)}`);
  assert.equal(await page.getByRole('textbox',{name:'Søg i Saucer',exact:true}).evaluate(el=>getComputedStyle(el).fontSize),'16px');
@@ -157,6 +170,9 @@ for(const [width,height] of [[320,568],[390,480],[390,850],[1280,850]])test(`com
 test('long names, quantity100 and high total remain readable at320px',async t=>{
  const context=await browser.newContext({viewport:{width:320,height:568},reducedMotion:'reduce'});t.after(()=>context.close());const page=await context.newPage();await page.goto(origin+'/?compact&wide');
  await page.getByRole('dialog').waitFor();await page.evaluate(()=>document.fonts.ready);
+ const header=page.getByRole('region',{name:'Produktinformation',exact:true});await header.focus();await header.press('End');
+ await page.waitForFunction(()=>document.querySelector('.commerce-option-header').scrollTop>0);
+ await header.press('Home');
  await page.getByRole('checkbox',{name:'Ekstra frisk mozzarella og grillede grøntsager',exact:true}).check();
  await page.getByRole('button',{name:'Øg antal',exact:true}).evaluate(button=>{for(let n=1;n<100;n++)button.click();});
  assert.equal(await page.getByRole('button',{name:'Øg antal',exact:true}).isDisabled(),true);

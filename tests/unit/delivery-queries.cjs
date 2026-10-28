@@ -67,3 +67,12 @@ test('full refund is reflected in operator payment status without leaking money'
  order.refundedAmountOre=20099;assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].paymentStatus,'Paid');
  order.refundedAmountOre='20100';assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].paymentStatus,'Paid');
 });
+test('operator list and read-only detail expose bound cancellation without private result data',async()=>{
+ const f=fixture(),order=f.rows.get('orders/o00'),digest=order.managedDelivery.requestDigest;
+ const attempt={schemaVersion:1,scope:{...scope,orderId:'o00'},provider:'test',intentId:'attempt',reference:'attempt',requestDigest:digest,revision:1,state:'booked',providerDeliveryId:'native',createdAt:1,updatedAt:1};
+ f.rows.set('orders/o00/deliveryAttempts/original',attempt);f.rows.set('orders/o00/deliveryDispatchResults/original',{scope:attempt.scope,providerId:'test',requestDigest:digest,attemptRef:'attempt',result:{kind:'accepted',providerDeliveryId:'native',nativeReference:'reference',trackingUrl:null,pickupInterval:null,deliveryInterval:null,pickupEstimateProvenance:null,cost:null}});
+ const saved={version:1,...scope,orderId:'o00',attemptRef:'attempt',providerDeliveryId:'native',environment:'sandbox',state:'cancelled',reconcileRequired:false,result:{kind:'cancelled',fee:null},operatorReason:'private reason',actorId:'private actor'};f.rows.set('orders/o00/deliveryCancellation/original',saved);
+ for(const query of [scope,{...scope,orderId:'o00'}]){const data=await f.readDeliveryOrders(query),row=data.orders.find(o=>o.id==='o00');assert.equal(row.cancellationState,'cancelled');assert.equal(row.deliveryStatus,'cancelled');assert.equal(row.paymentStatus,'Paid');for(const secret of ['private reason','private actor','providerDeliveryId','attemptRef'])assert.equal(JSON.stringify(data).includes(secret),false);}
+ f.rows.set('orders/o00/deliveryCancellation/original',{...saved,brandId:'foreign'});assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].cancellationState,null);
+ f.rows.set('orders/o00/deliveryCancellation/original',{...saved,state:'submitting',result:null});assert.equal((await f.readDeliveryOrders({...scope,orderId:'o00'})).orders[0].cancellationState,'submitting');
+});
