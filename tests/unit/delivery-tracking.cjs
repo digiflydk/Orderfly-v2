@@ -36,3 +36,16 @@ test('receipt tracking reread suppresses rotated proof and swapped scope before 
  records.set('orders/order',{...verified,...patch});reads.length=0;assert.equal(await read(verified),null);assert.deepEqual(reads,['orders/order']);
  }
 });
+test('persisted cancellation is bound to original accepted booking, preserves uncertainty and never refunds',()=>{
+ const {order,attempt,result}=fixture(),saved={version:1,...scope,attemptRef:'attempt',providerDeliveryId:'native',environment:'sandbox',state:'cancelled',reconcileRequired:false,result:{kind:'cancelled',fee:null},operatorReason:'private reason',actorId:'private actor'};
+ const interval={earliest:'2026-10-26T12:00:00Z',latest:'2026-10-26T12:10:00Z'};result.result.deliveryInterval=interval;
+ const projectSaved=(s=saved,state=null,o=order)=>project('order',o,attempt,result,state,null,s);
+ const good=projectSaved();assert.equal(good.cancellationState,'cancelled');assert.equal(good.deliveryStatus,'cancelled');assert.equal(good.bookingState,'accepted');assert.equal(good.paymentStatus,'paid');assert.equal(good.trackingUrl,null);assert.equal(good.deliveryInterval,null);
+ for(const key of ['brandId','locationId','orderId','attemptRef','providerDeliveryId']){assert.equal(projectSaved({...saved,[key]:'foreign'}).cancellationState,null);}
+ assert.equal(project('order',order,{...attempt,requestDigest:'b'.repeat(64)},result,null,null,saved).cancellationState,null);
+ for(const patch of [{state:'unknown',result:{kind:'unknown',error:{code:'unavailable',message:'unknown',retryable:false}}},{state:'submitting',result:null},{reconcileRequired:true}])assert.notEqual(projectSaved({...saved,...patch}).deliveryStatus,'cancelled');
+ for(const status of ['courier_to_pickup','picked_up','delivered','failed']){const v=projectSaved(saved,{...scope,provider:'wolt',providerDeliveryId:'native',status});assert.equal(v.cancellationState,'unknown');assert.equal(v.deliveryStatus,status);}
+ assert.equal(projectSaved(saved,null,{...order,status:'Delivered'}).cancellationState,'unknown');
+ assert.equal(projectSaved({...saved,result:null}).cancellationState,'unknown');
+ for(const secret of ['private reason','private actor','providerDeliveryId','attemptRef'])assert.equal(JSON.stringify(good).includes(secret),false);
+});

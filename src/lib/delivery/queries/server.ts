@@ -1,4 +1,5 @@
 import 'server-only';
+import { projectCancellation, type CancellationState } from '../cancellation/projection';
 import {quoteDiagnosticSchema} from '../quotes/diagnostic-schema';
 import {quoteDiagnosticId} from '../quotes/diagnostics';
 import { createHash } from 'node:crypto';
@@ -23,7 +24,7 @@ function decode(raw: string | undefined, scope: string): string | null {
   try { const value=z.object({scope:z.literal(scope),after:id}).strict().parse(JSON.parse(Buffer.from(raw,'base64url').toString('utf8')));return value.after; }
   catch { throw new DeliveryQueryError(); }
 }
-export type DeliveryOrderRow = { id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null; bookingFailureCode: string | null; costReviewRequired:boolean; deliveryReconciliationRequired:boolean };
+export type DeliveryOrderRow = { cancellationState:CancellationState|null; id: string; providerId: string; bookingState: string | null; deliveryStatus: string | null; paymentStatus: string | null; kitchenStatus: string | null; trackingUrl: null; bookingFailureCode: string | null; costReviewRequired:boolean; deliveryReconciliationRequired:boolean };
 export async function readDeliveryOrders(raw: unknown) {
   const parsed=querySchema.safeParse(raw);if(!parsed.success)throw new DeliveryQueryError();const q=parsed.data;
   await requireOrderflyAccess(q.brandId,[q.locationId],'orderfly.orders:view');
@@ -33,17 +34,18 @@ export async function readDeliveryOrders(raw: unknown) {
   async function project(doc: FirebaseFirestore.DocumentSnapshot): Promise<DeliveryOrderRow | null> {
     const order=doc.data();if(!order || order.brandId!==q.brandId || order.locationId!==q.locationId || order.deliveryType!=='Delivery')return null;
     const managed=managedDeliveryBindingSchema.safeParse(order.managedDelivery);if(!managed.success)return null;
-    const [attemptDoc,stateDoc,resultDoc]=await Promise.all([doc.ref.collection('deliveryAttempts').doc('original').get(),doc.ref.collection('deliveryState').doc('current').get(),q.orderId?doc.ref.collection('deliveryDispatchResults').doc('original').get():null]);
+    const [attemptDoc,stateDoc,resultDoc,cancellationDoc]=await Promise.all([doc.ref.collection('deliveryAttempts').doc('original').get(),doc.ref.collection('deliveryState').doc('current').get(),doc.ref.collection('deliveryDispatchResults').doc('original').get(),doc.ref.collection('deliveryCancellation').doc('original').get()]);
     const attempt=bookingIntentSchema.safeParse(attemptDoc.data()), state=stateDoc.data();
     const boundAttempt=attempt.success && attempt.data.scope.brandId===q.brandId && attempt.data.scope.locationId===q.locationId && attempt.data.scope.orderId===doc.id && attempt.data.provider===managed.data.providerId;
     const boundState=boundAttempt && attempt.data.state==='booked' && state && state.providerDeliveryId===attempt.data.providerDeliveryId && state.brandId===q.brandId && state.locationId===q.locationId && state.orderId===doc.id && state.provider===managed.data.providerId && statuses.includes(state.status);
     const resultRecord=resultDoc?.data(), result=deliveryCreateResultSchema.safeParse(resultRecord?.result);
     const boundResult=boundAttempt&&result.success&&resultRecord?.scope?.brandId===q.brandId&&resultRecord?.scope?.locationId===q.locationId&&resultRecord?.scope?.orderId===doc.id&&resultRecord?.providerId===managed.data.providerId&&resultRecord?.requestDigest===managed.data.requestDigest&&attempt.data.requestDigest===managed.data.requestDigest&&resultRecord?.attemptRef===attempt.data.reference;
+    const cancellationState=boundResult&&attempt.data.state==='booked'&&result.data.kind==='accepted'&&attempt.data.providerDeliveryId===result.data.providerDeliveryId?projectCancellation(cancellationDoc.data(),{brandId:q.brandId,locationId:q.locationId,orderId:doc.id,attemptRef:attempt.data.reference,providerDeliveryId:result.data.providerDeliveryId},boundState?state.status:null,order.status):null;
     const allowedCodes=['quote_expired','quote_changed','settings_changed','quote_changed_or_expired','binding_changed_before_dispatch','invalid_create_payload','invalid_request','authentication','configuration','unavailable','rate_limited','provider_error'];
-    const bookingFailureCode=boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?(allowedCodes.includes(result.data.error.code)?result.data.error.code:'booking_rejected'):null;
-    return {bookingFailureCode,id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:boundState?state.status:null,
+    const bookingFailureCode=q.orderId&&boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?(allowedCodes.includes(result.data.error.code)?result.data.error.code:'booking_rejected'):null;
+    return {cancellationState,bookingFailureCode,id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:cancellationState==='cancelled'?'cancelled':boundState?state.status:null,
       paymentStatus:typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'Refunded':['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
-      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true};
+      kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true||cancellationState==='unknown'};
   }
   if(q.orderId){
     const doc=await db.collection('orders').doc(q.orderId).get(),row=await project(doc);if(!row)throw new DeliveryQueryError('delivery_not_found',404);
