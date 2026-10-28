@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 
 type Props = {
   group: ToppingGroup & { toppings: EffectiveTopping[] };
+  initiallyExpanded?: boolean;
   dialogId: string;
   selectedToppings: Record<string, CartItemTopping>;
   showErrors: boolean;
@@ -20,8 +21,8 @@ type Props = {
 };
 
 /** Presentation state never changes the customer's selections. */
-export function ProductOptionGroup({group, dialogId, selectedToppings, showErrors, selectionText, onQuantity}: Props) {
-  const [expanded, setExpanded] = useState(false);
+export function ProductOptionGroup({group, initiallyExpanded = false, dialogId, selectedToppings, showErrors, selectionText, onQuantity}: Props) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
   const [showAll, setShowAll] = useState(false);
   const [search, setSearch] = useState('');
   const required = group.minSelection > 0;
@@ -43,18 +44,18 @@ export function ProductOptionGroup({group, dialogId, selectedToppings, showError
   const visibleOptions = group.toppings.filter(option => visibleIds.has(option.id));
   return <section id={`${dialogId}-group-${group.id}`} aria-labelledby={headingId} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && invalid}>
     <div className="mb-1">
-      <h3 id={headingId} className="font-semibold text-lg">
+      <h3 id={headingId} className="font-semibold text-base">
         {required ? name : <button type="button" className="flex min-h-11 w-full items-center justify-between gap-2 text-left" aria-expanded={open} aria-controls={contentId} onClick={() => setExpanded(!open)}>
           <span>{name}</span><ChevronDown aria-hidden="true" className={`h-5 w-5 shrink-0 transition-transform motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
         </button>}
       </h3>
-      <p className="text-sm text-muted-foreground">{required ? 'Påkrævet' : 'Valgfrit'} · {selectionText}{single && group.maxSelection !== 1 ? ' · Én slags ad gangen' : ''} · {count} valgt</p>
-      {!required && <p className="text-sm break-words">{selectedSummary || 'Ingen valgt'}</p>}
+      <p className="text-xs text-muted-foreground">{required ? 'Påkrævet' : 'Valgfrit'} · {selectionText}{single && group.maxSelection !== 1 ? ' · Én slags ad gangen' : ''}{count > 0 ? ` · ${count} valgt` : ''}</p>
+      {!required && !open && selectedSummary && <p className="text-sm break-words">{selectedSummary}</p>}
       {showErrors && invalid && <p role="alert" className="text-sm text-destructive">{selectionText} for at fortsætte.</p>}
     </div>
     {open && <div id={contentId}>
       {group.kind === 'removal' && <p className="text-xs text-muted-foreground">Markér de ingredienser, du ønsker fjernet.</p>}
-      {group.toppings.length > 10 && <Input className="my-2" aria-label={`Søg i ${name}`} placeholder="Søg tilvalg…" value={search} onChange={event => setSearch(event.target.value)} />}
+      {group.toppings.length > 10 && <Input className="my-2 text-base md:text-base" aria-label={`Søg i ${name}`} placeholder="Søg tilvalg…" value={search} onChange={event => setSearch(event.target.value)} />}
       <div className="space-y-0" role={single ? 'radiogroup' : 'group'} aria-labelledby={headingId}>
         {single && !required && <label className="flex min-h-11 cursor-pointer items-center gap-3 px-2 py-2">
           <input type="radio" name={`${dialogId}-${group.id}`} checked={count === 0} onChange={() => selectedOptions.forEach(option => onQuantity(option, 0))} className="h-5 w-5 shrink-0 accent-orange-600" />
@@ -67,14 +68,15 @@ export function ProductOptionGroup({group, dialogId, selectedToppings, showError
           const groupRemaining = group.maxSelection === 0 || count < group.maxSelection || replacing;
           const totalRemaining = total < MAX_TOPPINGS_PER_ITEM || (replacing && count > 0);
           const label = toppingLabel(topping);
-          return <div key={topping.id} data-option-row className="flex flex-wrap items-center justify-between gap-2 min-h-12 px-2 py-2 rounded-md hover:bg-accent">
-            <label htmlFor={`${dialogId}-${topping.id}`} className="flex min-h-11 flex-1 items-center gap-3 min-w-0 cursor-pointer">
-              {single ? <input type="radio" data-state={selected ? 'checked' : 'unchecked'} id={`${dialogId}-${topping.id}`} name={`${dialogId}-${group.id}`} checked={selected} onChange={() => onQuantity(topping, 1)} disabled={!selected && (!groupRemaining || !totalRemaining)} className="h-5 w-5 shrink-0 accent-orange-600" /> :
-                <Checkbox id={`${dialogId}-${topping.id}`} checked={selected} onCheckedChange={checked => onQuantity(topping, checked === true ? 1 : 0)} disabled={!selected && (!groupRemaining || !totalRemaining)} />}
-              <span className="font-normal break-words">{label}</span>
+          const priceId = topping.kind === 'removal' ? undefined : `${dialogId}-${topping.id}-price`;
+          return <div key={topping.id} data-option-row className="flex flex-wrap items-center justify-between gap-x-2 min-h-11 px-2 rounded-md hover:bg-accent">
+            <label htmlFor={`${dialogId}-${topping.id}`} className="commerce-option-label flex min-h-11 items-center gap-3 cursor-pointer">
+              {single ? <input type="radio" data-state={selected ? 'checked' : 'unchecked'} aria-label={label} aria-describedby={priceId} id={`${dialogId}-${topping.id}`} name={`${dialogId}-${group.id}`} checked={selected} onChange={() => onQuantity(topping, 1)} disabled={!selected && (!groupRemaining || !totalRemaining)} className="h-5 w-5 shrink-0 accent-orange-600" /> :
+                <Checkbox aria-label={label} aria-describedby={priceId} id={`${dialogId}-${topping.id}`} checked={selected} onCheckedChange={checked => onQuantity(topping, checked === true ? 1 : 0)} disabled={!selected && (!groupRemaining || !totalRemaining)} />}
+              <span className="min-w-0 font-normal break-words">{label}</span>
             </label>
-            {topping.kind !== 'removal' && <span className="text-sm text-muted-foreground">{topping.price === 0 ? 'Inkluderet' : `+${formatPrice(topping.price)}${topping.maxQuantity > 1 ? ' / stk.' : ''}`}</span>}
-            {topping.maxQuantity > 1 && selected && <div className="flex items-center gap-1" role="group" aria-label={`Antal ${label}`}>
+            {topping.kind !== 'removal' && <label htmlFor={`${dialogId}-${topping.id}`} id={priceId} data-option-price className="flex min-h-11 shrink-0 cursor-pointer items-center whitespace-nowrap text-sm text-muted-foreground">{topping.price === 0 ? 'Inkluderet' : `+${formatPrice(topping.price)}${topping.maxQuantity > 1 ? ' / stk.' : ''}`}</label>}
+            {topping.maxQuantity > 1 && selected && <div data-option-stepper className="ml-auto flex items-center gap-1" role="group" aria-label={`Antal ${label}`}>
               <Button type="button" variant="outline" size="icon" className="h-11 w-11" aria-label={`Færre ${label}`} onClick={() => onQuantity(topping, selectedQuantity - 1)}><Minus className="h-4 w-4" /></Button>
               <output className="w-6 text-center tabular-nums" aria-label={`Valgt antal ${label}`}>{selectedQuantity}</output>
               <Button type="button" variant="outline" size="icon" className="h-11 w-11" aria-label={`Flere ${label}`} disabled={selectedQuantity >= topping.maxQuantity || !groupRemaining || !totalRemaining} onClick={() => onQuantity(topping, selectedQuantity + 1)}><Plus className="h-4 w-4" /></Button>

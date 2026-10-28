@@ -202,3 +202,23 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-promotion-
   color: #fff;
   border-color: #e9aa3f;
 }
+
+/* Product choices fit their content; combo builders keep the existing sheet. */
+[data-commerce-panel][data-product-options] { height: auto !important; gap: 0; }
+[data-product-options] .commerce-option-header { grid-template-columns: 64px 1fr; gap: 12px; padding: 16px 16px 6px; }
+[data-product-options] .commerce-option-header .commerce-option-image { width: 64px; height: 64px; }
+[data-product-options] .commerce-option-group { padding-block: 2px; }
+[data-product-options] .commerce-option-group + .commerce-option-group { border-top: 1px solid hsl(var(--border)); padding-top: 6px; }
+body:has([data-commerce-root]) [data-product-options] [data-option-row] { outline: none; }
+body:has([data-commerce-root]) [data-product-options] [data-option-row]:has(:focus-visible) { outline: 2px solid hsl(var(--ring)); outline-offset: 0; }
+body:has([data-commerce-root]) [data-product-options] [data-option-row]:has([data-state="checked"]) { background: hsl(var(--primary) / .09); box-shadow: none; }
+[data-product-options] [data-option-row] :is(button, input):focus-visible { outline: none; box-shadow: none; }
+[data-product-options] .commerce-product-submit { white-space: normal; }
+@media (min-width: 640px) {
+  [data-commerce-panel][data-product-options] { top: 50% !important; bottom: auto !important; transform: translate(-50%, -50%) !important; border-radius: 16px !important; }
+}
+
+[data-product-options] .commerce-option-label { flex: 1 1 6rem; min-width: 6rem; }
+
+/* The shared dialog's close remains unchanged outside the product surface. */
+[data-product-options] > button:last-child { top: 4px; right: 4px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; }
