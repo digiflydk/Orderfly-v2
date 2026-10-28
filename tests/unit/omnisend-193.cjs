@@ -110,6 +110,8 @@ test('#193 active newsletter discount is unavailable until brand integration is 
 test('#193 existing notification heartbeat also runs the consent queue without starting campaigns',async()=>{
  let calls=0;
  const route=loadTs('src/app/api/internal/feedback/send/route.ts',{
+  '@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
+  '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},
   '@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({})},
   '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},
   '@/lib/games/worker':{runGameOutbox:async()=>({})},
@@ -122,6 +124,7 @@ test('#193 existing notification heartbeat also runs the consent queue without s
  try {
   const response=await route.POST(new Request('https://example.test',{method:'POST',headers:{authorization:`Bearer ${'x'.repeat(32)}`}}));
   assert.equal(response.status,200);assert.equal(calls,1);
-  assert.equal((await response.json()).contacts.processed,1);
+  const body=await response.json();
+  assert.equal(body.contacts.processed,1);assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});
  } finally {if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });

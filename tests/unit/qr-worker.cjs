@@ -71,6 +71,7 @@ test('invalid state or clock fails closed before retention; a database failure i
 });
 
 function heartbeat(qrWorker,counters){return loadTs('src/app/api/internal/feedback/send/route.ts',{
+  '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>{counters.delivery++;return {state:'idle'};}},
   '@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{counters.feedback++;return {sent:1};}},
   '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>{counters.orders++;return {sent:2};}},
   '@/lib/games/worker':{runGameOutbox:async()=>{counters.games++;return {};}},
@@ -78,19 +79,19 @@ function heartbeat(qrWorker,counters){return loadTs('src/app/api/internal/feedba
   '@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>{counters.loyalty++;return {};}},
   '@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/qr/worker':{runQrRetentionWorker:qrWorker},
 });}
-test('existing authenticated heartbeat isolates a QR exception from the other five workers',async()=>{
+test('existing authenticated heartbeat isolates a QR exception from the other six workers',async()=>{
   const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='s'.repeat(32);
   try{
-    const counters={feedback:0,orders:0,games:0,contacts:0,loyalty:0};let qrCalls=0;
+    const counters={feedback:0,orders:0,games:0,contacts:0,loyalty:0,delivery:0};let qrCalls=0;
     const route=heartbeat(async getDb=>{assert.equal(typeof getDb,'function');qrCalls++;throw Error('private QR failure');},counters);
     const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+'s'.repeat(32)}}));
-    assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const body=await response.json();assert.deepEqual(body.qr,{state:'failed'});assert.equal(body.feedback.sent,1);assert.equal(qrCalls,1);assert.deepEqual(counters,{feedback:1,orders:1,games:1,contacts:1,loyalty:1});assert.equal(JSON.stringify(body).includes('private QR failure'),false);
+    assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');const body=await response.json();assert.deepEqual(body.qr,{state:'failed'});assert.equal(body.feedback.sent,1);assert.equal(qrCalls,1);assert.deepEqual(counters,{feedback:1,orders:1,games:1,contacts:1,loyalty:1,delivery:1});assert.equal(JSON.stringify(body).includes('private QR failure'),false);
   }finally{if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });
 test('unauthorized heartbeat cannot start QR retention or any existing worker',async()=>{
   const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='s'.repeat(32);
   try{
-    const counters={feedback:0,orders:0,games:0,contacts:0,loyalty:0};let qrCalls=0;const route=heartbeat(async()=>{qrCalls++;return {state:'disabled'};},counters);
-    const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer invalid'}}));assert.equal(response.status,401);assert.equal(qrCalls,0);assert.deepEqual(counters,{feedback:0,orders:0,games:0,contacts:0,loyalty:0});
+    const counters={feedback:0,orders:0,games:0,contacts:0,loyalty:0,delivery:0};let qrCalls=0;const route=heartbeat(async()=>{qrCalls++;return {state:'disabled'};},counters);
+    const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer invalid'}}));assert.equal(response.status,401);assert.equal(qrCalls,0);assert.deepEqual(counters,{feedback:0,orders:0,games:0,contacts:0,loyalty:0,delivery:0});
   }finally{if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });

@@ -67,7 +67,7 @@ test('injected transaction failure rolls every staged write back; retry complete
  assert.deepEqual([...db.rows],before);assert.equal(db.writeCount,0);db.failAt=Infinity;await store.create(scope,command());assert.equal(db.writeCount,7);
 });
 test('existing global slug or local record collision aborts entire batch and keeps history',async()=>{
- const {db,store}=fixture();db.rows.set('qrPublicCodes/'+'2'.padStart(32,'0'),{brandId:'brandB',codeId:'other'});const before=[...db.rows];
+ const {db,store}=fixture();db.rows.set('qrPublicCodes/'+Buffer.from('2'.padStart(32,'0'),'hex').toString('base64url'),{brandId:'brandB',codeId:'other'});const before=[...db.rows];
  await rejects(()=>store.create(scope,command()),'id_collision');assert.deepEqual([...db.rows],before);
  const f=fixture();f.db.rows.set('brands/brandA/qrCodes/'+'1'.padStart(32,'0'),{id:'existing'});await rejects(()=>f.store.create(scope,command()),'id_collision');
 });

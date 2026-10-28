@@ -35,3 +35,7 @@ Detailed analytics covers at most the retained 90-day event interval and reports
 Lifetime counters are non-identifying permanent aggregates on newly created codes. Missing legacy counters are unknown, never reconstructed from a partial retained interval. Global counters must only be projected to a current brand-wide analytics grant because they can span former locations. Detailed event cleanup must preserve these aggregates.
 
 The existing additive index workflow accepts `docs/qr-firestore-indexes.json` for its three composites only. That script does not apply `fieldOverrides`; collection-group document-name query readiness must be verified separately. This manifest is a reviewed candidate, not an instruction to run a production write.
+
+## Compact QR links
+
+New individual and bulk-created codes encode the same 128 random bits as 22 base64url characters instead of 32 hexadecimal characters. Resolution and thumbnails accept both formats. Existing printed URLs and stored slugs remain unchanged. Shorter links improve density but do not guarantee arbitrary physical reduction: logo, module shape, quiet zone and printer quality still matter. There is no size-specific export mode.

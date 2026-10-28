@@ -112,3 +112,24 @@ test('transaction retry reuses one proof and event identity; aborted writes neve
   assert.equal([...f.db.rows.keys()].filter(key => key.includes('/qrScanEvents/')).length, 1);
   assert.equal(f.db.rows.get(`${f.prefix}/qrRateLimits/${Math.floor(now / 60000)}`).count, 1);
 });
+
+
+test('compact links retain consent-gated Club attribution and tenant isolation', async () => {
+  const f = fixture(), compact = Buffer.from(slug, 'hex').toString('base64url');
+  f.db.rows.set(`qrPublicCodes/${compact}`, { brandId: 'brandA', codeId });
+  f.db.rows.get(f.prefix).slug = compact;
+  const response = await handleQrRedirect(new Request(`https://orderfly.dk/q/${compact}`, {
+    headers: { 'user-agent': 'Mozilla/5.0 Safari/605.1.15' },
+  }), compact, f.options);
+  assert.equal(response.status, 302);
+  const receipt = new URL(response.headers.get('location')).searchParams.get('qr_touch');
+  assert.ok(receipt?.startsWith(compact + '.'));
+  assert.equal((await read(f, receipt)).qrId, codeId);
+  f.db.reads = [];
+  assert.equal(await read(f, receipt, { statisticsConsent: false }), null);
+  assert.deepEqual(f.db.reads, []);
+  assert.equal(await read(f, receipt, { brandId: 'brandB' }), null);
+  assert.deepEqual(f.db.reads, [`qrPublicCodes/${compact}`]);
+  const forged = receipt.slice(0, -1) + (receipt.endsWith('0') ? '1' : '0');
+  assert.equal(await read(f, forged), null);
+});

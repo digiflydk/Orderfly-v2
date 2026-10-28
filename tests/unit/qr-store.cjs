@@ -51,7 +51,7 @@ const rejects = (fn, code) => assert.rejects(fn, error => error instanceof QrSto
 test('create is atomic, public index is minimal and replay writes nothing', async () => {
   const { db, store } = fixture();
   const row = await store.create(scope, input, req(1));
-  assert.match(row.slug, /^[a-f0-9]{32}$/); assert.notEqual(row.slug, row.id);
+  assert.match(row.slug, /^[A-Za-z0-9_-]{21}[AQgw]$/); assert.notEqual(row.slug, row.id);
   assert.deepEqual(db.rows.get(`qrPublicCodes/${row.slug}`), { brandId: 'brandA', codeId: row.id });
   const before = [...db.rows]; assert.deepEqual(await store.create(scope, input, req(1)), row); assert.deepEqual([...db.rows], before);
   assert.equal(await store.resolve(row.slug), input.destination);
