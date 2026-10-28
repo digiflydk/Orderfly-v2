@@ -1,11 +1,534 @@
 {
   "source_manifest_sha256": "d4461a074d59ab035e005035ed9aa33e64327a6cff26d953ac7c680a60afd4fc",
-  "payload_sha256": "35448e26da496e249de4444883bd9371bee18da149f0306a50e3fcbc91cac383",
+  "navigation_patch_version": 1,
+  "page_patches": {
+    "/": {
+      "source_sha256": "acb17d60b8629e709a392561b75c90354bd0f9a7ced3a355b133705e766933a2",
+      "internal_links": 4,
+      "contact_anchor_added": false
+    },
+    "/book-bord": {
+      "source_sha256": "6ff91bd141af4517d6aa51b589ef1e10b5b20817cbe9aefcca26b4ec571e8e2f",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/bordbooking": {
+      "source_sha256": "d70d6f92b4e303e24c23fd7e69dfbc6102b67631fbb2eb9f59832c6cd3aacd1b",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/1-margherita-v": {
+      "source_sha256": "dd74961f11a6187aa1054d6b6412d57a8eec8259931e677689e577009af44119",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/10-margherita-speciale-v": {
+      "source_sha256": "c6a231e63017d54976bc5a0a5cdb8a7a06cf74f7e632b1ed28e5375f34df7721",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/11-formaggi-speciale-v": {
+      "source_sha256": "f80cd969a4b8917abc5df2337fbb980c957a81e59ffacd0e2a9996a58c45f77d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/12-montanara-speciale": {
+      "source_sha256": "c30deb20fa5d957f448ae7665a7e159e53f79d60feaec3ce3e27e207bb8757fb",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/13-ortalana": {
+      "source_sha256": "674de18d6906a59735bc028ed9e7d4e66004c977fa8d3033cbf97338ca9b5629",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/14-vegetariana-v": {
+      "source_sha256": "8b53811e8402675775f1a26c454df1ba4af26f6101e6409037fbea4437d2f255",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/15-pastrami-speciale": {
+      "source_sha256": "0d31294d86ff369e5479d41659152ed0f42989686fd6a598dc829ae5415aff01",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/16-gorgonzola": {
+      "source_sha256": "48f52cb3c94858dc0553c5e6505de10f009901e4aaef768f636748daa2f96a35",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/17-diavola": {
+      "source_sha256": "4524bcf273e179e15770f108cd7868b4ede4304c3455d092304b0411beeed4cd",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/18-esmeralda-speciale": {
+      "source_sha256": "f1ab7b2c9bd874850ee6efabe891354a69776a214b43af0d41eb177bb09e28d9",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/19-capricciosa": {
+      "source_sha256": "72742c18ed80fc57c7f4ccdb71fdfd8b55a7cb33b0d3ab6f559d2f46c673187a",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/21-penne-al-pollo": {
+      "source_sha256": "a358faba312521752aa7c05ba5a250897db24a05ce9e94c29ebfdea708f480ec",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/23-penne-al-filetto": {
+      "source_sha256": "28cf62812b7178dbf9c578e8df2b11bdd99f05e11c95365ed49bed6bf8696634",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/24-spaghetti-alla-bolognese": {
+      "source_sha256": "96e19e028b5ceac12256df503137dbbc295259eb37525d396d7330230004fb90",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/25-spaghetti-alla-carbonara": {
+      "source_sha256": "b0a812ddc3dc14c5743f2978dbf33a2a1b199dde2fb8444930a50528019f324d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/26-pasta-vegetar-v": {
+      "source_sha256": "5d8b866a16d4a5a75afaf14dba417387d409053cb38bd3f6ac17a645da3cccf4",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/27-lasagna-bolognese": {
+      "source_sha256": "9a92cf0e1ac1249606eab834f62c13cad8defffa9e3d3d46ea51f5872c272662",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/28-spaghetti-con-gamberoni": {
+      "source_sha256": "6456a54caf78e60a8f19c214b88b695da0300655d0cbe2992685ba351c57ce5c",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/29-tortellini-gratinati-col-polle": {
+      "source_sha256": "ffc5002c25c9a15d306a7c375c0fd811410d007c889f6dba07474e9f4fff25a3",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/3-hawaii": {
+      "source_sha256": "4511f0aa611a9987226ea9d5c21eee32d6f5c608d0959d54355aa879531a026a",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/3-retters-menu": {
+      "source_sha256": "979be021bc7e05fb90c8bed435e89775a7b1d8efc99eac678e2f0666407509e6",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/30-fettuccine-ai-funghi-misti-e-tartuffo": {
+      "source_sha256": "ee0ffea4f2d64057aa4e8fd8795c95f835cc57658a4a10b59f0f1b307d4a578f",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/31-insalata-caesar": {
+      "source_sha256": "aac818cd09f7d7c3b3f920f43b63921a312cae5e73f0d7adc7bab14ea150797d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/32-pasta-salat": {
+      "source_sha256": "6eff5e6c94f606c7fb7591a2f5bc9194a7e60a511a3b62f7df1e38463e25fdc3",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/33-insalata-greca": {
+      "source_sha256": "8391382ea386b45664abddabab635c7b5468c6f2ee0c411f4aa7c4ccc404562a",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/34-husets-sandwich": {
+      "source_sha256": "c2f5af186c025f20edf0ec4e64ec390fdb1b258cfdf9ea89d05c7bb75c177ebc",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/35-kylling-og-bacon": {
+      "source_sha256": "aa0e0f890d6e9f107baa6d9ee163e31710a079dd66cec5360cef39bb1777d470",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/36-zuppa-del-giorno": {
+      "source_sha256": "1ab29f2d98300e9d30bbb484b34ee88abd1064e497ae46104bb2d065720d8d0d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/37-bruschetta-2-stk-v": {
+      "source_sha256": "bf68509a77fa8f962ea60555e980d1a7e0291cdd0d503c127d7a067328eb904a",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/38-crispy-fried-chicken-burger": {
+      "source_sha256": "24daf8f506161d597a60890a73ccf136d6d2a05dec9107a2e5bc71deede41aaf",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/39-esmeralda-burger": {
+      "source_sha256": "449702910799695804fc46a41064531cdf4919bce03d92c34b5727273140a761",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/4-pepperoni": {
+      "source_sha256": "bf6cd37edc95a7d1e6f814aa2d07d191cb162af0da410ecd535c4dbebbba4a74",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/40-hot-n-spicy": {
+      "source_sha256": "cc97ba155ee7183c5fb6eca9b0e8e3527f93c1583d2608662ddf2f5575408226",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/41-steak-burger": {
+      "source_sha256": "2018bafe3a9f5b8fc665bca1194fd47771d3e22eef38a29dcd409c1b82ac940d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/43-entrecote": {
+      "source_sha256": "b482bd7151e4dcccdab0f0356999b39103d25d111d9f964e557e193fab75f425",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/44-kyllingefilet-2-stk": {
+      "source_sha256": "2b0b0a917f4a5b8c1e00ecc9b9bbea6765039e4e9687bfe6e44dbafa6b0eada3",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/45-oksemorbrad": {
+      "source_sha256": "ac888935a16f416f6a79106d079b3b7ed7a4d4e51d11657a4ee2b715e8be3fec",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/46-black-angus-steak": {
+      "source_sha256": "293dda46d82ea5944982962114408a2599c09135e684f942b0fb5fcd346cc0ef",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/5-romana": {
+      "source_sha256": "7b8c57915639f2b30a818132ddc9ca8c42bfc961e8c3587964a985991cdb50ea",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/50-nutella-pizza": {
+      "source_sha256": "8346f7729aa18abf3475588135387a62964c23e220cd589cf0147744385245b8",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/6-da-vinci": {
+      "source_sha256": "f0b4589e2779d6e40df703267af843ef0a8f1c5397a17f241cf964e508c320f7",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/7-rocco": {
+      "source_sha256": "ce374897ecadbd9b84dfe3d2c2abd6a270a7997e0b0d950c565194216410fcc0",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/8-salat-pizza": {
+      "source_sha256": "c96d33f2426fa34565a5d3ec0bd92e3f94d6384b483e7f6025896e1bb4f9c52e",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/9-pollo-speciale": {
+      "source_sha256": "19419b6b061d96ef08854c10e0407d7df6781127e7ef9635a5792e3e309cde25",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/chili-mayo": {
+      "source_sha256": "54d4bdd71f82e543bde9502578009a0753fc3881cb2bdbcae0d78fec8ed54025",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/chilibaeger": {
+      "source_sha256": "3c4db0cf8a45291f917e2eaa161ce0a2d13c6935d48ec02ef7ac010900b5370a",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/coca-cola-0-5-l": {
+      "source_sha256": "18bcb6d262977f4be88c3bd1ae5a37d59771b4afa48e1bff1683ebe5e873e9ca",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/coca-cola-1-5-l": {
+      "source_sha256": "f2a19395c01275061b18f9f5c233cd8fccb7ebc23175870dcf971811d18c1eb4",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/fanta-1-5-l": {
+      "source_sha256": "ee5bbc7f76d4bc43005355efa982fa05114e26f5176a1b4fed769d50ab0dc8d4",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/faxe-kondi-0-33-l": {
+      "source_sha256": "34e4ae65ade63245cb443673d528f92dc94304bce9f07aee8175410366759fa1",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/faxe-kondi-0-5-l": {
+      "source_sha256": "e3c5a6bc14ff5a343d85553fa63b5a667ac2d33fdbc66107e163d0f892373e11",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/faxe-kondi-1-5-l": {
+      "source_sha256": "f975791973eb396fa4baefd621069b1e16e9dff04084e53bc216182007882a58",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/fiskefilet": {
+      "source_sha256": "991128c5bd0d62e24985b289f0320f79ff75a1483ba8a656e48879add328c664",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/galvanina-bio-cola-zero-0-36-l": {
+      "source_sha256": "8ffc51fe41e08868369fcd4eaf3dec148e7087b61f9af4ad6b656c5322f183b1",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/galvanina-bio-fersken-0-36-l": {
+      "source_sha256": "179ff3021e76a26ba12e060d1177a275a06bcbbd7bb228f2f540f8941b390f11",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/galvanina-bio-gassoa-0-36-l": {
+      "source_sha256": "b7c7204552341a23a243a9740c9cf6522b6f14e3630fede5daf9d3ccb4628435",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/galvanina-bio-ingefaer-0-36-l": {
+      "source_sha256": "f6023a5e44530355cf6f3b089fd4b0360a1395f09afe3422eeeaab011d03727f",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/galvanina-bio-lemonade-0-36-l": {
+      "source_sha256": "c100700b6c204c40a5d0607262a82b42fb13ae6aec40b300fac761ee2e2c8d92",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/hjemmelavet-tiramisu": {
+      "source_sha256": "67a2f71a6d24b144309dc9f68cdcdeb131f21b9a467345751ad5feea5791b358",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/hjemmelavet-tiramisu-2": {
+      "source_sha256": "911c83053fd1bd1d68c542567d5ef986d6d8cd9588f21a704bf906e90979ebc2",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/hjemmelavet-tiramisu-2-stk": {
+      "source_sha256": "6569e565c90f9230659389fe91d360597cc4a75ed4b9fff23544485e76b9f480",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/hvidlogsbaeger": {
+      "source_sha256": "d465edcbb897cefa5f4550e1f05a3fb893716702d273329215eeba6d02b01859",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/italiana": {
+      "source_sha256": "5866871db45fa82f2d806e4aefadc05b11e1d2cb674887170bc1e5c24136aed4",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/ketchup": {
+      "source_sha256": "661fc648543d0b088c185c09e575a1eb20553c587082a7457e161bc8e1c00b39",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/kildevand-0-5-l-kildevand-0-5-l": {
+      "source_sha256": "8655f0e8104525afab12438422b03d345f17671cbad1b2266c5073d6175e4b04",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/mayo": {
+      "source_sha256": "540844e9afba4cc1c5e9b04e00b2a5ebde82e2dadf90874e0d75471b93911b3b",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/nuggets-6-stk": {
+      "source_sha256": "3da7101cf0c946779369c99b7aeb2a7c5a2edc023868f8913026428cfd492b92",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/nutella-pizza-2-skiver": {
+      "source_sha256": "aaacbf4de8dcd1773a4a7f2efad4e445c24caa1c577e1fd3c0f3463b87724e22",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/parmesan-baeger": {
+      "source_sha256": "8eceb1773085a2f59ab4d4ebd65baf36a60a2209d5e370ea73065422c1c729d5",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/pepsi-max-0-33-l": {
+      "source_sha256": "f2c2835588d88ffcfc4019f7c329fb9207959165d8336a064941a828244cdbec",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/pepsi-max-0-5-l": {
+      "source_sha256": "531abb8661c5c350ff2625d272c4afffd56eea4c09aa13a5ccd01b1e9d1641d8",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/pepsi-max-1-5-l": {
+      "source_sha256": "889fc8013c0c72403d338939318225de673cefb972941d253772b985ef04b18d",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/pommes-frites": {
+      "source_sha256": "8afbf3e61c2e574d05ed3eddf61b70229a6360063fc248fcaa6dca4abce14a19",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/remoulade": {
+      "source_sha256": "3c8fcc2a436c04c900db028540745d5a9d8d9ba0da8cde8aac7df80e6320d04f",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/dishes/rodspaettefilet": {
+      "source_sha256": "709956412b641553986a8755edb43e2a69a5f6c135d74729fd3a8ad9c2dd635b",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/faq": {
+      "source_sha256": "adbc8a26b3b0cfc76d5dc8b3584d75815a6b0900217d984b45a64c54893fa5a4",
+      "internal_links": 3,
+      "contact_anchor_added": false
+    },
+    "/handelsbetingelser": {
+      "source_sha256": "4f8fa8dabb719d7d60dc4734bed6daabd691aecf40380fa07471fe2ede0498b7",
+      "internal_links": 3,
+      "contact_anchor_added": false
+    },
+    "/kontakt": {
+      "source_sha256": "511d5f2a257d280f4776e50ff84530d42467ebf25e1fd700dd5c911835ec8613",
+      "internal_links": 1,
+      "contact_anchor_added": true
+    },
+    "/menu": {
+      "source_sha256": "97a66b2cf7ee0e4a91b3062038e5905c180f0a501b22e4d764308c37c2a1a732",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/menu/a-la-carte": {
+      "source_sha256": "d2f21343e1a640fb7bed3d4a478e157c861ffd94ee36d7cc2336092edeee8e8e",
+      "internal_links": 7,
+      "contact_anchor_added": false
+    },
+    "/menu/bornemenu": {
+      "source_sha256": "a19dfeabf1cb7e030e8f91ffe2d1153a91dfd64efe0067ddec6e1e670d1c1da0",
+      "internal_links": 3,
+      "contact_anchor_added": false
+    },
+    "/menu/burger": {
+      "source_sha256": "dad218c086f552f2c2cf9dadb3b62ab2caa0153d29793cb3948bde5da3a95eeb",
+      "internal_links": 5,
+      "contact_anchor_added": false
+    },
+    "/menu/desserter": {
+      "source_sha256": "17ee06ded86452fc3e67554f6587a2d4a6cd5ca36cdf12ec16d4cb57a5fc9fea",
+      "internal_links": 6,
+      "contact_anchor_added": false
+    },
+    "/menu/drikkevarer": {
+      "source_sha256": "5575b82a6a289994ac27c3fce3ebf7f15fe7f4786b94950078edc5bc440390e6",
+      "internal_links": 16,
+      "contact_anchor_added": false
+    },
+    "/menu/dyppelse": {
+      "source_sha256": "ff549a27d49a78ead284b14b1784b9df228bbefdf7f9d0b1a60a2917ebef0ba3",
+      "internal_links": 7,
+      "contact_anchor_added": false
+    },
+    "/menu/forretter": {
+      "source_sha256": "99a9914e00e11220b283bfdc5842fcba43186914c22c9657ca08e5019105d365",
+      "internal_links": 3,
+      "contact_anchor_added": false
+    },
+    "/menu/pasta": {
+      "source_sha256": "7e95a059ba78a295568bcb345bffe1caf14f3632eeaf0fcf5289ab59afd8dcbb",
+      "internal_links": 10,
+      "contact_anchor_added": false
+    },
+    "/menu/pizza": {
+      "source_sha256": "ac27bab594b70234fd629c59d02c965a9d25cdd798c9d6277ba821d7718ae03c",
+      "internal_links": 20,
+      "contact_anchor_added": false
+    },
+    "/menu/salat": {
+      "source_sha256": "d0cfbbf42f2ee89d7ab1981e41f757c9004aaa8fac661945dcdcf655cb9cbc1f",
+      "internal_links": 4,
+      "contact_anchor_added": false
+    },
+    "/menu/side-orders-dips": {
+      "source_sha256": "53aa233afc488077b02924e4d836fdb2e50fb66ab5ad02efd2fd716fc5fce6a9",
+      "internal_links": 3,
+      "contact_anchor_added": false
+    },
+    "/nyhedsbrev": {
+      "source_sha256": "7ef695c0af42ecd0fa33cc0546824dc195b5725074163611b8166bbd599962d1",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/om-esmeralda-pizza": {
+      "source_sha256": "275a760fcead12cbe75245f1131f34de52cba8c720dbe1076d75c795afc9fdf3",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/pages/menukort": {
+      "source_sha256": "782cbf179db1992b5f11d64f02e8b73cc3d8705e2314338887c667cba39d690b",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/pages/spin-og-vind-med-esmeralda": {
+      "source_sha256": "ce310a53ec3dec050cb2deecc6b22418fbda7e48cf4ffe0fce78a72cd0ebcde8",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/privatlivspolitik": {
+      "source_sha256": "2902f730818c6edce64e6f2f67771be251860d8df59c21f49cbbee5fe02d8306",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/produkter": {
+      "source_sha256": "4fb2ae6c60a0a30ddbe61aa790120db046f084af915f4ecb2d5402c84cc097d6",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/produkter/halal-kylling-frostpizza": {
+      "source_sha256": "1a5378483ac283ff866e240cdf8cf7be742700e1a11510c19c9e8c87ad1a8cce",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/produkter/halal-pepperoni-frostpizza": {
+      "source_sha256": "f2b7b4789ebf6c5bf04458b1963f65526d04838c2aed3989bba35bb46e30b37e",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/produkter/tiramisu": {
+      "source_sha256": "951781bdc501c1f5d8b1c1da1c35d7b343c400e01c8ba2e867326b73680a8798",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/ramadan": {
+      "source_sha256": "b27f0cc5345e519bdefbfa640286063ef7518738d2067c701a23137a5e983231",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    },
+    "/weekendbrunch": {
+      "source_sha256": "ae1a4ef359ae0c4eb9465894ca6ade41ed12755c57c99acf1381bff08009d15c",
+      "internal_links": 1,
+      "contact_anchor_added": false
+    }
+  },
+  "payload_sha256": "2e9e8060907c47ae0cf47c35ca8f0f5aa9e67ccc50d2f6eb9ac983fdad6927fa",
   "routes": {
     "/": {
-      "sha256": "acb17d60b8629e709a392561b75c90354bd0f9a7ced3a355b133705e766933a2",
+      "sha256": "687b3f319f61a2b86afc7d75f7a0d9acec253048213856029a2e0277bd7e9129",
       "file": "index.html",
-      "size": 79243
+      "size": 79127
     },
     "/_assets/013d8df1119a2bab0fef8d13.css": {
       "sha256": "f01cb0f3418cc744e15712bf50aafa27c5125f05e13ff9b5ca021c7e6c217685",
@@ -1353,514 +1876,514 @@
       "size": 8540
     },
     "/book-bord": {
-      "sha256": "6ff91bd141af4517d6aa51b589ef1e10b5b20817cbe9aefcca26b4ec571e8e2f",
+      "sha256": "b17cf3128a61b1191fcf0e1659949a5e9ae1cad1dde3a917e58cacea6ed7d3d8",
       "file": "book-bord.html",
-      "size": 38174
+      "size": 38145
     },
     "/bordbooking": {
-      "sha256": "d70d6f92b4e303e24c23fd7e69dfbc6102b67631fbb2eb9f59832c6cd3aacd1b",
+      "sha256": "714f3f481d8b38cf1a51fa7815264e9bed10c263c7cd84ebe99fa67e4a9bf920",
       "file": "bordbooking.html",
-      "size": 72236
+      "size": 72207
     },
     "/dishes/1-margherita-v": {
-      "sha256": "dd74961f11a6187aa1054d6b6412d57a8eec8259931e677689e577009af44119",
+      "sha256": "c12e908b2e969e42a7ff4ab086ae0a5767ecd3af91e7da8692750c3e423daee0",
       "file": "dishes/1-margherita-v.html",
-      "size": 42194
+      "size": 42165
     },
     "/dishes/10-margherita-speciale-v": {
-      "sha256": "c6a231e63017d54976bc5a0a5cdb8a7a06cf74f7e632b1ed28e5375f34df7721",
+      "sha256": "4329ef12dbbae3b2277029caf6e7df4d942759048e62228eb3ab9ef5dd7ccd8f",
       "file": "dishes/10-margherita-speciale-v.html",
-      "size": 42099
-    },
-    "/dishes/11-formaggi-speciale-v": {
-      "sha256": "f80cd969a4b8917abc5df2337fbb980c957a81e59ffacd0e2a9996a58c45f77d",
-      "file": "dishes/11-formaggi-speciale-v.html",
-      "size": 42095
-    },
-    "/dishes/12-montanara-speciale": {
-      "sha256": "c30deb20fa5d957f448ae7665a7e159e53f79d60feaec3ce3e27e207bb8757fb",
-      "file": "dishes/12-montanara-speciale.html",
-      "size": 42136
-    },
-    "/dishes/13-ortalana": {
-      "sha256": "674de18d6906a59735bc028ed9e7d4e66004c977fa8d3033cbf97338ca9b5629",
-      "file": "dishes/13-ortalana.html",
-      "size": 42085
-    },
-    "/dishes/14-vegetariana-v": {
-      "sha256": "8b53811e8402675775f1a26c454df1ba4af26f6101e6409037fbea4437d2f255",
-      "file": "dishes/14-vegetariana-v.html",
-      "size": 42269
-    },
-    "/dishes/15-pastrami-speciale": {
-      "sha256": "0d31294d86ff369e5479d41659152ed0f42989686fd6a598dc829ae5415aff01",
-      "file": "dishes/15-pastrami-speciale.html",
-      "size": 42164
-    },
-    "/dishes/16-gorgonzola": {
-      "sha256": "48f52cb3c94858dc0553c5e6505de10f009901e4aaef768f636748daa2f96a35",
-      "file": "dishes/16-gorgonzola.html",
-      "size": 41912
-    },
-    "/dishes/17-diavola": {
-      "sha256": "4524bcf273e179e15770f108cd7868b4ede4304c3455d092304b0411beeed4cd",
-      "file": "dishes/17-diavola.html",
-      "size": 41969
-    },
-    "/dishes/18-esmeralda-speciale": {
-      "sha256": "f1ab7b2c9bd874850ee6efabe891354a69776a214b43af0d41eb177bb09e28d9",
-      "file": "dishes/18-esmeralda-speciale.html",
-      "size": 42148
-    },
-    "/dishes/19-capricciosa": {
-      "sha256": "72742c18ed80fc57c7f4ccdb71fdfd8b55a7cb33b0d3ab6f559d2f46c673187a",
-      "file": "dishes/19-capricciosa.html",
-      "size": 41803
-    },
-    "/dishes/21-penne-al-pollo": {
-      "sha256": "a358faba312521752aa7c05ba5a250897db24a05ce9e94c29ebfdea708f480ec",
-      "file": "dishes/21-penne-al-pollo.html",
-      "size": 41961
-    },
-    "/dishes/23-penne-al-filetto": {
-      "sha256": "28cf62812b7178dbf9c578e8df2b11bdd99f05e11c95365ed49bed6bf8696634",
-      "file": "dishes/23-penne-al-filetto.html",
-      "size": 42008
-    },
-    "/dishes/24-spaghetti-alla-bolognese": {
-      "sha256": "96e19e028b5ceac12256df503137dbbc295259eb37525d396d7330230004fb90",
-      "file": "dishes/24-spaghetti-alla-bolognese.html",
-      "size": 42084
-    },
-    "/dishes/25-spaghetti-alla-carbonara": {
-      "sha256": "b0a812ddc3dc14c5743f2978dbf33a2a1b199dde2fb8444930a50528019f324d",
-      "file": "dishes/25-spaghetti-alla-carbonara.html",
-      "size": 42140
-    },
-    "/dishes/26-pasta-vegetar-v": {
-      "sha256": "5d8b866a16d4a5a75afaf14dba417387d409053cb38bd3f6ac17a645da3cccf4",
-      "file": "dishes/26-pasta-vegetar-v.html",
-      "size": 42061
-    },
-    "/dishes/27-lasagna-bolognese": {
-      "sha256": "9a92cf0e1ac1249606eab834f62c13cad8defffa9e3d3d46ea51f5872c272662",
-      "file": "dishes/27-lasagna-bolognese.html",
-      "size": 41827
-    },
-    "/dishes/28-spaghetti-con-gamberoni": {
-      "sha256": "6456a54caf78e60a8f19c214b88b695da0300655d0cbe2992685ba351c57ce5c",
-      "file": "dishes/28-spaghetti-con-gamberoni.html",
-      "size": 42172
-    },
-    "/dishes/29-tortellini-gratinati-col-polle": {
-      "sha256": "ffc5002c25c9a15d306a7c375c0fd811410d007c889f6dba07474e9f4fff25a3",
-      "file": "dishes/29-tortellini-gratinati-col-polle.html",
-      "size": 42152
-    },
-    "/dishes/3-hawaii": {
-      "sha256": "4511f0aa611a9987226ea9d5c21eee32d6f5c608d0959d54355aa879531a026a",
-      "file": "dishes/3-hawaii.html",
-      "size": 41948
-    },
-    "/dishes/3-retters-menu": {
-      "sha256": "979be021bc7e05fb90c8bed435e89775a7b1d8efc99eac678e2f0666407509e6",
-      "file": "dishes/3-retters-menu.html",
-      "size": 42217
-    },
-    "/dishes/30-fettuccine-ai-funghi-misti-e-tartuffo": {
-      "sha256": "ee0ffea4f2d64057aa4e8fd8795c95f835cc57658a4a10b59f0f1b307d4a578f",
-      "file": "dishes/30-fettuccine-ai-funghi-misti-e-tartuffo.html",
-      "size": 42375
-    },
-    "/dishes/31-insalata-caesar": {
-      "sha256": "aac818cd09f7d7c3b3f920f43b63921a312cae5e73f0d7adc7bab14ea150797d",
-      "file": "dishes/31-insalata-caesar.html",
-      "size": 42141
-    },
-    "/dishes/32-pasta-salat": {
-      "sha256": "6eff5e6c94f606c7fb7591a2f5bc9194a7e60a511a3b62f7df1e38463e25fdc3",
-      "file": "dishes/32-pasta-salat.html",
-      "size": 42104
-    },
-    "/dishes/33-insalata-greca": {
-      "sha256": "8391382ea386b45664abddabab635c7b5468c6f2ee0c411f4aa7c4ccc404562a",
-      "file": "dishes/33-insalata-greca.html",
-      "size": 42074
-    },
-    "/dishes/34-husets-sandwich": {
-      "sha256": "c2f5af186c025f20edf0ec4e64ec390fdb1b258cfdf9ea89d05c7bb75c177ebc",
-      "file": "dishes/34-husets-sandwich.html",
-      "size": 42173
-    },
-    "/dishes/35-kylling-og-bacon": {
-      "sha256": "aa0e0f890d6e9f107baa6d9ee163e31710a079dd66cec5360cef39bb1777d470",
-      "file": "dishes/35-kylling-og-bacon.html",
-      "size": 42084
-    },
-    "/dishes/36-zuppa-del-giorno": {
-      "sha256": "1ab29f2d98300e9d30bbb484b34ee88abd1064e497ae46104bb2d065720d8d0d",
-      "file": "dishes/36-zuppa-del-giorno.html",
-      "size": 41889
-    },
-    "/dishes/37-bruschetta-2-stk-v": {
-      "sha256": "bf68509a77fa8f962ea60555e980d1a7e0291cdd0d503c127d7a067328eb904a",
-      "file": "dishes/37-bruschetta-2-stk-v.html",
-      "size": 42095
-    },
-    "/dishes/38-crispy-fried-chicken-burger": {
-      "sha256": "24daf8f506161d597a60890a73ccf136d6d2a05dec9107a2e5bc71deede41aaf",
-      "file": "dishes/38-crispy-fried-chicken-burger.html",
-      "size": 42088
-    },
-    "/dishes/39-esmeralda-burger": {
-      "sha256": "449702910799695804fc46a41064531cdf4919bce03d92c34b5727273140a761",
-      "file": "dishes/39-esmeralda-burger.html",
-      "size": 42037
-    },
-    "/dishes/4-pepperoni": {
-      "sha256": "bf6cd37edc95a7d1e6f814aa2d07d191cb162af0da410ecd535c4dbebbba4a74",
-      "file": "dishes/4-pepperoni.html",
-      "size": 41909
-    },
-    "/dishes/40-hot-n-spicy": {
-      "sha256": "cc97ba155ee7183c5fb6eca9b0e8e3527f93c1583d2608662ddf2f5575408226",
-      "file": "dishes/40-hot-n-spicy.html",
-      "size": 42041
-    },
-    "/dishes/41-steak-burger": {
-      "sha256": "2018bafe3a9f5b8fc665bca1194fd47771d3e22eef38a29dcd409c1b82ac940d",
-      "file": "dishes/41-steak-burger.html",
-      "size": 42110
-    },
-    "/dishes/43-entrecote": {
-      "sha256": "b482bd7151e4dcccdab0f0356999b39103d25d111d9f964e557e193fab75f425",
-      "file": "dishes/43-entrecote.html",
-      "size": 42153
-    },
-    "/dishes/44-kyllingefilet-2-stk": {
-      "sha256": "2b0b0a917f4a5b8c1e00ecc9b9bbea6765039e4e9687bfe6e44dbafa6b0eada3",
-      "file": "dishes/44-kyllingefilet-2-stk.html",
-      "size": 42112
-    },
-    "/dishes/45-oksemorbrad": {
-      "sha256": "ac888935a16f416f6a79106d079b3b7ed7a4d4e51d11657a4ee2b715e8be3fec",
-      "file": "dishes/45-oksemorbrad.html",
-      "size": 42196
-    },
-    "/dishes/46-black-angus-steak": {
-      "sha256": "293dda46d82ea5944982962114408a2599c09135e684f942b0fb5fcd346cc0ef",
-      "file": "dishes/46-black-angus-steak.html",
-      "size": 42277
-    },
-    "/dishes/5-romana": {
-      "sha256": "7b8c57915639f2b30a818132ddc9ca8c42bfc961e8c3587964a985991cdb50ea",
-      "file": "dishes/5-romana.html",
-      "size": 42025
-    },
-    "/dishes/50-nutella-pizza": {
-      "sha256": "8346f7729aa18abf3475588135387a62964c23e220cd589cf0147744385245b8",
-      "file": "dishes/50-nutella-pizza.html",
-      "size": 42133
-    },
-    "/dishes/6-da-vinci": {
-      "sha256": "f0b4589e2779d6e40df703267af843ef0a8f1c5397a17f241cf964e508c320f7",
-      "file": "dishes/6-da-vinci.html",
-      "size": 42008
-    },
-    "/dishes/7-rocco": {
-      "sha256": "ce374897ecadbd9b84dfe3d2c2abd6a270a7997e0b0d950c565194216410fcc0",
-      "file": "dishes/7-rocco.html",
-      "size": 42025
-    },
-    "/dishes/8-salat-pizza": {
-      "sha256": "c96d33f2426fa34565a5d3ec0bd92e3f94d6384b483e7f6025896e1bb4f9c52e",
-      "file": "dishes/8-salat-pizza.html",
-      "size": 41924
-    },
-    "/dishes/9-pollo-speciale": {
-      "sha256": "19419b6b061d96ef08854c10e0407d7df6781127e7ef9635a5792e3e309cde25",
-      "file": "dishes/9-pollo-speciale.html",
-      "size": 42062
-    },
-    "/dishes/chili-mayo": {
-      "sha256": "54d4bdd71f82e543bde9502578009a0753fc3881cb2bdbcae0d78fec8ed54025",
-      "file": "dishes/chili-mayo.html",
-      "size": 41863
-    },
-    "/dishes/chilibaeger": {
-      "sha256": "3c4db0cf8a45291f917e2eaa161ce0a2d13c6935d48ec02ef7ac010900b5370a",
-      "file": "dishes/chilibaeger.html",
-      "size": 41855
-    },
-    "/dishes/coca-cola-0-5-l": {
-      "sha256": "18bcb6d262977f4be88c3bd1ae5a37d59771b4afa48e1bff1683ebe5e873e9ca",
-      "file": "dishes/coca-cola-0-5-l.html",
-      "size": 42103
-    },
-    "/dishes/coca-cola-1-5-l": {
-      "sha256": "f2a19395c01275061b18f9f5c233cd8fccb7ebc23175870dcf971811d18c1eb4",
-      "file": "dishes/coca-cola-1-5-l.html",
-      "size": 41993
-    },
-    "/dishes/fanta-1-5-l": {
-      "sha256": "ee5bbc7f76d4bc43005355efa982fa05114e26f5176a1b4fed769d50ab0dc8d4",
-      "file": "dishes/fanta-1-5-l.html",
-      "size": 41958
-    },
-    "/dishes/faxe-kondi-0-33-l": {
-      "sha256": "34e4ae65ade63245cb443673d528f92dc94304bce9f07aee8175410366759fa1",
-      "file": "dishes/faxe-kondi-0-33-l.html",
       "size": 42070
     },
-    "/dishes/faxe-kondi-0-5-l": {
-      "sha256": "e3c5a6bc14ff5a343d85553fa63b5a667ac2d33fdbc66107e163d0f892373e11",
-      "file": "dishes/faxe-kondi-0-5-l.html",
-      "size": 42003
+    "/dishes/11-formaggi-speciale-v": {
+      "sha256": "9c42133480869f680d58ea1c4ffc25ebea858e961b856826a0760f8a95190b1d",
+      "file": "dishes/11-formaggi-speciale-v.html",
+      "size": 42066
     },
-    "/dishes/faxe-kondi-1-5-l": {
-      "sha256": "f975791973eb396fa4baefd621069b1e16e9dff04084e53bc216182007882a58",
-      "file": "dishes/faxe-kondi-1-5-l.html",
-      "size": 42002
+    "/dishes/12-montanara-speciale": {
+      "sha256": "e584fb4a06e7821713f4de1bacf63ab74297cce4056889d3a3f5056977c1e03c",
+      "file": "dishes/12-montanara-speciale.html",
+      "size": 42107
     },
-    "/dishes/fiskefilet": {
-      "sha256": "991128c5bd0d62e24985b289f0320f79ff75a1483ba8a656e48879add328c664",
-      "file": "dishes/fiskefilet.html",
-      "size": 41837
-    },
-    "/dishes/galvanina-bio-cola-zero-0-36-l": {
-      "sha256": "8ffc51fe41e08868369fcd4eaf3dec148e7087b61f9af4ad6b656c5322f183b1",
-      "file": "dishes/galvanina-bio-cola-zero-0-36-l.html",
-      "size": 42096
-    },
-    "/dishes/galvanina-bio-fersken-0-36-l": {
-      "sha256": "179ff3021e76a26ba12e060d1177a275a06bcbbd7bb228f2f540f8941b390f11",
-      "file": "dishes/galvanina-bio-fersken-0-36-l.html",
-      "size": 42078
-    },
-    "/dishes/galvanina-bio-gassoa-0-36-l": {
-      "sha256": "b7c7204552341a23a243a9740c9cf6522b6f14e3630fede5daf9d3ccb4628435",
-      "file": "dishes/galvanina-bio-gassoa-0-36-l.html",
-      "size": 42069
-    },
-    "/dishes/galvanina-bio-ingefaer-0-36-l": {
-      "sha256": "f6023a5e44530355cf6f3b089fd4b0360a1395f09afe3422eeeaab011d03727f",
-      "file": "dishes/galvanina-bio-ingefaer-0-36-l.html",
-      "size": 42088
-    },
-    "/dishes/galvanina-bio-lemonade-0-36-l": {
-      "sha256": "c100700b6c204c40a5d0607262a82b42fb13ae6aec40b300fac761ee2e2c8d92",
-      "file": "dishes/galvanina-bio-lemonade-0-36-l.html",
-      "size": 42150
-    },
-    "/dishes/hjemmelavet-tiramisu": {
-      "sha256": "67a2f71a6d24b144309dc9f68cdcdeb131f21b9a467345751ad5feea5791b358",
-      "file": "dishes/hjemmelavet-tiramisu.html",
-      "size": 42077
-    },
-    "/dishes/hjemmelavet-tiramisu-2": {
-      "sha256": "911c83053fd1bd1d68c542567d5ef986d6d8cd9588f21a704bf906e90979ebc2",
-      "file": "dishes/hjemmelavet-tiramisu-2.html",
-      "size": 41988
-    },
-    "/dishes/hjemmelavet-tiramisu-2-stk": {
-      "sha256": "6569e565c90f9230659389fe91d360597cc4a75ed4b9fff23544485e76b9f480",
-      "file": "dishes/hjemmelavet-tiramisu-2-stk.html",
-      "size": 42048
-    },
-    "/dishes/hvidlogsbaeger": {
-      "sha256": "d465edcbb897cefa5f4550e1f05a3fb893716702d273329215eeba6d02b01859",
-      "file": "dishes/hvidlogsbaeger.html",
-      "size": 41886
-    },
-    "/dishes/italiana": {
-      "sha256": "5866871db45fa82f2d806e4aefadc05b11e1d2cb674887170bc1e5c24136aed4",
-      "file": "dishes/italiana.html",
-      "size": 42053
-    },
-    "/dishes/ketchup": {
-      "sha256": "661fc648543d0b088c185c09e575a1eb20553c587082a7457e161bc8e1c00b39",
-      "file": "dishes/ketchup.html",
-      "size": 41852
-    },
-    "/dishes/kildevand-0-5-l-kildevand-0-5-l": {
-      "sha256": "8655f0e8104525afab12438422b03d345f17671cbad1b2266c5073d6175e4b04",
-      "file": "dishes/kildevand-0-5-l-kildevand-0-5-l.html",
-      "size": 42002
-    },
-    "/dishes/mayo": {
-      "sha256": "540844e9afba4cc1c5e9b04e00b2a5ebde82e2dadf90874e0d75471b93911b3b",
-      "file": "dishes/mayo.html",
-      "size": 41801
-    },
-    "/dishes/nuggets-6-stk": {
-      "sha256": "3da7101cf0c946779369c99b7aeb2a7c5a2edc023868f8913026428cfd492b92",
-      "file": "dishes/nuggets-6-stk.html",
-      "size": 41868
-    },
-    "/dishes/nutella-pizza-2-skiver": {
-      "sha256": "aaacbf4de8dcd1773a4a7f2efad4e445c24caa1c577e1fd3c0f3463b87724e22",
-      "file": "dishes/nutella-pizza-2-skiver.html",
-      "size": 42081
-    },
-    "/dishes/parmesan-baeger": {
-      "sha256": "8eceb1773085a2f59ab4d4ebd65baf36a60a2209d5e370ea73065422c1c729d5",
-      "file": "dishes/parmesan-baeger.html",
-      "size": 41907
-    },
-    "/dishes/pepsi-max-0-33-l": {
-      "sha256": "f2c2835588d88ffcfc4019f7c329fb9207959165d8336a064941a828244cdbec",
-      "file": "dishes/pepsi-max-0-33-l.html",
+    "/dishes/13-ortalana": {
+      "sha256": "3a49e7b00dbde3c551b23ff78a687d37e7979a36258722a4a68059ff84bdc32d",
+      "file": "dishes/13-ortalana.html",
       "size": 42056
     },
-    "/dishes/pepsi-max-0-5-l": {
-      "sha256": "531abb8661c5c350ff2625d272c4afffd56eea4c09aa13a5ccd01b1e9d1641d8",
-      "file": "dishes/pepsi-max-0-5-l.html",
-      "size": 41993
+    "/dishes/14-vegetariana-v": {
+      "sha256": "0ccaba052d69fbe3c35bcb46964e67c70764bbea8da01ba0cf78b78957190cd9",
+      "file": "dishes/14-vegetariana-v.html",
+      "size": 42240
     },
-    "/dishes/pepsi-max-1-5-l": {
-      "sha256": "889fc8013c0c72403d338939318225de673cefb972941d253772b985ef04b18d",
-      "file": "dishes/pepsi-max-1-5-l.html",
-      "size": 41993
+    "/dishes/15-pastrami-speciale": {
+      "sha256": "b42b0b622a0bc76fbab5db377368cd03c85cd3764468454f903c9cc060106d7d",
+      "file": "dishes/15-pastrami-speciale.html",
+      "size": 42135
     },
-    "/dishes/pommes-frites": {
-      "sha256": "8afbf3e61c2e574d05ed3eddf61b70229a6360063fc248fcaa6dca4abce14a19",
-      "file": "dishes/pommes-frites.html",
-      "size": 41952
+    "/dishes/16-gorgonzola": {
+      "sha256": "0dfeb464f28c62470a068e80b871e9fa6cbc40397b58b9ceeb2be334415016cc",
+      "file": "dishes/16-gorgonzola.html",
+      "size": 41883
     },
-    "/dishes/remoulade": {
-      "sha256": "3c8fcc2a436c04c900db028540745d5a9d8d9ba0da8cde8aac7df80e6320d04f",
-      "file": "dishes/remoulade.html",
+    "/dishes/17-diavola": {
+      "sha256": "a559bc4a29748dfea83028e0050fe2a13408ecb38926486129dddb8d90b6327c",
+      "file": "dishes/17-diavola.html",
+      "size": 41940
+    },
+    "/dishes/18-esmeralda-speciale": {
+      "sha256": "8c4dbdd2a05b0160d66c6e52b6f8521c64f2393a40d5aca66251045f971afc9c",
+      "file": "dishes/18-esmeralda-speciale.html",
+      "size": 42119
+    },
+    "/dishes/19-capricciosa": {
+      "sha256": "806992b2c963e6bba76b3c208450a4b6aa8ca30a09968a4bc22ddce397367b22",
+      "file": "dishes/19-capricciosa.html",
+      "size": 41774
+    },
+    "/dishes/21-penne-al-pollo": {
+      "sha256": "d949df6ab81b3064ca0625a021ce47470660ff432614e453c622add69227eb4f",
+      "file": "dishes/21-penne-al-pollo.html",
+      "size": 41932
+    },
+    "/dishes/23-penne-al-filetto": {
+      "sha256": "52b4945608992a1cc633f48471197337c8f9136a1e6ab7de3300196be26d0829",
+      "file": "dishes/23-penne-al-filetto.html",
+      "size": 41979
+    },
+    "/dishes/24-spaghetti-alla-bolognese": {
+      "sha256": "189f44afc2d034f47ccba895b8e1cbb48b3a74a69dfd5da10754be78ec3b5c01",
+      "file": "dishes/24-spaghetti-alla-bolognese.html",
+      "size": 42055
+    },
+    "/dishes/25-spaghetti-alla-carbonara": {
+      "sha256": "b0d9994943672b09d6c6c05645f475e788971b7e1fe10a3d892c0ecf04054112",
+      "file": "dishes/25-spaghetti-alla-carbonara.html",
+      "size": 42111
+    },
+    "/dishes/26-pasta-vegetar-v": {
+      "sha256": "6e1cdeb099efc21d49904951f185962c2720b1e8d3ed21d4bd2a564391555b22",
+      "file": "dishes/26-pasta-vegetar-v.html",
+      "size": 42032
+    },
+    "/dishes/27-lasagna-bolognese": {
+      "sha256": "ee74a0887adb8a8c4c6bbc400b7469b4b657f576bc6cde431085de81001e28e2",
+      "file": "dishes/27-lasagna-bolognese.html",
+      "size": 41798
+    },
+    "/dishes/28-spaghetti-con-gamberoni": {
+      "sha256": "9e0390c288e2ac52c0ced6b604d4b4a7a4b8167542d0e671b06c59ade1469693",
+      "file": "dishes/28-spaghetti-con-gamberoni.html",
+      "size": 42143
+    },
+    "/dishes/29-tortellini-gratinati-col-polle": {
+      "sha256": "8fd4e1ff6e9f9f3f9ef81e126dbe2f2823d8e16837ff9f69af7a2e12d3f3ca31",
+      "file": "dishes/29-tortellini-gratinati-col-polle.html",
+      "size": 42123
+    },
+    "/dishes/3-hawaii": {
+      "sha256": "a9554adeb3d7bd289c6c93f76706591fe3b674df68a12a7e7291baa93c86bf40",
+      "file": "dishes/3-hawaii.html",
+      "size": 41919
+    },
+    "/dishes/3-retters-menu": {
+      "sha256": "83d94a40e43f55a149859d33f506be0445fe9a780db881f457e04a3923c7d399",
+      "file": "dishes/3-retters-menu.html",
+      "size": 42188
+    },
+    "/dishes/30-fettuccine-ai-funghi-misti-e-tartuffo": {
+      "sha256": "f75d1c2a9426f032f63482c647a6f2b7d0b8e79868e55e67db5f28500d15af9b",
+      "file": "dishes/30-fettuccine-ai-funghi-misti-e-tartuffo.html",
+      "size": 42346
+    },
+    "/dishes/31-insalata-caesar": {
+      "sha256": "54a0cb044e1da90ed031c53784635b3e7802527f7526913f0e5dc84a18575a81",
+      "file": "dishes/31-insalata-caesar.html",
+      "size": 42112
+    },
+    "/dishes/32-pasta-salat": {
+      "sha256": "3b480376d054b1d99dab85eb6c16661fb57d0b15f5332242e5e8f81dd610bd1c",
+      "file": "dishes/32-pasta-salat.html",
+      "size": 42075
+    },
+    "/dishes/33-insalata-greca": {
+      "sha256": "c654bf98223ca2c0c69beb563588b558dda5d5979e804f87c849bb0264a2e37a",
+      "file": "dishes/33-insalata-greca.html",
+      "size": 42045
+    },
+    "/dishes/34-husets-sandwich": {
+      "sha256": "1ab845514a51c3d67d1ba8b692a8a9ec2018d8bf902f75d6c6076a3caf49c1dc",
+      "file": "dishes/34-husets-sandwich.html",
+      "size": 42144
+    },
+    "/dishes/35-kylling-og-bacon": {
+      "sha256": "996faf627514843a66ba28ecb98acac12be83f036f8399f30960f25c7f69c465",
+      "file": "dishes/35-kylling-og-bacon.html",
+      "size": 42055
+    },
+    "/dishes/36-zuppa-del-giorno": {
+      "sha256": "ffade27da3e411979e295cdc4226dd27b68876fa87af9518693758b72f672c0c",
+      "file": "dishes/36-zuppa-del-giorno.html",
+      "size": 41860
+    },
+    "/dishes/37-bruschetta-2-stk-v": {
+      "sha256": "a3104292edd1661fa2aec1ec981e5bccab081c1342abab69c55be445ff99e7cf",
+      "file": "dishes/37-bruschetta-2-stk-v.html",
+      "size": 42066
+    },
+    "/dishes/38-crispy-fried-chicken-burger": {
+      "sha256": "0b42754104a830fa2e01baee236e4259cbb5b1db831d4bb251c97e4f22424e92",
+      "file": "dishes/38-crispy-fried-chicken-burger.html",
+      "size": 42059
+    },
+    "/dishes/39-esmeralda-burger": {
+      "sha256": "c64e41c3acf951c4a2169890534c7c46937d3827a258ac39189cf98b1d1653e1",
+      "file": "dishes/39-esmeralda-burger.html",
+      "size": 42008
+    },
+    "/dishes/4-pepperoni": {
+      "sha256": "8c06c7ea078fc902bc215a5ec6aa62be54c530243850e4e8054158c607b771f5",
+      "file": "dishes/4-pepperoni.html",
+      "size": 41880
+    },
+    "/dishes/40-hot-n-spicy": {
+      "sha256": "ed9362232ecf1133e07290705a7c9f98096ade5317c1eb9bd1997ee6d8e13e0d",
+      "file": "dishes/40-hot-n-spicy.html",
+      "size": 42012
+    },
+    "/dishes/41-steak-burger": {
+      "sha256": "ed737b31c1c26423d4b86d446a4a2891c733f9c76fcb89b3ff3110f3760c2f56",
+      "file": "dishes/41-steak-burger.html",
+      "size": 42081
+    },
+    "/dishes/43-entrecote": {
+      "sha256": "0a8e9dddedca59f3f822724f76ddd395692cdb158fb842da98ddf71698d6a569",
+      "file": "dishes/43-entrecote.html",
+      "size": 42124
+    },
+    "/dishes/44-kyllingefilet-2-stk": {
+      "sha256": "f198c6db1987f5d54eccd1a0883874606ed81bd2c9da168c3d0ffea61ccfeac1",
+      "file": "dishes/44-kyllingefilet-2-stk.html",
+      "size": 42083
+    },
+    "/dishes/45-oksemorbrad": {
+      "sha256": "991c6f210512a5ef9b359283c8d1cdb93d4719e5e60ada48a5884a4e093ad223",
+      "file": "dishes/45-oksemorbrad.html",
+      "size": 42167
+    },
+    "/dishes/46-black-angus-steak": {
+      "sha256": "4aa3584eb7e550258fabfb796a43f5e427d0b9dbc1ad9c358cd59302cb80e47b",
+      "file": "dishes/46-black-angus-steak.html",
+      "size": 42248
+    },
+    "/dishes/5-romana": {
+      "sha256": "4e70218db623be6f700a6b51698881e5d4c43136e4e782cccb3e9ac7dd1f14a8",
+      "file": "dishes/5-romana.html",
+      "size": 41996
+    },
+    "/dishes/50-nutella-pizza": {
+      "sha256": "13ab854bbbc11cf4a8ddfec7fd72eaba05f8ab704fae5bb7f8231d3f21be8aa2",
+      "file": "dishes/50-nutella-pizza.html",
+      "size": 42104
+    },
+    "/dishes/6-da-vinci": {
+      "sha256": "20187db64358d68727e9a8d935dc9c0b869db4b46deaa2d46aa690c05e02e115",
+      "file": "dishes/6-da-vinci.html",
+      "size": 41979
+    },
+    "/dishes/7-rocco": {
+      "sha256": "62bed4a7bcbf2ad77906b43b9e7f6201ec6f4ade4a65ed25113370769fdba024",
+      "file": "dishes/7-rocco.html",
+      "size": 41996
+    },
+    "/dishes/8-salat-pizza": {
+      "sha256": "f6535e6f834f57f9f833cb24e666436911eaa64c2ea672da9d7e063f6ede2657",
+      "file": "dishes/8-salat-pizza.html",
+      "size": 41895
+    },
+    "/dishes/9-pollo-speciale": {
+      "sha256": "f98d3130587948ff0362f31a3a8bb0143d61d20a1058b0f0a7351077e4345342",
+      "file": "dishes/9-pollo-speciale.html",
+      "size": 42033
+    },
+    "/dishes/chili-mayo": {
+      "sha256": "04f2e6bf7236584def03077f7a3d4b31d2ffe25bc24754f006969cd0254a05a9",
+      "file": "dishes/chili-mayo.html",
       "size": 41834
     },
+    "/dishes/chilibaeger": {
+      "sha256": "db66a4581aa783f15a53b507402faf9952bbc410b5aa4b1ab9156c7ff3800555",
+      "file": "dishes/chilibaeger.html",
+      "size": 41826
+    },
+    "/dishes/coca-cola-0-5-l": {
+      "sha256": "d42987b61766150d00dc7df236694cacab712a5e6e3deaacdbc81e8d1dcdac22",
+      "file": "dishes/coca-cola-0-5-l.html",
+      "size": 42074
+    },
+    "/dishes/coca-cola-1-5-l": {
+      "sha256": "14062914f18a3e602eec36131c4bb5cee696e879e665d613a0cb92320aa773b6",
+      "file": "dishes/coca-cola-1-5-l.html",
+      "size": 41964
+    },
+    "/dishes/fanta-1-5-l": {
+      "sha256": "b9f30fd5559266c0790bd8cb8d34ffb67065e030637a4bbfcb944207bc9af867",
+      "file": "dishes/fanta-1-5-l.html",
+      "size": 41929
+    },
+    "/dishes/faxe-kondi-0-33-l": {
+      "sha256": "9380c694f84221bb8d890086944ebef4a4d4df27502e933ce1d099b534aee37f",
+      "file": "dishes/faxe-kondi-0-33-l.html",
+      "size": 42041
+    },
+    "/dishes/faxe-kondi-0-5-l": {
+      "sha256": "9c7d249300aa1be382bdddf96222edb6423fe57fc4daf63a0ac16d55b7f2188c",
+      "file": "dishes/faxe-kondi-0-5-l.html",
+      "size": 41974
+    },
+    "/dishes/faxe-kondi-1-5-l": {
+      "sha256": "d240509b9b33d4b33a5a45c6633802d5276d26f08c2cc7141bcef40d0d93c423",
+      "file": "dishes/faxe-kondi-1-5-l.html",
+      "size": 41973
+    },
+    "/dishes/fiskefilet": {
+      "sha256": "a4afa6dede359fc9a0b8467f11b46dcbe79766c90e9a6e737bdffea55c16b5ea",
+      "file": "dishes/fiskefilet.html",
+      "size": 41808
+    },
+    "/dishes/galvanina-bio-cola-zero-0-36-l": {
+      "sha256": "c14b88f43712f7e3132abb7b32b8b010bcf23b9f29ad9a63015bcfa21038fd53",
+      "file": "dishes/galvanina-bio-cola-zero-0-36-l.html",
+      "size": 42067
+    },
+    "/dishes/galvanina-bio-fersken-0-36-l": {
+      "sha256": "2077d5e7f82b1c44ac59a2b917984b7a108ee5f97f7194b0612cba5a1a6d442c",
+      "file": "dishes/galvanina-bio-fersken-0-36-l.html",
+      "size": 42049
+    },
+    "/dishes/galvanina-bio-gassoa-0-36-l": {
+      "sha256": "839dbe4d85f0905d966cc1d1a6602c9bd961867b613dc82cb40e975412368616",
+      "file": "dishes/galvanina-bio-gassoa-0-36-l.html",
+      "size": 42040
+    },
+    "/dishes/galvanina-bio-ingefaer-0-36-l": {
+      "sha256": "87879c0d5fb3275cc92239543fc7cc63b52e217275d3b11e8319dafe766aa66b",
+      "file": "dishes/galvanina-bio-ingefaer-0-36-l.html",
+      "size": 42059
+    },
+    "/dishes/galvanina-bio-lemonade-0-36-l": {
+      "sha256": "685b82135ab2fb85a2760ae25ef0ecbc3bca1eb6a753307ec315a7440a5fb4ff",
+      "file": "dishes/galvanina-bio-lemonade-0-36-l.html",
+      "size": 42121
+    },
+    "/dishes/hjemmelavet-tiramisu": {
+      "sha256": "7da70edcb41a4e67fd482c6edba6360da727785e25a355c0cac2db945ed61b81",
+      "file": "dishes/hjemmelavet-tiramisu.html",
+      "size": 42048
+    },
+    "/dishes/hjemmelavet-tiramisu-2": {
+      "sha256": "6b41c9da3bc6557488f9ce966f325873a9f6fa1e86a6de12623ea8255d0b90f6",
+      "file": "dishes/hjemmelavet-tiramisu-2.html",
+      "size": 41959
+    },
+    "/dishes/hjemmelavet-tiramisu-2-stk": {
+      "sha256": "d7ce758f52069fbf7ba6820f190002e9e33726b46ada94f2c7cea5b791f01351",
+      "file": "dishes/hjemmelavet-tiramisu-2-stk.html",
+      "size": 42019
+    },
+    "/dishes/hvidlogsbaeger": {
+      "sha256": "ae2d6ec83c5d086b2495dc2a5c2bb8045a307ef5b60d5868e467fcef67c54287",
+      "file": "dishes/hvidlogsbaeger.html",
+      "size": 41857
+    },
+    "/dishes/italiana": {
+      "sha256": "c9bc13ec76ac1f5d86c2c1e3594235d20d186b00969a81c55e9e65c169a68872",
+      "file": "dishes/italiana.html",
+      "size": 42024
+    },
+    "/dishes/ketchup": {
+      "sha256": "0b9a065b3b6ea425370b83920e9a21dfdbdc5de32fa774f80984278ee63b59d6",
+      "file": "dishes/ketchup.html",
+      "size": 41823
+    },
+    "/dishes/kildevand-0-5-l-kildevand-0-5-l": {
+      "sha256": "a31d6c13861ba80633624dd2a68a7c68a96fe0e4a68a6ca06d41be86d4555d0c",
+      "file": "dishes/kildevand-0-5-l-kildevand-0-5-l.html",
+      "size": 41973
+    },
+    "/dishes/mayo": {
+      "sha256": "0942bf552a5fd0f38bb1727b510752ef2af498ff1f14ea252d30fc878f4dd176",
+      "file": "dishes/mayo.html",
+      "size": 41772
+    },
+    "/dishes/nuggets-6-stk": {
+      "sha256": "5bed9bb3a9abf8ae545c3f595d081353fa0f6e85776b40235aec6c2f4aefdc4e",
+      "file": "dishes/nuggets-6-stk.html",
+      "size": 41839
+    },
+    "/dishes/nutella-pizza-2-skiver": {
+      "sha256": "21bc9acf57c700f5004656c5d781d9397e0912cb60f193e520bac62a8a789ab0",
+      "file": "dishes/nutella-pizza-2-skiver.html",
+      "size": 42052
+    },
+    "/dishes/parmesan-baeger": {
+      "sha256": "48361f84c5cbb544a2caf4a3a9c2dffbdb8f5689dbe5364fe6a752bf132abb32",
+      "file": "dishes/parmesan-baeger.html",
+      "size": 41878
+    },
+    "/dishes/pepsi-max-0-33-l": {
+      "sha256": "2436cce4aef8f57d900e75b2bb5fe8c534de3ea3427dbe0183da69ca6edbf6b2",
+      "file": "dishes/pepsi-max-0-33-l.html",
+      "size": 42027
+    },
+    "/dishes/pepsi-max-0-5-l": {
+      "sha256": "41cec5448d61f669b9ebe9c830fad2d394589246b0371472700ef893db548ea0",
+      "file": "dishes/pepsi-max-0-5-l.html",
+      "size": 41964
+    },
+    "/dishes/pepsi-max-1-5-l": {
+      "sha256": "38f10cb81ed6869a1758acd25685ac93b998adf45d45e1dccd72f4432cd90d3d",
+      "file": "dishes/pepsi-max-1-5-l.html",
+      "size": 41964
+    },
+    "/dishes/pommes-frites": {
+      "sha256": "636a0b67152130465b54280f3bfee3983bff41dbff2d677e2fd465da80e6eac9",
+      "file": "dishes/pommes-frites.html",
+      "size": 41923
+    },
+    "/dishes/remoulade": {
+      "sha256": "bdcc8a3958f88a1b9ecbecab2cbf5172a868347bacae8140e8ac7c693bce169e",
+      "file": "dishes/remoulade.html",
+      "size": 41805
+    },
     "/dishes/rodspaettefilet": {
-      "sha256": "709956412b641553986a8755edb43e2a69a5f6c135d74729fd3a8ad9c2dd635b",
+      "sha256": "46c9ad24f31a4751f4b2dd6269368b90ad33a82c6abb72608b0c1109d1c41e4d",
       "file": "dishes/rodspaettefilet.html",
-      "size": 41921
+      "size": 41892
     },
     "/faq": {
-      "sha256": "adbc8a26b3b0cfc76d5dc8b3584d75815a6b0900217d984b45a64c54893fa5a4",
+      "sha256": "d88cb91638e4fc854610040f628ab7f08bf9ae6b2b90ba7ecce0d2d7fa50f7cc",
       "file": "faq.html",
-      "size": 53851
+      "size": 53764
     },
     "/handelsbetingelser": {
-      "sha256": "4f8fa8dabb719d7d60dc4734bed6daabd691aecf40380fa07471fe2ede0498b7",
+      "sha256": "81c9f3754e75261d24461ea6294ac1f7ecefaebd9ef927562787336421c2aa66",
       "file": "handelsbetingelser.html",
-      "size": 37983
+      "size": 37896
     },
     "/kontakt": {
-      "sha256": "511d5f2a257d280f4776e50ff84530d42467ebf25e1fd700dd5c911835ec8613",
+      "sha256": "d0c6b75c5ee010c7199f13c08322c5ec90a179ac7abc7ae5609915a9a9a128fb",
       "file": "kontakt.html",
-      "size": 42870
+      "size": 42862
     },
     "/menu": {
-      "sha256": "97a66b2cf7ee0e4a91b3062038e5905c180f0a501b22e4d764308c37c2a1a732",
+      "sha256": "0ed0c7272ecd9cc017bc9e46f53acf754db4b058e5aadc4885418afba11c3b2d",
       "file": "menu.html",
-      "size": 145701
+      "size": 145672
     },
     "/menu/a-la-carte": {
-      "sha256": "d2f21343e1a640fb7bed3d4a478e157c861ffd94ee36d7cc2336092edeee8e8e",
+      "sha256": "26707a0ce683528e90f85560ea60dbeaaa7932c00225845ac1db5b1174779f4c",
       "file": "menu/a-la-carte.html",
-      "size": 39026
+      "size": 38823
     },
     "/menu/bornemenu": {
-      "sha256": "a19dfeabf1cb7e030e8f91ffe2d1153a91dfd64efe0067ddec6e1e670d1c1da0",
+      "sha256": "bc1d1128847f8436f81b5d413484adc81ec2534a953de14b379a616b47a97b52",
       "file": "menu/bornemenu.html",
-      "size": 35735
+      "size": 35648
     },
     "/menu/burger": {
-      "sha256": "dad218c086f552f2c2cf9dadb3b62ab2caa0153d29793cb3948bde5da3a95eeb",
+      "sha256": "c0dcc830280ba1b79877c88cad4d4bf4e61e342bfb65087d8a147c267d19b6f0",
       "file": "menu/burger.html",
-      "size": 37546
+      "size": 37401
     },
     "/menu/desserter": {
-      "sha256": "17ee06ded86452fc3e67554f6587a2d4a6cd5ca36cdf12ec16d4cb57a5fc9fea",
+      "sha256": "1512d357e3d55d64e4ba17580959d18feb7aaf099bd33735b2539aba84dd6026",
       "file": "menu/desserter.html",
-      "size": 38020
+      "size": 37846
     },
     "/menu/drikkevarer": {
-      "sha256": "5575b82a6a289994ac27c3fce3ebf7f15fe7f4786b94950078edc5bc440390e6",
+      "sha256": "71d7db15541e042bfd85d80cd0285b5a0644692ccaf4f80e35c19b810d9b6cfe",
       "file": "menu/drikkevarer.html",
-      "size": 45254
+      "size": 44790
     },
     "/menu/dyppelse": {
-      "sha256": "ff549a27d49a78ead284b14b1784b9df228bbefdf7f9d0b1a60a2917ebef0ba3",
+      "sha256": "d231a736280538fc2b304fa0aafdbd665f25ca268f356e18982455246b732cf2",
       "file": "menu/dyppelse.html",
-      "size": 38324
+      "size": 38121
     },
     "/menu/forretter": {
-      "sha256": "99a9914e00e11220b283bfdc5842fcba43186914c22c9657ca08e5019105d365",
+      "sha256": "45076d55476b6d0076577d531bef58dbe00d4769d5f54b16ffdb519a1dbd5ece",
       "file": "menu/forretter.html",
-      "size": 35837
+      "size": 35750
     },
     "/menu/pasta": {
-      "sha256": "7e95a059ba78a295568bcb345bffe1caf14f3632eeaf0fcf5289ab59afd8dcbb",
+      "sha256": "16a8a0807fe6b1283a3695ac072822b995cd968c76a73f875c03a74b6ab8aab1",
       "file": "menu/pasta.html",
-      "size": 41574
+      "size": 41284
     },
     "/menu/pizza": {
-      "sha256": "ac27bab594b70234fd629c59d02c965a9d25cdd798c9d6277ba821d7718ae03c",
+      "sha256": "2806a972de70fba615fffa7d7ae1aa70811d3f259275cad4b50fe4c0309de0da",
       "file": "menu/pizza.html",
-      "size": 49006
+      "size": 48426
     },
     "/menu/salat": {
-      "sha256": "d0cfbbf42f2ee89d7ab1981e41f757c9004aaa8fac661945dcdcf655cb9cbc1f",
+      "sha256": "3d987459a643799d0dafb98f466b7d9e4934ec08622c921ce7290848048730be",
       "file": "menu/salat.html",
-      "size": 36603
+      "size": 36487
     },
     "/menu/side-orders-dips": {
-      "sha256": "53aa233afc488077b02924e4d836fdb2e50fb66ab5ad02efd2fd716fc5fce6a9",
+      "sha256": "bc85237da0605b5304f114feaab048ea5126dc84e326e5af88d04237d2f3c197",
       "file": "menu/side-orders-dips.html",
-      "size": 35722
+      "size": 35635
     },
     "/nyhedsbrev": {
-      "sha256": "7ef695c0af42ecd0fa33cc0546824dc195b5725074163611b8166bbd599962d1",
+      "sha256": "e46611cd762ef86fcd1915f47682c979629022f484a54c32526bc2b8fac7ef27",
       "file": "nyhedsbrev.html",
-      "size": 36676
+      "size": 36647
     },
     "/om-esmeralda-pizza": {
-      "sha256": "275a760fcead12cbe75245f1131f34de52cba8c720dbe1076d75c795afc9fdf3",
+      "sha256": "974ec0d80e22cd6a9f9d17a92fd0f9df4a2e2e748c252083bb6cfca3c27424ca",
       "file": "om-esmeralda-pizza.html",
-      "size": 47338
+      "size": 47309
     },
     "/pages/menukort": {
-      "sha256": "782cbf179db1992b5f11d64f02e8b73cc3d8705e2314338887c667cba39d690b",
+      "sha256": "b0dc06d8718578c852680e23904d17be6c4adb8eccf65cd0f74bd835fac70157",
       "file": "pages/menukort.html",
-      "size": 36725
+      "size": 36696
     },
     "/pages/spin-og-vind-med-esmeralda": {
-      "sha256": "ce310a53ec3dec050cb2deecc6b22418fbda7e48cf4ffe0fce78a72cd0ebcde8",
+      "sha256": "b537c2e4fb7abca512d23412b800b87c9a7e4af4515c910f0c53d0473ef3d977",
       "file": "pages/spin-og-vind-med-esmeralda.html",
-      "size": 35559
+      "size": 35530
     },
     "/privatlivspolitik": {
-      "sha256": "2902f730818c6edce64e6f2f67771be251860d8df59c21f49cbbee5fe02d8306",
+      "sha256": "852cf2d1bbe8d556e23f5b6468c78bec84456a15e403160f06a37a2475c0b5ef",
       "file": "privatlivspolitik.html",
-      "size": 40197
+      "size": 40168
     },
     "/produkter": {
-      "sha256": "4fb2ae6c60a0a30ddbe61aa790120db046f084af915f4ecb2d5402c84cc097d6",
+      "sha256": "e64a42158aac1edbf044ece8d5b4f00e80652a1168a8dc78e9c036d4637a7993",
       "file": "produkter.html",
-      "size": 61172
+      "size": 61143
     },
     "/produkter/halal-kylling-frostpizza": {
-      "sha256": "1a5378483ac283ff866e240cdf8cf7be742700e1a11510c19c9e8c87ad1a8cce",
+      "sha256": "fa9d3e27957d95c0ff1fdc9a26b3e9a70634c56977130baa014277df9efc1b4b",
       "file": "produkter/halal-kylling-frostpizza.html",
-      "size": 45557
+      "size": 45528
     },
     "/produkter/halal-pepperoni-frostpizza": {
-      "sha256": "f2b7b4789ebf6c5bf04458b1963f65526d04838c2aed3989bba35bb46e30b37e",
+      "sha256": "e3566db81f76b65cc0f029dd7859ea4b8f9addc7b25d97506b7100509b730055",
       "file": "produkter/halal-pepperoni-frostpizza.html",
-      "size": 45581
+      "size": 45552
     },
     "/produkter/tiramisu": {
-      "sha256": "951781bdc501c1f5d8b1c1da1c35d7b343c400e01c8ba2e867326b73680a8798",
+      "sha256": "f9c531c573c88e96a3355d1a92ca2b3cce797c9bc3679073dc5e3f613d55894f",
       "file": "produkter/tiramisu.html",
-      "size": 45553
+      "size": 45524
     },
     "/ramadan": {
-      "sha256": "b27f0cc5345e519bdefbfa640286063ef7518738d2067c701a23137a5e983231",
+      "sha256": "217f99725fb9085d4befe0e8d7a0bf9718cad810d1677d7d8af329503b3ff8aa",
       "file": "ramadan.html",
-      "size": 41693
+      "size": 41664
     },
     "/robots.txt": {
       "sha256": "331ea9090db0c9f6f597bd9840fd5b171830f6e0b3ba1cb24dfa91f0c95aedc1",
@@ -1868,9 +2391,9 @@
       "size": 26
     },
     "/weekendbrunch": {
-      "sha256": "ae1a4ef359ae0c4eb9465894ca6ade41ed12755c57c99acf1381bff08009d15c",
+      "sha256": "6731948f9c417a9de4f11bfae1edb218d5ab70725395145a959533ee3f30a8bb",
       "file": "weekendbrunch.html",
-      "size": 39590
+      "size": 39561
     }
   }
 }
