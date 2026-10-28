@@ -1,12 +1,14 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { useCart } from '@/context/cart-context';
+import { ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 import { CartContents, CartTotals, CartCheckoutButton } from './cart-contents';
 import { formatPrice, itemCountLabel } from '@/lib/storefront-format';
-export function MobileFloatingCart({ floating = true }: {
+export function MobileFloatingCart({ floating = true, compact = false }: {
     floating?: boolean;
+    compact?: boolean;
 }) {
     const { itemCount, checkoutTotal, bagFee, editingItem } = useCart();
     const [open, setOpen] = useState(false);
@@ -23,8 +25,8 @@ export function MobileFloatingCart({ floating = true }: {
     {floating && <div className="h-20 lg:hidden" aria-hidden="true"/>}
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button size="lg" className={floating ? 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold' : 'font-bold'}>
-          <span className="flex w-full items-center justify-between gap-4"><span>Se kurv · {itemCount}</span><span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span></span>
+        <Button size="lg" className={floating ? 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold' : 'font-bold min-h-11'}>
+          <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span>}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
