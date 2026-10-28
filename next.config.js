@@ -8,7 +8,7 @@ if (!/^[a-f0-9]{7,40}$/.test(releaseSha)) {
 const nextConfig = {
   output: 'standalone',
   serverExternalPackages: ['@resvg/resvg-js'],
-  outputFileTracingIncludes: { '/*': ['./public/fonts/orderfly/*.ttf', './preview/esmeralda/payload.json.gz.part-*', './mpanel/esmeralda/**/*'] },
+  outputFileTracingIncludes: { '/*': ['./public/fonts/orderfly/*.ttf', './public/fonts/inter/*', './preview/esmeralda/payload.json.gz.part-*', './mpanel/esmeralda/**/*'] },
   env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
   async headers() {
     return [
