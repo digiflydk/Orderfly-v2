@@ -17,6 +17,8 @@ The actual `www.esmeraldapizza.dk` hero was measured in the browser: `max-width:
 
 ## Verification
 
+Release follow-up: the first live deployment returned404 for Inter because the standalone package traced only the existing Orderfly TTF files. `next.config.js` now explicitly includes `public/fonts/inter/*` (font and license). Verify a clean production build contains the font in `.next/standalone/public/fonts/inter/`, then serve that output and compare the HTTP font body with the source **without manually copying public assets**. Repeat the HTTP/hash check against the deployed merchant hostname before acceptance. Manual public copying in a local harness is insufficient evidence for App Hosting packaging. Rollback contingency PR is tracked in #756.
+
 Run internally from repository root:
 
 ```
