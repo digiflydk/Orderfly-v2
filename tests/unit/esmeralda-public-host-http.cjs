@@ -28,12 +28,13 @@ test('actual HTTP production content, discovery, exact-host routing and mPanel i
  }
  const sitemap=await get('/sitemap.xml');assert.equal(sitemap.status,200);assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),discovery.public_urls);
  assert.match(await(await get('/robots.txt')).text(),/Allow: \/\n/);
- for(const q of ['','?next=%2Fmenu%3Fx%3D1&literal=%252F&a=1&a=2', '?space=a%20b&lower=%2f&tilde=~&empty=&a=1&a=2']){
-  const apex=await get('/menu'+q,'esmeraldapizza.dk');assert.equal(apex.status,308);assert.equal(apex.headers.get('location'),'https://www.esmeraldapizza.dk/menu'+q);
-  const legacy=await get('/hr/timelog'+q);assert.equal(legacy.status,308);assert.equal(legacy.headers.get('location'),'https://mpanel.esmeraldapizza.dk/hr/timelog'+q);assert.match(legacy.headers.get('x-robots-tag'),/noindex/);
-  const alias=await get('/admin-v2'+q,'mpanel.esmeraldapizza.dk');assert.equal(alias.status,301);assert.equal(alias.headers.get('location'),'https://mpanel.esmeraldapizza.dk/hr/admin'+q);
-  const https=await get('/admin-v2'+q,'mpanel.esmeraldapizza.dk',{headers:{'x-forwarded-proto':'http'}});assert.equal(https.status,308);assert.equal(https.headers.get('location'),'https://mpanel.esmeraldapizza.dk/admin-v2'+q);
-  const booking=await get('/book-bord'+q);assert.equal(booking.status,307);assert.equal(booking.headers.get('location'),'/bordbooking'+q);
+ const redirect=(response,status,target,query)=>{assert.equal(response.status,status);const actual=new URL(response.headers.get('location'),'https://www.esmeraldapizza.dk');assert.equal(actual.origin+actual.pathname,target);assert.deepEqual([...actual.searchParams],[...new URLSearchParams(query)],query);};
+ for(const q of ['','?next=%2Fmenu%3Fx%3D1&literal=%252F&a=1&a=2', '?space=a%20b&lower=%2f&tilde=~&empty=&a=1&a=2&plus=%2B&percent=%252F&callback=https%3A%2F%2Fexample.test%2Freturn%3Fa%3D1%26b%3D2&state=a%2Bb%2Fc%3D']){
+  const apex=await get('/menu'+q,'esmeraldapizza.dk');redirect(apex,308,'https://www.esmeraldapizza.dk/menu',q);
+  const legacy=await get('/hr/timelog'+q);redirect(legacy,308,'https://mpanel.esmeraldapizza.dk/hr/timelog',q);assert.match(legacy.headers.get('x-robots-tag'),/noindex/);
+  const alias=await get('/admin-v2'+q,'mpanel.esmeraldapizza.dk');redirect(alias,301,'https://mpanel.esmeraldapizza.dk/hr/admin',q);
+  const https=await get('/admin-v2'+q,'mpanel.esmeraldapizza.dk',{headers:{'x-forwarded-proto':'http'}});redirect(https,308,'https://mpanel.esmeraldapizza.dk/admin-v2',q);
+  const booking=await get('/book-bord'+q);redirect(booking,307,'https://www.esmeraldapizza.dk/bordbooking',q);
  }
  // Next normalizes a bare separator even in original App Router Request.url; no query values exist to lose.
  const emptyQuery=await get('/menu?','esmeraldapizza.dk');assert.equal(emptyQuery.status,308);assert.equal(emptyQuery.headers.get('location'),'https://www.esmeraldapizza.dk/menu');

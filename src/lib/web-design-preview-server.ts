@@ -34,7 +34,8 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     return new Response('Method not allowed', {status:405, headers});
   }
   const path = url.pathname;
-  // Middleware NextURL normalizes search parameters. App Router preserves the original request URL.
+  // Use the incoming handler URL without another parse/serialization of its query.
+  // Next may already have normalized encoding; HTTP tests verify ordered decoded values.
   const rawSearch = request.url.includes('?') ? request.url.slice(request.url.indexOf('?')).split('#')[0] : '';
   if (production) {
     const legacyTarget = resolveLegacyMpanelRedirect(path, rawSearch);
