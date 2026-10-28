@@ -16,7 +16,7 @@ test('packaged contact disables native GET, only owns exact contact form, preser
  assert.doesNotMatch(ownedBody,/turnstile|cf-turnstile|data-sitekey/);
  assert.match(ownedBody,/<label for="contact-message"[^>]*>Besked<\/label>/);
  assert.match(html,/<input[^>]*type="submit"[^>]* disabled\/?\s*>/);
- assert.match(html,/<head><script src="\/_assets\/website-contact-adapter.js"><\/script>/);
+ assert.match(html,/<head><script src="\/_assets\/website-consent.js"><\/script><script src="\/_assets\/website-contact-adapter.js"><\/script>/);
  assert.equal(Object.values(manifest.page_patches).filter(p=>p.contact_adapter_version).length,1);
  const asset=Buffer.from(entries['/_assets/website-contact-adapter.js'].data,'base64');
  assert.equal(crypto.createHash('sha256').update(asset).digest('hex'),'eb6ec999568ddea7e312638f3c46bdc58672cbe6566fd1569ce856953acd3ef9');
