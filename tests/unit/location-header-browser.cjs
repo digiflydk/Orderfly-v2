@@ -9,15 +9,17 @@ function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'location-header-browser-'));
  const entry=file('entry',`import React from'react';import{hydrateRoot}from'react-dom/client';
+ import{DeliveryPriceProvider}from ${JSON.stringify(path.join(root,'src/context/delivery-price-context.tsx'))};
  import{MenuHeader}from ${JSON.stringify(path.join(root,'src/components/layout/menu-header.tsx'))};
  import{BrandLayoutClient}from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/layout-client.tsx'))};
- const f=globalThis.fixture;hydrateRoot(document.getElementById('root'),<BrandLayoutClient brand={f.brand}>{f.initialLocation?<><MenuHeader brand={f.brand} initialLocation={f.initialLocation} initialNow={f.initialNow}/><main><div id="menu" style={{height:1800}}>Menu</div></main></>:<div id="menu" style={{height:1800}}>Menu</div>}</BrandLayoutClient>,{onRecoverableError:error=>{throw error}});globalThis.hydrated=true;`);
+ const f=globalThis.fixture;hydrateRoot(document.getElementById('root'),<BrandLayoutClient brand={f.brand}>{f.initialLocation?<DeliveryPriceProvider managed={!!f.managed}><MenuHeader brand={f.brand} initialLocation={f.initialLocation} initialNow={f.initialNow}/><main><div id="menu" style={{height:1800}}>Menu</div></main></DeliveryPriceProvider>:<div id="menu" style={{height:1800}}>Menu</div>}</BrandLayoutClient>,{onRecoverableError:error=>{throw error}});globalThis.hydrated=true;`);
  const serverEntry=file('server-entry',`import React from'react';import{renderToString}from'react-dom/server';
  import LocationLayout from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/layout.tsx'))};
  import{BrandLayoutClient}from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/layout-client.tsx'))};
  export async function render(f){globalThis.fixture=f;if(!f.initialLocation)return renderToString(<BrandLayoutClient brand={f.brand}><div id="menu" style={{height:1800}}>Menu</div></BrandLayoutClient>);const tree=await LocationLayout({children:<div id="menu" style={{height:1800}}>Menu</div>,params:Promise.resolve({brandSlug:f.brand.slug,locationSlug:f.initialLocation.slug})});f.initialNow=tree.props.children[0].props.initialNow;return renderToString(<BrandLayoutClient brand={f.brand}>{tree}</BrandLayoutClient>);}`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
+  '@/lib/delivery/quotes/adoption':file('adoption',`export const managedDeliveryRequired=async()=>!!globalThis.fixture.managed;`),
   '@/context/cart-context':file('cart',`import{useEffect,useState}from'react';export const useCart=()=>{const [location,setLocation]=useState(null);useEffect(()=>{setLocation(globalThis.fixture.location)},[]);return{location}};`),
   '@/lib/data/brand-location':file('data',`export const getBrandAndLocation=async(brandSlug,locationSlug)=>{const f=globalThis.fixture;if(brandSlug!==f.brand.slug||locationSlug!==f.initialLocation.slug)throw Error('Incorrect route lookup');return{brand:f.brand,location:f.initialLocation,brandMatchesLocation:f.initialLocation.brandId===f.brand.id}};`),
   '@/components/layout/footer':file('footer',`export const Footer=()=>null;`),
@@ -54,7 +56,7 @@ before(async()=>{
   const initialLocation={...location};
   if(mode==='stale-cart'){location.name='Another branch';location.slug='another';}
   if(mode==='cross-brand-cart')location.brandId='different-brand';
-  const fixture={brand,location:mode==='empty-cart'?null:location,initialLocation:url.pathname==='/esmeralda/checkout'?undefined:initialLocation,pathname:url.pathname};
+  const fixture={managed:mode==='managed',brand,location:mode==='empty-cart'?null:location,initialLocation:url.pathname==='/esmeralda/checkout'?undefined:initialLocation,pathname:url.pathname};
   let markup;try{markup=await render(fixture);}catch(error){if(error.message==='NOT_FOUND'){res.statusCode=404;return res.end('Not found');}throw error;}
   res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root">'+markup+'</div><script>globalThis.fixture='+JSON.stringify(fixture)+'</script><script src="/bundle.js"></script></body></html>');
  });
@@ -136,3 +138,5 @@ test('legacy checkout retains exactly one compact header after cart restoration'
  assert.equal(await page.getByRole('banner').getByRole('link').count(),0);
  assert.equal(await page.getByRole('region',{name:'Lokationsoplysninger'}).count(),0);
 });
+
+test('managed route never advertises a stale legacy delivery price',async t=>{const page=await pageFor(t,390,'/esmeralda/amager?mode=managed');await page.getByText('Leveringspris beregnes i kassen').waitFor();assert.equal(await page.getByText('Levering fra: 49,00 kr.').count(),0);await page.getByText('Minimumsbestilling: 100,00 kr.').waitFor();});
