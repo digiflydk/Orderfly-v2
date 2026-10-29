@@ -225,3 +225,36 @@ test('other tenant retains generic palette and source-derived thank-you branding
  assert.equal(await page.getByRole('link',{name:'Besøg vores hjemmeside'}).getAttribute('href'),'/other');
  assert.equal(await page.locator('.es-header-v2__logo').count(),0);
 });
+
+for (const language of ['da','en']) for (const width of [390,1280]) test(`choice limits are actionable, preserve answers and allow cleared optional answers (${language}, ${width})`,async t=>{
+ const page=await setup(t,'/public',width);
+ const required={questionId:'meal',label:'Meal choices',type:'tags',isRequired:true,minSelection:2,maxSelection:2,options:['A','B','C'].map(id=>({id,label:id}))};
+ const optional={...required,questionId:'extra',label:'Extra choices',type:'multiple_options',isRequired:false};
+ f.records.set('feedbackQuestionsVersion/v1',{...f.records.get('feedbackQuestionsVersion/v1'),language,questions:[required,optional]});
+ if(language==='en')f.records.set('feedbackQuestionsVersion/en',{...f.records.get('feedbackQuestionsVersion/en'),isActive:false});
+ await page.reload();
+ const meal=page.getByRole('group',{name:'Meal choices*',exact:true}),extra=page.getByRole('group',{name:/Extra choices/});
+ const submit=page.getByRole('button',{name:language==='da'?'Send din feedback':'Send your feedback',exact:true});
+ const message=language==='da'?'Vælg præcis 2 muligheder.':'Select exactly 2 options.';
+ await meal.getByText(message,{exact:true}).waitFor();
+ let requests=0;page.on('request',request=>{if(request.url().endsWith('/action/public'))requests++;});
+ await meal.getByRole('checkbox',{name:'A',exact:true}).check();await submit.click();
+ await meal.getByRole('alert').filter({hasText:message}).waitFor();assert.equal(requests,0);
+ assert.equal(await meal.getByRole('checkbox',{name:'A',exact:true}).getAttribute('aria-invalid'),'true');
+ await meal.getByRole('checkbox',{name:'B',exact:true}).check();await meal.getByRole('checkbox',{name:'C',exact:true}).check();await submit.click();
+ await meal.getByRole('alert').filter({hasText:message}).waitFor();assert.equal(requests,0);
+ await meal.getByRole('checkbox',{name:'C',exact:true}).uncheck();
+ await extra.getByRole('checkbox',{name:'A',exact:true}).check();await submit.click();
+ await extra.getByRole('alert').filter({hasText:message}).waitFor();assert.equal(requests,0);
+ await extra.getByRole('checkbox',{name:'A',exact:true}).uncheck();
+ assert.equal(await extra.getByRole('alert').count(),0);
+ await page.route('**/action/public',route=>route.fulfill({status:503,body:'Unavailable'}));await submit.click();
+ await page.getByRole('alert').filter({hasText:language==='da'?'Dine svar er bevaret':'Your answers have been kept'}).waitFor();
+ assert.equal(await meal.getByRole('checkbox',{name:'A',exact:true}).isChecked(),true);
+ assert.equal(await meal.getByRole('checkbox',{name:'B',exact:true}).isChecked(),true);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.unroute('**/action/public');await submit.click();
+ await page.waitForURL('**/feedback/thank-you?brand='+esmeraldaBrand+'&lang='+language);
+ const entries=await f.admin.getFeedbackEntries();assert.equal(entries.length,1);
+ assert.deepEqual(entries[0].responses.meal.answer,['A','B']);assert.equal(entries[0].responses.extra,undefined);
+});
