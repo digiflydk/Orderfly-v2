@@ -3,7 +3,8 @@
 import { useMemo, useState } from 'react';
 import Link from '@/components/superadmin/admin-link';
 import { feedbackDate } from '@/lib/feedback/display';
-import { Eye, MoreHorizontal, Star, Trash2, X } from 'lucide-react';
+import { FeedbackRating } from '@/components/feedback/feedback-rating';
+import { Eye, MoreHorizontal, Trash2, X } from 'lucide-react';
 
 import type { Brand, Feedback, Location } from '@/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -34,14 +35,6 @@ interface FeedbackClientPageProps {
   canEdit?: boolean;
   editableBrandIds?: string[] | null;
 }
-
-const RatingStars = ({ rating }: { rating: number }) => (
-  <div className="flex items-center">
-    {[...Array(5)].map((_, i) => (
-      <Star key={i} className={`h-4 w-4 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />
-    ))}
-  </div>
-);
 
 const sourceOf = (feedback: FeedbackWithDetails) =>
   feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
@@ -113,7 +106,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
             const sourceId = feedback.sourceId || feedback.orderId || feedback.id;
             return <TableRow key={feedback.id}>
               <TableCell><div className="space-y-1"><Badge variant={source === 'booking' ? 'secondary' : 'outline'}>{source === 'booking' ? 'Booking' : 'Online order'}</Badge><div className="max-w-36 truncate font-mono text-xs text-muted-foreground" title={sourceId}>{sourceId}</div></div></TableCell>
-              <TableCell><RatingStars rating={feedback.rating} /></TableCell>
+              <TableCell><FeedbackRating rating={feedback.rating} /></TableCell>
               <TableCell>{feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>
               <TableCell>{feedbackDate(feedback.receivedAt)}</TableCell>

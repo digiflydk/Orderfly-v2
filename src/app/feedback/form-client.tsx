@@ -20,6 +20,32 @@ interface FeedbackFormClientProps {
   questionsVersion: ExperienceFeedbackQuestionsVersion;
 }
 
+type Question = ExperienceFeedbackQuestionsVersion['questions'][number];
+const isChoice = (question: Question) => question.type === 'tags' || question.type === 'multiple_options';
+function choiceInstruction(question: Question, english: boolean) {
+  const min = Math.max(question.isRequired ? 1 : 0, question.minSelection || 0);
+  const max = question.maxSelection && question.maxSelection > 0 ? question.maxSelection : null;
+  const instruction = min && min === max
+    ? (english ? `Select exactly ${min} ${min === 1 ? 'option' : 'options'}.` : `Vælg præcis ${min} ${min === 1 ? 'mulighed' : 'muligheder'}.`)
+    : min && max
+      ? (english ? `Select between ${min} and ${max} options.` : `Vælg mellem ${min} og ${max} muligheder.`)
+      : min
+        ? (english ? `Select at least ${min} ${min === 1 ? 'option' : 'options'}.` : `Vælg mindst ${min} ${min === 1 ? 'mulighed' : 'muligheder'}.`)
+        : max
+          ? (english ? `Select at most ${max} ${max === 1 ? 'option' : 'options'}.` : `Vælg højst ${max} ${max === 1 ? 'mulighed' : 'muligheder'}.`)
+          : '';
+  return instruction && !question.isRequired
+    ? (english ? `Optional. If you answer: ${instruction}` : `Valgfrit. Hvis du svarer: ${instruction}`)
+    : instruction;
+}
+function choiceError(question: Question, answer: unknown, english: boolean) {
+  const count = Array.isArray(answer) ? new Set(answer).size : 0;
+  if (!question.isRequired && count === 0) return null;
+  const min = Math.max(question.isRequired ? 1 : 0, question.minSelection || 0);
+  const max = question.maxSelection && question.maxSelection > 0 ? question.maxSelection : null;
+  return count < min || (max !== null && count > max) ? choiceInstruction(question, english) : null;
+}
+
 type ResponseValue = { type: string; answer: any; questionLabel: string };
 
 type FormValues = {
@@ -29,13 +55,23 @@ type FormValues = {
 export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormClientProps) {
   const { toast } = useToast();
   const copy = feedbackCopy[questionsVersion.language === 'en' ? 'en' : 'da'];
+  const [hasSubmitted, setHasSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: { responses: {} } });
   const { handleSubmit, watch, setValue } = form;
   const watchedResponses = watch('responses');
 
+  const english = questionsVersion.language === 'en';
+  const choiceErrors = Object.fromEntries(questionsVersion.questions.filter(isChoice).map(question =>
+    [question.questionId, hasSubmitted ? choiceError(question, watchedResponses[question.questionId]?.answer, english) : null]));
+
   const onSubmit = (data: FormValues) => {
+    setHasSubmitted(true);
+    if (questionsVersion.questions.some(question => isChoice(question) && choiceError(question, data.responses[question.questionId]?.answer, english))) {
+      setError(english ? 'Check the marked questions. Your answers have been kept.' : 'Kontrollér de markerede spørgsmål. Dine svar er bevaret.');
+      return;
+    }
     const missing = questionsVersion.questions.some(q => q.isRequired && (data.responses[q.questionId]?.answer === undefined || data.responses[q.questionId]?.answer === '' || (Array.isArray(data.responses[q.questionId]?.answer) && !data.responses[q.questionId].answer.length)));
     if (missing) { setError(copy.required); return; }
     const formData = new FormData();
@@ -45,7 +81,13 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     formData.append('questionVersionId', questionsVersion.id);
     formData.append('language', questionsVersion.language);
     if (context.invitationToken) formData.append('invitationToken', context.invitationToken);
-    formData.append('responses', JSON.stringify(data.responses));
+    // An unanswered optional choice is omitted, including after selecting and clearing it.
+    // The server still validates every provided answer against its authoritative form.
+    const responses = { ...data.responses };
+    for (const question of questionsVersion.questions) {
+      if (isChoice(question) && !question.isRequired && Array.isArray(responses[question.questionId]?.answer) && responses[question.questionId].answer.length === 0) delete responses[question.questionId];
+    }
+    formData.append('responses', JSON.stringify(responses));
 
     setError(null);
     startTransition(async () => {
@@ -126,7 +168,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
         const isRadio = question.type === 'multiple_options' && min === 1 && max === 1;
         if (isRadio) {
           return (
-            <RadioGroup onValueChange={(val) => handleValueChange(qid, question.label, question.type, [val])}>
+            <RadioGroup aria-describedby={`choice-help-${qid}${choiceErrors[qid] ? ` choice-error-${qid}` : ''}`} aria-invalid={Boolean(choiceErrors[qid])} onValueChange={(val) => handleValueChange(qid, question.label, question.type, [val])}>
               {(question.options || []).map((opt) => (
                 <div key={opt.id} className="flex items-center space-x-2">
                   <RadioGroupItem value={opt.label} id={`${qid}-${opt.id}`} />
@@ -143,6 +185,9 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
               <div key={opt.id} className="flex items-center space-x-2">
                 <Checkbox
                   id={`${qid}-${opt.id}`}
+                  checked={Array.isArray(response?.answer) && response.answer.includes(opt.label)}
+                  aria-describedby={`choice-help-${qid}${choiceErrors[qid] ? ` choice-error-${qid}` : ''}`}
+                  aria-invalid={Boolean(choiceErrors[qid])}
                   onCheckedChange={(checked) => {
                     const current = Array.isArray(response?.answer) ? response.answer : [];
                     const next = checked
@@ -182,7 +227,9 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
                 <div className="mb-4 flex items-start gap-3"><span aria-hidden="true" className="mt-0.5 text-xs font-semibold text-[var(--feedback-accent)]">{String(index + 1).padStart(2, '0')}</span>
                   <label id={`question-${question.questionId}`} htmlFor={question.type === 'text' ? `answer-${question.questionId}` : undefined} className="text-size-regular font-semibold">{question.label}{question.isRequired ? <span className="ml-1 text-[var(--feedback-accent)]">*</span> : <span className="ml-2 text-xs font-normal text-[var(--feedback-muted)]">({copy.optional})</span>}</label>
                 </div>
+                {isChoice(question) && <p id={`choice-help-${question.questionId}`} className="mb-3 text-sm text-[var(--feedback-muted)]">{choiceInstruction(question, english)}</p>}
                 {renderQuestion(question)}
+                {choiceErrors[question.questionId] && <p id={`choice-error-${question.questionId}`} role="alert" className="mt-3 text-sm text-red-500">{choiceErrors[question.questionId]}</p>}
               </div>
             ))}
           </fieldset>
