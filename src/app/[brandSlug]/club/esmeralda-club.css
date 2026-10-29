@@ -1,3 +1,10 @@
+/* Club headings retain their website typography when the shared commerce theme
+   changes its menu font. Match both the frame and its separately mounted footer. */
+[data-commerce-root][data-brand-slug="esmeralda"] :is([data-esmeralda-club], [data-esmeralda-club-footer]) :is(h1, h2, [role="dialog"] h3) {
+  font-family: 'Bourton Base', Impact, Arial Black, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+}
 /* Scoped to Esmeralda's club frame. The storefront, admin and other brands retain their own styles. */
 [data-esmeralda-club], [data-esmeralda-club-footer] {
   font-family: 'Brandon Text Office Regular', Arial, sans-serif;

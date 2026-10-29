@@ -132,6 +132,9 @@ for (const width of [320, 390, 820, 1440]) for (const view of ['login', 'signup'
     assert.equal(colors.button, 'rgb(245, 174, 37)');
     assert.equal(colors.ink, 'rgb(17, 17, 17)');
     assert.match(colors.heading, /Bourton Base/);
+    const clubHeadings = await page.locator('[data-esmeralda-club] h1, [data-esmeralda-club] h2, [data-esmeralda-club-footer] h2').evaluateAll(nodes => nodes.map(node => ({font:getComputedStyle(node).fontFamily, transform:getComputedStyle(node).textTransform})));
+    assert.ok(clubHeadings.length > 1);
+    for (const heading of clubHeadings) { assert.match(heading.font, /Bourton Base/); assert.equal(heading.transform, 'uppercase'); }
     if (width <= 1150) {
       assert.equal(await page.getByRole('navigation', { name: 'Primær navigation', exact: true }).isVisible(), false);
       await page.locator('.es-club-mobile-menu summary').click();

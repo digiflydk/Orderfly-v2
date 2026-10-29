@@ -36,3 +36,5 @@ An independent Codex review must approve the final commit, then the coordinator 
 ## Follow-up outside this menu slice
 
 Full checkout rearrangement, bag fee presentation, explicit quantity/stykpris in checkout, Club signup presentation and full paid-order confirmation QA remain separate work. No purchase or live data mutation is authorized by this visual regression suite. A menu release is not acceptance of those remaining checkout changes.
+
+Release regression follow-up: the shared commerce heading selector overrode Club login/signup typography after the Inter change. The Club stylesheet now explicitly scopes its existing Bourton heading treatment to the Esmeralda Club frame and footer. Browser coverage retains the original font assertion and checks all Club headings, while the menu continues using Inter.
