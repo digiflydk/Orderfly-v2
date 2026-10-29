@@ -738,7 +738,7 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "024eb001f4d00254fff4b757c5e15ca587d78b6c0c86a0aeeb8325f473ff6aa6",
+  "payload_sha256": "baf1a132dd9acc9435a64e9b52f69c68001759024afa53b457c4d37e8456ad8f",
   "routes": {
     "/": {
       "file": "index.html",
@@ -2491,9 +2491,9 @@
       "size": 35508
     },
     "/menu": {
-      "sha256": "6e2ad876a89f0e017838ab98c6048d39ad3da0c389084f19c4e9967e96efec59",
+      "sha256": "788468cc2951fc3ab0f395d4f4a5ec6cccabe18bac25770d0a4ad1844d2e58f2",
       "file": "menu.html",
-      "size": 138369
+      "size": 139012
     },
     "/menu/a-la-carte": {
       "sha256": "956969b7be62f8f0d7fa664a9ce438c7de36309519e49556f54e987e216d9f61",
@@ -3329,5 +3329,11 @@
     "pages": 103,
     "accessible_name": "Book bord",
     "destination": "/bordbooking"
+  },
+  "menu_filter_accessibility": {
+    "version": 1,
+    "route": "/menu",
+    "source_sha256": "6e2ad876a89f0e017838ab98c6048d39ad3da0c389084f19c4e9967e96efec59",
+    "scope": "native-keyboard-filter-and-no-inert-captcha"
   }
 }
