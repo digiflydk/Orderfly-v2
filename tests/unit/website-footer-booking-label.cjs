@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),zlib=require('node:zlib'),crypto=require('node:crypto');
 const manifest=require('../../preview/esmeralda/manifest.json');
+const {menuFilterBaseline}=require('../helpers/website-menu-filter-baseline.cjs');
 const payload=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`)))));
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const old='<a aria-label="Kontakt os" href="/bordbooking" class="footer_link">Book bord</a>',fixed='<a href="/bordbooking" class="footer_link">Book bord</a>';
@@ -8,6 +9,7 @@ test('103 corrected footer names are the only payload differences from ae203c3',
  const original=Object.fromEntries(Object.entries(manifest.routes).map(([route,e])=>{
   let body=Buffer.from(payload[route].data,'base64');
   assert.equal(hash(body),e.sha256,route);assert.equal(body.length,e.size,route);
+  body=menuFilterBaseline(route,body,manifest);
   if(e.file.endsWith('.html')&&route!=='/bordbooking'){
    const html=body.toString();assert.equal(html.split(fixed).length,2,route);assert.ok(!html.includes(old),route);
    // Reconstruct the exact reviewed parent, preserving every other label, URL,
