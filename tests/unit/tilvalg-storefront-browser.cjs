@@ -14,16 +14,18 @@ before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'tilvalg-storefront-browser-'));
  const entry=file('entry',`import React,{useState}from'react';import{createRoot}from'react-dom/client';
  import{ProductDialog}from ${JSON.stringify(path.join(root,'src/components/product/product-dialog.tsx'))};
+ import{StorefrontV2Provider}from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
  const product=${JSON.stringify(product)},groups=${JSON.stringify(groups)},toppings=${JSON.stringify(toppings)};
  if(location.search.includes('long')){product.toppingGroupIds.push('sauces','side');product.toppingGroupConditions={side:['sauce12']};groups.push({id:'side',groupName:'Tilbehør til sauce',minSelection:1,maxSelection:1,locationIds:['l']});toppings.push({id:'side1',groupId:'side',toppingName:'Brød',price:0,isActive:true,locationIds:['l']});groups.push({id:'sauces',groupName:'Saucer',minSelection:0,maxSelection:1,locationIds:['l']});for(let n=1;n<=12;n++)toppings.push({id:'sauce'+n,groupId:'sauces',toppingName:'Sauce '+n,price:n,isActive:true,locationIds:['l']});}
  if(location.search.includes('compact')){product.toppingGroupIds=['extras','removals'];product.toppingOverrides={};}
+ if(location.search.includes('requiredonly')){product.toppingGroupIds=['drink'];product.toppingOverrides={};}
  if(location.search.includes('wide')){product.productName='Pizza med ekstra mozzarella, grøntsager og friske krydderurter';product.price=12345.5;product.description='En fyldig pizza med grøntsager og frisk mozzarella. '.repeat(8);toppings[0].toppingName='Ekstra frisk mozzarella og grillede grøntsager';}
- function App(){const[open,setOpen]=useState(true);const[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved?{...window.saved,id:product.id,cartItemId:'saved',itemType:'product',productName:product.productName,brandId:product.brandId,price:75,itemTotal:75}:undefined);setOpen(true);}}>Rediger gemt</button><ProductDialog product={product} initialItem={initialItem} allToppingGroups={groups} allToppings={toppings} isOpen={open} setIsOpen={setOpen}/></>};createRoot(document.getElementById('root')).render(<App/>);`);
+ function App(){const[open,setOpen]=useState(true);const[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved?{...window.saved,id:product.id,cartItemId:'saved',itemType:'product',productName:product.productName,brandId:product.brandId,price:75,itemTotal:75}:undefined);setOpen(true);}}>Rediger gemt</button><ProductDialog product={product} initialItem={initialItem} allToppingGroups={groups} allToppings={toppings} isOpen={open} setIsOpen={setOpen}/></>};createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={new URLSearchParams(location.search).has('v2')}><App/></StorefrontV2Provider>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const cart=file('cart',`const value={cartReady:true,deliveryType:'pickup',location:{id:'l'},cartTotal:0,addToCart:(product,quantity,toppings,basePrice,finalPrice)=>{window.saved={productId:product.id,quantity,toppings,basePrice,finalPrice};return true;}};export const useCart=()=>value;`);
  const aliases={
   '@/context/cart-context':cart,
-  '@/context/storefront-catalog':file('catalog',`const data={products:[${JSON.stringify(product)}],combos:[]};export const useStorefrontCatalog=()=>data;`),
+  '@/context/storefront-catalog':file('catalog',`const data={products:[${JSON.stringify(product)}],combos:new URLSearchParams(location.search).has('upgrade')?[{id:'test-combo',comboName:'Testmenu',pickupPrice:100,upgradeProductIds:['pizza'],productGroups:[{groupName:'Pizza',productIds:['pizza']}]}]:[]};export const useStorefrontCatalog=()=>data;`),
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'test'});`),
   '@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/lib/public-read':file('public-read',`export const publicRead=async()=>[];`),
@@ -40,10 +42,10 @@ before(async()=>{
   plugins:[new webpackModule.webpack.NormalModuleReplacementPlugin(/^\.\/combo-builder-dialog$/,resource=>{resource.request=aliases['@/components/product/combo-builder-dialog'];})],
   resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/tilvalg-storefront-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  execFileSync(path.join(root,'node_modules/.bin/tailwindcss'),['-c',path.join(root,'tailwind.config.ts'),'-i',path.join(root,'src/app/globals.css'),'-o',path.join(dir,'styles.css'),'--minify'],{cwd:root,stdio:'pipe'});
- let styles=fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
+ let styles=fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8');
  const fontDir=process.env.TILVALG_FONT_DIR;
  if(fontDir) styles+="@font-face{font-family:'Bourton Base';src:url('/heading.woff2')}@font-face{font-family:'Brandon Text Office Regular';src:url('/body.ttf')}";
- server=http.createServer((req,res)=>{if(req.url==='/product.svg'){res.setHeader('content-type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#28231b"/><circle cx="32" cy="32" r="25" fill="#c99950"/><circle cx="32" cy="32" r="21" fill="#f0cc78"/><g fill="#a94c37"><circle cx="23" cy="23" r="5"/><circle cx="40" cy="25" r="5"/><circle cx="31" cy="42" r="5"/></g></svg>');}if(fontDir&&['/heading.woff2','/body.ttf'].includes(req.url)){res.setHeader('content-type',req.url.endsWith('.woff2')?'font/woff2':'font/ttf');return res.end(fs.readFileSync(path.join(fontDir,req.url.slice(1))));}if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(styles);}if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');res.end(fs.readFileSync(path.join(dir,'bundle.js')));}else{res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div data-commerce-root data-brand-slug="esmeralda" id="root"></div><script src="/bundle.js"></script></body></html>');}});
+ server=http.createServer((req,res)=>{if(req.url==='/product.svg'){res.setHeader('content-type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#28231b"/><circle cx="32" cy="32" r="25" fill="#c99950"/><circle cx="32" cy="32" r="21" fill="#f0cc78"/><g fill="#a94c37"><circle cx="23" cy="23" r="5"/><circle cx="40" cy="25" r="5"/><circle cx="31" cy="42" r="5"/></g></svg>');}if(fontDir&&['/heading.woff2','/body.ttf'].includes(req.url)){res.setHeader('content-type',req.url.endsWith('.woff2')?'font/woff2':'font/ttf');return res.end(fs.readFileSync(path.join(fontDir,req.url.slice(1))));}if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(styles);}if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');res.end(fs.readFileSync(path.join(dir,'bundle.js')));}else{res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div data-commerce-root data-brand-slug="esmeralda" id="root"'+(new URL(req.url,'http://localhost').searchParams.has('v2')?' data-storefront-version="2"':'')+'></div><script src="/bundle.js"></script></body></html>');}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
@@ -194,4 +196,58 @@ test('long names, quantity100 and high total remain readable at320px',async t=>{
  const textFits=await optionRow.locator('.commerce-option-label > span').evaluate(el=>el.scrollWidth<=el.clientWidth+1);assert.equal(textFits,true);
  const box=await submit.boundingBox();assert.ok(box.y+box.height<=568);
  if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,'storefront-long-name-320.png'),fullPage:true});
+});
+
+// The same production modifier UI under the server-selected V2 context.
+// Fixtures are local and never become merchant catalog data.
+for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required choices, saved customization and pinned rectangular action (${width}x${height})`,async t=>{
+ const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});t.after(()=>context.close());
+ const page=await context.newPage();page.setDefaultTimeout(7000);const errors=[];page.on('pageerror',error=>errors.push(error.message));
+ await page.goto(origin+'/?v2&long');
+ const panel=page.getByRole('dialog');await panel.waitFor();
+ assert.equal(await panel.getAttribute('data-storefront-version'),'2');
+ assert.equal(await page.locator('#root').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(23, 22, 20)');
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).getPropertyValue('--primary').trim()),'40 58% 61%');
+ await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
+ assert.equal(await page.evaluate(()=>window.saved),undefined,'required choices must block add');
+ await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ await page.getByRole('button',{name:'Flere Ost',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:'Flere Ost',exact:true}).isDisabled(),true,'maximum quantity remains enforced');
+ await page.getByRole('button',{name:'Fjern ingredienser',exact:true}).click();
+ await page.getByRole('checkbox',{name:'Uden løg',exact:true}).check();
+ await page.getByRole('button',{name:'Saucer',exact:true}).click();
+ await page.getByRole('button',{name:'Vis alle (12)',exact:true}).click();
+ await page.getByRole('radio',{name:'Sauce 12',exact:true}).check();
+ await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
+ assert.equal(await page.evaluate(()=>window.saved),undefined,'conditional required choice must block add');
+ await page.getByRole('radio',{name:'Brød',exact:true}).check();
+ const submit=page.getByRole('button',{name:/Tilføj til kurv/});
+ await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
+ const bounds=await submit.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+1,'action stays in viewport after content scroll');
+ assert.equal(await submit.evaluate(el=>getComputedStyle(el).borderRadius),'6px');
+ assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(213, 176, 98)');
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(23, 22, 20)');
+ assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'dialog must not overflow horizontally');
+ await submit.click();
+ const saved=await page.evaluate(()=>window.saved);assert.equal(saved.quantity,1);assert.equal(saved.toppings.find(x=>x.id==='cheese').quantity,3);
+ assert.equal(saved.toppings.find(x=>x.id==='onion').name,'Uden løg');assert.equal(saved.toppings.some(x=>x.id==='water'),true);assert.equal(saved.toppings.some(x=>x.id==='cola'),false);
+ assert.equal(saved.toppings.some(x=>x.id==='sauce12'),true);assert.equal(saved.toppings.some(x=>x.id==='side1'),true);
+ await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
+ assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'3');
+ assert.equal(await page.getByRole('radio',{name:'Vand',exact:true}).isChecked(),true);
+ await page.getByRole('button',{name:'Fjern ingredienser',exact:true}).click();assert.equal(await page.getByRole('checkbox',{name:'Uden løg',exact:true}).isChecked(),true);
+ await page.getByRole('button',{name:/Gem ændringer/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings,saved.toppings);
+ assert.deepEqual(errors,[]);
+});
+
+test('V2 menu upgrade cannot discard chosen product modifiers',async t=>{
+ const context=await browser.newContext({viewport:{width:390,height:850},reducedMotion:'reduce'});t.after(()=>context.close());
+ const page=await context.newPage();await page.goto(origin+'/?v2&compact&upgrade');
+ const upgrade=page.getByRole('button',{name:'Vælg menu',exact:true});await upgrade.waitFor();assert.equal(await upgrade.isEnabled(),true);
+ await page.getByRole('checkbox',{name:'Ost',exact:true}).check();
+ assert.equal(await upgrade.isDisabled(),true);assert.equal(await page.getByText('Denne menu understøtter ikke rettens tilvalg. Læg retten i kurven for at beholde dine valg.').isVisible(),true);
+ await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ assert.equal((await page.evaluate(()=>window.saved)).toppings.find(x=>x.id==='cheese').quantity,1);
+ await page.goto(origin+'/?v2&requiredonly&upgrade');await upgrade.waitFor();
+ assert.equal(await upgrade.isDisabled(),true,'unselected required group cannot be bypassed by upgrading');
 });

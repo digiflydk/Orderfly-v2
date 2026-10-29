@@ -33,3 +33,9 @@ export function paymentMethodLabel(order: { paymentMethod?: string; paymentStatu
   }
   return order.paymentMethod === 'Cash' ? 'Kontant' : 'Online betaling';
 }
+
+// V2 hands payment selection to the configured hosted provider. Never enable a disabled method.
+export function storefrontCheckoutMethods(location: { paymentMethods?: LocationPaymentMethods }, mode: 'pickup' | 'delivery', hostedOnly = false) {
+  const methods = availableCheckoutMethods(location, mode);
+  return hostedOnly ? methods.filter(method => method === 'online') : methods;
+}

@@ -1,5 +1,6 @@
 
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { money } from '@/lib/money';
 
 import { useState, useEffect, useMemo, useRef, useId } from 'react';
@@ -50,6 +51,7 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 }
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, onSaved }: ComboBuilderDialogProps) {
+  const isV2 = useStorefrontV2();
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
   const { toast } = useToast();
@@ -183,7 +185,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
                 <div className="commerce-option-header">

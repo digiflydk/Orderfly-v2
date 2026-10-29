@@ -1,0 +1,69 @@
+/* #780: the server-selected V2 marker is also supplied to portalled panels.
+   No selector applies to V1 or changes the catalog/business rules. */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]),
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-commerce-root],
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-storefront-version="2"] {
+  --background: 30 6% 8% !important;
+  --foreground: 40 20% 96% !important;
+  --card: 30 5% 12%;
+  --card-foreground: 40 20% 96%;
+  --popover: 30 5% 12%;
+  --popover-foreground: 40 20% 96%;
+  --primary: 40 58% 61% !important;
+  --primary-foreground: 30 20% 9% !important;
+  --secondary: 30 5% 18% !important;
+  --secondary-foreground: 40 20% 96%;
+  --muted: 30 5% 18%;
+  --muted-foreground: 35 9% 72%;
+  --accent: 35 12% 20%;
+  --accent-foreground: 40 20% 96%;
+  --border: 35 7% 25% !important;
+  --input: 35 7% 30%;
+  --ring: 40 58% 61%;
+  --storefront-menu-background: #171614;
+  --storefront-nav-background: #171614f5;
+  --commerce-yellow: #d5b062;
+  --commerce-yellow-hover: #e1c17e;
+  font-family: 'Esmeralda Inter', Arial, sans-serif;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+}
+/* Specificity deliberately exceeds the legacy Esmeralda theme. */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-commerce-root],
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-commerce-panel],
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-storefront-header],
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .commerce-option-quantity {
+  background: #171614;
+  color: #f8f5ef;
+}
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) :is(h1,h2,h3) { font-family: 'Esmeralda Inter', Arial, sans-serif; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-ui-button] { border-radius: 6px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-ui-button]:is([data-ui-variant="default"], [data-ui-variant="brand"]),
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-storefront-header] [data-ui-button][data-ui-variant="default"],
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) button[aria-current="true"] {
+  background: #d5b062; color: #211a0d; border-color: #d5b062;
+}
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-ui-button]:is([data-ui-variant="outline"], [data-ui-variant="ghost"], [data-ui-variant="secondary"]) { color: #f8f5ef; border-color: #514b40; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) :is(button,a,input):focus-visible { outline-color: #d5b062; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-menu-hero] { min-height: 180px; margin-block: 12px 16px; border-radius: 8px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .storefront-hero-copy { padding: 24px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .storefront-hero-copy h1 { font-size: clamp(26px, 3vw, 38px); }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product-card] { padding: 18px 0; gap: 16px; border-color: #3d382e; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product-card] h3 { font-size: 17px; line-height: 1.35; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product-card] img { border-radius: 6px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] { height: min(90dvh, 820px) !important; border-radius: 10px 10px 0 0 !important; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] > div { flex: 1; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options-scroll] { flex: 1; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] .commerce-option-header { grid-template-columns: 112px minmax(0, 1fr); padding: 24px 16px 16px; gap: 16px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] .commerce-option-image { width: 112px; height: 112px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .commerce-product-footer { background: #1e1c18; box-shadow: 0 -8px 24px #0003; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .commerce-option-group { padding-block: 12px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-option-row]:has([data-state="checked"]) { background: #d5b06214; box-shadow: inset 0 0 0 1px #d5b06255; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-option-row] input[type="radio"] { accent-color: #d5b062; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .commerce-inline-offers { background: #252117; border-color: #665534; }
+@media (max-width: 639px) {
+  body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-menu-hero] { min-height: 140px; }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .storefront-hero-copy { padding: 16px; }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] .commerce-option-header { grid-template-columns: 88px minmax(0, 1fr); }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-product-options] .commerce-option-image { width: 88px; height: 88px; }
+}

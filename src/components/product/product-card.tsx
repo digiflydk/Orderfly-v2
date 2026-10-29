@@ -1,5 +1,6 @@
 
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 
 import Image from 'next/image';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
@@ -48,6 +49,7 @@ export function ProductCardSkeleton() {
 
 
 export function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false }: ProductCardProps) {
+  const isV2 = useStorefrontV2();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
   const [allToppings, setAllToppings] = useState<any[]>([]);
@@ -108,7 +110,7 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
 
   return (
     <>
-      <article
+      <article data-v2-product-card={isV2 || undefined}
         className={cn("group flex w-full items-start gap-4 cursor-pointer border-b", compact ? "py-3" : "py-4")}
         onClick={handleCardClick}
       >
@@ -150,12 +152,12 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
             <Button type="button" aria-label={`Tilføj ${product.productName}`} aria-busy={isPending} disabled={isPending || !cartReady} onClick={event => {
               event.stopPropagation();
               if(upsellId && upsellAdded.current)return;
-              if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
+              if (isV2 || product.toppingGroupIds?.length) {void handleCardClick(); return;}
               if (addToCart(product,1,[],basePrice,finalPrice,undefined,upsellId) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
               trackEvent('add_to_cart', {productId: product.id, locationId: location?.id, itemsCount: 1, cartValue: finalPrice, deliveryType});
               onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
-            }} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
-                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
+            }} size={isV2 ? "default" : "icon"} className={cn("h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0", isV2 ? "px-4" : "w-11")}>
+                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : isV2 ? "Tilføj" : <Plus className="h-5 w-5"/>}
             </Button>
           </div>
         </div>

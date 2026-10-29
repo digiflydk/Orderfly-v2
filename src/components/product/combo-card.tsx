@@ -1,6 +1,7 @@
 
 
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { money } from '@/lib/money';
 
 import {formatPrice} from '@/lib/storefront-format';
@@ -21,6 +22,7 @@ interface ComboCardProps {
 }
 
 export function ComboCard({ combo, brandProducts }: ComboCardProps) {
+  const isV2 = useStorefrontV2();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { deliveryType } = useCart();
   
@@ -31,7 +33,7 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
 
   return (
     <>
-      <div 
+      <div data-v2-product-card={isV2 || undefined}
         className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
         onClick={() => { if (price !== undefined) setIsDialogOpen(true); }}
       >
@@ -63,8 +65,8 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
           </div>
           <div className="flex items-center justify-between mt-2">
             <p className="font-semibold text-foreground">{price===undefined?'Ikke tilgængelig':formatPrice(price)}</p>
-            <Button disabled={price === undefined} type="button" aria-label={`Tilføj ${combo.comboName}`} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
-              <Plus className="h-5 w-5"/>
+            <Button disabled={price === undefined} type="button" aria-label={`Tilføj ${combo.comboName}`} size={isV2 ? "default" : "icon"} className={`h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0 ${isV2 ? "px-4" : "w-11"}`}>
+              {isV2 ? "Vælg menu" : <Plus className="h-5 w-5"/>}
             </Button>
           </div>
         </div>

@@ -1,3 +1,7 @@
+import '@/styles/storefront-v2-checkout.css';
+import { headers } from 'next/headers';
+import { isEsmeraldaV2Host } from '@/lib/esmeralda-v2-host';
+import { StorefrontV2Provider } from '@/context/storefront-v2-context';
 
 import { notFound } from 'next/navigation';
 import { getBrandBySlug } from '@/lib/data/brand-location';
@@ -44,29 +48,34 @@ export default async function BrandLayout({
     );
   }
 
+  const requestHeaders = await headers();
+  const v2 = brand.slug === 'esmeralda' && isEsmeraldaV2Host(requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host'));
+
   return (
-    <AnalyticsProvider brand={brand}>
-      <BrandTracking brand={brand} />
-      <CartProvider>
-        <div data-commerce-root data-brand-slug={brand.slug}
-          style={
-            {
-              '--primary': brand.appearances?.colors.primary,
-              '--secondary': brand.appearances?.colors.secondary,
-              '--background': brand.appearances?.colors.background,
-              '--foreground': brand.appearances?.colors.text,
-              '--border': brand.appearances?.colors.border,
-              '--primary-foreground': brand.appearances?.colors.buttonText,
-              fontFamily: brand.appearances?.typography.fontFamily,
-            } as React.CSSProperties
-          }
-        >
-          <BrandLayoutClient brand={brand}>
-            {children}
-          </BrandLayoutClient>
-        </div>
-        <DeliveryModalHost />
-      </CartProvider>
-    </AnalyticsProvider>
+    <StorefrontV2Provider enabled={v2}>
+      <AnalyticsProvider brand={brand}>
+        <BrandTracking brand={brand} />
+        <CartProvider>
+          <div data-commerce-root data-brand-slug={brand.slug} data-storefront-version={v2 ? '2' : undefined}
+            style={
+              {
+                '--primary': brand.appearances?.colors.primary,
+                '--secondary': brand.appearances?.colors.secondary,
+                '--background': brand.appearances?.colors.background,
+                '--foreground': brand.appearances?.colors.text,
+                '--border': brand.appearances?.colors.border,
+                '--primary-foreground': brand.appearances?.colors.buttonText,
+                fontFamily: brand.appearances?.typography.fontFamily,
+              } as React.CSSProperties
+            }
+          >
+            <BrandLayoutClient brand={brand}>
+              {children}
+            </BrandLayoutClient>
+          </div>
+          <DeliveryModalHost />
+        </CartProvider>
+      </AnalyticsProvider>
+    </StorefrontV2Provider>
   );
 }

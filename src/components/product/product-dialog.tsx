@@ -1,5 +1,6 @@
 
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { lineMoney, money, sumMoney } from '@/lib/money';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, cartTopping, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
@@ -58,6 +59,7 @@ const getSelectionText = (group: ToppingGroup): string => {
 
 
 export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount, initialItem, onAdded, upsellId }: ProductDialogProps) {
+  const isV2 = useStorefrontV2();
   const {combos, products} = useStorefrontCatalog();
   const [upgrade, setUpgrade] = useState<ComboMenu | null>(null);
   const [showErrors, setShowErrors] = useState(false);
@@ -229,7 +231,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent data-commerce-panel="options" data-product-options className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" data-product-options className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
         <div className="flex min-h-0 flex-col overflow-hidden">
             <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
@@ -263,11 +265,14 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     const price = deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice;
                     if (price === undefined) return null;
                     const delta=price-finalPrice-toppingsTotal;
+                    // Combos currently store product IDs, not per-product modifiers.
+                    // Never discard V2 choices by switching into that narrower model.
+                    const incompatibleUpgrade = isV2 && (Object.keys(selectedToppings).length > 0 || requiredGroups.length > 0);
                     return <section className="commerce-inline-offers" key={c.id}>
                       <h3 className="font-semibold">Gør det til {c.comboName}</h3><p className="text-sm">{c.description || c.productGroups.map(g=>g.groupName).join(' + ')}</p>
                       <p className="text-sm">{formatPrice(price)} pr. menu · {delta>=0?`+${formatPrice(delta)}`:`Spar ${formatPrice(-delta)}`} pr. stk.</p>
-                      {Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
-                      <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>Vælg menu</Button>
+                      {incompatibleUpgrade ? <p className="text-sm" role="status">Denne menu understøtter ikke rettens tilvalg. Læg retten i kurven for at beholde dine valg.</p> : Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
+                      <Button className="mt-2 w-full" disabled={incompatibleUpgrade} onClick={() => { if (!incompatibleUpgrade) setUpgrade(c); }}>Vælg menu</Button>
                     </section>;
                   })}
                 </div>
