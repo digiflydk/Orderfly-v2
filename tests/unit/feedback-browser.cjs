@@ -7,7 +7,7 @@ const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.
 const esmeraldaBrand='oeypKaMyYcQjIwaa1PtV';
 async function thankYouProps(query){
  const ts=require('typescript'),jsx=(type,props)=>({type,props});
- const mocks={...f.mocks,'react/jsx-runtime':{jsx,jsxs:jsx},'@/components/feedback/thank-you-view':{FeedbackThankYouView:'view'},'@/lib/next/resolve-props':{resolveSearchParams:async p=>p},'@/lib/feedback/presentation':require('../helpers/load-ts.cjs').loadTs('src/lib/feedback/presentation.ts',{})};
+ const mocks={...f.mocks,'@/lib/feedback/external-review-receipt':require('../helpers/load-ts.cjs').loadTs('src/lib/feedback/external-review-receipt.ts',f.mocks),'react/jsx-runtime':{jsx,jsxs:jsx},'@/components/feedback/thank-you-view':{FeedbackThankYouView:'view'},'@/lib/next/resolve-props':{resolveSearchParams:async p=>p},'@/lib/feedback/presentation':require('../helpers/load-ts.cjs').loadTs('src/lib/feedback/presentation.ts',{})};
  const code=ts.transpileModule(fs.readFileSync('src/app/feedback/thank-you/page.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
  const mod={exports:{}};new Function('require','module','exports',code)(name=>{assert.ok(name in mocks,name);return mocks[name]},mod,mod.exports);
  return (await mod.exports.default({searchParams:Promise.resolve(Object.fromEntries(new URLSearchParams(query)))})).props;
@@ -257,4 +257,28 @@ for (const language of ['da','en']) for (const width of [390,1280]) test(`choice
  await page.waitForURL('**/feedback/thank-you?brand='+esmeraldaBrand+'&lang='+language);
  const entries=await f.admin.getFeedbackEntries();assert.equal(entries.length,1);
  assert.deepEqual(entries[0].responses.meal.answer,['A','B']);assert.equal(entries[0].responses.extra,undefined);
+});
+
+for(const language of ['da','en'])for(const width of [390,1280])test(`external review invitation follows saved feedback and is dismissible (${language}, ${width})`,async t=>{
+ const page=await setup(t,'/public',width);
+ f.records.set('feedbackSettings/'+esmeraldaBrand,{externalReviewsEnabled:true,externalReviewsMinRating:4.7,googleReviewUrl:'https://g.page/r/example/review',trustpilotReviewUrl:'https://www.trustpilot.com/evaluate/example.com'});
+ f.records.set('feedbackQuestionsVersion/v1',{...f.records.get('feedbackQuestionsVersion/v1'),language});if(language==='en')f.records.set('feedbackQuestionsVersion/en',{...f.records.get('feedbackQuestionsVersion/en'),isActive:false});
+ await page.reload();await page.getByRole('button',{name:language==='da'?'5 stjerner':'5 stars',exact:true}).click();
+ await page.getByRole('button',{name:language==='da'?'Send din feedback':'Send your feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?**');
+ const google=page.getByRole('link',{name:language==='da'?'Anmeld på Google':'Review on Google',exact:true});await google.waitFor();assert.equal(await google.getAttribute('href'),'https://g.page/r/example/review');assert.equal(await google.getAttribute('rel'),'noopener noreferrer');assert.equal(await google.getAttribute('target'),'_blank');
+ await page.getByRole('link',{name:language==='da'?'Anmeld på Trustpilot':'Review on Trustpilot',exact:true}).waitFor();assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedback/')).length,1);assert.equal(new URL(page.url()).searchParams.has('receipt'),false);
+ await page.getByRole('button',{name:language==='da'?'Nej tak':'No thanks',exact:true}).click();assert.equal(await google.count(),0);assert.equal([...f.records.keys()].filter(k=>k.startsWith('feedback/')).length,1);
+});
+test('external review settings save, persist, disable without losing URLs and protect viewers',async t=>{
+ const page=await setup(t,'/settings',390);await page.locator('#externalReviewsEnabled').check();await page.locator('#externalReviewsMinRating').fill('4.5');await page.locator('#googleReviewUrl').fill('https://g.page/r/example/review');await page.locator('#trustpilotReviewUrl').fill('https://www.trustpilot.com/evaluate/example.com');await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByText('Indstillingerne er gemt.',{exact:true}).waitFor();await page.reload();assert.equal(await page.locator('#externalReviewsEnabled').isChecked(),true);assert.equal(await page.locator('#externalReviewsMinRating').inputValue(),'4.5');
+ await page.locator('#externalReviewsEnabled').uncheck();await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByText('Indstillingerne er gemt.',{exact:true}).waitFor();await page.reload();assert.equal(await page.locator('#externalReviewsEnabled').isChecked(),false);assert.equal(await page.locator('#googleReviewUrl').inputValue(),'https://g.page/r/example/review');
+ f.auth.uid='qa-viewer';await page.reload();for(const id of ['externalReviewsEnabled','externalReviewsMinRating','googleReviewUrl','trustpilotReviewUrl'])assert.equal(await page.locator('#'+id).isDisabled(),true);
+});
+
+test('direct forged query cannot reveal links; single configured provider appears after save',async t=>{
+ const page=await setup(t,'/public',390,'b');f.records.set('feedbackSettings/b',{externalReviewsEnabled:true,externalReviewsMinRating:4.7,googleReviewUrl:'https://g.page/r/example/review',trustpilotReviewUrl:''});
+ await page.goto(origin+'/feedback/thank-you?brand=b&rating=5&lang=da');await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Google',exact:true}).count(),0);
+ await page.goto(origin+'/public');await page.getByRole('button',{name:'5 stjerner',exact:true}).click();await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?**');await page.getByRole('link',{name:'Anmeld på Google',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Trustpilot',exact:true}).count(),0);
+ f.records.set('feedbackSettings/b',{...f.records.get('feedbackSettings/b'),externalReviewsEnabled:false});await page.reload();await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Google',exact:true}).count(),0);
 });
