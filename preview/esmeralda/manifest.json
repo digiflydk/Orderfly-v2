@@ -738,12 +738,12 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "c27fdc619287fbec9a368e03c2b92bcb97ed51208ce8fa2dd5dae55de5114ad0",
+  "payload_sha256": "ac57a0460f65b369178b1a073a10459d84750c709707f8e2001a872a26d1a448",
   "routes": {
     "/": {
-      "sha256": "6bb65ee619f69527648f8fe7d9dd50f309de292a3178dbdf4c1f4105100ebeea",
       "file": "index.html",
-      "size": 72587
+      "size": 166022,
+      "sha256": "b29330ec4d5c9ddf9e0163ccaf464b6888eb9129ab844847ed26db75dda13728"
     },
     "/_assets/013d8df1119a2bab0fef8d13.css": {
       "sha256": "f01cb0f3418cc744e15712bf50aafa27c5125f05e13ff9b5ca021c7e6c217685",
@@ -2619,6 +2619,156 @@
       "sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
       "file": "_assets/website-consent.js",
       "size": 9468
+    },
+    "/_assets/9553e41a4710bdd1859d8a74.avif": {
+      "sha256": "9553e41a4710bdd1859d8a74b4f3f7311451eea7e13b90db39190e3ef6062d06",
+      "size": 28117,
+      "file": "_assets/9553e41a4710bdd1859d8a74.avif"
+    },
+    "/_assets/d0f47115d76114229818f317.avif": {
+      "sha256": "d0f47115d76114229818f317f1421c80d12f40627b21978ac4d1f8fa05493f15",
+      "size": 57351,
+      "file": "_assets/d0f47115d76114229818f317.avif"
+    },
+    "/_assets/9cd59357594e89254dbf314d.avif": {
+      "sha256": "9cd59357594e89254dbf314d72a232b455044b198d7583e432db7f588437c511",
+      "size": 113719,
+      "file": "_assets/9cd59357594e89254dbf314d.avif"
+    },
+    "/_assets/d97822b421686f72e137424f.avif": {
+      "sha256": "d97822b421686f72e137424f031067426acd8e610e9e14d84abadc4bb4322b96",
+      "size": 9916,
+      "file": "_assets/d97822b421686f72e137424f.avif"
+    },
+    "/_assets/4a11900fdbc49da0d3bf2b3c.avif": {
+      "sha256": "4a11900fdbc49da0d3bf2b3c9a3d990d22ef9d6ffd68bc698dabb2fc22f3d89e",
+      "size": 19696,
+      "file": "_assets/4a11900fdbc49da0d3bf2b3c.avif"
+    },
+    "/_assets/15d84fc294f89fa80f37e1fb.avif": {
+      "sha256": "15d84fc294f89fa80f37e1fb9e93dd18d935a7b43d091d39cee24fd702e8d92c",
+      "size": 36728,
+      "file": "_assets/15d84fc294f89fa80f37e1fb.avif"
+    },
+    "/_assets/3a9877e0b4b7f75cf6a37711.avif": {
+      "sha256": "3a9877e0b4b7f75cf6a377118d37cfd326119d4497db6333e2f995d4c2ae761a",
+      "size": 23165,
+      "file": "_assets/3a9877e0b4b7f75cf6a37711.avif"
+    },
+    "/_assets/fba8cbe54479b70f09abea33.avif": {
+      "sha256": "fba8cbe54479b70f09abea33413e19fe732793d0ad83c181a754fbf732f93b48",
+      "size": 37176,
+      "file": "_assets/fba8cbe54479b70f09abea33.avif"
+    },
+    "/_assets/895f205e5a7b1b77bcf23732.avif": {
+      "sha256": "895f205e5a7b1b77bcf237321ff66dea70786b88a6fce086c9870a6b371b19f0",
+      "size": 51223,
+      "file": "_assets/895f205e5a7b1b77bcf23732.avif"
+    },
+    "/_assets/3de22975c2c9ecf7292e4150.avif": {
+      "sha256": "3de22975c2c9ecf7292e4150da4d22405cdf49a76dbdd1045ed1d7ce74c195b2",
+      "size": 21990,
+      "file": "_assets/3de22975c2c9ecf7292e4150.avif"
+    },
+    "/_assets/a81cbf05056826018ffd101d.avif": {
+      "sha256": "a81cbf05056826018ffd101d136815ee03fd48783d48ab65c5390542b7ab2826",
+      "size": 55631,
+      "file": "_assets/a81cbf05056826018ffd101d.avif"
+    },
+    "/_assets/a2a8ed75e5ae4b8ba053e8f5.avif": {
+      "sha256": "a2a8ed75e5ae4b8ba053e8f517c1c784a67aa944a65b69cf3bc08d2bffe476af",
+      "size": 32715,
+      "file": "_assets/a2a8ed75e5ae4b8ba053e8f5.avif"
+    },
+    "/_assets/c05ce4c377a4d94f53a143c4.avif": {
+      "sha256": "c05ce4c377a4d94f53a143c4f7ce1de26426265fbc8c8b05de1a8b26026aadf8",
+      "size": 77582,
+      "file": "_assets/c05ce4c377a4d94f53a143c4.avif"
+    },
+    "/_assets/860f22b02842abc2fbba4bfb.avif": {
+      "sha256": "860f22b02842abc2fbba4bfbe5a15f8ead6ec93fbb6fda5fe6e1ddaaf30e533b",
+      "size": 17104,
+      "file": "_assets/860f22b02842abc2fbba4bfb.avif"
+    },
+    "/_assets/ab10d2e46ec7bba56e727b69.avif": {
+      "sha256": "ab10d2e46ec7bba56e727b69585facd4984e1ce769453e7f5d745b973622ac62",
+      "size": 34015,
+      "file": "_assets/ab10d2e46ec7bba56e727b69.avif"
+    },
+    "/_assets/71613501937b5dd498db67f8.avif": {
+      "sha256": "71613501937b5dd498db67f837d4282c6252fe7da965a0f44d707c3a76415ece",
+      "size": 56979,
+      "file": "_assets/71613501937b5dd498db67f8.avif"
+    },
+    "/_assets/a4b288329d6a46e0eb94a1c5.avif": {
+      "sha256": "a4b288329d6a46e0eb94a1c58e923730747a365dce10d0af405b4b923e92d93f",
+      "size": 13771,
+      "file": "_assets/a4b288329d6a46e0eb94a1c5.avif"
+    },
+    "/_assets/081464f451ff6abea9d3dc41.avif": {
+      "sha256": "081464f451ff6abea9d3dc41be3555c397a85d3248e12f9a2e05ab75e0b59088",
+      "size": 24431,
+      "file": "_assets/081464f451ff6abea9d3dc41.avif"
+    },
+    "/_assets/7c4237d704dc23d1f6b0f96d.avif": {
+      "sha256": "7c4237d704dc23d1f6b0f96dc97523f714394b1961890e55ed40f51626533ec4",
+      "size": 29542,
+      "file": "_assets/7c4237d704dc23d1f6b0f96d.avif"
+    },
+    "/_assets/9c61ccb71611d5fc6d33bcf6.avif": {
+      "sha256": "9c61ccb71611d5fc6d33bcf612980031298cc74aa66ee357c2f1f3a1e5d7ea4c",
+      "size": 21861,
+      "file": "_assets/9c61ccb71611d5fc6d33bcf6.avif"
+    },
+    "/_assets/2097d3bdde3c88d6762933fb.avif": {
+      "sha256": "2097d3bdde3c88d6762933fba28e419092a55b75368e07d8c6b8d0247397ef53",
+      "size": 53881,
+      "file": "_assets/2097d3bdde3c88d6762933fb.avif"
+    },
+    "/_assets/7d572fcdf23fffcd3c4f4165.avif": {
+      "sha256": "7d572fcdf23fffcd3c4f41650568714418d43878893a1b2fb42e0dfa35559aec",
+      "size": 75179,
+      "file": "_assets/7d572fcdf23fffcd3c4f4165.avif"
+    },
+    "/_assets/c2e759af83a0cad2a463c6ab.avif": {
+      "sha256": "c2e759af83a0cad2a463c6ab3f8d4886d1feffe3703636579f00b912f1358758",
+      "size": 15878,
+      "file": "_assets/c2e759af83a0cad2a463c6ab.avif"
+    },
+    "/_assets/cffcbfcb42d86bc75d2706d2.avif": {
+      "sha256": "cffcbfcb42d86bc75d2706d208964a03ba8b0dc58a00f9d68081990a8c567743",
+      "size": 32032,
+      "file": "_assets/cffcbfcb42d86bc75d2706d2.avif"
+    },
+    "/_assets/a9dde279b25255807f2f976f.avif": {
+      "sha256": "a9dde279b25255807f2f976ff5ff1680cd77f0cc090b56d532b4fea881628cc4",
+      "size": 41358,
+      "file": "_assets/a9dde279b25255807f2f976f.avif"
+    },
+    "/_assets/bf6dfbe4a94bb832697dc67a.avif": {
+      "sha256": "bf6dfbe4a94bb832697dc67a26d1fec613c8e193349caded4a3c3832395531ef",
+      "size": 14368,
+      "file": "_assets/bf6dfbe4a94bb832697dc67a.avif"
+    },
+    "/_assets/e6a405e154019a8afc4ca176.avif": {
+      "sha256": "e6a405e154019a8afc4ca17606c82ebff2e086793e956cec3cf34d862d5e6db7",
+      "size": 27595,
+      "file": "_assets/e6a405e154019a8afc4ca176.avif"
+    },
+    "/_assets/19507bc43dda8826e0bab779.avif": {
+      "sha256": "19507bc43dda8826e0bab7790ffa2d6b3dcb75e634a7bbf4e83865611582305a",
+      "size": 43601,
+      "file": "_assets/19507bc43dda8826e0bab779.avif"
+    },
+    "/_assets/ad2683abbe575d32fdf2d35a.avif": {
+      "sha256": "ad2683abbe575d32fdf2d35a29171e769422f15be26d62d9d84ca12c4fd20473",
+      "size": 57792,
+      "file": "_assets/ad2683abbe575d32fdf2d35a.avif"
+    },
+    "/_assets/866410e0a89ea259ae10d686.webp": {
+      "sha256": "866410e0a89ea259ae10d686be659044f404cd118c160e0456d29da54fae57fb",
+      "size": 6442,
+      "file": "_assets/866410e0a89ea259ae10d686.webp"
     }
   },
   "added_assets": {
@@ -2633,6 +2783,537 @@
       "source": "preview/esmeralda/adapters/website-consent.js",
       "upstream": "Esmeralda-Website#47",
       "activation": "consent-gated-production-hosts-only"
+    },
+    "/_assets/9553e41a4710bdd1859d8a74.avif": {
+      "source": "/_assets/a0d1273deaf4aee98f5aaeb5.webp",
+      "source_sha256": "b54d07595ea3a4599645b1c541f54c8bffa1a76780bf57ac1e51e4f4c8b82cc2",
+      "width": 640,
+      "height": 427,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/d0f47115d76114229818f317.avif": {
+      "source": "/_assets/a0d1273deaf4aee98f5aaeb5.webp",
+      "source_sha256": "b54d07595ea3a4599645b1c541f54c8bffa1a76780bf57ac1e51e4f4c8b82cc2",
+      "width": 1024,
+      "height": 683,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/9cd59357594e89254dbf314d.avif": {
+      "source": "/_assets/a0d1273deaf4aee98f5aaeb5.webp",
+      "source_sha256": "b54d07595ea3a4599645b1c541f54c8bffa1a76780bf57ac1e51e4f4c8b82cc2",
+      "width": 1536,
+      "height": 1024,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/d97822b421686f72e137424f.avif": {
+      "source": "/_assets/136fa7864ea41c342d69547e.jpeg",
+      "source_sha256": "2791d949766bdd07c564c68e0835d8fd9ebd9e8720194d2ca2177e5ad26154c0",
+      "width": 640,
+      "height": 181,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/4a11900fdbc49da0d3bf2b3c.avif": {
+      "source": "/_assets/136fa7864ea41c342d69547e.jpeg",
+      "source_sha256": "2791d949766bdd07c564c68e0835d8fd9ebd9e8720194d2ca2177e5ad26154c0",
+      "width": 1024,
+      "height": 290,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/15d84fc294f89fa80f37e1fb.avif": {
+      "source": "/_assets/136fa7864ea41c342d69547e.jpeg",
+      "source_sha256": "2791d949766bdd07c564c68e0835d8fd9ebd9e8720194d2ca2177e5ad26154c0",
+      "width": 1536,
+      "height": 435,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/3a9877e0b4b7f75cf6a37711.avif": {
+      "source": "/_assets/586bd71bca149b42d73325b8.avif",
+      "source_sha256": "8c6c69461e0bb5184ad86f3815e1b063bd03f098b938743b5dc51648ba32c822",
+      "width": 640,
+      "height": 800,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/fba8cbe54479b70f09abea33.avif": {
+      "source": "/_assets/586bd71bca149b42d73325b8.avif",
+      "source_sha256": "8c6c69461e0bb5184ad86f3815e1b063bd03f098b938743b5dc51648ba32c822",
+      "width": 1024,
+      "height": 1280,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/895f205e5a7b1b77bcf23732.avif": {
+      "source": "/_assets/586bd71bca149b42d73325b8.avif",
+      "source_sha256": "8c6c69461e0bb5184ad86f3815e1b063bd03f098b938743b5dc51648ba32c822",
+      "width": 1365,
+      "height": 1706,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/3de22975c2c9ecf7292e4150.avif": {
+      "source": "/_assets/4a2de651d080f5c13feefd7d.webp",
+      "source_sha256": "125fed7cf19f62f69addb615fe24bdb3282e5cc5881f9a8b96d7b5a844b7960f",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/a81cbf05056826018ffd101d.avif": {
+      "source": "/_assets/4a2de651d080f5c13feefd7d.webp",
+      "source_sha256": "125fed7cf19f62f69addb615fe24bdb3282e5cc5881f9a8b96d7b5a844b7960f",
+      "width": 1000,
+      "height": 563,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/a2a8ed75e5ae4b8ba053e8f5.avif": {
+      "source": "/_assets/32177a40775747475536f010.webp",
+      "source_sha256": "1ccf2395c407a471f97adef5fc2e438a74ae004a21748d00e5a4a37cd0db4c23",
+      "width": 640,
+      "height": 427,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/c05ce4c377a4d94f53a143c4.avif": {
+      "source": "/_assets/32177a40775747475536f010.webp",
+      "source_sha256": "1ccf2395c407a471f97adef5fc2e438a74ae004a21748d00e5a4a37cd0db4c23",
+      "width": 1024,
+      "height": 683,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/860f22b02842abc2fbba4bfb.avif": {
+      "source": "/_assets/725894228d4a0a2348a9cecf.webp",
+      "source_sha256": "6c2492369111c01151b5ed83dcd7c584ed61346331d72b6995bfaaa30a704b9d",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/ab10d2e46ec7bba56e727b69.avif": {
+      "source": "/_assets/725894228d4a0a2348a9cecf.webp",
+      "source_sha256": "6c2492369111c01151b5ed83dcd7c584ed61346331d72b6995bfaaa30a704b9d",
+      "width": 1024,
+      "height": 576,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/71613501937b5dd498db67f8.avif": {
+      "source": "/_assets/725894228d4a0a2348a9cecf.webp",
+      "source_sha256": "6c2492369111c01151b5ed83dcd7c584ed61346331d72b6995bfaaa30a704b9d",
+      "width": 1200,
+      "height": 675,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/a4b288329d6a46e0eb94a1c5.avif": {
+      "source": "/_assets/fee0e20939516ef0378f9b09.avif",
+      "source_sha256": "dc81e83de91137ef62ddc68cf3f0b28354be5b8a7ff6d0b4a3a79f4c8668438c",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/081464f451ff6abea9d3dc41.avif": {
+      "source": "/_assets/fee0e20939516ef0378f9b09.avif",
+      "source_sha256": "dc81e83de91137ef62ddc68cf3f0b28354be5b8a7ff6d0b4a3a79f4c8668438c",
+      "width": 1024,
+      "height": 576,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/7c4237d704dc23d1f6b0f96d.avif": {
+      "source": "/_assets/fee0e20939516ef0378f9b09.avif",
+      "source_sha256": "dc81e83de91137ef62ddc68cf3f0b28354be5b8a7ff6d0b4a3a79f4c8668438c",
+      "width": 1200,
+      "height": 675,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/9c61ccb71611d5fc6d33bcf6.avif": {
+      "source": "/_assets/23686dd052ee2a5182738a74.avif",
+      "source_sha256": "45d33bc38352ffbed7a13a61a1f2439238ced076b0b1b769454e34645928dfce",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/2097d3bdde3c88d6762933fb.avif": {
+      "source": "/_assets/23686dd052ee2a5182738a74.avif",
+      "source_sha256": "45d33bc38352ffbed7a13a61a1f2439238ced076b0b1b769454e34645928dfce",
+      "width": 1024,
+      "height": 576,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/7d572fcdf23fffcd3c4f4165.avif": {
+      "source": "/_assets/23686dd052ee2a5182738a74.avif",
+      "source_sha256": "45d33bc38352ffbed7a13a61a1f2439238ced076b0b1b769454e34645928dfce",
+      "width": 1200,
+      "height": 675,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/c2e759af83a0cad2a463c6ab.avif": {
+      "source": "/_assets/176687f7da9b80564ca50baf.avif",
+      "source_sha256": "7a8b0939900ce7bf305d975c3091fd180b2d0c1f0948728d9aacbef6373fbae4",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/cffcbfcb42d86bc75d2706d2.avif": {
+      "source": "/_assets/176687f7da9b80564ca50baf.avif",
+      "source_sha256": "7a8b0939900ce7bf305d975c3091fd180b2d0c1f0948728d9aacbef6373fbae4",
+      "width": 1024,
+      "height": 576,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/a9dde279b25255807f2f976f.avif": {
+      "source": "/_assets/176687f7da9b80564ca50baf.avif",
+      "source_sha256": "7a8b0939900ce7bf305d975c3091fd180b2d0c1f0948728d9aacbef6373fbae4",
+      "width": 1200,
+      "height": 675,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/bf6dfbe4a94bb832697dc67a.avif": {
+      "source": "/_assets/b610e32661ae72c42217ac27.webp",
+      "source_sha256": "3f41101be447e1224da79b4ca16eeafd0b43be8074471856e5a42ab9adad1b49",
+      "width": 640,
+      "height": 360,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/e6a405e154019a8afc4ca176.avif": {
+      "source": "/_assets/b610e32661ae72c42217ac27.webp",
+      "source_sha256": "3f41101be447e1224da79b4ca16eeafd0b43be8074471856e5a42ab9adad1b49",
+      "width": 1024,
+      "height": 576,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/19507bc43dda8826e0bab779.avif": {
+      "source": "/_assets/b610e32661ae72c42217ac27.webp",
+      "source_sha256": "3f41101be447e1224da79b4ca16eeafd0b43be8074471856e5a42ab9adad1b49",
+      "width": 1536,
+      "height": 864,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/ad2683abbe575d32fdf2d35a.avif": {
+      "source": "/_assets/b610e32661ae72c42217ac27.webp",
+      "source_sha256": "3f41101be447e1224da79b4ca16eeafd0b43be8074471856e5a42ab9adad1b49",
+      "width": 1600,
+      "height": 900,
+      "format": "avif",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    },
+    "/_assets/866410e0a89ea259ae10d686.webp": {
+      "source": "/_assets/cbdfddea996fb10f5850db63.png",
+      "source_sha256": "fe9f6da0bf5b466cda83c33ad6512e77f671fe3a7622b577af96933a4a034291",
+      "width": 301,
+      "height": 159,
+      "format": "webp",
+      "activation": "homepage-responsive-image",
+      "upstream": "Esmeralda-Website#18; scripts/preview-performance-90.cjs"
+    }
+  },
+  "homepage_delivery": {
+    "version": 2,
+    "inline_css": [
+      {
+        "route": "/_assets/35bcf5deb637f8de14c02ad4.css",
+        "sha256": "f978c3834a712641ac965435e0c0ca358ba475b3246fe462a24e086172c93934"
+      },
+      {
+        "route": "/_assets/28105a59fc9c2fd50cc83d1f.css",
+        "sha256": "5711b4d85e033ab5d821c45db0b3bf4c0ab66f7df8fcb81bf36c884197c8f43b"
+      }
+    ],
+    "responsive_images": {
+      "/_assets/a0d1273deaf4aee98f5aaeb5.webp": {
+        "width": 1536,
+        "height": 1024,
+        "items": [
+          {
+            "route": "/_assets/9553e41a4710bdd1859d8a74.avif",
+            "width": 640,
+            "height": 427,
+            "bytes": 28117
+          },
+          {
+            "route": "/_assets/d0f47115d76114229818f317.avif",
+            "width": 1024,
+            "height": 683,
+            "bytes": 57351
+          },
+          {
+            "route": "/_assets/9cd59357594e89254dbf314d.avif",
+            "width": 1536,
+            "height": 1024,
+            "bytes": 113719
+          }
+        ]
+      },
+      "/_assets/136fa7864ea41c342d69547e.jpeg": {
+        "width": 1536,
+        "height": 435,
+        "items": [
+          {
+            "route": "/_assets/d97822b421686f72e137424f.avif",
+            "width": 640,
+            "height": 181,
+            "bytes": 9916
+          },
+          {
+            "route": "/_assets/4a11900fdbc49da0d3bf2b3c.avif",
+            "width": 1024,
+            "height": 290,
+            "bytes": 19696
+          },
+          {
+            "route": "/_assets/15d84fc294f89fa80f37e1fb.avif",
+            "width": 1536,
+            "height": 435,
+            "bytes": 36728
+          }
+        ]
+      },
+      "/_assets/586bd71bca149b42d73325b8.avif": {
+        "width": 1365,
+        "height": 1706,
+        "items": [
+          {
+            "route": "/_assets/3a9877e0b4b7f75cf6a37711.avif",
+            "width": 640,
+            "height": 800,
+            "bytes": 23165
+          },
+          {
+            "route": "/_assets/fba8cbe54479b70f09abea33.avif",
+            "width": 1024,
+            "height": 1280,
+            "bytes": 37176
+          },
+          {
+            "route": "/_assets/895f205e5a7b1b77bcf23732.avif",
+            "width": 1365,
+            "height": 1706,
+            "bytes": 51223
+          }
+        ]
+      },
+      "/_assets/4a2de651d080f5c13feefd7d.webp": {
+        "width": 1000,
+        "height": 563,
+        "items": [
+          {
+            "route": "/_assets/3de22975c2c9ecf7292e4150.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 21990
+          },
+          {
+            "route": "/_assets/a81cbf05056826018ffd101d.avif",
+            "width": 1000,
+            "height": 563,
+            "bytes": 55631
+          }
+        ]
+      },
+      "/_assets/32177a40775747475536f010.webp": {
+        "width": 1024,
+        "height": 683,
+        "items": [
+          {
+            "route": "/_assets/a2a8ed75e5ae4b8ba053e8f5.avif",
+            "width": 640,
+            "height": 427,
+            "bytes": 32715
+          },
+          {
+            "route": "/_assets/c05ce4c377a4d94f53a143c4.avif",
+            "width": 1024,
+            "height": 683,
+            "bytes": 77582
+          }
+        ]
+      },
+      "/_assets/725894228d4a0a2348a9cecf.webp": {
+        "width": 1200,
+        "height": 675,
+        "items": [
+          {
+            "route": "/_assets/860f22b02842abc2fbba4bfb.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 17104
+          },
+          {
+            "route": "/_assets/ab10d2e46ec7bba56e727b69.avif",
+            "width": 1024,
+            "height": 576,
+            "bytes": 34015
+          },
+          {
+            "route": "/_assets/71613501937b5dd498db67f8.avif",
+            "width": 1200,
+            "height": 675,
+            "bytes": 56979
+          }
+        ]
+      },
+      "/_assets/fee0e20939516ef0378f9b09.avif": {
+        "width": 1200,
+        "height": 675,
+        "items": [
+          {
+            "route": "/_assets/a4b288329d6a46e0eb94a1c5.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 13771
+          },
+          {
+            "route": "/_assets/081464f451ff6abea9d3dc41.avif",
+            "width": 1024,
+            "height": 576,
+            "bytes": 24431
+          },
+          {
+            "route": "/_assets/7c4237d704dc23d1f6b0f96d.avif",
+            "width": 1200,
+            "height": 675,
+            "bytes": 29542
+          }
+        ]
+      },
+      "/_assets/23686dd052ee2a5182738a74.avif": {
+        "width": 1200,
+        "height": 675,
+        "items": [
+          {
+            "route": "/_assets/9c61ccb71611d5fc6d33bcf6.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 21861
+          },
+          {
+            "route": "/_assets/2097d3bdde3c88d6762933fb.avif",
+            "width": 1024,
+            "height": 576,
+            "bytes": 53881
+          },
+          {
+            "route": "/_assets/7d572fcdf23fffcd3c4f4165.avif",
+            "width": 1200,
+            "height": 675,
+            "bytes": 75179
+          }
+        ]
+      },
+      "/_assets/176687f7da9b80564ca50baf.avif": {
+        "width": 1200,
+        "height": 675,
+        "items": [
+          {
+            "route": "/_assets/c2e759af83a0cad2a463c6ab.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 15878
+          },
+          {
+            "route": "/_assets/cffcbfcb42d86bc75d2706d2.avif",
+            "width": 1024,
+            "height": 576,
+            "bytes": 32032
+          },
+          {
+            "route": "/_assets/a9dde279b25255807f2f976f.avif",
+            "width": 1200,
+            "height": 675,
+            "bytes": 41358
+          }
+        ]
+      },
+      "/_assets/b610e32661ae72c42217ac27.webp": {
+        "width": 1600,
+        "height": 900,
+        "items": [
+          {
+            "route": "/_assets/bf6dfbe4a94bb832697dc67a.avif",
+            "width": 640,
+            "height": 360,
+            "bytes": 14368
+          },
+          {
+            "route": "/_assets/e6a405e154019a8afc4ca176.avif",
+            "width": 1024,
+            "height": 576,
+            "bytes": 27595
+          },
+          {
+            "route": "/_assets/19507bc43dda8826e0bab779.avif",
+            "width": 1536,
+            "height": 864,
+            "bytes": 43601
+          },
+          {
+            "route": "/_assets/ad2683abbe575d32fdf2d35a.avif",
+            "width": 1600,
+            "height": 900,
+            "bytes": 57792
+          }
+        ]
+      },
+      "/_assets/cbdfddea996fb10f5850db63.png": {
+        "width": 301,
+        "height": 159,
+        "items": [
+          {
+            "route": "/_assets/866410e0a89ea259ae10d686.webp",
+            "width": 301,
+            "height": 159,
+            "bytes": 6442
+          }
+        ]
+      }
     }
   }
 }

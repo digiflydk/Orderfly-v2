@@ -24,7 +24,7 @@ test('all104pages use one local consent owner and no eager marketing/Google or n
  const booking=Buffer.from(payload['/book-bord'].data,'base64').toString();assert.match(booking,/<noscript><p>JavaScript skal være aktiveret/);
 });
 test('added consent asset pin, disabled contact asset and preserved UI fragment remain explicit',()=>{
- assert.equal(Object.keys(manifest.routes).length,376);
+ assert.equal(Object.keys(manifest.routes).length,406);
  const bytes=fs.readFileSync('preview/esmeralda/adapters/website-consent.js');
  const sha=crypto.createHash('sha256').update(bytes).digest('hex');assert.equal(sha,manifest.added_assets['/_assets/website-consent.js'].sha256);assert.deepEqual(Buffer.from(payload['/_assets/website-consent.js'].data,'base64'),bytes);
  assert.equal(manifest.added_assets['/_assets/website-contact-adapter.js'].activation,'disabled');
