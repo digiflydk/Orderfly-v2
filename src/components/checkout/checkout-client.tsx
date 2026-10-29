@@ -3,7 +3,9 @@ import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
 import { Textarea } from '@/components/ui/textarea';
 import { ManagedDeliveryQuote, type ManagedDeliveryQuoteView } from './managed-delivery-quote';
-import { useManagedDeliveryQuote } from './use-managed-delivery-quote';
+import { useManagedDeliveryQuote, managedQuotePaymentWindowMs } from './use-managed-delivery-quote';
+import { normalizeDeliveryPhone } from '@/lib/delivery/quotes/phone';
+import { normalizeDanishDeliveryAddress } from '@/lib/delivery/quotes/address';
 import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
@@ -605,17 +607,20 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
     appliedDiscountId:appliedDiscount?.id||null,brandSlug:brand.slug,locationSlug:location.slug,deliveryTime:effectiveTime}:null;
   // Legal acceptance does not change price; all pricing/contact/scope inputs do.
   const quoteIdentity=JSON.stringify({...quoteInput,customerInfo:{...quoteCustomer,acceptTerms:undefined}});
-  const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction});
-  const managedQuote=managed.state.kind==='ready'&&managed.state.quote.expiresAtMs>Date.now()?managed.state.quote:null;
-  const managedConsent=managedQuote&&managed.accepted&&managed.checkoutKey?{...managed.accepted,checkoutKey:managed.checkoutKey}:null;
+  const quoteIdentityRef=useRef(quoteIdentity);quoteIdentityRef.current=quoteIdentity;
+  const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
+  let quoteReady=!!quoteInput&&cartItems.length>0&&isOrderTimeValid&&checkoutSchema.omit({acceptTerms:true}).safeParse(quoteForm).success;
+  try {
+    normalizeDeliveryPhone(quoteForm.phone);
+    normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country});
+  } catch { quoteReady=false; }
+  const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction,autoRequestReady:quoteReady,locked:isFormLocked});
+  const managedQuote=managed.state.kind==='ready'&&managed.paymentProof?managed.state.quote:null;
+  const managedConsent=managed.paymentProof&&managed.checkoutKey?{...managed.paymentProof,checkoutKey:managed.checkoutKey}:null;
   const managedTotal=managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.checkoutTotalMinor/100):'Afventer leveringspris';
-  const requestDeliveryPrice=async()=>{
-    const valid=await form.trigger(['name','email','phone','street','zipCode','city','deliveryInstructions']);
-    if(!valid||!quoteForm.street?.trim()||!quoteForm.zipCode?.trim()||!quoteForm.city?.trim()){setCheckoutError('Udfyld navn, e-mail, telefon og leveringsadresse, før du henter leveringsprisen.');return;}
-    setCheckoutError(null);await managed.request();
-  };
+  const requestDeliveryPrice=()=>{setCheckoutError(null);void managed.request();};
 
-  const proceedToStripe = async (formValues: CheckoutFormValues) => {
+  const proceedToStripe = async (formValues: CheckoutFormValues, deliveryConsent: typeof managedConsent) => {
       // A slow payment request is not evidence that no session exists. Keep the
       // submission locked until a definitive response; never race it with retry.
       const waiting = setTimeout(() => setCheckoutError('Det tager lidt længere tid at åbne betalingen. Hold siden åben, mens vi kontrollerer den.'), 15000);
@@ -652,7 +657,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
         taxes: 0
       };
 
-      if(managedActive){if(!managedConsent||!managedQuote||managedQuote.expiresAtMs<=Date.now()){setCheckoutError('Hent og accepter en gyldig leveringspris før betaling.');return;}paymentDetails.deliveryFee=managedQuote.customerFeeMinor/100;}
+      if(managedActive){if(!deliveryConsent||!managedQuote||quoteIdentityRef.current!==quoteIdentity||managedQuote.expiresAtMs<=Date.now()+managedQuotePaymentWindowMs){setCheckoutError('Vent på en opdateret leveringspris, og kontrollér beløbet før betaling.');return;}paymentDetails.deliveryFee=deliveryConsent.customerFeeMinor/100;}
 
       // Recheck even if the page or an upsell dialog has been open for a while.
       try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
@@ -700,7 +705,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
         location!.slug,
         finalDeliveryTime,
         anonymousId,
-        ...(managedActive&&managedConsent?[managedConsent]:[])
+        ...(managedActive&&deliveryConsent?[deliveryConsent]:[])
       );
 
       setCheckoutError(null);
@@ -736,11 +741,14 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
       setCheckoutError('Udfyld leveringsadressen.');
       return;
     }
-    if(managedActive&&!managedConsent){setCheckoutError('Hent og accepter leveringsprisen før betaling.');return;}
+    const quotedFields=(values:CheckoutFormValues)=>JSON.stringify([values.name,values.email,values.phone,values.street||'',values.zipCode||'',values.city||'',values.deliveryInstructions||'',!!values.subscribeToNewsletter,!!values.clubTermsAccepted,!!values.useClubDiscount]);
+    if(managedActive&&(!managedConsent||isValidatingDiscount||quoteIdentityRef.current!==quoteIdentity||quotedFields(formValues)!==quotedFields(quoteForm))){setCheckoutError('Vent på leveringsprisen, før du går til betaling.');return;}
+    // This click accepts the displayed immutable price. Never refresh and pay silently.
+    const deliveryConsent=managedConsent?{...managedConsent}:null;
     requestInFlight.current = true;
     setIsProcessing(true);
     try {
-      await proceedToStripe(formValues);
+      await proceedToStripe(formValues,deliveryConsent);
     } finally {
       requestInFlight.current = false;
       setIsProcessing(false);
@@ -775,7 +783,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   }
 
   const isTermsAccepted = form.watch('acceptTerms');
-  const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
+
 
   // Called as a function, not rendered as <Component/>: a component defined inside render is a new
   // type on every render, so React would remount the checkbox and drop taps landing mid-update.
@@ -839,6 +847,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
           <span>{managedActive?managedTotal:formatPrice(checkoutTotal)}</span>
         </div>
       </Button>
+      {managedActive&&managedQuote&&<p className="mt-2 text-sm text-muted-foreground">Når du går til betaling, accepterer du leveringsprisen og det viste samlede beløb.</p>}
       {paymentMethod === 'pay_at_pickup' && <p className="mt-2 text-sm">Betales ved afhentning. Din ordre sendes til restauranten, når du bestiller.</p>}
       {checkoutError && <p role="alert" className="mt-3 text-sm text-destructive">{checkoutError}</p>}
     </div>
@@ -1005,7 +1014,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     </>
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
-                  <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} accepted={managed.accepted} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} onAccept={managed.accept} onPickup={()=>{setDeliveryType('pickup');setSelectedTime('asap');}} locked={isFormLocked}/>
+                  <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField
                     control={form.control}

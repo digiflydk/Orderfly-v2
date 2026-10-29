@@ -2,34 +2,41 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { validManagedDeliveryQuote, type ManagedDeliveryQuoteView, type ManagedQuoteState, type ManagedQuoteAcceptance } from './managed-delivery-quote';
 export type CustomerQuoteResult=({ok:true}&ManagedDeliveryQuoteView)|{ok:false;code:string;message?:string};
-/** Endpoint injected by the real checkout integration, never inferred here.
- * requestIdentity must cover every cart/address/time/discount/scope input. */
-export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,requestQuote}: {enabled:boolean;requestIdentity:string;input:T|null;requestQuote:(input:T&{checkoutKey:string})=>Promise<CustomerQuoteResult>}) {
+// Match the server's minimum remaining lifetime before opening hosted payment.
+export const managedQuotePaymentWindowMs=60_000;
+/** requestIdentity covers every cart/address/time/discount/scope input. Requests
+ * are serialized because abandoning a server action does not stop provider I/O. */
+export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,requestQuote,autoRequestReady=false,locked=false}: {enabled:boolean;requestIdentity:string;input:T|null;requestQuote:(input:T&{checkoutKey:string})=>Promise<CustomerQuoteResult>;autoRequestReady?:boolean;locked?:boolean}) {
  const [stored,setStored]=useState<{identity:string;state:ManagedQuoteState}>({identity:requestIdentity,state:{kind:'idle'}});
- const [accepted,setAccepted]=useState<ManagedQuoteAcceptance|null>(null);
  const [previousFeeMinor,setPreviousFeeMinor]=useState<number|null>(null);
- const identity=useRef(requestIdentity);identity.current=requestIdentity;
- const key=useRef<string|null>(null),sequence=useRef(0),pending=useRef(false),mounted=useRef(true);
+ const [wake,setWake]=useState(0),[now,setNow]=useState(()=>Date.now());
+ const current=useRef({enabled,requestIdentity,input,requestQuote,autoRequestReady,locked});current.current={enabled,requestIdentity,input,requestQuote,autoRequestReady,locked};
+ const key=useRef<string|null>(null),sequence=useRef(0),pending=useRef(false),mounted=useRef(true),attempted=useRef<string|null>(null),lastFee=useRef<number|null>(null);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;sequence.current++;};},[]);
- useEffect(()=>{sequence.current++;pending.current=false;setAccepted(null);setStored({identity:requestIdentity,state:{kind:'idle'}});},[enabled,requestIdentity]);
+ useEffect(()=>{sequence.current++;attempted.current=null;setStored({identity:requestIdentity,state:{kind:'idle'}});},[enabled,requestIdentity]);
  const request=useCallback(async()=>{
-  if(!enabled||!input||pending.current)return;
+  const snapshot=current.current;
+  if(!snapshot.enabled||!snapshot.autoRequestReady||snapshot.locked||!snapshot.input||pending.current)return;
   if(!key.current)key.current=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
-  const token=++sequence.current,expected=requestIdentity;pending.current=true;setAccepted(null);setStored({identity:expected,state:{kind:'loading'}});
+  const token=++sequence.current,expected=snapshot.requestIdentity;pending.current=true;attempted.current=expected;
+  setStored({identity:expected,state:{kind:'loading'}});
   try{
-   const result=await requestQuote({...input,checkoutKey:key.current});
-   if(!mounted.current||token!==sequence.current||identity.current!==expected)return;
-   if(result.ok&&validManagedDeliveryQuote(result)&&result.expiresAtMs>Date.now())setStored({identity:expected,state:{kind:'ready',quote:result}});
-   else setStored({identity:expected,state:{kind:'unavailable',reason:result.ok?'quote_expired':result.code,pickupAllowed:true}});
-  }catch{if(mounted.current&&token===sequence.current&&identity.current===expected)setStored({identity:expected,state:{kind:'unavailable',reason:'delivery_unavailable',pickupAllowed:true}});}
-  finally{if(token===sequence.current)pending.current=false;}
- },[enabled,input,requestIdentity,requestQuote]);
- const state=enabled&&stored.identity===requestIdentity?stored.state:{kind:'idle'} as ManagedQuoteState;
- const accept=useCallback((value:ManagedQuoteAcceptance|null)=>{
-  if(!value){setAccepted(null);return;}
-  if(state.kind!=='ready'||!validManagedDeliveryQuote(state.quote)||state.quote.expiresAtMs<=Date.now()||value.quoteId!==state.quote.quoteId||value.quoteToken!==state.quote.quoteToken||value.checkoutFingerprint!==state.quote.checkoutFingerprint||value.customerFeeMinor!==state.quote.customerFeeMinor||value.checkoutTotalMinor!==state.quote.checkoutTotalMinor||value.currency!==state.quote.currency)return;
-  setAccepted(value);setPreviousFeeMinor(value.customerFeeMinor);
- },[state]);
- const currentAcceptance=enabled&&stored.identity===requestIdentity&&state.kind==='ready'&&state.quote.expiresAtMs>Date.now()?accepted:null;
- return {state,accepted:currentAcceptance,accept,request,previousFeeMinor,checkoutKey:key.current};
+   const result=await snapshot.requestQuote({...snapshot.input,checkoutKey:key.current});
+   if(!mounted.current||token!==sequence.current||!current.current.enabled||current.current.requestIdentity!==expected)return;
+   if(result.ok&&validManagedDeliveryQuote(result)&&result.expiresAtMs>Date.now()+managedQuotePaymentWindowMs){
+    setPreviousFeeMinor(lastFee.current);lastFee.current=result.customerFeeMinor;
+    setNow(Date.now());setStored({identity:expected,state:{kind:'ready',quote:result}});
+   }else setStored({identity:expected,state:{kind:'unavailable',reason:result.ok?'quote_expired':result.code,pickupAllowed:false}});
+  }catch{if(mounted.current&&token===sequence.current&&current.current.enabled&&current.current.requestIdentity===expected)setStored({identity:expected,state:{kind:'unavailable',reason:'delivery_unavailable',pickupAllowed:false}});}
+  finally{pending.current=false;if(mounted.current)setWake(value=>value+1);}
+ },[]);
+ useEffect(()=>{
+  if(!enabled||!autoRequestReady||locked||pending.current||attempted.current===requestIdentity)return;
+  const timer=setTimeout(()=>void request(),700);return()=>clearTimeout(timer);
+ },[enabled,autoRequestReady,locked,requestIdentity,request,wake]);
+ useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[enabled]);
+ const state:ManagedQuoteState=enabled&&stored.identity===requestIdentity?stored.state:{kind:'idle'};
+ const quote=autoRequestReady&&state.kind==='ready'&&state.quote.expiresAtMs>Math.max(now,Date.now())+managedQuotePaymentWindowMs?state.quote:null;
+ const paymentProof:ManagedQuoteAcceptance|null=quote?{quoteId:quote.quoteId,quoteToken:quote.quoteToken,checkoutFingerprint:quote.checkoutFingerprint,customerFeeMinor:quote.customerFeeMinor,checkoutTotalMinor:quote.checkoutTotalMinor,currency:quote.currency}:null;
+ return {state,paymentProof,request,previousFeeMinor,checkoutKey:key.current};
 }
