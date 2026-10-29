@@ -37,7 +37,7 @@ before(async () => {
     function require(name){if(name==='react')return React;if(name==='react/jsx-runtime')return jsx;if(name.startsWith('./'))return modules[name.slice(2)];throw Error(name)}
     for(const [name,source] of ${JSON.stringify(modules)}){const module={exports:{}};new Function('require','exports','module',source)(require,module.exports,module);modules[name]=module.exports;}
     const props=${JSON.stringify(initial)},params=new URLSearchParams(location.search);
-    if(params.has('design')){props.codes[0].publicUrl='https://orderfly.dk/q/'+'a'.repeat(32);props.codes[0].name='Pepperoni';props.codes[0].campaign='Frozen pizza';props.codes[0].destination='https://www.esmeraldapizza.dk/produkter';props.allTime={'b1/qr1':{openings:19,probableScans:18,excludedOpenings:1,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000}};}
+    if(params.has('design')){props.codes[0].publicUrl='HTTPS://ORDERFLY.DK/R/L'+ '0'.repeat(24)+'1';props.codes[0].name='Pepperoni';props.codes[0].campaign='Frozen pizza';props.codes[0].destination='https://www.esmeraldapizza.dk/produkter';props.allTime={'b1/qr1':{openings:19,probableScans:18,excludedOpenings:1,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000}};}
     if(params.has('pages'))props.codes=Array.from({length:13},(_,i)=>({...props.codes[0],id:'q'+i,name:'Kode '+String(i).padStart(2,'0')}));
     if(params.has('mixedanalytics'))props.analyticsCodeKeys=['b1/qr1'];
     if(params.has('denied')){props.analytics=false;props.capabilities={create:false,edit:false,archive:false,export:false};}

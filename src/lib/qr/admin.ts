@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { applyUtm, buildStaticPayload, normalizeDestination, type QrStaticInput, type UtmTags } from './payload';
 import { renderQr, normalizeQrLogo } from './render';
+import { qrScanUrl } from './scan-url';
 import { qrPrintHtml } from './print';
 import { createQrStore, QrStoreError, type QrDatabase, type QrRecord, type QrScope } from './store';
 
@@ -26,7 +27,7 @@ export function qrSummary(record:QrRecord) {
  const url=new URL(record.destination),tags={source:'',medium:'',campaign:'',content:'',term:''};
  for(const k of ['source','medium','campaign','content','term'] as const)tags[k]=url.searchParams.get(`utm_${k}`)||'';
  return {name:record.name,brandId:record.brandId,locationId:record.locationId,kind:'dynamic' as const,destination:record.destination,staticType:'url' as const,fields:{},campaign:record.campaign,tags:record.tags,utm:tags,
- expiresAt:record.expiresAt,style:record.design,id:record.id,revision:String(record.revision),status:record.status,publicUrl:`https://orderfly.dk/q/${record.slug}`};
+ expiresAt:record.expiresAt,style:record.design,id:record.id,revision:String(record.revision),status:record.status,publicUrl:qrScanUrl(record.slug)};
 }
 function staticPayload(draft:QrAdminDraft):string {
  const f=draft.fields;
@@ -75,7 +76,7 @@ export function createQrAdminService(deps:QrAdminDependencies) {
    }
    if(draft.style?.logoBase64) draft.style={...draft.style,logoBase64:await normalizeQrLogo(draft.style.logoBase64),errorCorrectionLevel:'H'};
    // Validate styles against the fixed-length permanent link before persisting.
-   await renderQr(`https://orderfly.dk/q/${'0'.repeat(32)}`,draft.style);
+   await renderQr(qrScanUrl('f'.repeat(32)),draft.style);
    const input={name:draft.name,destination:formDestination(draft.destination,draft.utm),locationId:draft.locationId,campaign:draft.campaign,tags:draft.tags,expiresAt:draft.expiresAt,design:draft.style};
    const row=c.context.id?await store.update(scope,c.context.id,input,Number(c.context.revision),c.context.requestId):await store.create(scope,input,c.context.requestId);
    return qrSummary(row);
@@ -86,7 +87,7 @@ export function createQrAdminService(deps:QrAdminDependencies) {
    if(!c.context.id||!c.context.revision)throw new QrStoreError('save_required',409);
    const record=await store.get(scope,c.context.id);
    if(String(record.revision)!==c.context.revision||record.locationId!==draft.locationId)throw new QrStoreError('revision_conflict',409);
-   payload=`https://orderfly.dk/q/${record.slug}`;
+   payload=qrScanUrl(record.slug);
   }else payload=staticPayload(draft);
   const logo=c.logoBase64?Buffer.from(c.logoBase64,'base64'):undefined;
   if(logo&&(logo.byteLength>2097152||logo.toString('base64')!==c.logoBase64))throw new QrStoreError('invalid_input');

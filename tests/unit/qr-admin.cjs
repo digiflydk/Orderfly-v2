@@ -26,7 +26,7 @@ test('server native action denial prevents every store write or image export',as
 test('dynamic creation preserves native scope, UTM and original idempotency key',async()=>{
  const {execute,calls}=fixture();const result=await execute({action:'save',draft,context:{requestId}});
  const mutation=calls.find(x=>x[0]==='create');assert.equal(mutation[1].brandId,'brandA');assert.equal(mutation[1].actorId,'actorA');assert.equal(mutation[3],requestId);
- assert.equal(new URL(mutation[2].destination).searchParams.get('utm_source'),'poster');assert.equal(result.publicUrl,'https://orderfly.dk/q/'+saved.slug);
+ assert.equal(new URL(mutation[2].destination).searchParams.get('utm_source'),'poster');assert.equal(result.publicUrl,loadTs('src/lib/qr/scan-url.ts').qrScanUrl(saved.slug));
 });
 test('invalid contrast is rejected before storing any dynamic definition',async()=>{
  const {execute,calls}=fixture();await assert.rejects(()=>execute({action:'save',draft:{...draft,style:{width:512,margin:4,dark:'#ffffff',light:'#ffffff',errorCorrectionLevel:'H'}},context:{requestId}}));
@@ -55,7 +55,7 @@ test('static confidential payloads are never saved; immediate preview has no DB 
 });
 test('dynamic image always encodes stored stable identity and rejects stale revision',async()=>{
  const {execute}=fixture();const result=await execute({action:'render',draft:{...draft,destination:'https://attacker.test/'},context:{id:'codeA',revision:'1'},format:'preview'});
- assert.equal(result.payload,'https://orderfly.dk/q/'+saved.slug);
+ assert.equal(result.payload,loadTs('src/lib/qr/scan-url.ts').qrScanUrl(saved.slug));
  await assert.rejects(()=>execute({action:'render',draft,context:{id:'codeA',revision:'2'},format:'svg'}),e=>e.code==='revision_conflict');
  await assert.rejects(()=>execute({action:'render',draft,context:{},format:'preview'}),e=>e.code==='save_required');
 });
@@ -74,4 +74,11 @@ test('HTTP unknown write outcome is503, native errors stay deny and all response
   const response=await qrAdminHttp(req({}),{origin:'https://orderfly.dk',execute:async()=>{throw error;}});
   assert.equal(response.status,status);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.text()).includes('secret'),false);
  }
+});
+
+test('copied alphanumeric scan URL is rejected before a dynamic destination is saved',async()=>{
+ const {execute,calls}=fixture();
+ const destination=loadTs('src/lib/qr/scan-url.ts').qrScanUrl(saved.slug);
+ await assert.rejects(()=>execute({action:'save',draft:{...draft,destination},context:{requestId}}),e=>e.code==='blocked_destination');
+ assert.equal(calls.some(x=>x[0]==='create'||x[0]==='update'),false);
 });

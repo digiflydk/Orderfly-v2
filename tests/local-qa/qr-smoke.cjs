@@ -20,11 +20,14 @@ withQrFixture(async({db,ids,manager,viewer,session,BASE})=>{
  phase='native_edit';const updatedDraft={...draft,name:'QA0 QR edited',destination:'https://example.com/qa0-updated'};
  const editedResponse=await api(managerCookie,{action:'save',draft:updatedDraft,context:{id:created.id,revision:created.revision,requestId:randomUUID()}});assert.equal(editedResponse.status,200);let current=await editedResponse.json();assert.equal(current.revision,'2');assert.equal((await savedRef.get()).data().name,updatedDraft.name);
  assert.equal((await api(managerCookie,{action:'save',draft,context:{id:created.id,revision:created.revision,requestId:randomUUID()}})).status,409);checks.push('native edit persists revision and stale revision rejects');
- phase='redirect_native_state';const qrPath=new URL(created.publicUrl).pathname,stored=(await savedRef.get()).data(),slug=qrPath.split('/').pop();
+ phase='redirect_native_state';const qrPath=new URL(created.publicUrl).pathname,stored=(await savedRef.get()).data(),scanCode=qrPath.split('/').pop(),{qrSlugFromScanCode}=loadTs('src/lib/qr/scan-url.ts'),slug=qrSlugFromScanCode(scanCode);
+ assert.match(qrPath,/^\/R\/C[0-9A-Z]{25}$/);assert.ok(slug);
  assert.equal(stored.status,'active');assert.equal(stored.slug,slug);assert.equal(stored.expiresAt,null);assert.equal(stored.brandId,ids.brand);assert.equal(stored.locationId,ids.location);assert.equal((await db.doc('qrPublicCodes/'+slug).get()).data().codeId,created.id);
  phase='redirect_native_resolve';const {createQrStore}=loadTs('src/lib/qr/store.ts'),{normalizeDestination}=loadTs('src/lib/qr/payload.ts');assert.equal(await createQrStore(db,{normalizeDestination}).resolve(slug),(await savedRef.get()).data().destination);
  phase='redirect_persistence';
  const head=await fetch(BASE+qrPath,{method:'HEAD',redirect:'manual'});
+ const originalHead=await fetch(BASE+'/q/'+slug,{method:'HEAD',redirect:'manual'});assert.equal(originalHead.status,302);assert.equal(originalHead.headers.get('location'),head.headers.get('location'));
+ assert.equal((await fetch(BASE+'/R/C'+'Z'.repeat(25),{method:'HEAD',redirect:'manual'})).status,404);
  if(head.status!==302){const alias=await fetch(BASE+qrPath,{method:'HEAD',redirect:'manual',headers:{host:'localhost:3100'}}),get=await fetch(BASE+qrPath,{redirect:'manual',headers:{'user-agent':MOBILE}});phase=`redirect_head_${head.status}_get_${get.status}_localhost_alias_${alias.status}`;}
  assert.equal(head.status,302);assert.deepEqual((await savedRef.get()).data().lifetime,stored.lifetime);assert.equal((await savedRef.collection('qrScanEvents').get()).size,0);
  const mobile=await fetch(BASE+qrPath,{redirect:'manual',headers:{'user-agent':MOBILE}});assert.equal(mobile.status,302);assert.equal(new URL(mobile.headers.get('location')).pathname,'/qa0-updated');assert.match(mobile.headers.get('cache-control'),/no-store/);
@@ -64,6 +67,6 @@ withQrFixture(async({db,ids,manager,viewer,session,BASE})=>{
   }finally{await browser.close();}
  }
  phase='pause';const latest=(await savedRef.get()).data();const pause=await api(managerCookie,{action:'status',brandId:ids.brand,locationId:ids.location,id:created.id,status:'paused',revision:String(latest.revision),requestId:randomUUID()});assert.equal(pause.status,200);
- const paused=await fetch(BASE+qrPath,{redirect:'manual',headers:{'user-agent':MOBILE}});assert.equal(paused.status,404);assert.equal((await savedRef.collection('qrScanEvents').get()).size,2);assert.equal((await savedRef.get()).data().lifetime.openings,2);checks.push('paused redirect rejects without adding scan events');
+ const paused=await fetch(BASE+qrPath,{redirect:'manual',headers:{'user-agent':MOBILE}});assert.equal(paused.status,404);assert.equal((await fetch(BASE+'/q/'+slug,{method:'HEAD',redirect:'manual'})).status,404);assert.equal((await savedRef.collection('qrScanEvents').get()).size,2);assert.equal((await savedRef.get()).data().lifetime.openings,2);checks.push('paused redirect rejects without adding scan events');
  return {environment:'QR-QA0-local',project:'demo-orderfly-qa0',checks,browserAcceptance:!apiOnly,browserErrors,blockedExternalRequests:blockedExternal,productionAcceptance:false,physicalScanVerified:false};
 }).then(result=>console.log(JSON.stringify(result))).catch(()=>{console.error('QR_QA0_SMOKE_FAILED_PHASE_'+phase);process.exitCode=1;});
