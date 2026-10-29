@@ -1,18 +1,19 @@
 import 'server-only';
 import { z } from 'zod';
+import { externalReviewSettings, externalReviewSettingsSchema } from './external-review-settings';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { assertFeedbackBrand, requireFeedbackAccess } from './access';
 import { feedbackAutomation, feedbackAutomationSchema, feedbackMailConfig } from './mail-config';
 import { FeedbackQuestionsVersionSchema } from '@/lib/schemas/feedback';
 import { questionVersionMatchesBrand } from './question-scope';
 import { feedbackAdminNotificationSchema, feedbackAdminNotifications, feedbackAdminNotificationConfig } from './admin-notifications';
-const settingsUpdate = z.object({ brandId: z.string().regex(/^[\w-]{1,160}$/), publicReviewsEnabled: z.boolean().optional() }).merge(feedbackAutomationSchema.partial()).merge(feedbackAdminNotificationSchema.partial()).strict().refine(data => Object.entries(data).some(([key, value]) => key !== 'brandId' && value !== undefined), 'Vælg mindst én indstilling.');
+const settingsUpdate = z.object({ brandId: z.string().regex(/^[\w-]{1,160}$/), publicReviewsEnabled: z.boolean().optional() }).merge(externalReviewSettingsSchema.partial()).merge(feedbackAutomationSchema.partial()).merge(feedbackAdminNotificationSchema.partial()).strict().refine(data => Object.entries(data).some(([key, value]) => key !== 'brandId' && value !== undefined), 'Vælg mindst én indstilling.');
 export type FeedbackSettingsUpdate = z.infer<typeof settingsUpdate>;
 
 export async function readFeedbackSettings(brandId: string) {
   assertFeedbackBrand(await requireFeedbackAccess(), brandId);
   const data = (await getAdminDb().collection('feedbackSettings').doc(brandId).get()).data();
-  return { publicReviewsEnabled: data?.publicReviewsEnabled === true, ...feedbackAutomation(data), ...feedbackAdminNotifications(brandId, data), emailConfigured: Boolean(feedbackMailConfig(brandId)), adminNotificationConfigured: Boolean(feedbackAdminNotificationConfig(brandId)) };
+  return { ...externalReviewSettings(data), publicReviewsEnabled: data?.publicReviewsEnabled === true, ...feedbackAutomation(data), ...feedbackAdminNotifications(brandId, data), emailConfigured: Boolean(feedbackMailConfig(brandId)), adminNotificationConfigured: Boolean(feedbackAdminNotificationConfig(brandId)) };
 }
 export async function writeFeedbackSettings(input: unknown) {
   const data = settingsUpdate.parse(input);
@@ -26,6 +27,8 @@ export async function writeFeedbackSettings(input: unknown) {
       tx.get(db.collection('feedbackSettings').doc(data.brandId)),
     ]);
     if (!brand.exists) throw new Error('Brandet findes ikke.');
+    const externalReviews = externalReviewSettings({ ...current.data(), ...data });
+    if (externalReviews.externalReviewsEnabled && !externalReviews.googleReviewUrl && !externalReviews.trustpilotReviewUrl) throw new Error('Angiv mindst ét anmeldelseslink før aktivering.');
     const notifications = feedbackAdminNotifications(data.brandId, { ...current.data(), ...data });
     const notificationConfig = feedbackAdminNotificationConfig(data.brandId);
     if (notifications.adminNotificationsEnabled && (!notifications.adminNotificationEmail || notifications.adminNotificationEmail !== notificationConfig?.recipientEmail)) throw new Error('Modtageren skal være brandets konfigurerede superadminmail.');
