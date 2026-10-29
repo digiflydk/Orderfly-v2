@@ -738,12 +738,12 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "ac57a0460f65b369178b1a073a10459d84750c709707f8e2001a872a26d1a448",
+  "payload_sha256": "694ebc06bd8041913d0079cdb1cefebfc437321c1d43af96b7e783e4ac9047f9",
   "routes": {
     "/": {
       "file": "index.html",
-      "size": 166022,
-      "sha256": "b29330ec4d5c9ddf9e0163ccaf464b6888eb9129ab844847ed26db75dda13728"
+      "size": 175324,
+      "sha256": "abeb862ee4746d45d313c27fe0e9a529420659b29140132a6fbe85a9271851cb"
     },
     "/_assets/013d8df1119a2bab0fef8d13.css": {
       "sha256": "f01cb0f3418cc744e15712bf50aafa27c5125f05e13ff9b5ca021c7e6c217685",
@@ -3315,5 +3315,13 @@
         ]
       }
     }
+  },
+  "homepage_bootstrap": {
+    "version": 1,
+    "consent_route": "/_assets/website-consent.js",
+    "consent_sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
+    "consent_placement": "first-synchronous-inline-script",
+    "removed_original_hero_preloads": 2,
+    "hero_semantics": "labelled-div-listitem"
   }
 }

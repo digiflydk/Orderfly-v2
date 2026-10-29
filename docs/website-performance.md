@@ -90,3 +90,45 @@ still requires the earlier documented migration/consent/performance patches too.
 Public mobile90+ must be measured again after coordinator release. Isolated
 first-paint timings, passing local tests and these byte reductions do not establish
 that public goal.
+
+## Critical bootstrap and matched hero discovery
+
+Release35c80e48 had three predeclared public mobile measurements:94,80and92,
+with median92. The80result is retained; this is not a claim that every load is90+.
+Headline simulated Lighthouse LCP differs from the observed raw LCP breakdown,
+so the slower simulated result alone does not establish a5second image-render
+stall. This follow-up addresses concrete source/network findings instead.
+
+The previous homepage delivery pass updated the real hero image to responsive
+AVIF but left two media-specific preloads pointing to its original151,420byte
+WebP. A request-level reproduction downloaded both the old WebP and selectedAVIF.
+Those obsolete preloads are removed. The real image stays eager/high-priority;
+no mismatched fallback preload is added. Mobile390px, PSI-like412px/DPR1.75and
+desktop1348px tests require exactly one selected responsive hero request and no
+original-WebP request during initial hero/controls verification. The old asset
+remains available for the existing later Club popup and deep-page compatibility.
+
+The homepage's first synchronous consent bootstrap now embeds the complete
+byte-identical pinned adapter. Its external route remains unchanged for all103
+other HTMLpages. Ownership tests require exactly one owner per page, pin the
+complete inlinebytes/SHA256, reject duplicate/tampered/deferred/relocated owners,
+and retain forbidden-vendor checks for every other script. This removes the
+remaining parser-blocking adapter fetch without deferring consent. The adapter
+contains neither a currentScript dependency nor a literal closing-script delimiter.
+Actual intercepted homepage and newsletter browser flows verify default denial,
+grant, withdrawal/reload and no duplicate provider initialization at390/1440px.
+
+The Club listitem is now a labelleddiv rather than an incompatible section.
+Its classes, heading association, layout and content stay the same. Browser axe
+checks cover both allowed-role compatibility and required children after Swiper
+initialization. NCF is unchanged: an isolated comparison found its two requests
+and35,332rawJSbytes unnecessary for the observed homepage UI, but its removal is
+not needed for these concrete corrections and was left outside this change.
+
+Only the homepage entry changes. A golden digest pins all405non-home manifest
+entries against35c80e48, with individual payload-size/hash verification. All406
+routes remain present. `scripts/preview-critical-bootstrap.cjs` applies this pass
+once after deliveryv2, verifies its input payload and original adapter, and fails
+closed on unexpected owner/wrapper/preload counts. After a fresh exact-head build,
+review and coordinator release, public mobile measurements must be repeated and
+all results disclosed. Local paint timings are not a public score.
