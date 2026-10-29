@@ -38,7 +38,7 @@ Loading displays skeleton/text with busy state, not zero metrics. Empty state sa
 
 ## Checkout
 
-Reuse current delivery/pickup selection and cart. Address validation identifies the failing field and suggests correction. Quote refresh preserves entered information, announces progress and disables payment only while required validation is incomplete. Display delivery fee and estimated interval before payment; new price needs explicit customer acceptance. Unavailable delivery offers pickup without discarding the cart. Confirmation distinguishes payment confirmation from courier booking. Tracking never implies delivery completion from kitchen-ready status.
+Reuse the existing cart and fulfillment selection. Once required address/contact input is valid, calculate delivery automatically. The delivery panel has no calculate-price button, separate price-acceptance checkbox or pickup-switch button. Address validation identifies the failing field and suggests correction. Quote refresh preserves entered information, announces progress and blocks payment until a valid current price is displayed. Show the server delivery fee, total and available estimated interval before payment. The normal payment action accepts that displayed total; background recalculation never submits payment. Changed inputs invalidate the old quote. Quotes with 60 seconds or less remaining and unavailable delivery keep payment blocked with a useful Danish error and a deliberate “Prøv igen” action, without automatic retry loops. Confirmation distinguishes payment confirmation from courier booking. Tracking never implies delivery completion from kitchen-ready status.
 
 ## Accessibility and responsive acceptance
 

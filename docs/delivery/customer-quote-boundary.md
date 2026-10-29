@@ -18,6 +18,8 @@ Claims use canonical `deliveryQuotes/{quoteRef}` plus `customerClaims/current`, 
 
 The order-creation transaction rereads the native quote, claim, current server draft and settings, then atomically consumes the token alongside the Pending order. Replays cannot fund a second order. Managed order metadata binds provider, quote reference and full quote content digest. The paid-order worker owns later provider dispatch. Zero-total or pay-at-pickup managed orders are rejected because the managed authority requires a positive verified online payment.
 
+The checkout requests a quote automatically after valid required input and displays its authoritative fee-inclusive total. Customer acceptance is the normal payment action on that displayed current quote, not a separate quote checkbox. Automatic retrieval is not payment authorization. Input changes invalidate the prior client proof; all native claim, revision, token and amount checks described above still apply.
+
 Quote expiry is checked again before opening Stripe. A quote accepted into a pending order is not a guarantee that its provider price remains available after payment; the paid orchestration must revalidate/reconcile and compensate according to the documented policy. An already-consumed token cannot be retried as a different order if later checkout creation fails; obtain a fresh quote.
 
 ## Rate/privacy and remaining external gates
