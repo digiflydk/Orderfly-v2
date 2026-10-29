@@ -21,6 +21,7 @@ function fixture(){
    {id:'editor',principalId:key('qa-editor'),companyId:'b',locationIds:null,roleIds:['editor'],active:true},
    {id:'viewer',principalId:key('qa-viewer'),companyId:'b',locationIds:null,roleIds:['viewer'],active:true}]
  });
+ const cookieJar=new Map();
  const auth={uid:'qa-platform',cookie:true};const reads=[];
  const failure={write:false,auth:false,read:false};let sequence=0,queue=Promise.resolve();const writes=[];
  const snap=key=>({id:key.split('/')[1],ref:query(key.split('/')[0]).doc(key.split('/')[1]),exists:records.has(key),data:()=>records.has(key)?{...records.get(key)}:undefined,get:field=>records.get(key)?.[field]});
@@ -52,14 +53,14 @@ function fixture(){
  const order={id:'order',customerDetails:{id:'c'},brandId:'b',locationId:'l',deliveryType:'Pickup',status:'Completed',paymentStatus:'Paid'};
  records.set('orders/order',order);
  const mocks={'server-only':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:url=>{throw Object.assign(Error('redirect'),{digest:'NEXT_REDIRECT',url});}},
-  'next/headers':{cookies:async()=>({get:()=>auth.cookie?{value:'synthetic-session'}:undefined})},
+  'next/headers':{cookies:async()=>({get:name=>name==='feedback_review_receipt'?cookieJar.get(name):auth.cookie?{value:'synthetic-session'}:undefined,set:(name,value,options)=>{if(options.maxAge===0)cookieJar.delete(name);else cookieJar.set(name,{value,...options});}})},
   '@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async()=>{if(failure.auth)throw Error('Invalid session');return{uid:auth.uid};}})}),getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:stamp}),admin:{firestore:{FieldValue:{serverTimestamp:stamp}}}},
   '@/lib/auth/permissions':{hasPermission:()=>!failure.auth},
   '@/app/checkout/order-actions':{getOrderById:async id=>records.has('orders/'+id)?{...records.get('orders/'+id),id}:null},
   '@/lib/integrations/esmeralda-feedback-integration':{resolveBookingFeedbackInvitationToken:async token=>token==='valid'?{booking_id:'booking',customer_id:'c',organization_id:'b',location_id:'l',invitation_id:'i',starts_at:'2026-01-01T10:00:00Z',ends_at:'2026-01-01T12:00:00Z',status:records.get('integrationFeedbackInvitations/i')?.status}:null},
  };
  const mailProvider=loadTs('src/lib/feedback/mail-provider.ts',mocks);mocks['./mail-provider']=mailProvider;
- return{mocks,mailProvider,mailQueue:loadTs('src/lib/feedback/mail-queue.ts',mocks),mailWorker:loadTs('src/lib/feedback/mail-worker.ts',mocks),mailAdmin:loadTs('src/lib/feedback/mail-admin.ts',mocks),invitations:loadTs('src/lib/feedback/order-invitations.ts',mocks),records,writes,reads,auth,failure,questions,db,access:loadTs('src/lib/feedback/access.ts',mocks),report:loadTs('src/lib/feedback/report.ts',mocks),settings:loadTs('src/lib/feedback/settings.ts',mocks),reviews:loadTs('src/lib/feedback/public-reviews.ts',mocks),admin:loadTs('src/app/superadmin/feedback/actions.ts',mocks),public:loadTs('src/app/feedback/actions.ts',mocks),store:loadTs('src/lib/feedback/question-store.ts',mocks)};
+ return{cookieJar,mocks,mailProvider,mailQueue:loadTs('src/lib/feedback/mail-queue.ts',mocks),mailWorker:loadTs('src/lib/feedback/mail-worker.ts',mocks),mailAdmin:loadTs('src/lib/feedback/mail-admin.ts',mocks),invitations:loadTs('src/lib/feedback/order-invitations.ts',mocks),records,writes,reads,auth,failure,questions,db,access:loadTs('src/lib/feedback/access.ts',mocks),report:loadTs('src/lib/feedback/report.ts',mocks),settings:loadTs('src/lib/feedback/settings.ts',mocks),reviews:loadTs('src/lib/feedback/public-reviews.ts',mocks),admin:loadTs('src/app/superadmin/feedback/actions.ts',mocks),public:loadTs('src/app/feedback/actions.ts',mocks),store:loadTs('src/lib/feedback/question-store.ts',mocks)};
 }
 function versionForm(overrides={}){
  const values={versionLabel:'Ny version',isActive:'',language:'da',orderTypes:['delivery'],questions:JSON.stringify(questions),...overrides};const form=new FormData();
