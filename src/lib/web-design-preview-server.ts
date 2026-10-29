@@ -1,3 +1,4 @@
+import { encodeWebsiteResponse } from '@/lib/website-response-encoding';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
@@ -72,7 +73,8 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     if (bytes.length !== expected.size || sha(bytes) !== expected.sha256) throw new Error('Preview entry integrity mismatch');
     headers.set('Content-Type', mime[expected.file.split('.').pop()!] ?? 'application/octet-stream');
     headers.set('Content-Length', String(bytes.length));
-    return new Response(request.method === 'HEAD' ? null : new Uint8Array(bytes), {headers});
+    const encoded = encodeWebsiteResponse(bytes, headers, request);
+    return new Response(request.method === 'HEAD' ? null : encoded, {headers});
   } catch {
     return new Response(request.method === 'HEAD' ? null : 'Website unavailable', {status:503,headers:{...Object.fromEntries(headers),...ESMERALDA_UNAVAILABLE_HEADERS}});
   }
