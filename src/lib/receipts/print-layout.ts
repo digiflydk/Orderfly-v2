@@ -94,12 +94,18 @@ function date(value?: string, fallback = 'Dato ukendt') {
   return new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(parsed);
 }
 function count(value: number | null) { return Number.isSafeInteger(value) && value! > 0 ? String(value) : '?'; }
-function printDelivery(doc: Layout, delivery: DeliveryPrintDetails) {
+function printDelivery(doc: Layout, delivery: DeliveryPrintDetails, kitchen = false) {
   doc.box('Leveringsadresse', delivery.address || 'Adresse ikke angivet');
   const interval = (value: { earliest: string; latest: string }) => value.earliest === value.latest
     ? date(value.earliest) : `${date(value.earliest)} – ${date(value.latest)}`;
   doc.line(`Ønsket levering: ${delivery.requested?.kind === 'asap' ? 'Hurtigst muligt' : delivery.requested?.kind === 'scheduled' ? interval(delivery.requested) : 'Ikke angivet'}`, { bold: true, size: 30 });
-  doc.line(delivery.reliablePickup ? `Forventet afhentning af bud: ${interval(delivery.reliablePickup)}` : 'Afhentning af bud: Tidspunkt ikke bekræftet', { size: 30 });
+  if (delivery.pickupUnavailable) {
+    doc.box(delivery.pickupUnavailable === 'cancelled' ? 'LEVERING ANNULLERET' : 'LEVERING MISLYKKET', 'Kontrollér ordren før tilberedning');
+    return;
+  }
+  const pickup = delivery.reliablePickup ?? delivery.plannedPickup;
+  if (kitchen && pickup) doc.box(delivery.reliablePickup ? 'Klar til afhentning' : 'Klar til afhentning (planlagt)', date(pickup.earliest));
+  doc.line(delivery.reliablePickup ? `Forventet afhentning af bud: ${interval(delivery.reliablePickup)}` : delivery.plannedPickup ? `Planlagt afhentning af bud: ${interval(delivery.plannedPickup)}` : 'Afhentning af bud: Tidspunkt ikke bekræftet', { size: 30 });
 }
 
 export function renderKitchenReceiptSvg(settings: KitchenSettings, order: KitchenPreviewData): ReceiptSvg {
@@ -112,7 +118,7 @@ export function renderKitchenReceiptSvg(settings: KitchenSettings, order: Kitche
   if (order.canceled) doc.box('ANNULLERET', 'MÅ IKKE TILBEREDES');
   doc.rule(); doc.line(`#${order.reference}`, { center: true, bold: true, size: settings.paperWidthMm === 58 ? 42 : 46 });
   doc.line(order.fulfillmentType.toUpperCase(), { center: true, bold: true, size: 36 });
-  if (order.delivery) printDelivery(doc, order.delivery);
+  if (order.delivery) printDelivery(doc, order.delivery, true);
   else doc.line(date(order.fulfillmentAt, order.fulfillmentLabel || 'Tidspunkt ikke angivet'), { center: true, bold: true, size: 38 });
   doc.line(`Status: ${order.status}`, { center: true, size: 30 }); doc.rule();
   if (order.notes) doc.box('Bemærkning', order.notes);

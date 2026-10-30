@@ -26,7 +26,7 @@ before(async () => {
     const identity=JSON.stringify({address,cart,time});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise(resolve=>{window.requests=window.requests||[];window.requests.push({value,resolve});}),[]);
     const flow=useManagedDeliveryQuote({enabled,requestIdentity:identity,input,requestQuote:fetchQuote,autoRequestReady:address.length>=3});window.paymentProof=flow.paymentProof;
     return React.createElement(React.Fragment,null,React.createElement('p',null,'Kurv: 2 pizzaer'),React.createElement('label',null,'Adresse',React.createElement('input',{value:address,onChange:event=>setAddress(event.target.value)})),React.createElement(ManagedDeliveryQuote,{enabled,state:flow.state,checkoutFingerprint:flow.state.kind==='ready'?flow.state.quote.checkoutFingerprint:'',previousFeeMinor:flow.previousFeeMinor,onRequest:flow.request}),React.createElement('button',{disabled:!flow.paymentProof,onClick:()=>window.submittedProof=flow.paymentProof},'Test betaling'),React.createElement(ManagedDeliveryTracking,{enabled,orderId:'order-a',data:tracking,onRefresh:()=>{}}));}
-    createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
+    createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,sessionId:window.__receiptSession,receiptToken:window.__receiptToken,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   const cartStub=path.join(dir,'cart-stub.js'),pathStub=path.join(dir,'path-stub.js'),analyticsStub=path.join(dir,'analytics-stub.js'),linkStub=path.join(dir,'link-stub.js');
@@ -105,3 +105,29 @@ test('persisted cancellation separates payment, hides stale ETA and preserves un
 });
 
 test('paid cancelled receipt reports courier cancellation without claiming a refund',async t=>{const context=await browser.newContext({viewport:{width:390,height:844}});t.after(()=>context.close());const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test kunde',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',deliveryTime:'asap',status:'Pending',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'accepted',cancellationState:'cancelled',deliveryStatus:'cancelled',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};});await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Leveringen er annulleret',exact:true})).toBeVisible();await expect(page.getByText('Betaling: Betalt')).toBeVisible();await expect(page.getByText(/har fået annulleret kurérleveringen/)).toBeVisible();await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toHaveCount(0);assert.deepEqual(errors,[]);});
+
+test('paid delivery receipt refreshes ETA automatically with scoped proof, recovers errors and stops on delivery',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.clock.install();
+ const receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',deliveryTime:'asap',status:'Pending',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'pending',deliveryStatus:null,paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};
+ await page.addInitScript(r=>{window.__receipt=r;window.__receiptSession='cs_test_receipt_fixture';window.__receiptToken='a'.repeat(64);},receipt);
+ let requests=0,fail=false,done=false;
+ await page.route('**/api/orders/lookup-by-session?**',async route=>{
+  requests++;const q=new URL(route.request().url()).searchParams;
+  assert.equal(q.get('session_id'),'cs_test_receipt_fixture');assert.equal(q.get('receipt_token'),'a'.repeat(64));assert.equal(q.get('brand_id'),'brand-a');assert.equal(q.get('location_id'),'location-a');assert.equal(q.get('order_id'),'order-a');assert.equal(q.get('status_only'),'true');
+  if(fail)return route.fulfill({status:503,json:{found:false}});
+  const order={...receipt,status:'Received',managedDeliveryTracking:{...receipt.managedDeliveryTracking,bookingState:'accepted',deliveryStatus:done?'delivered':'courier_assigned',deliveryInterval:{earliest:'2026-10-30T11:05:00Z',latest:'2026-10-30T11:15:00Z'},updatedAt:'2026-10-30T10:00:00Z'}};
+  await route.fulfill({json:{found:true,order}});
+ });
+ await page.goto(origin+'/confirmation');await page.clock.runFor(1600);await expect(page.getByText(/Forventet levering:.*12.05/)).toBeVisible();assert.equal(requests,1);
+ await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();
+ fail=true;await page.clock.runFor(10100);await expect(page.getByRole('alert')).toContainText('kunne ikke opdateres');await expect(page.getByText(/Forventet levering:.*12.05/)).toBeVisible();
+ fail=false;done=true;await page.clock.runFor(10100);await expect(page.getByText('Din ordre er leveret',{exact:true})).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);
+ const count=requests;await page.clock.runFor(30000);assert.equal(requests,count);assert.equal(new URL(page.url()).pathname,'/confirmation');
+});
+
+test('legacy paid delivery does not start managed delivery polling',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.clock.install();let requests=0;
+ await page.route('**/api/orders/lookup-by-session?**',async route=>{requests++;await route.fulfill({json:{found:false}});});
+ await page.addInitScript(()=>{window.__receiptSession='cs_test_receipt_fixture';window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',status:'Received',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35}};});
+ await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();await page.clock.runFor(45000);assert.equal(requests,0);
+});

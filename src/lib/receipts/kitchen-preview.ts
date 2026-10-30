@@ -5,6 +5,8 @@ import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 export type DeliveryPrintDetails = {
   address: string;
   requested: { kind: 'asap' } | { kind: 'scheduled'; earliest: string; latest: string } | null;
+  pickupUnavailable?: 'cancelled' | 'failed';
+  plannedPickup?: { earliest: string; latest: string } | null;
   reliablePickup: { earliest: string; latest: string } | null;
 };
 
