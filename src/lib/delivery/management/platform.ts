@@ -42,7 +42,7 @@ export async function loadGeoapifyPlatformInTransaction(tx: FirebaseFirestore.Tr
   const row = await tx.get(ref());
   return row.exists ? geoapifyPlatformRecordSchema.parse(row.data()) : null;
 }
-async function load() { return getAdminDb().runTransaction(loadGeoapifyPlatformInTransaction); }
+async function load() { return getAdminDb().runTransaction(loadGeoapifyPlatformInTransaction,{readOnly:true}); }
 async function authorize(tx: FirebaseFirestore.Transaction, actor: string) {
   const row = await tx.get(getAdminDb().collection('platformAdminControl').doc('access-v1'));
   if (!row.exists || !isSuperuser(policySchema.parse(row.data()), actor)) throw new AuthorityError('forbidden');

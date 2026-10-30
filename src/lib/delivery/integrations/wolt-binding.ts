@@ -98,7 +98,9 @@ export async function createClaimedWoltStorage(capability:WoltDispatchCapability
 }
 async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,authorize:(tx:FirebaseFirestore.Transaction)=>Promise<void>):Promise<Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>>{
  const exact=(candidate:DeliveryScope)=>candidate.brandId===scope.brandId&&candidate.locationId===scope.locationId;
- async function current(){return measureQuoteStep('wolt_authority',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{await authorize(tx);return loadWoltBindingInTransaction(tx,scope,environment);})) );}
+ // This snapshot contains no writes. Read-only transactions retain the scoped
+ // authority/binding checks without an empty read/write commit or read locks.
+ async function current(){return measureQuoteStep('wolt_authority',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{await authorize(tx);return loadWoltBindingInTransaction(tx,scope,environment);},{readOnly:true})) );}
  // Fail before returning a usable adapter and re-authorize every operation thereafter.
  await current();
  const storage:Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>={

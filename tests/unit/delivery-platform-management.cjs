@@ -13,14 +13,15 @@ function fixture(options = {}) {
   const policy = { principals: [{ id: actor, active: true }], companies: [],
     roles: [{ id: 'owner', name: 'Owner', companyId: null, kind: 'superuser', permissions: [], active: true }],
     memberships: [{ id: 'owner', principalId: actor, companyId: null, locationIds: null, roleIds: ['owner'], active: true }] };
-  const records = new Map([['platformAdminControl/access-v1', policy]]), events = [];
+  const records = new Map([['platformAdminControl/access-v1', policy]]), events = [], transactionOptions = [];
   const ref = path => ({ path, id: path.split('/').at(-1), collection: name => ({ doc: id => ref(path + '/' + name + '/' + id) }) });
   let queue = Promise.resolve();
-  const db = { collection: name => ({ doc: id => ref(name + '/' + id) }), runTransaction(run) {
+  const db = { collection: name => ({ doc: id => ref(name + '/' + id) }), runTransaction(run, txOptions) {
+    transactionOptions.push(txOptions);
     const result = queue.then(async () => {
       const copy = new Map(structuredClone([...records])); let writing = false;
       const tx = { get: async r => { assert.equal(writing, false); return { exists: copy.has(r.path), data: () => structuredClone(copy.get(r.path)) }; },
-        set(r, v) { writing = true; copy.set(r.path, v); }, create(r, v) { writing = true; assert.equal(copy.has(r.path), false);
+        set(r, v) { assert.notEqual(txOptions?.readOnly, true); writing = true; copy.set(r.path, v); }, create(r, v) { assert.notEqual(txOptions?.readOnly, true); writing = true; assert.equal(copy.has(r.path), false);
           if (options.failAudit && r.path.includes('/audit/')) throw Error('private-driver'); copy.set(r.path, v); } };
       const value = await run(tx); records.clear(); for (const row of copy) records.set(...row); return value;
     }); queue = result.catch(() => {}); return result;
@@ -42,10 +43,19 @@ function fixture(options = {}) {
       return { kind: options.providerFailure ? 'unavailable' : 'verified', address: { reference: 'hidden', latitude: 55, longitude: 12 } };
     } }) },
   };
-  return { records, events, service: loadTs('src/lib/delivery/management/platform.ts', mocks) };
+  return { records, events, transactionOptions, service: loadTs('src/lib/delivery/management/platform.ts', mocks) };
 }
 const request = (method, value, extra = {}) => new Request('https://orderfly.dk/api/delivery/platform' + (method === 'POST' ? '/check' : ''), {
   method, headers: { origin: 'https://orderfly.dk', 'content-type': 'application/json', ...extra }, ...(method !== 'GET' ? { body: typeof value === 'string' ? value : JSON.stringify(value) } : {}),
+});
+test('runtime platform snapshots are read-only while settings and audit writes remain read-write',async()=>{
+ const f=fixture();await f.service.writeGeoapifyPlatform(command());
+ assert.ok(f.transactionOptions.every(options=>options===undefined));
+ f.transactionOptions.length=0;
+ assert.equal((await f.service.getPlatformGeoapifyReadiness()).enabled,true);
+ assert.equal((await f.service.getPlatformGeoapifyRuntime()).apiKey,key);
+ assert.equal(f.transactionOptions.length,3);
+ for(const options of f.transactionOptions)assert.deepEqual(options,{readOnly:true});
 });
 test('superadmin save is revisioned and projections/audit never expose secret or reference', async () => {
   const f = fixture(); assert.equal((await f.service.readGeoapifyPlatform()).keyConfigured, false);

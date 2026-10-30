@@ -21,7 +21,7 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
  // Independent scoped reads after the controller's pre-persistence gate.
  const [result,runtimeEnvironment]=await Promise.all([
-  getAdminDb().runTransaction(async tx=>(await loadDeliverySettingsInTransaction(tx,brand.id,location.id)).result),
+  getAdminDb().runTransaction(async tx=>(await loadDeliverySettingsInTransaction(tx,brand.id,location.id)).result,{readOnly:true}),
   managedDeliveryRuntimeEnvironment({brandId:brand.id,locationId:location.id}),
  ]);
  if(!result.settings.enabled||result.settings.paused||!result.settings.providerId)throw Error('delivery_disabled');

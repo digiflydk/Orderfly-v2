@@ -61,7 +61,7 @@ before(async()=>{
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
  export const getDiscountCardCheckoutEnabledAction=async()=>scenario.startsWith('ui-card');
- export const getDiscountCardCheckoutOfferAction=async(brand,slug,location,email)=>scenario.startsWith('ui-card')&&email==='test@example.test'?{name:'Familie',percentage:25}:null;
+ export const getDiscountCardCheckoutOfferAction=async(brand,slug,location,email)=>{window.cardPreviewCalls=window.cardPreviewCalls||[];window.cardPreviewCalls.push(email);if(window.holdCardPreview)await new Promise(resolve=>{window.cardPreviewRequests=window.cardPreviewRequests||[];window.cardPreviewRequests.push({email,resolve});});return scenario.startsWith('ui-card-preview')?{name:email,percentage:25}:scenario.startsWith('ui-card')&&email==='test@example.test'?{name:'Familie',percentage:25}:null;};
  export const newsletterSyncAvailableAction=async()=>true;
  export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
@@ -668,4 +668,22 @@ test('actual checkout asks for missing contact instead of pretending address-onl
  const page=await setup(t,'managed-missing-contact');await page.getByPlaceholder('john@example.com',{exact:true}).fill('');await page.clock.install();await fillDeliveryAddress(page);
  await expect(page.getByText('Udfyld navn, e-mail og mobilnummer, så beregner vi leveringsprisen.',{exact:true})).toBeVisible();await expect(page.getByRole('dialog',{name:'Henter leveringsprisen…'})).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
  await page.getByPlaceholder('john@example.com',{exact:true}).fill('test@example.test');await expect(page.getByRole('dialog',{name:'Henter leveringsprisen…'})).toBeVisible();await expect(page.getByPlaceholder('john@example.com',{exact:true})).toBeFocused();
+});
+
+
+test('email benefit preview validates and debounces typing without enqueuing partial addresses',async t=>{
+ const page=await setup(t,'ui-card-preview-debounce');await page.locator('[data-discount-card-offer]').waitFor();await page.clock.install();await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));await page.evaluate(()=>window.cardPreviewCalls=[]);
+ const email=page.getByPlaceholder('john@example.com',{exact:true});
+ for(const value of ['t','test@','test@example']){await email.fill(value);await page.clock.runFor(400);assert.equal(await page.evaluate(()=>window.cardPreviewCalls.length),0);await expect(page.locator('[data-discount-card-offer]')).toHaveCount(0);}
+ await email.fill('first@example.test');await page.clock.runFor(100);await email.fill('latest@example.test');await page.clock.runFor(200);assert.equal(await page.evaluate(()=>window.cardPreviewCalls.length),0);await page.clock.runFor(100);
+ await expect(page.locator('[data-discount-card-offer]')).toContainText('latest@example.test');assert.deepEqual(await page.evaluate(()=>window.cardPreviewCalls),['latest@example.test']);
+});
+
+test('email benefit preview serializes stale lookups and coalesces latest contact plus focus refresh',async t=>{
+ const page=await setup(t,'ui-card-preview-queue');await page.locator('[data-discount-card-offer]').waitFor();await page.clock.install();await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));await page.evaluate(()=>{window.cardPreviewCalls=[];window.holdCardPreview=true;});
+ const email=page.getByPlaceholder('john@example.com',{exact:true});await email.fill('first@example.test');await expect(page.locator('[data-discount-card-offer]')).toHaveCount(0);await page.clock.runFor(300);await expect.poll(()=>page.evaluate(()=>window.cardPreviewCalls.length)).toBe(1);
+ await email.fill('second@example.test');await page.clock.runFor(400);await email.fill('latest@example.test');await page.clock.runFor(400);await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('focus'));});await page.clock.runFor(400);assert.deepEqual(await page.evaluate(()=>window.cardPreviewCalls),['first@example.test']);
+ await page.evaluate(()=>window.cardPreviewRequests[0].resolve());await expect.poll(()=>page.evaluate(()=>window.cardPreviewCalls.length)).toBe(2);assert.deepEqual(await page.evaluate(()=>window.cardPreviewCalls),['first@example.test','latest@example.test']);await expect(page.locator('[data-discount-card-offer]')).toHaveCount(0);
+ await page.evaluate(()=>window.cardPreviewRequests[1].resolve());await expect(page.locator('[data-discount-card-offer]')).toContainText('latest@example.test');await page.clock.runFor(400);assert.equal(await page.evaluate(()=>window.cardPreviewCalls.length),2);
+ await page.evaluate(()=>{window.holdCardPreview=false;window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('focus'));});await page.clock.runFor(300);await expect.poll(()=>page.evaluate(()=>window.cardPreviewCalls.length)).toBe(3);await expect(page.locator('[data-discount-card-offer]')).toContainText('latest@example.test');
 });
