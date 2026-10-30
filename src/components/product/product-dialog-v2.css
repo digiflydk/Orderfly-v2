@@ -1,0 +1,21 @@
+/* Product presentation is opt-in through the server-derived V2 context. */
+[data-product-options][data-v2-product="true"] .v2-product-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  background: #25221c;
+  overflow: hidden;
+  border-radius: 10px 10px 0 0;
+}
+[data-product-options][data-v2-product="true"] .v2-product-hero img { width: 100%; height: 100%; object-fit: cover; }
+[data-product-options][data-v2-product="true"] .v2-product-heading { padding: 22px 20px 12px; gap: 8px; }
+[data-product-options][data-v2-product="true"] .v2-product-heading h2 { font-size: 26px; line-height: 1.2; }
+[data-product-options][data-v2-product="true"] .v2-product-heading p { line-height: 1.6; }
+[data-product-options][data-v2-product="true"] .v2-product-price { font-size: 20px; font-weight: 600; }
+[data-product-options][data-v2-product="true"] .v2-product-customization { border-block: 1px solid #514b40; margin-block: 16px; }
+[data-product-options][data-v2-product="true"] .v2-product-customize { width: 100%; justify-content: space-between; min-height: 56px; border: 0; background: transparent; padding-inline: 0; }
+[data-product-options][data-v2-product="true"] .v2-product-customize-help { color: #cbc4b7; font-size: 14px; padding-bottom: 12px; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product="true"] .commerce-option-quantity { border: 1px solid #665f52; border-radius: 6px; gap: 0; }
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product="true"] .commerce-option-quantity button { border: 0; border-radius: 0; background: transparent; }
+[data-product-options][data-v2-product="true"] .commerce-product-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+[data-product-options][data-v2-product="true"] > button:last-child { background: #171614e6; color: #fff; border-radius: 6px; opacity: 1; top: 12px; right: 12px; }

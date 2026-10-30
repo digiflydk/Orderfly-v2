@@ -1,4 +1,5 @@
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
 import { Textarea } from '@/components/ui/textarea';
@@ -66,7 +67,7 @@ import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { cn } from '@/lib/utils';
-import { availableCheckoutMethods, type CheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
+import { storefrontCheckoutMethods, type CheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 
 
 import { isLockedItem } from '@/lib/cart-utils';
@@ -120,6 +121,7 @@ interface CheckoutClientProps {
 }
 
 function BagFeeRow() {
+  const isV2 = useStorefrontV2();
   const { brand, includeBagFee, toggleBagFee } = useCart();
   const [isAlertOpen, setIsAlertOpen] = useState(false);
 
@@ -158,7 +160,7 @@ function BagFeeRow() {
         <span>{formatPrice(brand.bagFee)}</span>
       </div>
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent data-storefront-version={isV2 ? '2' : undefined}>
           <AlertDialogHeader>
             <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -322,6 +324,7 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
 }
 
 function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { location: Location;managedDeliveryEnabled?:boolean;form:UseFormReturn<CheckoutFormValues> }) {
+  const isV2 = useStorefrontV2();
   const keyboardOpen = useCheckoutKeyboard();
   const { trackEvent, measurementKey, attribution: analyticsAttribution } = useAnalytics();
   const {
@@ -349,7 +352,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
-  const enabledPaymentMethods = useMemo(() => availableCheckoutMethods(location, deliveryType || 'pickup'), [location, deliveryType]);
+  const enabledPaymentMethods = useMemo(() => storefrontCheckoutMethods(location, deliveryType || 'pickup', isV2), [location, deliveryType, isV2]);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod | null>(() => enabledPaymentMethods[0] || null);
   useEffect(() => {
     if (!isProcessing && (!paymentMethod || !enabledPaymentMethods.includes(paymentMethod))) setPaymentMethod(enabledPaymentMethods[0] || null);
@@ -867,11 +870,11 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
         )}
       </div>
       <FormProvider {...form}>
-        <form data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
+        <form data-storefront-version={isV2 ? '2' : undefined} data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
-              <section aria-labelledby="payment-method-heading">
+              {!isV2 && <section aria-labelledby="payment-method-heading">
                 <h2 id="payment-method-heading" className="text-2xl font-bold mb-4">Betalingsmetode</h2>
                 <div className="space-y-3">
                   {enabledPaymentMethods.map(method => <label key={method} className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
@@ -882,7 +885,8 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                   </label>)}
                   {!enabledPaymentMethods.length && <p role="alert" className="text-destructive">Restauranten tilbyder ikke en betalingsmetode til levering. Vælg afhentning eller kontakt restauranten.</p>}
                 </div>
-              </section>
+              </section>}
+              {isV2 && !enabledPaymentMethods.length && <p role="alert" className="text-destructive">Online betaling er ikke tilgængelig hos restauranten lige nu. Kontakt restauranten for at bestille.</p>}
               <section>
                 <h2 className="text-2xl font-bold mb-4">Levering og tidspunkt</h2>
                 <div className="space-y-4">
@@ -1188,7 +1192,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
       )}
 
       <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent data-storefront-version={isV2 ? '2' : undefined}>
           <AlertDialogHeader>
             <AlertDialogTitle>Rabatkoden kunne ikke bruges</AlertDialogTitle>
             <AlertDialogDescription>{discountErrorMessage}</AlertDialogDescription>

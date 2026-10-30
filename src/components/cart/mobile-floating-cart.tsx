@@ -1,4 +1,5 @@
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { useEffect, useRef, useState } from 'react';
 import { useCart } from '@/context/cart-context';
 import { ShoppingBag } from 'lucide-react';
@@ -10,6 +11,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     floating?: boolean;
     compact?: boolean;
 }) {
+    const isV2 = useStorefrontV2();
     const { itemCount, checkoutTotal, bagFee, editingItem } = useCart();
     const [open, setOpen] = useState(false);
     const returnAfterEdit = useRef(false);
@@ -22,14 +24,14 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     if (!itemCount && floating)
         return null;
     return <>
-    {floating && <div className="h-20 lg:hidden" aria-hidden="true"/>}
+    {floating && <div data-v2-cart-clearance={isV2 || undefined} className="h-20 lg:hidden" aria-hidden="true"/>}
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button size="lg" className={floating ? 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold' : 'font-bold min-h-11'}>
+        <Button data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating ? 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold' : 'font-bold min-h-11'}>
           <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span>}</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
+      <SheetContent data-storefront-version={isV2 ? '2' : undefined} side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
         <SheetHeader className="p-4 pr-14 shrink-0"><SheetTitle>Din kurv · {itemCountLabel(itemCount)}</SheetTitle><SheetDescription>Rediger dine varer, eller gå videre til kassen.</SheetDescription></SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto"><CartContents onEdit={() => { returnAfterEdit.current = true; setOpen(false); }}/><CartTotals onBrowse={() => setOpen(false)}/></div>
         <div className="shrink-0 border-t bg-background p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"><CartCheckoutButton /></div>

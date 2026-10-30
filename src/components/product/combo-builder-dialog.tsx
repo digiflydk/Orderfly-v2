@@ -1,6 +1,12 @@
 
 'use client';
-import { money } from '@/lib/money';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
+import { publicRead } from '@/lib/public-read';
+import { ProductOptionGroup } from './product-option-group';
+import { activeToppingGroupIds } from '@/lib/topping-conditions';
+import { resolveToppingOptions, reconcileToppingQuantities, cartTopping, type EffectiveTopping } from '@/lib/topping-options';
+import { resolveComboProductModifiers } from '@/lib/combo-modifiers';
+import { money, sumMoney } from '@/lib/money';
 
 import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
@@ -12,7 +18,7 @@ import { Label } from '@/components/ui/label';
 import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
-import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
+import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu, Topping, ToppingGroup } from '@/types';
 import { Minus, Plus, X } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '../ui/badge';
@@ -24,6 +30,7 @@ interface ComboBuilderDialogProps {
   initialItem?: CartItem;
   initialQuantity?: number;
   preselectedProductId?: string;
+  preselectedModifiers?: {id: string; quantity: number}[];
   onSaved?: () => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
@@ -49,7 +56,9 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
     return "Vælg tilvalg";
 }
 
-export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, onSaved }: ComboBuilderDialogProps) {
+export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, preselectedModifiers, onSaved }: ComboBuilderDialogProps) {
+  const isV2 = useStorefrontV2();
+  const configureProducts = isV2 || preselectedModifiers !== undefined || !!initialItem?.comboSelections?.some(g => g.products.some(p => p.modifiers !== undefined));
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
   const { toast } = useToast();
@@ -70,6 +79,47 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
   const [showErrors, setShowErrors] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<SelectionState>({});
+
+  const [modifiers, setModifiers] = useState<Record<string, {id: string; quantity: number}[]>>({});
+  const [optionCatalog, setOptionCatalog] = useState<{key: string; groups: ToppingGroup[]; toppings: Topping[]} | null>(null);
+  const [optionError, setOptionError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const optionKey = `${combo.brandId}/${location?.id}`;
+  useEffect(() => {
+    if (!isOpen || !location) return;
+    let cancelled = false;
+    setOptionError(false);
+    const needsOptions = configureProducts && combo.productGroups.some(g => brandProducts.some(p => g.productIds.includes(p.id) && p.toppingGroupIds?.length));
+    const read = needsOptions ? publicRead<{groups: ToppingGroup[]; toppings: Topping[]}>(`/api/public/product-options?${new URLSearchParams({brandId: combo.brandId, locationId: location.id})}`) : Promise.resolve({groups: [], toppings: []});
+    read
+      .then(data => { if (!Array.isArray(data.groups) || !Array.isArray(data.toppings)) throw Error('Invalid options'); if (!cancelled) setOptionCatalog({...data, key: optionKey}); })
+      .catch(() => {if (!cancelled) setOptionError(true);});
+    return () => {cancelled = true;};
+  }, [isOpen, optionKey, retry, configureProducts]);
+  const optionsReady = optionCatalog?.key === optionKey && !optionError;
+  const configurations = combo.productGroups.flatMap(group => (selection[group.id] || []).flatMap(id => {
+    const product = brandProducts.find(p => p.id === id);
+    if (!configureProducts || !product || !location || !deliveryType || !optionsReady) return [];
+    const key = `${group.id}/${id}`;
+    const catalog = {...optionCatalog!, products: brandProducts};
+    const scope = {brandId: combo.brandId, locationId: location.id, deliveryType};
+    const groups = catalog.groups.filter(g => product.toppingGroupIds?.includes(g.id));
+    const options = resolveToppingOptions(product, groups, catalog.toppings, brandProducts, scope);
+    const choices = modifiers[key] ?? Object.entries(reconcileToppingQuantities(product, groups, options, {})).map(([id,quantity]) => ({id,quantity}));
+    const quantities = Object.fromEntries(choices.map(m => [m.id,m.quantity]));
+    const resolved = resolveComboProductModifiers(product, choices, catalog, scope);
+    return [{key, product, groups, options, choices, quantities, resolved}];
+  }));
+  const modifierToppings = configurations.flatMap(c => (c.resolved || []).map(t => ({...t, name: `${c.product.productName}: ${t.name}`})));
+  const modifierTotal = sumMoney(modifierToppings.map(t => t.price));
+  function updateModifier(config: typeof configurations[number], option: EffectiveTopping, count: number) {
+    const next = {...config.quantities};
+    const group = config.groups.find(g => g.id === option.groupId);
+    if (count > 0 && (group?.selectionMode === 'single' || group?.maxSelection === 1)) config.options.filter(o => o.groupId === option.groupId).forEach(o => delete next[o.id]);
+    if (count > 0) next[option.id] = count; else delete next[option.id];
+    const reconciled = reconcileToppingQuantities(config.product, config.groups, config.options, next, undefined, config.quantities);
+    setModifiers(previous => ({...previous, [config.key]: Object.entries(reconciled).map(([id, quantity]) => ({id, quantity}))}));
+  }
 
   const comboPrice = useMemo(() => {
     const amount = deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice;
@@ -98,6 +148,16 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
         const group = combo.productGroups.find(g => g.productIds.includes(preselectedProductId));
         if (group) initialSelection[group.id] = [preselectedProductId];
       }
+      const initialModifiers: typeof modifiers = {};
+      if (initialItem?.itemType === 'combo') initialItem.comboSelections?.forEach(g => {
+        const group = combo.productGroups.find(candidate => g.groupId ? candidate.id === g.groupId : candidate.groupName === g.groupName);
+        if (group) g.products.forEach(p => {initialModifiers[`${group.id}/${p.id}`] = p.modifiers || [];});
+      });
+      if (preselectedProductId) {
+        const group = combo.productGroups.find(g => g.productIds.includes(preselectedProductId));
+        if (group) initialModifiers[`${group.id}/${preselectedProductId}`] = preselectedModifiers || [];
+      }
+      setModifiers(initialModifiers);
       setSelection(initialSelection);
       setQuantity(initialQuantity || initialItem?.quantity || 1);
     }
@@ -150,13 +210,14 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
 
   const handleAddToCart = () => {
     if (!cartReady || committed.current || comboPrice === undefined) return;
-    if (!isSelectionValid) {
+    if (!isSelectionValid || !optionsReady || configurations.some(c => !c.resolved)) {
       setShowErrors(true);
       const group = combo.productGroups.find(g => {
         const ids = selection[g.id] || [];
         return ids.length < Number(g.minSelection) || (Number(g.maxSelection)>0 && ids.length>Number(g.maxSelection)) || ids.some(id => !brandProducts.some(p=>p.id===id));
       });
-      const el = group && document.getElementById(`${dialogId}-group-${group.id}`);
+      const invalidProduct = configurations.find(c => !c.resolved);
+      const el = group ? document.getElementById(`${dialogId}-group-${group.id}`) : invalidProduct ? document.getElementById(`${dialogId}-product-${invalidProduct.key}`) : null;
       if (el) {el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); el.focus();}
       return;
     }
@@ -167,23 +228,24 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
         groupName: group?.groupName || '',
         products: ids.map(pid => {
           const product = brandProducts.find(p => p.id === pid);
-          return { id: pid, name: product?.productName || 'Vare' };
+          const choices = configurations.find(c => c.key === `${groupId}/${pid}`)?.choices;
+          return { id: pid, name: product?.productName || 'Vare', ...(configureProducts ? {modifiers: choices || []} : {}) };
         })
       };
     });
-    if (addComboToCart(combo, quantity, comboSelections, comboPrice, initialItem) === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen.'}); return;}
+    if (addComboToCart(combo, quantity, comboSelections, comboPrice, initialItem, modifierToppings) === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen.'}); return;}
     committed.current = true;
     onSaved?.();
     toast({title: initialItem ? 'Kurven er opdateret' : 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
-    trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money(comboPrice * quantity), deliveryType});
+    trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money((comboPrice + modifierTotal) * quantity), deliveryType});
     setIsOpen(false);
   };
   
-  const totalItemPrice = (comboPrice || 0) * quantity;
+  const totalItemPrice = sumMoney([comboPrice || 0, modifierTotal]) * quantity;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
                 <div className="commerce-option-header">
@@ -236,6 +298,24 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                         </section>
                     );
                     })}
+                    {!optionsReady && <p role="status">{optionError ? 'Tilvalg kunne ikke indlæses.' : 'Indlæser tilvalg…'}</p>}
+                    {optionError && <Button onClick={() => setRetry(n => n + 1)}>Prøv igen</Button>}
+                    {configurations.filter(c => c.groups.length > 0).map(config => {
+                      const active = activeToppingGroupIds(config.product, config.groups, config.options, Object.keys(config.quantities));
+                      const selectedToppings = Object.fromEntries(config.choices.flatMap(m => {
+                        const option = config.options.find(o => o.id === m.id);
+                        return option && m.quantity <= option.maxQuantity ? [[m.id, cartTopping(option,m.quantity)]] : [];
+                      }));
+                      return <section key={config.key} id={`${dialogId}-product-${config.key}`} tabIndex={-1} aria-label={`Tilvalg til ${config.product.productName}`}>
+                        <h3 className="font-semibold">Tilvalg til {config.product.productName}</h3>
+                        {showErrors && !config.resolved && <p role="alert">Kontrollér tilvalg til {config.product.productName}.</p>}
+                        {config.groups.filter(g => active.has(g.id)).map(group => <ProductOptionGroup key={group.id}
+                          group={{...group, toppings:config.options.filter(o => o.groupId === group.id)}}
+                          dialogId={`${dialogId}-${config.key}`} selectedToppings={selectedToppings} showErrors={showErrors}
+                          initiallyExpanded selectionText={group.maxSelection === group.minSelection ? `Vælg ${group.minSelection}` : `Vælg mindst ${group.minSelection}`}
+                          onQuantity={(option, count) => updateModifier(config,option,count)} />)}
+                      </section>;
+                    })}
             </div>
             </ScrollArea>
             <div className="w-full mt-auto sticky bottom-0">
@@ -260,10 +340,10 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     size="lg"
                     className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!cartReady || comboPrice === undefined}
+                    disabled={!cartReady || comboPrice === undefined || !optionsReady}
                 >
                     <div className="flex w-full justify-between items-center">
-                        <span>{!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                        <span>{!isSelectionValid || configurations.some(c => !c.resolved) ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
                         <span>{formatPrice(totalItemPrice)}</span>
                     </div>
                 </Button>

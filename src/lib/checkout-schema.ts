@@ -35,7 +35,7 @@ const checkoutTupleSchema = z.tuple([
     toppingIds: z.array(id).max(MAX_TOPPINGS_PER_ITEM).optional(),
     toppingQuantities: z.array(z.number().int().min(1).max(MAX_TOPPINGS_PER_ITEM)).max(MAX_TOPPINGS_PER_ITEM).optional(),
     comboSelections: z.array(z.object({ groupId: id.optional(), groupName: z.string().min(1).max(200),
-      products: z.array(z.object({ id, name: z.string().max(200) })).max(40),
+      products: z.array(z.object({ id, name: z.string().max(200) , modifiers: z.array(z.object({ id, quantity: z.number().int().min(1).max(MAX_TOPPINGS_PER_ITEM) }).strict()).max(MAX_TOPPINGS_PER_ITEM).optional() })).max(40),
     })).max(20).optional(),
     unitPrice: amount, totalPrice: amount, toppings: z.array(z.string().max(200)).max(MAX_TOPPINGS_PER_ITEM).optional(),
   }).refine(item => !item.toppingQuantities || (!!item.toppingIds && item.toppingIds.length === item.toppingQuantities.length && item.toppingIds.length === (item.toppings || []).length && item.toppingQuantities.reduce((sum, n) => sum + n, 0) <= MAX_TOPPINGS_PER_ITEM), 'Invalid topping quantities.')).min(1).max(97), // Stripe supports 100 lines, leaving room for the three fees.

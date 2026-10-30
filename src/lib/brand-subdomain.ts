@@ -1,3 +1,5 @@
+import { isEsmeraldaV2Host } from './esmeralda-v2-host';
+
 // Brand subdomains under orderfly.dk (#12). The existing unique brand `slug`
 // is the subdomain label, so `esmeralda` serves https://esmeralda.orderfly.dk.
 // Pure helpers: safe to import from edge middleware, server and client code.
@@ -15,6 +17,8 @@ export const RESERVED_BRAND_SLUGS = new Set([
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
   // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
   'club',
+  // Explicit V2 presentation alias belongs to the existing Esmeralda brand.
+  'esmeralda2',
   'features', 'pricing', 'contact', 'ok', 'health', 'static', 'assets', 'cdn',
 ]);
 
@@ -68,6 +72,7 @@ export function brandSlugAlternatives(slug: string, taken: (candidate: string) =
  * is accepted for local testing, since browsers resolve *.localhost locally.
  */
 export function brandSlugFromHost(hostHeader: string | null | undefined): string | null {
+  if (isEsmeraldaV2Host(hostHeader)) return 'esmeralda';
   const host = (hostHeader ?? '').split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
   for (const root of [ROOT_DOMAIN, 'localhost']) {
     if (!host.endsWith(`.${root}`)) continue;

@@ -1,0 +1,18 @@
+/* V2 only: preserve V1 layout and reserve iOS home-indicator clearance. */
+[data-v2-cart-bar="true"] {
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-radius: 0;
+}
+[data-v2-cart-clearance="true"] { height: calc(80px + env(safe-area-inset-bottom, 0px)); }
+[data-storefront-version="2"] .commerce-checkout-bar {
+  padding: 12px 0 env(safe-area-inset-bottom, 0px);
+}
+@media (max-width: 1023px) {
+  form[data-storefront-version="2"] > .grid {
+    padding-bottom: calc(230px + env(safe-area-inset-bottom, 0px));
+  }
+}
+[data-storefront-version="2"][data-commerce-panel="cart"] {
+  max-height: 90dvh;
+}

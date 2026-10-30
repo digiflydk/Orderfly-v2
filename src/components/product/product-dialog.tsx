@@ -1,5 +1,6 @@
 
 'use client';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { lineMoney, money, sumMoney } from '@/lib/money';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, cartTopping, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
@@ -8,7 +9,7 @@ import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, ChevronDown } from 'lucide-react';
 import type { CartItem, ComboMenu, Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
@@ -58,9 +59,11 @@ const getSelectionText = (group: ToppingGroup): string => {
 
 
 export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount, initialItem, onAdded, upsellId }: ProductDialogProps) {
+  const isV2 = useStorefrontV2();
   const {combos, products} = useStorefrontCatalog();
   const [upgrade, setUpgrade] = useState<ComboMenu | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
   const initialized = useRef('');
   const committed = useRef(false);
   const interactionId = useRef('');
@@ -107,7 +110,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     const key = `${product.id}/${location?.id}/${deliveryType}/${initialItem?.cartItemId || ''}`;
     if (isOpen && location && initialized.current !== key) {
       if (initialized.current) {setIsOpen(false); return;}
-      initialized.current = key; committed.current = false; setShowErrors(false);
+      initialized.current = key; committed.current = false; setShowErrors(false); setCustomizing(false);
       interactionId.current = crypto.randomUUID();
       pendingUserSelection.current = false;
       setQuantity(initialItem?.quantity || 1);
@@ -224,18 +227,24 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     setIsOpen(false);
   }
 
+  const optionalSelections = Object.values(selectedToppings).filter(option => relevantToppingGroups.some(group =>
+    group.minSelection === 0 && group.toppings.some(topping => topping.id === option.id)));
   const hasOptions = allergenError || allergens.length > 0 || relevantToppingGroups.length > 0;
 
-  if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
+  if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} preselectedModifiers={isV2 ? Object.values(selectedToppings).map(option => ({id: option.id!, quantity: option.quantity ?? 1})) : undefined} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent data-commerce-panel="options" data-product-options className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" data-product-options data-v2-product={isV2 ? "true" : undefined} className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
         <div className="flex min-h-0 flex-col overflow-hidden">
-            <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
+            {!isV2 && <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
-                </div>
+                </div>}
             <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
+                {isV2 && <div className="v2-product-overview">
+                  <div className="v2-product-hero"><Image src={safeImage(product.imageUrl)} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" /></div>
+                  <DialogHeader className="v2-product-heading text-left"><DialogTitle>{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="v2-product-price">{formatPrice(finalPrice)}</p></DialogHeader>
+                </div>}
                 <div className="px-4 pb-3 pt-2 space-y-2">
                     {hasOptions && (
                         <>
@@ -254,19 +263,32 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                 </div>
                             )}
 
-                            {relevantToppingGroups.map(group => <ProductOptionGroup key={group.id}
+                            {relevantToppingGroups.filter(group => !isV2 || group.minSelection > 0).map(group => <ProductOptionGroup key={group.id}
                               group={group} initiallyExpanded={group.id === relevantToppingGroups.find(candidate => candidate.minSelection === 0)?.id} dialogId={dialogId} selectedToppings={selectedToppings}
                               showErrors={showErrors} selectionText={getSelectionText(group)} onQuantity={handleToppingQuantity} />)}
+                            {isV2 && relevantToppingGroups.some(group => group.minSelection === 0) && <section className="v2-product-customization">
+                              <Button type="button" variant="outline" className="v2-product-customize" aria-expanded={customizing} aria-controls={`${dialogId}-ingredients`} onClick={() => setCustomizing(value => !value)}>
+                                <span>Tilpas ingredienser</span><ChevronDown aria-hidden="true" className={customizing ? 'rotate-180' : ''} />
+                              </Button>
+                              {!customizing && optionalSelections.length > 0 && <p className="v2-product-customize-help">{optionalSelections.map(option => `${(option.quantity ?? 1) > 1 ? `${option.quantity} × ` : ''}${option.name}`).join(', ')}</p>}
+                              <div id={`${dialogId}-ingredients`} hidden={!customizing}>
+                                <p className="v2-product-customize-help">Tilføj eller fjern ingredienser efter din smag.</p>
+                                {relevantToppingGroups.filter(group => group.minSelection === 0).map(group => <ProductOptionGroup key={group.id}
+                                  group={group} initiallyExpanded dialogId={dialogId} selectedToppings={selectedToppings}
+                                  showErrors={showErrors} selectionText={getSelectionText(group)} onQuantity={handleToppingQuantity} />)}
+                              </div>
+                            </section>}
                         </>
                     )}
                   {combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id))).slice(0,2).map(c => {
                     const price = deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice;
                     if (price === undefined) return null;
-                    const delta=price-finalPrice-toppingsTotal;
+                    const menuPrice = isV2 ? sumMoney([price, toppingsTotal]) : price;
+                    const delta = isV2 ? price - finalPrice : price - finalPrice - toppingsTotal;
                     return <section className="commerce-inline-offers" key={c.id}>
                       <h3 className="font-semibold">Gør det til {c.comboName}</h3><p className="text-sm">{c.description || c.productGroups.map(g=>g.groupName).join(' + ')}</p>
-                      <p className="text-sm">{formatPrice(price)} pr. menu · {delta>=0?`+${formatPrice(delta)}`:`Spar ${formatPrice(-delta)}`} pr. stk.</p>
-                      {Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
+                      <p className="text-sm">{formatPrice(menuPrice)} pr. menu · {delta>=0?`+${formatPrice(delta)}`:`Spar ${formatPrice(-delta)}`} pr. stk.</p>
+                      {!isV2 && Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
                       <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>Vælg menu</Button>
                     </section>;
                   })}
@@ -282,8 +304,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
                 <Button size="lg" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
                   onClick={handleAddToCart} disabled={!cartReady}
-                  aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
-                  <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                  aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
+                  <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'}</span>
                   <span className="text-sm tabular-nums">{formatPrice(totalItemPrice)}</span>
                 </Button>
               </div>

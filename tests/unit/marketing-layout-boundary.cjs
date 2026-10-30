@@ -4,6 +4,12 @@ const fs=require('node:fs'),ts=require('typescript');
 test('native brand layout fetches only its brand and never forwards global marketing settings',async()=>{
  const brand={id:'brand-a',slug:'fixture',name:'Fixture'},reads=[];
  const mocks={
+  // Browser-only styles and request/presentation dependencies are explicit;
+  // unexpected data dependencies must still fail this boundary test.
+  '@/styles/storefront-v2-checkout.css':{},
+  'next/headers':{headers:async()=>new Headers({host:'fixture.orderfly.dk'})},
+  '@/lib/esmeralda-v2-host':{isEsmeraldaV2Host:()=>assert.fail('V2 host check must not run for another brand')},
+  '@/context/storefront-v2-context':{StorefrontV2Provider:'StorefrontV2'},
   'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},
   'next/navigation':{notFound:()=>{throw Error('not found');}},
   '@/lib/data/brand-location':{getBrandBySlug:async slug=>{reads.push(slug);return slug==='fixture'?brand:null;}},
@@ -20,6 +26,8 @@ test('native brand layout fetches only its brand and never forwards global marke
  new Function('require','module','exports',code)(name=>{assert.ok(name in mocks,`unexpected layout dependency: ${name}`);return mocks[name];},mod,mod.exports);
  const layout=mod.exports.default;
  const tree=await layout({params:Promise.resolve({brandSlug:'fixture'}),children:'content'});
+ assert.equal(tree.type,'StorefrontV2');
+ assert.equal(tree.props.enabled,false);
  function find(node){if(node?.type==='BrandLayoutClient')return node;const children=node?.props?.children;for(const child of Array.isArray(children)?children:[children]){if(child&&typeof child==='object'){const found=find(child);if(found)return found;}}}
  assert.deepEqual(find(tree).props,{brand,children:'content'});
  assert.deepEqual(reads,['fixture']);

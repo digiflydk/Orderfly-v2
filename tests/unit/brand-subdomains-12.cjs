@@ -144,10 +144,14 @@ function loadTsx(file, mocks) {
 }
 
 test('#12 a suspended brand renders the neutral status page, never its storefront', async () => {
-  const render = status => loadTsx('src/app/[brandSlug]/layout.tsx', {
+  const render = (status, host = 'esmeralda.orderfly.dk', slug = 'esmeralda') => loadTsx('src/app/[brandSlug]/layout.tsx', {
     react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
-    '@/lib/data/brand-location': { getBrandBySlug: async () => (status ? { id: 'b', slug: 'esmeralda', name: 'Esmeralda', status } : null) },
+    '@/lib/data/brand-location': { getBrandBySlug: async () => (status ? { id: 'b', slug, name: 'Esmeralda', status } : null) },
+    '@/styles/storefront-v2-checkout.css': {},
+    'next/headers': { headers: async () => new Headers({ host }) },
+    '@/lib/esmeralda-v2-host': loadTs('src/lib/esmeralda-v2-host.ts'),
+    '@/context/storefront-v2-context': { StorefrontV2Provider: ({ children }) => children },
     '@/context/cart-context': { CartProvider: ({ children }) => children },
     '@/context/analytics-context': { AnalyticsProvider: ({ children }) => children },
     './deliverymodalhost': { default: () => null }, './layout-client': { BrandLayoutClient: ({ children }) => children },
@@ -159,6 +163,10 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
   assert.match(suspended, /data-brand-status="suspended"/);
   assert.doesNotMatch(suspended, /STOREFRONT|Esmeralda/);
   assert.match(html(await render('active')), /STOREFRONT/);
+  assert.match(html(await render('active', 'esmeralda2.orderfly.dk')), /data-storefront-version="2"/);
+  assert.doesNotMatch(html(await render('active')), /data-storefront-version/);
+  assert.doesNotMatch(html(await render('active', 'esmeralda2.orderfly.dk', 'other')), /data-storefront-version/);
+  assert.doesNotMatch(html(await render('suspended', 'esmeralda2.orderfly.dk')), /STOREFRONT|data-storefront-version/);
   await assert.rejects(render(null), /NOT_FOUND/);
 });
 

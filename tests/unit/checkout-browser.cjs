@@ -26,7 +26,7 @@ before(async()=>{
  const scenario=new URLSearchParams(window.location.search).get('case')||'success';
  const presentation=scenario.startsWith('presentation');
  const newsletter=scenario.startsWith('ui-newsletter')||scenario.startsWith('ui-club');
- export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location=${JSON.stringify(location)};
+ export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location={...${JSON.stringify(location)},...(scenario.startsWith('v2-')?{paymentMethods:{online:!scenario.includes('offline'),payAtPickup:true}}:{})};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
  const reduced={...item,id:'offer',cartItemId:'offer',basePrice:75,price:45};
@@ -93,11 +93,12 @@ before(async()=>{
  import {MobileFloatingCart} from ${JSON.stringify(path.join(root,'src/components/cart/mobile-floating-cart.tsx'))};
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
  import {StorefrontCatalog} from ${JSON.stringify(path.join(root,'src/context/storefront-catalog.tsx'))};
+ import {StorefrontV2Provider} from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
  import {FixtureCart,brand,location} from ${JSON.stringify(cart)};
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},surface):surface;
- createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},content)));
+ createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},content):content))));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
  const aliases={
@@ -119,8 +120,8 @@ before(async()=>{
  };
  // Specific aliases must precede the generic @ prefix.
  delete aliases['@'];aliases['@']=path.join(root,'src');
- await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
- const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
+ await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/\.css$/,use:[fixture('css-loader','module.exports=function(){return "";}')]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2-checkout.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
@@ -560,4 +561,36 @@ test('managed form change in the same submit turn cannot reuse a previously disp
  await page.getByLabel('Adresse',{exact:true}).evaluate(input=>{const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Andenvej 99');input.dispatchEvent(new Event('input',{bubbles:true}));input.form.requestSubmit();});
  await page.waitForTimeout(150);assert.equal(requests.get('managed-submit-race')?.length||0,0);await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
  await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.street)).toBe('Andenvej 99');await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-submit-race')[0][1].street,'Andenvej 99');
+});
+
+// V2 changes presentation/payment handoff only; requests retain the existing contract.
+test('V2 mobile checkout has no payment selector and hands online payment to hosted provider',async t=>{
+ const page=await setup(t,'v2-success-mobile');
+ await expect(page.locator('form[data-storefront-version="2"]')).toHaveCount(1);
+ await expect(page.locator('input[name="paymentMethod"]')).toHaveCount(0);
+ await expect(page.getByText('Betal ved afhentning',{exact:true})).toHaveCount(0);
+ const button=page.getByRole('button',{name:/Gå til betaling/}).last();
+ await expect(button).toBeVisible();
+ await expect(button).toHaveCSS('background-color','rgb(213, 176, 98)');
+ await expect(page.locator('form[data-storefront-version="2"]')).toHaveCSS('background-color','rgb(23, 22, 20)');
+ await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+ const box=await button.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=900,'payment CTA stays in viewport');
+ await pay(page);await page.waitForURL('**/stripe?*');
+ assert.equal(requests.get('v2-success-mobile').length,1);
+ assert.equal(requests.get('v2-success-mobile')[0][1].paymentMethod,'online');
+});
+test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
+ const page=await setup(t,'v2-invalid-mobile');
+ await page.getByPlaceholder('john@example.com').fill('invalid');await pay(page);
+ await expect(page.getByText('Indtast en gyldig e-mailadresse',{exact:true})).toBeVisible();
+ await expect(page.getByRole('alert').filter({visible:true})).toContainText('Kontrollér de markerede felter');
+ assert.equal(requests.has('v2-invalid-mobile'),false);
+});
+test('V2 never silently enables online payment when merchant disables it',async t=>{
+ const page=await setup(t,'v2-offline-mobile');
+ await expect(page.getByText('Online betaling er ikke tilgængelig hos restauranten lige nu. Kontakt restauranten for at bestille.')).toBeVisible();
+ await expect(page.locator('input[name="paymentMethod"]')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.locator('form').evaluate(form=>form.requestSubmit());
+ await page.waitForTimeout(100);assert.equal(requests.has('v2-offline-mobile'),false);
 });

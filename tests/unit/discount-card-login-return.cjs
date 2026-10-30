@@ -1,5 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),vm=require('node:vm');
-const routes={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/brand-subdomain.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:routes,exports:routes.exports});
+// Load the actual pure host helper, while rejecting any unexpected dependency.
+const host={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/esmeralda-v2-host.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:host,exports:host.exports});
+const routes={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/brand-subdomain.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:routes,exports:routes.exports,require:name=>{assert.equal(name,'./esmeralda-v2-host');return host.exports;}});
 const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/[brandSlug]/club/login/checkout-return.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:name=>{assert.equal(name,'@/lib/brand-subdomain');return routes.exports;}});
 const {safeCheckoutReturn:valid,readCheckoutReturn:read,checkoutReturnKey:key}=m.exports;
 test('only same-brand relative checkout paths allowed',()=>{
@@ -21,4 +23,13 @@ test('all storefront checkout route classes roundtrip, including canonical long 
   assert.equal(valid(target,'esmeralda',canonical?'/club':'/esmeralda/club'),target,target);
  }
  for(const p of ['/feedback/checkout','/esmeralda/checkout','/other/feedback/checkout','/esmeralda/feedback/checkout?x=1','/esmeralda/../checkout'])assert.equal(valid(p,'esmeralda','/club'),null,p);
+});
+
+test('V2 presentation alias keeps the existing brand checkout return boundary',()=>{
+ const brand=routes.exports.brandSlugFromHost('esmeralda2.orderfly.dk');
+ assert.equal(brand,'esmeralda');
+ const target=routes.exports.storefrontPath(brand,true,'amager','checkout');
+ assert.equal(valid(target,brand,'/club'),'/amager/checkout');
+ assert.equal(valid('/other/amager/checkout',brand,'/club'),null);
+ assert.equal(valid('/esmeralda2/amager/checkout',brand,'/club'),null);
 });
