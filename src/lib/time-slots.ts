@@ -1,6 +1,6 @@
 
 
-import { addMinutes, format, isBefore, isEqual, roundToNearestMinutes, addDays, set, parseISO, startOfDay, isSameDay, isAfter, subMinutes } from 'date-fns';
+import { addMinutes, format, isBefore, isEqual, roundToNearestMinutes, addDays, set, parseISO, startOfDay, isSameDay, isAfter } from 'date-fns';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import type { Location, TimeSlotResponse } from '@/types';
 
@@ -66,8 +66,10 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
 
     if (dayInfo) {
         const { openingTime, closingTime } = dayInfo;
-        const lastPossiblePickupTime = subMinutes(closingTime, effectivePrep);
-        const lastPossibleDeliveryTime = subMinutes(closingTime, effectivePrep + deliveryMinutes);
+        // Slots are customer fulfillment times: preparation/transport is already
+        // included in the earliest time, so fulfillment may run up to closing.
+        const lastPossiblePickupTime = closingTime;
+        const lastPossibleDeliveryTime = closingTime;
 
         const dateIsToday = isSameDay(forDate, now);
         const isCurrentlyOpen = dateIsToday && !isBefore(now, openingTime) && isBefore(now, closingTime);
@@ -117,12 +119,12 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
             const nextDayInfo = getDayInfo(nextDate);
             if (nextDayInfo) {
                 const label = i === 1 ? 'Tomorrow' : format(nextDate, 'eee, MMM d');
-                if (!asap_pickup && location.deliveryTypes.includes('pickup') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep), subMinutes(nextDayInfo.closingTime, effectivePrep))) {
-                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep), subMinutes(nextDayInfo.closingTime, effectivePrep), addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep));
+                if (!asap_pickup && location.deliveryTypes.includes('pickup') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep), nextDayInfo.closingTime)) {
+                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep), nextDayInfo.closingTime, addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep));
                     if (next.length) asap_pickup = `${label} - ${next[0]}`;
                 }
-                if (!asap_delivery && location.deliveryTypes.includes('delivery') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), subMinutes(nextDayInfo.closingTime, effectivePrep + deliveryMinutes))) {
-                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), subMinutes(nextDayInfo.closingTime, effectivePrep + deliveryMinutes), addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep + deliveryMinutes));
+                if (!asap_delivery && location.deliveryTypes.includes('delivery') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), nextDayInfo.closingTime)) {
+                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), nextDayInfo.closingTime, addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep + deliveryMinutes));
                     if (next.length) asap_delivery = `${label} - ${next[0]}`;
                 }
                 if ((asap_pickup || !location.deliveryTypes.includes('pickup')) && (asap_delivery || !location.deliveryTypes.includes('delivery'))) break;

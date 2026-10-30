@@ -2,7 +2,7 @@ import type {DeliveryCampaignSnapshot} from './schema';
 import { measureQuoteStep } from './performance';
 import { deliveryQuoteRequestSchema, deliveryQuoteResultSchema, type DeliveryQuoteRequest, type DeliveryProvider } from '../provider-contract';
 import { deliverySettingsSchema, type DeliverySettings } from '../settings/schema';
-import { deliveryScheduleAt } from '../settings/schedule';
+import { deliveryScheduleAt, deliveryPickupWindowAllows } from '../settings/schedule';
 import { resolveDeliveryRoute, type RoutingAdapter, type RouteEvidence } from '../routing/service';
 import { checkDeliveryCoverage } from '../coverage/check';
 import { buildQuote, quoteFingerprint, type QuoteBindingInput, type BoundQuote } from './binding';
@@ -33,9 +33,8 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
       || input.fulfillment.checkoutRef!==input.binding.checkoutReference || input.fulfillment.providerId!==settings.providerId
       || input.fulfillment.readyAt!==input.binding.fulfillmentAt
       || input.binding.normalizedAddress!==quoteAddressBinding(input.fulfillment.pickup,input.fulfillment.dropoff)) return {ok:false,reason:'scope_mismatch'};
-    // Scheduled coverage belongs to the requested delivery window; kitchen readiness is a separate native constraint.
-    const deliveryAt=input.fulfillment.desiredDelivery.kind==='scheduled'?input.fulfillment.desiredDelivery.interval.earliest:input.binding.fulfillmentAt;
-    const schedule=deliveryScheduleAt(settings,new Date(deliveryAt));
+    // The schedule constrains courier pickup, not the customer's arrival.
+    const schedule=deliveryScheduleAt(settings,new Date(input.fulfillment.readyAt));
     if (!schedule.open) return {ok:false,reason:schedule.reason};
     const postal=(a:AddressInput)=>({street:`${a.street} ${a.building}`.trim(),postalCode:a.postcode,city:a.city,countryCode:a.country});
     const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now}));
@@ -49,8 +48,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     if(fulfillment.desiredDelivery.kind==='scheduled'){
       const target=Date.parse(fulfillment.desiredDelivery.interval.earliest);
       if(target!==Date.parse(fulfillment.desiredDelivery.interval.latest)||target<Date.parse(fulfillment.readyAt)+route.durationSeconds*1000)return {ok:false,reason:'unsupported_schedule'};
-      const targetSchedule=deliveryScheduleAt(settings,new Date(target));
-      if(!targetSchedule.open)return {ok:false,reason:targetSchedule.reason};
+
     }
     const areaAllowed=deps.areaAllows(route);
     const initialCoverage=checkDeliveryCoverage({settings,schedule,route,areaAllowed,providerAvailable:true,nowMs:deps.now().getTime(),maxRouteAgeMs:input.maxRouteAgeMs});
@@ -59,6 +57,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     if (providerQuote.kind==='error') return {ok:false,reason:'provider_error',diagnostic:providerQuote.error.code};
     if (providerQuote.kind==='unavailable') return {ok:false,reason:`provider_${providerQuote.reason}`};
     if (providerQuote.providerId!==settings.providerId) return {ok:false,reason:'provider_mismatch'};
+    if(!deliveryPickupWindowAllows(settings,fulfillment.readyAt,providerQuote.pickupInterval))return {ok:false,reason:'unsupported_schedule'};
     if (providerQuote.cost.taxBasis==='unknown') return {ok:false,reason:'incompatible_money'};
     // Cost is the adapter's total payable quote; surcharges are informational breakdown, not added twice.
     const nowMs=deps.now().getTime();

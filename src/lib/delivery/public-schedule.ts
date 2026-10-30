@@ -1,27 +1,30 @@
-import { addDays, format } from 'date-fns';
+import { addDays, addMinutes, format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import type { Location } from '@/types';
-import { deliveryPreparationMinutes, fulfillmentSlots, managedDeliverySelection, resolveFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
+import { deliveryKitchenOpenAt, deliveryPreparationMinutes, fulfillmentSlots, managedDeliverySelection, resolveFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
 import { defaultDeliverySettings, type DeliverySettings } from './settings/schema';
 import { deliveryScheduleAt } from './settings/schedule';
+import { resolveRestaurantDeliverySchedule } from './settings/restaurant-schedule';
 
 /** Public availability only. Provider bindings, pricing and credentials never reach the client. */
-export type ManagedDeliverySchedule = Pick<DeliverySettings, 'enabled' | 'paused' | 'timezone' | 'weeklyHours' | 'exceptions' | 'preparationMinutes'>;
+export type ManagedDeliverySchedule = Pick<DeliverySettings, 'enabled' | 'paused' | 'timezone' | 'weeklyHours' | 'exceptions' | 'preparationMinutes' | 'scheduleMode' | 'pickupOpeningOffsetMinutes' | 'pickupClosingOffsetMinutes'>;
 const zone = 'Europe/Copenhagen';
 export const MANAGED_DELIVERY_TRANSPORT_MINUTES = 30;
 
 function preparedLocation(location: Location, schedule: ManagedDeliverySchedule): Location {
   const preparation = deliveryPreparationMinutes(location, schedule.preparationMinutes);
-  return { ...location, delivery_time: MANAGED_DELIVERY_TRANSPORT_MINUTES, prep_time: preparation, manual_override: preparation, travlhed_factor: 'normal' };
+  return { ...location, deliveryTypes: ['pickup'], delivery_time: MANAGED_DELIVERY_TRANSPORT_MINUTES, prep_time: preparation, manual_override: preparation, travlhed_factor: 'normal' };
 }
 
 /** Intersect native kitchen slots with the very same delivery schedule used by quoting. */
 export function managedFulfillmentSlots(location: Location, mode: 'pickup' | 'delivery', day: string, now = new Date(), schedule?: ManagedDeliverySchedule | null): string[] {
   if (mode === 'pickup' || !schedule) return fulfillmentSlots(location, mode, day, now);
   try {
-    const settings = { ...defaultDeliverySettings(), ...schedule };
-    return fulfillmentSlots(preparedLocation(location, schedule), mode, day, now)
-      .filter(at => deliveryScheduleAt(settings, new Date(at)).open);
+    if (!location.isActive || !location.deliveryTypes?.includes('delivery')) return [];
+    const settings = resolveRestaurantDeliverySchedule({ ...defaultDeliverySettings(), ...schedule }, location.openingHours);
+    return fulfillmentSlots(preparedLocation(location, schedule), 'pickup', day, now)
+      .filter(at => deliveryScheduleAt(settings, new Date(at)).open)
+      .map(at => addMinutes(new Date(at), MANAGED_DELIVERY_TRANSPORT_MINUTES).toISOString());
   } catch { return []; }
 }
 
@@ -48,14 +51,12 @@ export function managedDeliverySelectionForSchedule(location: Location, selectio
   if (!schedule) return managedDeliverySelection(location, selection, now);
   const next = resolveManagedFulfillmentTime(location, 'delivery', selection, now, schedule);
   if (selection !== 'asap') return next;
-  const native = managedDeliverySelection(location, selection, now);
-  const settings = { ...defaultDeliverySettings(), ...schedule };
-  if (native !== 'asap' || !deliveryScheduleAt(settings, now).open) return next;
-  const earliest = resolveFulfillmentTime(preparedLocation(location, schedule), 'delivery', 'asap', now);
-  return earliest === next ? 'asap' : next;
+  if (!deliveryKitchenOpenAt(location, now)) return next;
+  const ready = resolveFulfillmentTime(preparedLocation(location, schedule), 'pickup', 'asap', now);
+  return addMinutes(new Date(ready), MANAGED_DELIVERY_TRANSPORT_MINUTES).toISOString() === next ? 'asap' : next;
 }
 
 export function unavailableManagedDeliverySchedule(): ManagedDeliverySchedule {
-  const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes } = defaultDeliverySettings();
-  return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes };
+  const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes } = defaultDeliverySettings();
+  return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes };
 }

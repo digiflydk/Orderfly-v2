@@ -4,7 +4,7 @@ function fixture(){
  const draft={checkoutKeyHash:key,requestDigest:'b'.repeat(64),draftRevision:1,addressRevision:1,itemSubtotalAfterDiscountMinor:10000,bagFeeMinor:0,adminFeeMinor:0,binding:{...scope,checkoutReference:key,providerId:'wolt',normalizedAddress:JSON.stringify([fields(addr),fields(addr)]),cartDigest:'c'.repeat(64),fulfillmentAt:'2026-10-26T12:00:00Z',brandRevision:1,locationRevision:0}};
  const request={version:1,scope,checkoutRef:key,providerId:'wolt',pickup:addr,dropoff:addr,pickupContact:{name:'Store',phone:'+4512345678'},dropoffContact:{name:'Customer',phone:'+4587654321'},instructions:'',readyAt:draft.binding.fulfillmentAt,desiredDelivery:{kind:'asap'},items:[{name:'Pizza',quantity:1}],bagCount:1,requirements:[]};
  const rows=new Map([['deliveryCheckoutDrafts/'+key,{...structuredClone(draft),expiresAt:new Date(Date.now()+600000)}],['brands/A',{name:'Brand'}],['locations/A1',{brandId:'A',isActive:true}]]);
- const settings={enabled:true,paused:false,providerId:'wolt'};let service,capability,network=0,factories=0,enabled=true;
+ const settings={...loadTs('src/lib/delivery/settings/schema.ts').defaultDeliverySettings(),enabled:true,paused:false,providerId:'wolt',scheduleMode:'manual',weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:[{startMinute:0,endMinute:1440}]}))};let service,capability,network=0,factories=0,enabled=true;
  const tx={get:async ref=>({exists:rows.has(ref.path),data:()=>rows.get(ref.path)})};
  const db={collection:name=>({doc:id=>({path:name+'/'+id})}),runTransaction:async (fn,options)=>{assert.deepEqual(options,{readOnly:true});return fn(tx);}};
  const mocks={'../management-runtime':{deliveryScopeRuntimeAllowed:async()=>enabled},'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'../settings/server':{loadDeliverySettingsInTransaction:async()=>({result:{settings,brandRevision:1,revision:0}})},
@@ -19,7 +19,7 @@ test('persisted native draft allows quote only; mutations are denied without pro
  assert.throws(()=>f.inspectCustomerWoltQuoteCapability({}),/authority/);
 });
 test('scope, digest/revision and active location are revalidated after factory creation',async()=>{
- for(const change of [f=>f.rows.get('deliveryCheckoutDrafts/'+f.draft.checkoutKeyHash).requestDigest='d'.repeat(64),f=>f.rows.get('deliveryCheckoutDrafts/'+f.draft.checkoutKeyHash).draftRevision++,f=>f.rows.get('locations/A1').brandId='B',f=>f.rows.get('locations/A1').isActive=false,f=>f.settings.paused=true]){
+ for(const change of [f=>f.rows.get('deliveryCheckoutDrafts/'+f.draft.checkoutKeyHash).requestDigest='d'.repeat(64),f=>f.rows.get('deliveryCheckoutDrafts/'+f.draft.checkoutKeyHash).draftRevision++,f=>f.rows.get('locations/A1').brandId='B',f=>f.rows.get('locations/A1').isActive=false,f=>f.settings.paused=true,f=>f.settings.weeklyHours.forEach(day=>day.intervals=[])]){
   const f=fixture(),provider=await f.createCustomerWoltQuoteProvider(f.draft,'sandbox');change(f);await assert.rejects(provider.quote(f.request));assert.equal(f.network(),0);
  }
 });

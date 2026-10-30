@@ -1,3 +1,4 @@
+import {deliveryScheduleAt} from '../settings/schedule';
 import 'server-only';
 import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { isDeepStrictEqual } from 'node:util';
@@ -47,6 +48,7 @@ export async function authorizeCustomerWoltQuoteInTransaction(tx:FirebaseFiresto
  const {expiresAt:_expiresAt,expiresAtMs:_expiresAtMs,...nativeDraft}=raw;
  if(!isDeepStrictEqual(draftSchema.parse(nativeDraft),expected)||Date.now()>=expiry(raw))throw new Error('delivery_customer_draft_changed');
  const {result}=await loadDeliverySettingsInTransaction(tx,binding.brandId,binding.locationId);
+ if(!deliveryScheduleAt(result.settings,new Date(binding.fulfillmentAt)).open)throw new Error('delivery_customer_settings_changed');
  if(!result.settings.enabled||result.settings.paused||result.settings.providerId!=='wolt'||result.brandRevision!==binding.brandRevision||result.revision!==binding.locationRevision)throw new Error('delivery_customer_settings_changed');
 }
 const forbidden=()=>({code:'quote_only_capability',messageKey:'delivery.quote_only_capability',retry:'never' as const,nativeCode:null});

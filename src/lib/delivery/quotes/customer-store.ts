@@ -1,3 +1,4 @@
+import {deliveryPickupWindowAllows} from '../settings/schedule';
 import 'server-only';
 import {createHash} from 'node:crypto';
 import {getAdminDb} from '@/lib/firebase-admin';
@@ -24,6 +25,7 @@ async function currentSettings(tx:FirebaseFirestore.Transaction,claim:CustomerQu
  const [brand,location]=await Promise.all([tx.get(db.collection('brands').doc(b.brandId)),tx.get(db.collection('locations').doc(b.locationId))]);
  if(!brand.exists||!location.exists||location.data()?.brandId!==b.brandId||location.data()?.isActive!==true)throw Error('quote_scope_changed');
  const {result}=await loadDeliverySettingsInTransaction(tx,b.brandId,b.locationId);
+ if(!deliveryPickupWindowAllows(result.settings,q.fulfillment.readyAt,q.providerQuote.pickupInterval))throw Error('quote_settings_changed');
  if(!result.settings.enabled||result.settings.paused||result.brandRevision!==b.brandRevision||result.revision!==b.locationRevision||result.settings.providerId!==b.providerId)throw Error('quote_settings_changed');
 }
 /** Commit these counters in their own transaction before calling a provider; failures never refund the budget. */

@@ -1,3 +1,4 @@
+import {deliveryPickupWindowAllows} from '../settings/schedule';
 import 'server-only';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
@@ -32,6 +33,7 @@ function validate(input: unknown, now: number): StoredDeliveryQuote {
 }
 async function current(tx: FirebaseFirestore.Transaction, quote: StoredDeliveryQuote) {
   const { result } = await loadDeliverySettingsInTransaction(tx, quote.binding.brandId, quote.binding.locationId);
+  if(!deliveryPickupWindowAllows(result.settings,quote.fulfillment.readyAt,quote.providerQuote.pickupInterval))throw new DeliveryQuoteStoreError('quote_changed',409);
   if (result.brandRevision !== quote.binding.brandRevision || result.revision !== quote.binding.locationRevision
     || result.settings.providerId !== quote.binding.providerId || !result.settings.enabled || result.settings.paused
     || !isDeepStrictEqual(result.settings.pricingRules, (quote.economics.baseRules ?? quote.economics.rules))

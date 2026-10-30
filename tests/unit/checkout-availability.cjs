@@ -108,7 +108,7 @@ test('before and exactly at opening, winter Copenhagen and explicit date', () =>
   assert.equal(slots.asap_pickup, '');
 });
 test('delivery rolls to tomorrow independently of remaining pickup capacity', () => {
-  const slots = calculateTimeSlots(location, undefined, new Date('2026-09-06T19:10:00Z'));
+  const slots = calculateTimeSlots(location, undefined, new Date('2026-09-06T19:30:00Z'));
   assert.equal(slots.asap_pickup, 'ASAP (20-25 min)');
   assert.equal(slots.asap_delivery, 'Tomorrow - 12:40');
 });

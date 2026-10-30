@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
 function fixture(options={}){
  const reads=[],settingsReads=[];
- const settings={enabled:true,paused:false,timezone:'Europe/Copenhagen',weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===3?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[],preparationMinutes:20,providerId:'wolt',pricingRules:{private:'not public'},secretRef:'not public'};
+ const settings={scheduleMode:'restaurant',pickupOpeningOffsetMinutes:20,pickupClosingOffsetMinutes:20,enabled:true,paused:false,timezone:'Europe/Copenhagen',weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===3?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[],preparationMinutes:20,providerId:'wolt',pricingRules:{private:'not public'},secretRef:'not public'};
  const rows=new Map([['locations/l',{brandId:'b'}],['deliveryAdoptions/b:l',{version:1,brandId:'b',locationId:'l',mode:'managed'}]]);
  const db={collection:name=>({doc:id=>({path:`${name}/${id}`})}),runTransaction:async fn=>{if(options.failure)throw Error('database unavailable');return fn({get:async ref=>{reads.push(ref.path);return {exists:rows.has(ref.path),data:()=>rows.get(ref.path)};}});}};
  const api=loadTs('src/lib/delivery/public-schedule-server.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'./quotes/adoption':{deliveryAdoptionKey:scope=>`${scope.brandId}:${scope.locationId}`},'./settings/server':{loadDeliverySettingsInTransaction:async(tx,brandId,locationId)=>{settingsReads.push({brandId,locationId});return {result:{settings}};}}});
@@ -11,7 +11,7 @@ function fixture(options={}){
 }
 test('public schedule resolves scoped managed settings and exposes only availability fields',async()=>{
  const f=fixture(),result=await f.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'});
- assert.deepEqual(Object.keys(result).sort(),['enabled','exceptions','paused','preparationMinutes','timezone','weeklyHours']);
+ assert.deepEqual(Object.keys(result).sort(),['enabled','exceptions','paused','pickupClosingOffsetMinutes','pickupOpeningOffsetMinutes','preparationMinutes','scheduleMode','timezone','weeklyHours']);
  assert.deepEqual(result.weeklyHours,f.settings.weeklyHours);
  assert.deepEqual(f.reads,['locations/l','deliveryAdoptions/b:l']);
  assert.deepEqual(f.settingsReads,[{brandId:'b',locationId:'l'}]);
