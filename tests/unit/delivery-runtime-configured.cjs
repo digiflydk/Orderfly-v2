@@ -22,3 +22,17 @@ test('parallel initialization fails closed when either adapter rejects or has mi
   const f=fixture();change(f);assert.equal(await create(f.deps).resolve(f.scope,f.draft),null);
  }
 });
+
+test('routing approval and enrollment reads overlap but both gate adapter construction',{timeout:2000},async()=>{
+ const f=fixture();let releaseApproval,enrollmentRead=false;
+ const gate=new Promise(resolve=>{releaseApproval=resolve;});
+ f.deps.hasApprovedRoutingSource=async()=>{await gate;return true;};
+ f.deps.authorizeConfig=async()=>{enrollmentRead=true;return true;};
+ const pending=create(f.deps).resolve(f.scope,f.draft);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(enrollmentRead,true);assert.deepEqual(f.calls,[]);
+ releaseApproval();assert.ok(await pending);
+ for(const denied of ['routing','scope']){
+  const g=fixture();g.deps.hasApprovedRoutingSource=async()=>denied!=='routing';g.deps.authorizeConfig=async()=>denied!=='scope';
+  assert.equal(await create(g.deps).resolve(g.scope,g.draft),null);assert.deepEqual(g.calls,[]);
+ }
+});

@@ -99,3 +99,12 @@ Managed default delivery is effective location preparation plus 30 minutes trans
 ## Single kitchen pickup time (2026-10-30)
 
 Kitchen receipts show one prominent `Klar til afhentning` box using the earliest pickup time from verified courier evidence, or the scoped booking fallback. The secondary courier pickup line and `(planlagt)` suffix are omitted on kitchen receipts. Customer receipts, missing-time messages and cancellation/failure warnings keep their existing behavior.
+
+
+## Immediate delivery-price feedback
+
+The customer sees a nonmodal “Henter leveringsprisen…” popup immediately when all quote prerequisites are valid, including the 250 ms typing debounce and any latest request queued behind obsolete provider work. It never moves keyboard focus or traps typing; Escape or “Skjul beskeden” hides it while calculation continues. A new input identity opens a new indication, and success/error/incomplete input closes it. Errors still require explicit retry or corrected input, with no automatic provider retry loop.
+
+Address completion alone cannot authorize a binding quote: customer identity, pricing/club/newsletter rules and provider contact need valid name, email and phone too. An address-complete/contact-incomplete checkout explicitly asks for those details rather than pretending a provider request started. Backend authority and payment-proof guards are unchanged.
+
+Chromium regression in `tests/unit/managed-delivery-checkout-ui-browser.cjs` covers visibility before the debounce, focus retention, serialized obsolete requests, error closure, dismissal without cancellation, changed-input reopening and missing-prerequisite suppression.

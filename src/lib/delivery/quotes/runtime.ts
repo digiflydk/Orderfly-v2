@@ -27,9 +27,9 @@ const resolver=createConfiguredManagedDeliveryRuntimeResolver({
  dispatchEnabled:deliveryDispatchEnabled,environment:()=>process.env,
  authorizeConfig:config=>deliveryScopeRuntimeAllowed(config.scope,config.environment,'new'),
  async loadConfig(scope){
-  if(await readManagedDeliveryAdoption(scope)!=='managed')return null;
   const key=createHash('sha256').update(JSON.stringify([scope.brandId,scope.locationId])).digest('hex');
-  const snapshot=await getAdminDb().collection('deliveryRuntimeConfigs').doc(key).get();
+  const [adoption,snapshot]=await Promise.all([readManagedDeliveryAdoption(scope),getAdminDb().collection('deliveryRuntimeConfigs').doc(key).get()]);
+  if(adoption!=='managed')return null;
   return snapshot.exists?snapshot.data() as ApprovedManagedRuntimeConfig:null;
  },
  async hasApprovedRoutingSource(source){

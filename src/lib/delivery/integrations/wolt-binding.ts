@@ -15,6 +15,10 @@ import type { WoltBinding } from '../providers/wolt/binding';
 import type { WoltEnvironment } from '../providers/wolt/config';
 import type { WoltPrivateQuote, WoltProviderDependencies } from '../providers/wolt/provider';
 
+// Reuse the SDK connection; accessSecretVersion and both native authority
+// checks below still run for every operation. No secret payload is cached.
+let secretClient: SecretManagerServiceClient | undefined;
+
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const nativeRef=z.string().min(1).max(300).regex(/^[^\u0000-\u001f\u007f]+$/);
 const instant=z.string().max(50).refine(v=>{try{woltInstant(v);return true;}catch{return false;}});
@@ -103,7 +107,7 @@ async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,aut
    return sanitized(async()=>{
     const before=await current();if(before.secretRef!==reference||before.environment!==context.environment||before.merchantId!==context.merchantId)throw new WoltStorageError('secret_unavailable');
     let value:string|undefined;
-    try{const client=new SecretManagerServiceClient();const [version]=await client.accessSecretVersion({name:before.secretRef});const data=version.payload?.data;value=typeof data==='string'?Buffer.from(data,'base64').toString('utf8'):data?Buffer.from(data).toString('utf8'):undefined;}catch{throw new WoltStorageError('secret_unavailable');}
+    try{const client=secretClient??=new SecretManagerServiceClient();const [version]=await client.accessSecretVersion({name:before.secretRef});const data=version.payload?.data;value=typeof data==='string'?Buffer.from(data,'base64').toString('utf8'):data?Buffer.from(data).toString('utf8'):undefined;}catch{throw new WoltStorageError('secret_unavailable');}
     const after=await current();if(!isDeepStrictEqual(before,after))throw new WoltStorageError('secret_unavailable');
     return value;
    });

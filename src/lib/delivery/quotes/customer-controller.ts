@@ -18,7 +18,11 @@ import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDel
 export type NativeManagedPricing={brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
- const result=await getAdminDb().runTransaction(async tx=>(await loadDeliverySettingsInTransaction(tx,brand.id,location.id)).result);
+ // Independent scoped reads after the controller's pre-persistence gate.
+ const [result,runtimeEnvironment]=await Promise.all([
+  getAdminDb().runTransaction(async tx=>(await loadDeliverySettingsInTransaction(tx,brand.id,location.id)).result),
+  managedDeliveryRuntimeEnvironment({brandId:brand.id,locationId:location.id}),
+ ]);
  if(!result.settings.enabled||result.settings.paused||!result.settings.providerId)throw Error('delivery_disabled');
  const now=new Date(),scheduled=!!input.deliverySelection&&input.deliverySelection!=='asap';
  if(!scheduled&&(!deliveryKitchenOpenAt(location,now)||!deliveryScheduleAt(result.settings,now).open))throw Error('delivery_kitchen_closed');
@@ -27,7 +31,6 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
  const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
  const key=checkoutKeyHash(input.checkoutKey);
- const runtimeEnvironment=await managedDeliveryRuntimeEnvironment({brandId:brand.id,locationId:location.id});
  if(!runtimeEnvironment)throw Error('delivery_environment_unconfigured');
  if(expectedEnvironment!==undefined&&runtimeEnvironment!==expectedEnvironment)throw Error('delivery_environment_changed');
  const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment,preparationMinutes,kitchenHours:location.openingHours,items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
