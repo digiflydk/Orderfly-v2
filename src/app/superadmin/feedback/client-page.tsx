@@ -24,7 +24,7 @@ type FeedbackWithDetails = Feedback & {
   locationName: string;
   customerName: string;
   questionVersionLabel: string;
-  sourceType?: 'commerce_order' | 'booking';
+  sourceType?: 'commerce_order' | 'booking' | 'dine_in';
   sourceId?: string;
 };
 
@@ -37,7 +37,7 @@ interface FeedbackClientPageProps {
 }
 
 const sourceOf = (feedback: FeedbackWithDetails) =>
-  feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
+  feedback.sourceType === 'dine_in' ? 'dine_in' : feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
 
 export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit = true, editableBrandIds = null }: FeedbackClientPageProps) {
   const canEditBrand = (brandId: string) => canEdit && (editableBrandIds === null || editableBrandIds.includes(brandId));
@@ -92,7 +92,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
       {error && <p role="alert" className="text-destructive">{error}</p>}
       <Card><CardContent className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-6">
         <Input className="lg:col-span-2" placeholder="Search customer, order, booking or comment..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
-        <Select value={filters.source} onValueChange={(source) => setFilters({ ...filters, source })}><SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger><SelectContent><SelectItem value="all">All Sources</SelectItem><SelectItem value="commerce_order">Online orders</SelectItem><SelectItem value="booking">Bookings</SelectItem></SelectContent></Select>
+        <Select value={filters.source} onValueChange={(source) => setFilters({ ...filters, source })}><SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger><SelectContent><SelectItem value="all">All Sources</SelectItem><SelectItem value="commerce_order">Online orders</SelectItem><SelectItem value="booking">Bookings</SelectItem><SelectItem value="dine_in">Restaurantbesøg (QR)</SelectItem></SelectContent></Select>
         <Select value={filters.brandId} onValueChange={(brandId) => setFilters({ ...filters, brandId, locationId: 'all' })}><SelectTrigger><SelectValue placeholder="Brand" /></SelectTrigger><SelectContent><SelectItem value="all">All Brands</SelectItem>{brands.map((brand) => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select>
         <Select value={filters.locationId} onValueChange={(locationId) => setFilters({ ...filters, locationId })}><SelectTrigger><SelectValue placeholder="Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{locations.filter(location => filters.brandId === 'all' || location.brandId === filters.brandId).map((location) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)}</SelectContent></Select>
         <Button variant="ghost" onClick={() => { setSearchQuery(''); setFilters({ brandId: 'all', locationId: 'all', rating: 'all', source: 'all', showPublicly: 'all' }); }}><X className="mr-2 h-4 w-4" />Clear</Button>
@@ -105,7 +105,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
             const source = sourceOf(feedback);
             const sourceId = feedback.sourceId || feedback.orderId || feedback.id;
             return <TableRow key={feedback.id}>
-              <TableCell><div className="space-y-1"><Badge variant={source === 'booking' ? 'secondary' : 'outline'}>{source === 'booking' ? 'Booking' : 'Online order'}</Badge><div className="max-w-36 truncate font-mono text-xs text-muted-foreground" title={sourceId}>{sourceId}</div></div></TableCell>
+              <TableCell><div className="space-y-1"><Badge variant={source === 'booking' ? 'secondary' : 'outline'}>{source === 'dine_in' ? 'Restaurantbesøg (QR)' : source === 'booking' ? 'Booking' : 'Online order'}</Badge><div className="max-w-36 truncate font-mono text-xs text-muted-foreground" title={sourceId}>{sourceId}</div></div></TableCell>
               <TableCell><FeedbackRating rating={feedback.rating} /></TableCell>
               <TableCell>{feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>

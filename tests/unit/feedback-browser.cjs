@@ -13,8 +13,11 @@ async function thankYouProps(query){
  return (await mod.exports.default({searchParams:Promise.resolve(Object.fromEntries(new URLSearchParams(query)))})).props;
 }
 const root=process.cwd();let dir,server,browser,origin,f;
+const previousDineInSecret=process.env.ORDERFLY_FEEDBACK_TOKEN_SECRET;
+function dineInModule(filename){return require('../helpers/load-ts.cjs').loadTs(filename,{...f.mocks,'next/headers':{...f.mocks['next/headers'],headers:async()=>new Headers({'x-forwarded-for':'192.0.2.10'})}});}
 function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync(target,code);return target;}
 before(async()=>{
+ process.env.ORDERFLY_FEEDBACK_TOKEN_SECRET='synthetic-dine-in-browser-secret-32-bytes';
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'feedback-browser-'));
  const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';
  import QuestionForm from ${JSON.stringify(path.join(root,'src/components/superadmin/feedback-question-version-form.tsx'))};
@@ -26,15 +29,17 @@ before(async()=>{
  import {FeedbackSettingsView} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/settings/settings-view.tsx'))};
  import {FeedbackDetailClient} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/[feedbackId]/client-page.tsx'))};
  import {PublicReviewsView} from ${JSON.stringify(path.join(root,'src/components/feedback/public-reviews-view.tsx'))};
- const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/feedback/thank-you'?<FeedbackThankYouView {...data}/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList {...data}/>));`);
+ const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/feedback/thank-you'?<FeedbackThankYouView {...data}/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:(route==='/public'||route==='/dine-in'||route==='/dine-in-real')?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList {...data}/>));`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const actions=file('actions',`const send=async(kind,data)=>{const response=await fetch('/action/'+kind,{method:'POST',body:data instanceof FormData?data:JSON.stringify(data),headers:data instanceof FormData?{}:{'content-type':'application/json'}});if(!response.ok)throw Error('Transport failed');const result=await response.json();if(result.redirect){location.assign(result.redirect);return;}return result;};
- export const createOrUpdateQuestionVersion=data=>send('version',data);export const submitFeedbackAction=(_,data)=>send('public',data);export const updateFeedback=(id,data)=>send('update',{id,data});export const deleteFeedback=id=>send('delete',{id});export const saveFeedbackSettings=data=>send('settings',data);export const retryFeedbackMail=(id,confirmed)=>send('retry',{id,confirmed});`);
+ export const createOrUpdateQuestionVersion=data=>send('version',data);export const submitFeedbackAction=(_,data)=>send('public',data);export const submitDineInFeedbackAction=(_,data)=>send('dine-in',data);export const updateFeedback=(id,data)=>send('update',{id,data});export const deleteFeedback=id=>send('delete',{id});export const saveFeedbackSettings=data=>send('settings',data);export const retryFeedbackMail=(id,confirmed)=>send('retry',{id,confirmed});`);
  const aliases={
   '@/lib/firebase':file('firebase','export {};'),
   'firebase/app$':file('firebase-app','export const getApp=()=>({});'),
   'firebase/auth$':file('firebase-auth',`export const getAuth=()=>({});export const inMemoryPersistence={};export const setPersistence=async()=>{};export const signInWithEmailAndPassword=async()=>({user:{getIdToken:async()=>"SYNTHETIC_ID_TOKEN"}});export const signOut=async()=>{};`),
   '@/app/superadmin/feedback/actions':actions,
+  '@/app/feedback/dine-in/actions':actions,
+  './dine-in/actions':actions,
   '@/app/superadmin/feedback/settings/actions':actions,
   '@/app/superadmin/locations/actions':file('locations',`export const getAllLocations=()=>{throw Error('Unexpected post-mount server action');};`),
   '@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),
@@ -66,6 +71,8 @@ before(async()=>{
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:f.access.canEditFeedbackBrand(await f.access.requireFeedbackAccess(),'b')};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
    else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:f.records.get('orders/order').brandId,brandName:f.records.get('brands/'+f.records.get('orders/order').brandId).name,experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
+   else if(pathname==='/dine-in-real')data=await dineInModule('src/lib/feedback/dine-in.ts').getDineInFeedbackContext('esmeralda','amager','da');
+   else if(pathname==='/dine-in')data={context:{sourceType:'dine_in',sourceId:'nonce',customerId:'',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'booking',displayReference:'Amager',invitationToken:'synthetic-bound-token'},questionsVersion:await f.store.readQuestionVersion('v1')};
    else if(pathname==='/inbox')data={initialFeedback:(await f.admin.getFeedbackEntries()).map(row=>({...row,customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',questionVersionLabel:'Besøg'})),brands:[{id:'b',name:'Esmeralda QA'}],locations:[{id:'l',name:'Amager',brandId:'b'}],canEdit:(await f.access.requireFeedbackAccess()).permissions.includes('feedback:edit'),editableBrandIds:(await f.access.requireFeedbackAccess()).editableBrandIds};
    else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}],brands:[{id:'b',name:'Esmeralda QA'},{id:'other',name:'Other Brand'}]};
    else data={initialVersions:await f.admin.getFeedbackQuestionVersions(),brands:[{id:'b',name:'Esmeralda QA'},{id:'other',name:'Other Brand'}]};
@@ -74,7 +81,7 @@ before(async()=>{
   if(url.pathname.startsWith('/action/')){
    const chunks=[];for await(const chunk of req)chunks.push(chunk);const body=Buffer.concat(chunks);
    const data=req.headers['content-type'].includes('application/json')?JSON.parse(body):await new Request('http://local/action',{method:'POST',headers:{'content-type':req.headers['content-type']},body}).formData();
-   let result;try{const kind=url.pathname.split('/').pop();result=kind==='retry'?(await f.mailAdmin.retryFeedbackMailJob(data.id,data.confirmed),{ok:true,message:'Beskeden er sat i kø igen.'}):kind==='settings'?(await f.settings.writeFeedbackSettings(data),{ok:true,message:'Indstillingerne er gemt.'}):kind==='public'?await f.public.submitFeedbackAction(null,data):kind==='version'?await f.admin.createOrUpdateQuestionVersion(data):kind==='update'?await f.admin.updateFeedback(data.id,data.data):await f.admin.deleteFeedback(data.id);}catch(error){if(error.digest==='NEXT_REDIRECT')result={redirect:error.url};else throw error;}
+   let result;try{const kind=url.pathname.split('/').pop();result=kind==='retry'?(await f.mailAdmin.retryFeedbackMailJob(data.id,data.confirmed),{ok:true,message:'Beskeden er sat i kø igen.'}):kind==='settings'?(await f.settings.writeFeedbackSettings(data),{ok:true,message:'Indstillingerne er gemt.'}):kind==='public'?await f.public.submitFeedbackAction(null,data):kind==='dine-in'?await dineInModule('src/app/feedback/dine-in/actions.ts').submitDineInFeedbackAction(null,data):kind==='version'?await f.admin.createOrUpdateQuestionVersion(data):kind==='update'?await f.admin.updateFeedback(data.id,data.data):await f.admin.deleteFeedback(data.id);}catch(error){if(error.digest==='NEXT_REDIRECT')result={redirect:error.url};else throw error;}
    res.setHeader('content-type','application/json');return res.end(JSON.stringify(result));
   }
   res.setHeader('content-type','text/html');res.end('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
@@ -82,7 +89,7 @@ before(async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
-after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
+after(async()=>{previousDineInSecret===undefined?delete process.env.ORDERFLY_FEEDBACK_TOKEN_SECRET:process.env.ORDERFLY_FEEDBACK_TOKEN_SECRET=previousDineInSecret;await browser?.close();await new Promise(resolve=>server?.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
 async function setup(t,pathname,width=390,brand=esmeraldaBrand){
  f=fixture();if(pathname==='/public'){f.records.set('brands/'+esmeraldaBrand,{name:'Esmeralda Pizza',slug:'esmeralda',status:'active'});for(const key of ['orders/order','customers/c','locations/l'])f.records.set(key,{...f.records.get(key),brandId:brand});}const context=await browser.newContext({viewport:{width,height:900}});t.after(()=>context.close());
  const page=await context.newPage();page.setDefaultTimeout(7000);
@@ -281,4 +288,65 @@ test('direct forged query cannot reveal links; single configured provider appear
  await page.goto(origin+'/feedback/thank-you?brand=b&rating=5&lang=da');await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Google',exact:true}).count(),0);
  await page.goto(origin+'/public');await page.getByRole('button',{name:'5 stjerner',exact:true}).click();await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?**');await page.getByRole('link',{name:'Anmeld på Google',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Trustpilot',exact:true}).count(),0);
  f.records.set('feedbackSettings/b',{...f.records.get('feedbackSettings/b'),externalReviewsEnabled:false});await page.reload();await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Anmeld på Google',exact:true}).count(),0);
+});
+
+for(const width of [390,1280])test(`dine-in form preserves answers and submits through its dedicated action (${width})`,async t=>{
+ const page=await setup(t,'/dine-in',width);
+ await page.getByRole('heading',{name:'Tak for dit besøg',exact:true}).waitFor();
+ await page.getByText('Dine svar er anonyme og deles med restauranten.',{exact:false}).waitFor();
+ assert.equal(await page.locator('input[type=email],input[type=password]').count(),0);
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Besvar venligst'}).waitFor();
+ await page.getByRole('button',{name:'5 stjerner',exact:true}).click();
+ await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').fill('God betjening');
+ await page.route('**/action/dine-in',route=>route.fulfill({status:503,body:'Unavailable'}));
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Dine svar er bevaret'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'5 stjerner',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').inputValue(),'God betjening');
+ await page.unroute('**/action/dine-in');
+ await page.route('**/action/dine-in',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({error:true,message:'Spørgeskemaet er udløbet. Åbn QR-linket igen.'})}));
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Åbn QR-linket igen.'}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'5 stjerner',exact:true}).getAttribute('aria-pressed'),'true');
+ await page.unroute('**/action/dine-in');
+ let submitted=false;
+ await page.route('**/action/dine-in',async route=>{
+   const form=await new Request('http://fixture',{method:'POST',headers:route.request().headers(),body:route.request().postDataBuffer()}).formData();
+   assert.equal(form.get('sourceType'),'dine_in');assert.equal(form.get('customerId'),'');assert.equal(form.get('invitationToken'),'synthetic-bound-token');assert.equal(JSON.parse(form.get('responses')).rating.answer,5);submitted=true;
+   await route.fulfill({contentType:'application/json',body:JSON.stringify({redirect:'/feedback/thank-you?brand=b&lang=da'})});
+ });
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?brand=b&lang=da');
+ assert.equal(submitted,true);await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();
+});
+test('settings exposes a stable QR URL and admin filters distinguish QR visits',async t=>{
+ const page=await setup(t,'/settings');
+ assert.equal(await page.getByRole('link',{name:'https://orderfly.dk/feedback/dine-in/esmeralda/amager',exact:true}).getAttribute('href'),'https://orderfly.dk/feedback/dine-in/esmeralda/amager');
+ f.records.set('feedback/qr',{sourceType:'dine_in',sourceId:'qr-visit',brandId:'b',locationId:'l',customerId:'',rating:5,receivedAt:new Date('2026-09-09T10:00:00Z')});
+ f.records.set('feedback/order',{sourceType:'commerce_order',sourceId:'online-order',brandId:'b',locationId:'l',customerId:'c',rating:2});
+ await page.goto(origin+'/inbox');await page.getByText('Restaurantbesøg (QR)',{exact:true}).waitFor();
+ await page.getByRole('combobox').nth(0).click();await page.getByRole('option',{name:'Restaurantbesøg (QR)',exact:true}).click();
+ await page.getByText('qr-visit',{exact:true}).waitFor();assert.equal(await page.getByText('online-order',{exact:true}).count(),0);
+ await page.goto(origin+'/report?from=2026-09-09&to=2026-09-09&source=dine_in');
+ await page.getByText('0 onlineordrer · 0 bookinger · 1 QR-besøg',{exact:true}).waitFor();
+});
+
+for(const width of [390,1280])test(`real dine-in context, submission and external-review step (${width})`,async t=>{
+ const page=await setup(t,'/settings',width);
+ // Use the built-in eight-question restaurant questionnaire without creating one in storage.
+ f.records.delete('brands/b');f.records.set('brands/'+esmeraldaBrand,{name:'Esmeralda Pizza',slug:'esmeralda',status:'active'});
+ f.records.set('locations/l',{brandId:esmeraldaBrand,name:'Amager',slug:'amager',isActive:true});
+ f.records.set('feedbackSettings/'+esmeraldaBrand,{externalReviewsEnabled:true,externalReviewsMinRating:4.7,googleReviewUrl:'https://g.page/r/qa/review',trustpilotReviewUrl:'https://dk.trustpilot.com/review/example.test'});
+ await page.goto(origin+'/dine-in-real');await page.getByRole('heading',{name:'Tak for dit besøg',exact:true}).waitFor();
+ const groups=page.locator('[role=group][aria-labelledby]');assert.equal(await groups.count(),8);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+ if(process.env.FEEDBACK_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.FEEDBACK_SCREENSHOT_DIR,'dine-in-'+width+'.png'),fullPage:true});
+ for(let i=0;i<6;i++)await groups.nth(i).getByRole('button',{name:'5 stjerner',exact:true}).click();
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();
+ await page.waitForURL('**/feedback/thank-you?brand='+esmeraldaBrand+'&lang=da');
+ await page.getByRole('link',{name:'Anmeld på Google',exact:true}).waitFor();await page.getByRole('link',{name:'Anmeld på Trustpilot',exact:true}).waitFor();
+ const saved=[...f.records].filter(([key])=>key.startsWith('feedback/'));assert.equal(saved.length,1);assert.equal(saved[0][1].sourceType,'dine_in');assert.equal(saved[0][1].customerId,'');assert.equal(saved[0][1].rating,5);
+ await page.getByRole('button',{name:'Nej tak',exact:true}).click();assert.equal(await page.getByRole('link',{name:'Anmeld på Google',exact:true}).count(),0);assert.equal([...f.records].filter(([key])=>key.startsWith('feedback/')).length,1);
+ assert.equal([...f.records].filter(([key])=>key.startsWith('feedbackMailJobs/')).length,0);
 });

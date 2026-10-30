@@ -31,7 +31,7 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
     const [brand, location, customerName] = await Promise.all([
         getBrandById(feedback.brandId),
         getLocationById(feedback.locationId),
-        getCustomerName(feedback.customerId, feedback.brandId),
+        feedback.sourceType === 'dine_in' ? Promise.resolve('Anonym gæst') : getCustomerName(feedback.customerId, feedback.brandId),
     ]);
 
     const fullFeedback = {

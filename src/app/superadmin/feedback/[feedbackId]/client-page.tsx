@@ -22,7 +22,7 @@ type FullFeedback = Feedback & {
   brandName: string;
   locationName: string;
   customerName: string;
-  sourceType?: 'commerce_order' | 'booking';
+  sourceType?: 'commerce_order' | 'booking' | 'dine_in';
   sourceId?: string;
 };
 
@@ -47,7 +47,7 @@ export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { init
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState('');
   const [publicComment, setPublicComment] = useState(initialFeedback.publicComment ?? initialFeedback.comment ?? '');
-  const sourceType = feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
+  const sourceType = feedback.sourceType === 'dine_in' ? 'dine_in' : feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
   const sourceId = feedback.sourceId || feedback.orderId || feedback.id;
   const responses = (feedback as any).responses || {};
 
@@ -91,7 +91,7 @@ export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { init
         <Button variant="outline" size="sm" asChild className="mb-2"><Link href="/superadmin/feedback"><ArrowLeft className="mr-2 h-4 w-4" />Back to All Feedback</Link></Button>
         <h1 className="text-2xl font-bold tracking-tight">Feedback <span className="rounded-sm bg-muted px-2 py-1 font-mono text-primary">{feedback.id.substring(0, 6).toUpperCase()}</span></h1>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge variant={sourceType === 'booking' ? 'secondary' : 'outline'}>{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'}</Badge>
+          <Badge variant={sourceType === 'booking' ? 'secondary' : 'outline'}>{sourceType === 'dine_in' ? 'Restaurantbesøg (QR)' : sourceType === 'booking' ? 'Restaurant booking' : 'Online order'}</Badge>
           {sourceType === 'commerce_order' && feedback.orderId ? <Link href={`/superadmin/sales/orders/${feedback.orderId}`} className="font-mono text-sm text-primary hover:underline">{sourceId}</Link> : <span className="font-mono text-sm text-muted-foreground">{sourceId}</span>}
         </div>
       </div>
@@ -109,7 +109,7 @@ export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { init
           <div className="space-y-2"><Label htmlFor="publicComment">Tekst til offentlig visning</Label><Textarea id="publicComment" maxLength={2000} disabled={isPending || !canEdit} value={publicComment} onChange={e => setPublicComment(e.target.value)} /><p className="text-sm text-muted-foreground">Kontrollér teksten før godkendelse. E-mailadresser, telefonnumre og links fjernes automatisk. Det oprindelige kundesvar bevares internt.</p></div>
           {feedback.showPublicly && <Button variant="outline" disabled={isPending || !canEdit} onClick={() => toggle('showPublicly', true)}>Gem offentlig tekst</Button>}
 <div className="flex items-center justify-between"><Label htmlFor="showPublicly">Godkend til offentlig visning</Label><Switch disabled={isPending || !canEdit} id="showPublicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle('showPublicly', value)} /></div><div className="flex items-center justify-between"><Label htmlFor="maskCustomerName">Skjul kundens navn i offentlige anmeldelser</Label><Switch disabled={isPending || !canEdit} id="maskCustomerName" checked={feedback.maskCustomerName} onCheckedChange={(value) => toggle('maskCustomerName', value)} /></div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{feedbackDate(feedback.receivedAt)}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem><InfoItem icon={MessageSquare} label="Feedbackmail"><Link href="/superadmin/feedback/settings" className="underline">Se afsendelsesstatus</Link></InfoItem></CardContent></Card>
+        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{feedbackDate(feedback.receivedAt)}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'dine_in' ? 'Restaurantbesøg (QR)' : sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem><InfoItem icon={MessageSquare} label="Feedbackmail"><Link href="/superadmin/feedback/settings" className="underline">Se afsendelsesstatus</Link></InfoItem></CardContent></Card>
       </div>
     </div>
   </div>;

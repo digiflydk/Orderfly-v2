@@ -1,6 +1,6 @@
 import type { FeedbackQuestion } from '@/types';
 
-export type FeedbackSourceType = 'commerce_order' | 'booking';
+export type FeedbackSourceType = 'commerce_order' | 'booking' | 'dine_in';
 export type FeedbackExperienceType = 'pickup' | 'delivery' | 'booking';
 
 export type ExperienceFeedbackQuestionsVersion = {
@@ -44,7 +44,7 @@ export type CanonicalFeedbackRecord = {
   language: string;
   showPublicly: boolean;
   maskCustomerName: boolean;
-  answeredVia?: 'email' | 'webshop' | 'app';
+  answeredVia?: 'email' | 'webshop' | 'app' | 'qr';
   internalNote?: string;
   autoResponseSent: boolean;
   responses: unknown;

@@ -824,6 +824,8 @@ export type CodeReview = {
  */
 export type Feedback = {
   id: string;
+  sourceType?: 'commerce_order' | 'booking' | 'dine_in';
+  sourceId?: string;
   orderId: string;
   customerId: string;
   locationId: string;
@@ -837,7 +839,7 @@ export type Feedback = {
   language: string; // "da", "en", etc.
   showPublicly: boolean;
   maskCustomerName: boolean;
-  answeredVia?: 'email' | 'webshop' | 'app';
+  answeredVia?: 'email' | 'webshop' | 'app' | 'qr';
   internalNote?: string;
   publicComment?: string;
   publication?: { approvedBy: string; approvedAt: Date } | null;

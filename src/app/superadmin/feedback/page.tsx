@@ -26,7 +26,7 @@ async function FeedbackPageContent() {
         ...f,
         brandName: brandMap.get(f.brandId) || 'N/A',
         locationName: locationMap.get(f.locationId)?.brandId === f.brandId ? locationMap.get(f.locationId)!.name : 'N/A',
-        customerName: customerMap.get(f.customerId)?.brandId === f.brandId ? String(customerMap.get(f.customerId)?.fullName || 'Unknown Customer') : 'Unknown Customer',
+        customerName: f.sourceType === 'dine_in' ? 'Anonym gæst' : customerMap.get(f.customerId)?.brandId === f.brandId ? String(customerMap.get(f.customerId)?.fullName || 'Unknown Customer') : 'Unknown Customer',
         showPublicly: f.showPublicly === true && Boolean(f.publication?.approvedBy),
         questionVersionLabel: versionMap.get(f.questionVersionId) || 'N/A',
     }));

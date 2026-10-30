@@ -59,7 +59,7 @@ const feedbackSubmissionSchema = z.object({
 });
 
 type AuthoritativeSource = {
-  sourceType: FeedbackSourceType;
+  sourceType: Exclude<FeedbackSourceType, 'dine_in'>;
   sourceId: string;
   customerId: string;
   locationId: string;
