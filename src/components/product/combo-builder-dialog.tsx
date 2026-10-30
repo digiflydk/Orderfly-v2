@@ -83,6 +83,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
   const [showErrors, setShowErrors] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<SelectionState>({});
+  const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
 
   const [modifiers, setModifiers] = useState<Record<string, {id: string; quantity: number}[]>>({});
   const [optionCatalog, setOptionCatalog] = useState<{key: string; groups: ToppingGroup[]; toppings: Topping[]} | null>(null);
@@ -135,7 +136,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
     const key = `${combo.id}/${location?.id}/${deliveryType}`;
     if (initialized.current && initialized.current !== key) {setIsOpen(false); return;}
     if (isOpen && initialized.current !== key) {
-      initialized.current = key; committed.current = false; setShowErrors(false);
+      initialized.current = key; committed.current = false; setShowErrors(false); setExpandedProducts({});
       const initialSelection: SelectionState = {};
       combo.productGroups.forEach(group => {
         if (Number(group.minSelection)>0 && Number(group.maxSelection)===1 && group.productIds.filter(id=>brandProducts.some(p=>p.id===id)).length===1) {
@@ -229,6 +230,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
         return ids.length < Number(g.minSelection) || (Number(g.maxSelection)>0 && ids.length>Number(g.maxSelection)) || ids.some(id => !brandProducts.some(p=>p.id===id));
       });
       const invalidProduct = configurations.find(c => !c.resolved);
+      if (invalidProduct) setExpandedProducts(previous => ({...previous, [invalidProduct.key]: true}));
       const el = group ? document.getElementById(`${dialogId}-group-${group.id}`) : invalidProduct ? document.getElementById(`${dialogId}-product-${invalidProduct.key}`) : null;
       if (el) {el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); el.focus();}
       return;
@@ -266,7 +268,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
             <ScrollArea className="flex-1">
                 <div className="commerce-option-header">
                   <div className="commerce-option-image"><Image src={safeImage(retainedProduct ? retainedProduct.imageUrl : combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
-                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{retainedProduct ? `${retainedProduct.productName} er med. Vælg resten af din menu.` : combo.description || 'Sammensæt din menu.'}</DialogDescription>{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
+                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{retainedProduct ? `${retainedProduct.productName}-menu` : combo.comboName}</DialogTitle><DialogDescription>{retainedProduct ? 'Vælg resten af din menu. Dine tilpasninger følger med.' : combo.description || 'Sammensæt din menu.'}</DialogDescription>{retainedProduct && retainedGroupId && comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id) > 0 && <p className="text-sm">+{formatPrice(comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id))}</p>}{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
                 </div>
                 <div className="p-4 space-y-3">
                     {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
@@ -277,6 +279,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     const isSingleSelect = Number(group.maxSelection) === 1;
                     const currentSelection = selection[group.id] || [];
                     const retainsDish = group.id === retainedGroupId && !!retainedProduct;
+                    // The retained dish already has its name and image in the dialog header.
+                    if (retainsDish && isSingleSelect) return null;
 
                     return (
                         <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
@@ -327,18 +331,32 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     {optionError && <Button onClick={() => setRetry(n => n + 1)}>Prøv igen</Button>}
                     {configurations.filter(c => c.groups.length > 0).map(config => {
                       const active = activeToppingGroupIds(config.product, config.groups, config.options, Object.keys(config.quantities));
+                      // The approved Esmeralda pizza menu already includes a drink. This catalog
+                      // group contains larger extra drinks, not dish customizations. Scope this
+                      // presentation policy to that menu; never guess by translated group labels.
+                      const visibleGroups = config.groups.filter(group => {
+                        if (!active.has(group.id)) return false;
+                        const selected = config.options.some(option => option.groupId === group.id && (config.quantities[option.id] || 0) > 0);
+                        const excludedDrinkUpsell = isV2 && combo.brandId === 'oeypKaMyYcQjIwaa1PtV'
+                          && combo.id === 'esmeralda-v2-pizzamenu-20261030' && group.id === 'D7lnGx57JS0BnSFqSzHn';
+                        // Keep required rules reachable, and preserve/edit existing paid extras.
+                        return !excludedDrinkUpsell || Number(group.minSelection) > 0 || selected;
+                      });
                       const selectedToppings = Object.fromEntries(config.choices.flatMap(m => {
                         const option = config.options.find(o => o.id === m.id);
                         return option && m.quantity <= option.maxQuantity ? [[m.id, cartTopping(option,m.quantity)]] : [];
                       }));
                       return <section key={config.key} id={`${dialogId}-product-${config.key}`} tabIndex={-1} aria-label={`Tilvalg til ${config.product.productName}`}>
-                        <h3 className="font-semibold">Tilvalg til {config.product.productName}</h3>
+                        {isV2 ? <Button type="button" variant="outline" aria-expanded={!!expandedProducts[config.key]} aria-controls={`${dialogId}-options-${config.key}`} onClick={() => setExpandedProducts(previous => ({...previous, [config.key]: !previous[config.key]}))}>{expandedProducts[config.key] ? 'Luk tilpasning' : 'Tilpas'}{config.product.id !== retainedProduct?.id ? ` ${config.product.productName}` : ''}</Button> : <h3 className="font-semibold">Tilvalg til {config.product.productName}</h3>}
+                        {isV2 && config.resolved && config.resolved.length > 0 && <p className="mt-2 text-sm text-muted-foreground">{config.resolved.map(t => t.name).join(', ')}</p>}
                         {showErrors && !config.resolved && <p role="alert">Kontrollér tilvalg til {config.product.productName}.</p>}
-                        {config.groups.filter(g => active.has(g.id)).map(group => <ProductOptionGroup key={group.id}
+                        <div id={`${dialogId}-options-${config.key}`} hidden={isV2 && !expandedProducts[config.key]}>
+                        {visibleGroups.map(group => <ProductOptionGroup key={group.id}
                           group={{...group, toppings:config.options.filter(o => o.groupId === group.id)}}
                           dialogId={`${dialogId}-${config.key}`} selectedToppings={selectedToppings} showErrors={showErrors}
                           initiallyExpanded selectionText={group.maxSelection === group.minSelection ? `Vælg ${group.minSelection}` : `Vælg mindst ${group.minSelection}`}
                           onQuantity={(option, count) => updateModifier(config,option,count)} />)}
+                        </div>
                       </section>;
                     })}
             </div>
@@ -367,8 +385,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     onClick={handleAddToCart}
                     disabled={!cartReady || comboPrice === undefined || !optionsReady}
                 >
-                    <div className="flex w-full justify-between items-center">
-                        <span>{!isSelectionValid || configurations.some(c => !c.resolved) ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                    <div className="flex w-full justify-between items-center gap-3">
+                        <span>{!isSelectionValid || configurations.some(c => !c.resolved) ? (isV2 ? 'Vælg tilvalg' : 'Vælg de påkrævede tilvalg') : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
                         <span>{formatPrice(totalItemPrice)}</span>
                     </div>
                 </Button>
