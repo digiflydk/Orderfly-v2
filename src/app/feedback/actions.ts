@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { readActiveQuestions, readActiveQuestionsForBrand } from '@/lib/feedback/question-store';
+import { createExternalReviewReceipt, setExternalReviewReceipt } from '@/lib/feedback/external-review-receipt';
+import { eligibleExternalReviewLinks } from '@/lib/feedback/external-review-settings';
 import { feedbackMetrics } from '@/lib/feedback/metrics';
 import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
@@ -127,6 +129,8 @@ function extractCoreResponses(responses: Record<string, { type: string; answer: 
 
 export async function submitFeedbackAction(_prevState: any, formData: FormData) {
   let thankYouHref = '/feedback/thank-you';
+  // Remove a prior successful submission's receipt before validation or retry.
+  await setExternalReviewReceipt();
   try {
     let responses: Record<string, unknown> = {};
     try {
@@ -203,7 +207,8 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     const invitationRef = source.invitationId && source.invitationCollection ? db.collection(source.invitationCollection).doc(source.invitationId) : null;
     const thanksRef = db.collection('feedbackMailJobs').doc(feedbackId + '-thankYou');
     const notificationRef = db.collection('feedbackMailJobs').doc(feedbackId + '-adminNotification');
-    await db.runTransaction(async transaction => {
+    const reviewReceipt = createExternalReviewReceipt();
+    const showReviewInvitation = await db.runTransaction(async transaction => {
       const existing = await transaction.get(feedbackRef);
       const legacy = source.sourceType === 'commerce_order'
         ? await transaction.get(db.collection('feedback').where('orderId', '==', source.sourceId)) : null;
@@ -232,6 +237,11 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       const legacyId = legacy?.docs.find(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)?.id;
       const savedId = existing.exists ? existing.id : legacyId || feedbackId;
       if (!existing.exists && !legacyId) {
+        if (eligibleExternalReviewLinks(currentSettings.data(), feedbackMetrics({ responses: validatedResponses }).rating)) {
+          feedbackData.externalReviewReceipt = { hash: reviewReceipt.hash, expiresAt: reviewReceipt.expiresAt };
+        } else {
+          delete feedbackData.externalReviewReceipt;
+        }
         transaction.create(feedbackRef, feedbackData);
         const notifications = feedbackAdminNotifications(source.brandId, currentSettings.data());
         if (notifications.adminNotificationsEnabled && notifications.adminNotificationEmail && !previousNotification.exists) transaction.create(notificationRef,
@@ -241,7 +251,9 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       if (thanks && !thanks.exists && source.invitationId) {
         transaction.create(thanksRef, pendingFeedbackMessage({ ...source, invitationId: source.invitationId, ...(source.sourceType === 'booking' && parsed.data.invitationToken ? { invitationToken: parsed.data.invitationToken } : {}) }, 'thankYou', Date.now()));
       }
+      return !existing.exists && !legacyId && Boolean(feedbackData.externalReviewReceipt);
     });
+    if (showReviewInvitation) await setExternalReviewReceipt(feedbackId, reviewReceipt.token);
 
     try { revalidatePath('/superadmin/feedback'); } catch (error) { console.error('Feedback cache refresh failed', error); }
   } catch (e) {
