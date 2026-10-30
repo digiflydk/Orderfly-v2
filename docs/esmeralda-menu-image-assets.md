@@ -10,4 +10,6 @@ Assets are under `public/images/esmeralda-v2/menu/`. No production catalog recor
 
 The exact eight public image paths bypass brand-subdomain rewriting. This is required on `esmeralda2.orderfly.dk`; otherwise middleware prefixes `/esmeralda` and the images return 404. Adjacent image paths and other brand routes remain scoped. Middleware regression coverage includes the public hostname and App Hosting's forwarded-host header.
 
+Production packaging must explicitly trace `public/images/esmeralda-v2/menu/*.webp` in `next.config.js`, as with the self-hosted fonts. Verify all eight files exist in the standalone build and are served byte-for-byte under the V2 host without copying public files into the bundle manually. A development server alone does not verify App Hosting packaging.
+
 Validation: TypeScript typecheck; scoped mapping and asset-presence tests (`tests/unit/esmeralda-menu-images.cjs`); relevant combo builder browser suite. Source-based cuts and illustrations were visually inspected, including a second Pepsi Max pass to remove a halo.
