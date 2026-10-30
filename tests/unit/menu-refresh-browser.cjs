@@ -99,7 +99,7 @@ for(const width of [320,390,1280])test(`V2 compact menu and product-to-cart geom
  await take('menu');
  await add.click();
  const product=page.getByRole('dialog');await product.getByRole('heading',{name:'Margherita',exact:true}).waitFor();
- await product.getByRole('button',{name:/Læg i pose|Tilføj til kurv/}).click();
+ await product.getByRole('button',{name:/Læg i kurv|Tilføj til kurv/}).click();
  await product.waitFor({state:'hidden'});
  if(width>=1024){
   const sidebar=page.getByRole('complementary',{name:'Din kurv'});

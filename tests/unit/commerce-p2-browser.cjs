@@ -600,7 +600,7 @@ for(const width of [390,1280])test(`#780 V2 product hero, required choices and o
  await dialog.getByRole('button',{name:'Øg antal'}).click();
  const footer=await dialog.locator('.commerce-product-footer').boundingBox();
  assert.ok(footer.y+footer.height<=901,'primary action stays inside the viewport');
- await dialog.getByRole('button',{name:/Læg i pose/}).click();
+ await dialog.getByRole('button',{name:/Læg i kurv/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const cart=JSON.parse(await page.locator('#cart-state').textContent());
  assert.deepEqual(cart.toppingIds.sort(),['base','bacon','t'].sort());
@@ -647,8 +647,8 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  await expect(dialog.getByRole('heading',{name:'Se din menu',exact:true})).toBeVisible();
  await expect(dialog.getByText('Fixture Soda',{exact:true})).toBeVisible();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,0,'overview has not committed the menu');
- await expect(dialog.getByRole('button',{name:/Læg i pose/})).toHaveText('Læg i pose210,00 kr.');
- await dialog.getByRole('button',{name:/Læg i pose/}).click();
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText('Tilføj til kurv210,00 kr.');
+ await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const cart=JSON.parse(await page.locator('#cart-state').textContent());
  assert.deepEqual(cart.comboModifiers,[{id:'t',quantity:1},{id:'bacon',quantity:1}]);

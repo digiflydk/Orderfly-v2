@@ -312,23 +312,23 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                       </div>
                       <p className="text-sm">{delta>=0?`Fra +${formatPrice(delta)}`:`Spar op til ${formatPrice(-delta)}`} pr. stk. · Eventuelle ekstra tilvalg tillægges.</p>
                       {!isV2 && Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
-                      <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>{isV2 ? `Vælg ${c.comboName}` : 'Vælg menu'}</Button>
+                      <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>Vælg menu</Button>
                     </section>;
                   })}
                 </div>
             </div>
             <div className="commerce-product-footer shrink-0 border-t bg-inherit px-3 py-3">
               {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className={completedRequiredGroups === requiredGroups.length ? "sr-only" : "mb-2 text-xs text-muted-foreground"}>{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
-              {isV2 && availableUpgrades.length > 0 && <Button type="button" className="mb-2 w-full min-h-11 rounded-lg" onClick={() => {
+              {isV2 && availableUpgrades.length > 0 && <Button type="button" variant="outline" className="mb-2 w-full min-h-11 rounded-lg" onClick={() => {
                 if (availableUpgrades.length === 1) setUpgrade(availableUpgrades[0]);
                 else document.getElementById(`${dialogId}-upgrade-${availableUpgrades[0].id}`)?.scrollIntoView({block:'center', behavior:'smooth'});
-              }}>Vælg menu</Button>}
+              }}>Køb som menu</Button>}
               <div className="flex items-center gap-3">
                 {!isV2 && quantityControl}
-                <Button size="lg" variant={isV2 ? "outline" : "default"} className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
+                <Button size="lg" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
                   onClick={handleAddToCart} disabled={!cartReady}
-                  aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i pose' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
-                  <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i pose' : 'Tilføj til kurv'}</span>
+                  aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
+                  <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'}</span>
                   <span aria-hidden="true" className="v2-product-price-divider">·</span><span className="text-sm tabular-nums">{formatPrice(totalItemPrice)}</span>
                 </Button>
               </div>
