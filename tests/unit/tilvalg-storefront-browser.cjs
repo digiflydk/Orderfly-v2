@@ -224,11 +224,11 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(await page.evaluate(()=>window.saved),undefined,'conditional required choice must block add');
  await page.getByRole('radio',{name:'Brød',exact:true}).check();
- const submit=page.getByRole('button',{name:/Læg i kurv/});
+ const submit=page.getByRole('button',{name:/Læg i pose/});
  await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
  const bounds=await submit.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+1,'action stays in viewport after content scroll');
  assert.equal(await submit.evaluate(el=>getComputedStyle(el).borderRadius),'6px');
- assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(232, 191, 105)');
+ assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
  assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 20, 19)');
  assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'dialog must not overflow horizontally');
  await submit.click();
@@ -255,7 +255,7 @@ test('V2 menu upgrade passes chosen modifiers and preserves the draft on return'
  assert.equal(await page.evaluate(()=>window.saved),undefined,'opening a combo must not write a product to the cart');
  await page.getByRole('button',{name:'Tilbage til produkt',exact:true}).click();
  assert.equal(await page.getByRole('checkbox',{name:'Ost',exact:true}).isChecked(),true);
- await page.getByRole('button',{name:/Læg i kurv/}).click();
+ await page.getByRole('button',{name:/Læg i pose/}).click();
  const saved=await page.evaluate(()=>window.saved);assert.equal(saved.quantity,2);assert.equal(saved.toppings.find(x=>x.id==='cheese').quantity,1);
  // Empty required choices remain explicit in the draft; the real combo builder's
  // rejection of these choices is tested in combo-modifiers-browser.cjs.
@@ -285,7 +285,7 @@ for (const [width,height] of [[320,568],[390,850],[1280,850]]) test(`V2 mockup s
  assert.equal(await page.getByText('Mælk',{exact:true}).isVisible(),true);
  await page.locator('.v2-product-allergens summary').click();
  await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=0);
- const submit=page.getByRole('button',{name:/Læg i kurv/});const action=await submit.boundingBox();
+ const submit=page.getByRole('button',{name:/Læg i pose/});const action=await submit.boundingBox();
  assert.ok(action.width>box.width*.85,'purchase action spans the bottom bar');
  assert.ok(action.y+action.height<=height+1,'bottom action is visible');
  assert.equal(await page.getByRole('button',{name:'Tilbage til menu',exact:true}).isVisible(),true);
@@ -309,14 +309,16 @@ test('V2 à la carte required tiles, exact choices and quantity clearance',async
  const quantity=await page.getByRole('group',{name:'Antal produkter',exact:true}).boundingBox();const footer=await page.locator('.commerce-product-footer').boundingBox();
  assert.ok(quantity.y+quantity.height<=footer.y,'quantity is fully reachable above fixed footer');
  if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,'v2-product-steak-390.png'),fullPage:true});
- await page.getByRole('button',{name:/Læg i kurv/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings.map(x=>x.name),['Medium','Hasselbackkartofler','Champignonsauce']);
+ await page.getByRole('button',{name:/Læg i pose/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings.map(x=>x.name),['Medium','Hasselbackkartofler','Champignonsauce']);
 });
 
 test('V2 pinned upgrade action quotes the dish surcharge and keeps the existing draft',async t=>{
  const context=await browser.newContext({viewport:{width:320,height:568}});t.after(()=>context.close());
  const page=await context.newPage();await page.goto(origin+'/?v2&compact&upgrade&surcharge');
- const upgrade=page.getByRole('button',{name:'Køb som menu',exact:true});await upgrade.waitFor();
+ const upgrade=page.getByRole('button',{name:'Vælg menu',exact:true});await upgrade.waitFor();
  await page.getByRole('dialog').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
+ assert.equal(await upgrade.getAttribute('data-ui-variant'),'default');
+ assert.equal(await page.getByRole('button',{name:/Læg i pose/}).getAttribute('data-ui-variant'),'outline');
  const box=await upgrade.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=568);
  assert.match(await page.locator('.commerce-inline-offers').innerText(),/40,00/);
  await upgrade.click();assert.equal((await page.evaluate(()=>window.upgradeDraft)).productId,'pizza');
