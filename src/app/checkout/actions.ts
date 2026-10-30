@@ -16,6 +16,7 @@ import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
 import { checkoutRequestSchema, deliveryQuoteRequestSchema, managedDeliveryAcceptanceSchema } from '@/lib/checkout-schema';
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { MANAGED_DELIVERY_TRANSPORT_MINUTES } from '@/lib/delivery/public-schedule';
 import { assertCheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 import { validateCheckoutItems } from '@/lib/checkout-items';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
@@ -686,11 +687,12 @@ export async function requestManagedDeliveryQuoteAction(input: {
     const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
     scopeVerified=true;
-    if(!await managedDeliveryRuntimeAvailable({brandId:input.brandId,locationId:input.locationId})){await report();return failure;}
+    // The controller checks configuration before saving the draft, then the
+    // resolver rechecks it. Avoid an additional duplicate probe here.
     trace('pricing');
     const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
     trace('time');
-    if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime(location,'delivery',input.deliveryTime);
+    if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime({...location,delivery_time:MANAGED_DELIVERY_TRANSPORT_MINUTES},'delivery',input.deliveryTime);
     const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
       subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
     if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
@@ -763,7 +765,7 @@ export async function createStripeCheckoutSessionAction(
     }
     
     if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
-    let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
+    let fulfillmentAt = resolveFulfillmentTime(managedDeliveryAcceptance ? {...location,delivery_time:MANAGED_DELIVERY_TRANSPORT_MINUTES} : location, deliveryType, deliveryTime);
     const priced = await resolveAuthoritativeCheckoutPricing({cartItems,customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId,enforceLegacyDeliveryMinimum:!managedDeliveryAcceptance});
     cartItems=priced.cartItems;
     const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,appliedDiscountIdForOrder,
@@ -849,6 +851,10 @@ export async function createStripeCheckoutSessionAction(
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
         deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt),
         fulfillmentAt,
+        // Customer estimate is distinct from ASAP kitchen readiness. Derived only from the validated quote.
+        ...(managedQuote ? {expectedDeliveryAt:managedQuote.fulfillment.desiredDelivery.kind==='scheduled'
+          ? managedQuote.fulfillment.desiredDelivery.interval.earliest
+          : new Date(Date.parse(managedQuote.fulfillment.readyAt)+MANAGED_DELIVERY_TRANSPORT_MINUTES*60_000).toISOString()} : {}),
         brandName: brand.name,
         locationName: location.name,
         customerDetails: {

@@ -32,8 +32,9 @@ export async function resolveDeliveryRoute(input: { pickup: DeliveryAddress; dro
   try {
     // Project allow-listed address fields; client extras such as coordinates cannot leak into resolution.
     const project = (a: DeliveryAddress): DeliveryAddress => ({street:a.street.trim(),postalCode:a.postalCode.trim(),city:a.city.trim(),countryCode:a.countryCode});
-    const pickup = await adapter.resolve(project(input.pickup));
-    const dropoff = await adapter.resolve(project(input.dropoff));
+    const resolutions = await Promise.allSettled([adapter.resolve(project(input.pickup)), adapter.resolve(project(input.dropoff))]);
+    if(resolutions[0].status==='rejected'||resolutions[1].status==='rejected')return {ok:false,reason:'routing_unavailable'};
+    const pickup = resolutions[0].value, dropoff = resolutions[1].value;
     for (const result of [pickup, dropoff]) {
       if (result.kind === 'invalid') return {ok:false,reason:'invalid_address'};
       if (result.kind === 'ambiguous') return {ok:false,reason:'ambiguous_address'};

@@ -22,6 +22,27 @@ async function points(adapter) {
   assert.equal(pickup.kind, 'verified'); assert.equal(dropoff.kind, 'verified');
   return { pickup: pickup.address, dropoff: dropoff.address, profile: 'car' };
 }
+test('concurrent geocodes preserve invocation order when dropoff finishes first',{timeout:2000},async()=>{
+ let releasePickup,dropoffReturned=false;
+ const gate=new Promise(resolve=>{releasePickup=resolve;});
+ const f=setup({fetch:async(url)=>{
+  const parsed=new URL(url);
+  if(parsed.pathname.includes('/geocode/')){
+   const number=parsed.searchParams.get('housenumber');
+   if(number==='1')await gate;else dropoffReturned=true;
+   const data=geocode(number);data.results[0].lat=number==='1'?55.6:55.7;return json(data);
+  }
+  assert.equal(parsed.searchParams.get('waypoints'),'55.6,12.5|55.7,12.5');return json(route());
+ }});
+ const pickup=f.adapter.resolve(address),dropoff=f.adapter.resolve({...address,street:'Testvej 2'});
+ const destination=await dropoff;assert.equal(dropoffReturned,true);assert.equal(destination.kind,'verified');
+ // An unresolved pickup cannot be replaced by the already resolved destination.
+ assert.equal((await f.adapter.route({pickup:destination.address,dropoff:destination.address,profile:'car'})).kind,'unavailable');
+ releasePickup();const origin=await pickup;assert.equal(origin.kind,'verified');
+ assert.equal((await f.adapter.route({pickup:origin.address,dropoff:destination.address,profile:'car'})).kind,'route');
+ assert.equal(f.events.filter(event=>event==='quote').length,1);
+ assert.equal(f.events.filter(event=>event==='request').length,3);
+});
 test('single lazy reservation covers exactly two projected EU geocodes and one metric route', async () => {
   const f = setup(); assert.deepEqual(f.events, []);
   const p = await points(f.adapter);

@@ -32,7 +32,7 @@ export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,reques
  },[]);
  useEffect(()=>{
   if(!enabled||!autoRequestReady||locked||pending.current||attempted.current===requestIdentity)return;
-  const timer=setTimeout(()=>void request(),700);return()=>clearTimeout(timer);
+  const timer=setTimeout(()=>void request(),250);return()=>clearTimeout(timer);
  },[enabled,autoRequestReady,locked,requestIdentity,request,wake]);
  useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[enabled]);
  const state:ManagedQuoteState=enabled&&stored.identity===requestIdentity?stored.state:{kind:'idle'};

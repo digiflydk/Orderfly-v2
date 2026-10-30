@@ -1,4 +1,5 @@
 import 'server-only';
+import { z } from 'zod';
 import { readReceiptDeliveryTracking } from '@/lib/delivery/tracking-server';
 import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import Stripe from 'stripe';
@@ -14,12 +15,21 @@ export type GuestReceipt = Pick<OrderDetail,
   'id' | 'brandId' | 'locationId' | 'customerName' | 'customerContact' | 'deliveryType' |
   'deliveryTime' | 'status' | 'paymentStatus' | 'paymentMethod' | 'totalAmount' | 'productItems'> & {
   managedDeliveryTracking?: CustomerDeliveryTracking;
+  expectedDeliveryAt?: string;
   createdAt: string;
   customerDetails: Pick<OrderDetail['customerDetails'], 'id' | 'address'>;
   paymentDetails: Omit<OrderDetail['paymentDetails'], 'paymentRefId'>;
   invoice?: OrderDetail['invoice'];
   paymentCollection?: Pick<NonNullable<OrderDetail['paymentCollection']>, 'method'>;
 };
+
+function receiptExpectedDeliveryAt(value: unknown): string | undefined {
+  try {
+    const date = value instanceof Date ? value : typeof value === 'string' && z.string().datetime({offset:true}).safeParse(value).success
+      ? new Date(value) : value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function' ? value.toDate() : null;
+    return date instanceof Date && Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+  } catch { return undefined; }
+}
 
 // The existing random Stripe session ID is a guest capability, not a user ID.
 // Never recover or disclose it from a predictable order ID. Keep it out of logs.
@@ -74,9 +84,11 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
   if (!order) return null;
   const managedDeliveryTracking = await readReceiptDeliveryTracking(order).catch(() => null);
   const payment = order.paymentDetails;
+  const expectedDeliveryAt = managedDeliveryTracking ? receiptExpectedDeliveryAt((order as OrderDetail & {expectedDeliveryAt?: unknown}).expectedDeliveryAt) : undefined;
   // Explicit projection: no PSP identifiers, cancel hashes or arbitrary DB fields.
   return {
     ...(managedDeliveryTracking ? {managedDeliveryTracking} : {}),
+    ...(expectedDeliveryAt ? {expectedDeliveryAt} : {}),
     id: order.id, brandId: order.brandId, locationId: order.locationId,
     customerName: order.customerName, customerContact: order.customerContact,
     customerDetails: { id: order.customerDetails.id, address: order.customerDetails.address },

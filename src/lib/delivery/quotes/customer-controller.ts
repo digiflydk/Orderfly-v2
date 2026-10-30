@@ -42,6 +42,8 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
 }
 export async function createNativeManagedCustomerQuote(input:NativeManagedPricing,trace:QuoteTrace=()=>{}){
  const scope={brandId:input.brand.id,locationId:input.location.id};
+ // Preserve the configuration/retention gate before persisting customer drafts.
+ // The action does not repeat this probe; the resolver rechecks after persistence.
  if(!await managedDeliveryRuntimeAvailable(scope))return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
  trace('draft');
  const native=await prepareNativeManagedDraft(input),draft=await saveAuthoritativeCustomerDraft(native.draft);

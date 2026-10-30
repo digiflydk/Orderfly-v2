@@ -75,7 +75,9 @@ export function createGeoapifyRoutingAdapter(options: {
       address = { street: address.street, postalCode: address.postalCode, city: address.city, countryCode: address.countryCode };
       const parts = address.street.normalize('NFKC').trim().match(/^(.+?)\s+(\d+[A-Za-z]?)$/u);
       if (!parts) return { kind: 'invalid' };
-      if (geocodes++ >= 2) return { kind: 'unavailable' };
+      // Preserve invocation identity even when the destination resolves first.
+      const index = geocodes++;
+      if (index >= 2) return { kind: 'unavailable' };
       try {
         const data = await request('/v1/geocode/search', new URLSearchParams({
           street: parts[1], housenumber: parts[2], postcode: address.postalCode, city: address.city,
@@ -96,12 +98,12 @@ export function createGeoapifyRoutingAdapter(options: {
             || !Number.isFinite(result.rank.confidence_building_level) || result.rank.confidence_building_level < 0.95 || result.rank.confidence_building_level > 1))) return { kind: 'ambiguous' };
         const verified = { reference: result.place_id, latitude: result.lat, longitude: result.lon };
         if (!point(verified)) return { kind: 'invalid' };
-        resolved.push({ ...verified });
+        resolved[index] = { ...verified };
         return { kind: 'verified', address: verified };
       } catch { return { kind: 'unavailable' }; }
     },
     async route({ pickup, dropoff, profile }) {
-      if (profile !== 'car' || !point(pickup) || !point(dropoff) || resolved.length !== 2
+      if (profile !== 'car' || !point(pickup) || !point(dropoff) || resolved.length !== 2 || !resolved[0] || !resolved[1]
         || !samePoint(pickup, resolved[0]) || !samePoint(dropoff, resolved[1]) || routeUsed) return { kind: 'unavailable' };
       routeUsed = true;
       try {

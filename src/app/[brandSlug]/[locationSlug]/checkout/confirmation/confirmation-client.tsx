@@ -187,7 +187,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
-            {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
+            {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} fallbackDeliveryTime={order.expectedDeliveryAt} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
             {!failed&&!refunded && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
             <Button asChild variant="outline" className="ml-2"><Link href={storefront(location.slug)}>Tilbage til menuen</Link></Button>
         </main>;
@@ -237,7 +237,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                         </p>
                     </div>
 
-                    {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
+                    {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} fallbackDeliveryTime={order.expectedDeliveryAt} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
                              <CardHeader><CardTitle>Kundeoplysninger</CardTitle></CardHeader>
@@ -253,8 +253,8 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                              <CardHeader><CardTitle>Ordreoplysninger</CardTitle></CardHeader>
                              <CardContent className="space-y-4">
                                 <InfoItem icon={deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Bestillingstype">{deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</InfoItem>
-                                {deliveryTime && (
-                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? tracking ? "Valgt leveringstid" : "Forventet levering" : "Forventet afhentning"}>
+                                {deliveryTime && !(deliveryType === 'Delivery' && tracking) && (
+                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? "Forventet levering" : "Forventet afhentning"}>
                                         {formatDisplayTime(deliveryTime)}
                                     </InfoItem>
                                 )}
