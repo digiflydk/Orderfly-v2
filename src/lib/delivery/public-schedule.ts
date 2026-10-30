@@ -8,10 +8,11 @@ import { deliveryScheduleAt } from './settings/schedule';
 /** Public availability only. Provider bindings, pricing and credentials never reach the client. */
 export type ManagedDeliverySchedule = Pick<DeliverySettings, 'enabled' | 'paused' | 'timezone' | 'weeklyHours' | 'exceptions' | 'preparationMinutes'>;
 const zone = 'Europe/Copenhagen';
+export const MANAGED_DELIVERY_TRANSPORT_MINUTES = 30;
 
 function preparedLocation(location: Location, schedule: ManagedDeliverySchedule): Location {
   const preparation = deliveryPreparationMinutes(location, schedule.preparationMinutes);
-  return { ...location, prep_time: preparation, manual_override: preparation, travlhed_factor: 'normal' };
+  return { ...location, delivery_time: MANAGED_DELIVERY_TRANSPORT_MINUTES, prep_time: preparation, manual_override: preparation, travlhed_factor: 'normal' };
 }
 
 /** Intersect native kitchen slots with the very same delivery schedule used by quoting. */

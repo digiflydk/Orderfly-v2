@@ -78,6 +78,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/merchant-payment-methods':loadTs('src/lib/merchant-payment-methods.ts'),
   '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
+  '@/lib/delivery/public-schedule':loadTs('src/lib/delivery/public-schedule.ts'),
   '@/lib/optional-checkout':load('src/lib/optional-checkout.ts'),
   '@/lib/server/consent-identity':loadTs('src/lib/server/consent-identity.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>consentCookie?{value:consentCookie}:undefined})},'@/lib/firebase-admin':{getAdminDb:()=>{if(fault==='consent-read')throw Error('consent offline');return fault==='consent-link'?{...marketingDb,runTransaction:run=>marketingDb.runTransaction(tx=>run({...tx,update:()=>{throw Error('consent link offline');}}))}:marketingDb;}}}),
   '@/lib/stripe-checkout-failure':load('src/lib/stripe-checkout-failure.ts'),

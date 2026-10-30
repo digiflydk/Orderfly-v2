@@ -6,3 +6,19 @@ test('disabled dispatch, scope, environment, approvals and pickup identity fail 
 test('production requires separate activation and no cross-scope draft reaches provider',async()=>{const f=fixture();f.config.environment=f.env.ORDERFLY_DELIVERY_ENVIRONMENT='production';let r=create(f.deps);assert.equal(await r.available(f.scope),false);f.env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED='true';assert.equal(await r.available(f.scope),true);assert.equal(await r.resolve(f.scope,{binding:{brandId:'other',locationId:'l'}}),null);assert.deepEqual(f.calls,[]);});
 
 test('provider construction rejects a runtime environment changed after authoritative draft preparation',async()=>{const f=fixture(),r=create(f.deps);assert.equal(await r.resolve(f.scope,f.draft,'production'),null);assert.deepEqual(f.calls,[]);assert.ok(await r.resolve(f.scope,f.draft,'sandbox'));});
+
+test('independent adapter initialization overlaps and waits for both before exposing runtime',{timeout:2000},async()=>{
+ const f=fixture();let releaseRouting,providerStarted=false,finished=false;
+ const routingGate=new Promise(resolve=>{releaseRouting=resolve;});
+ f.deps.createRouting=async()=>{await routingGate;return {source:'approved_fixture'};};
+ f.deps.createQuoteProvider=async()=>{providerStarted=true;return {providerId:'wolt'};};
+ const pending=create(f.deps).resolve(f.scope,f.draft).then(value=>{finished=true;return value;});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(providerStarted,true);assert.equal(finished,false);
+ releaseRouting();assert.equal((await pending).provider.providerId,'wolt');
+});
+test('parallel initialization fails closed when either adapter rejects or has mismatched identity',async()=>{
+ for(const change of [f=>f.deps.createRouting=async()=>{throw Error('private');},f=>f.deps.createQuoteProvider=async()=>{throw Error('private');},f=>f.deps.createRouting=async()=>({source:'foreign'}),f=>f.deps.createQuoteProvider=async()=>({providerId:'foreign'})]){
+  const f=fixture();change(f);assert.equal(await create(f.deps).resolve(f.scope,f.draft),null);
+ }
+});

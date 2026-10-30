@@ -4,6 +4,7 @@ import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
 import { Textarea } from '@/components/ui/textarea';
 import { ManagedDeliveryQuote, type ManagedDeliveryQuoteView } from './managed-delivery-quote';
+import { customerDeliveryEstimate } from '@/lib/delivery/customer-eta';
 import { useManagedDeliveryQuote, managedQuotePaymentWindowMs } from './use-managed-delivery-quote';
 import { normalizeDeliveryPhone } from '@/lib/delivery/quotes/phone';
 import { normalizeDanishDeliveryAddress } from '@/lib/delivery/quotes/address';
@@ -627,6 +628,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   } catch { quoteReady=false; }
   const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction,autoRequestReady:quoteReady,locked:isFormLocked});
   const managedQuote=managed.state.kind==='ready'&&managed.paymentProof?managed.state.quote:null;
+  const managedDeliveryTimeLabel = customerDeliveryEstimate(managedQuote?.deliveryInterval) ?? `ca. ${localizeTime(displayTime)}`;
   const managedConsent=managed.paymentProof&&managed.checkoutKey?{...managed.paymentProof,checkoutKey:managed.checkoutKey}:null;
   const managedTotal=managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.checkoutTotalMinor/100):'Afventer leveringspris';
   const requestDeliveryPrice=()=>{setCheckoutError(null);void managed.request();};
@@ -923,7 +925,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                         {isLoadingTimes ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <><p className="font-semibold">{localizeTime(displayTime)}</p>
+                          <><p className="font-semibold">{managedActive ? `Forventet levering ${managedDeliveryTimeLabel}` : localizeTime(displayTime)}</p>
                           {managedActive && !isOrderTimeValid && <p role="alert" className="mt-1 text-sm text-destructive">{selectedTime === 'asap' ? 'Der er ingen ledige leveringstider. Vælg en anden dato.' : 'Det valgte tidspunkt er ikke tilgængeligt for levering. Vælg et nyt tidspunkt.'}</p>}</>
                         )}
                       </div>
@@ -1028,7 +1030,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     </>
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
-                  <ManagedDeliveryQuote showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
+                  <ManagedDeliveryQuote showDeliveryTime={false} showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
                   {isV2 && <p className="v2-guest-note">Du kan bestille uden at oprette en konto.</p>}
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField

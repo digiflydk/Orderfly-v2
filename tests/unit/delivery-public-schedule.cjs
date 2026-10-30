@@ -11,8 +11,8 @@ test('Wednesday-only delivery removes Friday choices while preserving pickup and
  assert.ok(fulfillmentSlots(location,'delivery','2026-10-30',now).includes('2026-10-30T10:50:00.000Z'));
  assert.deepEqual(managedFulfillmentSlots(location,'delivery','2026-10-30',now,s),[]);
  for(const target of ['2026-10-30T10:50:00.000Z','2026-10-30T11:05:00.000Z'])assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery',target,now,s));
- assert.equal(resolveManagedFulfillmentTime(location,'delivery','asap',now,s),'2026-11-04T10:40:00.000Z');
- assert.equal(managedDeliverySelectionForSchedule(location,'asap',now,s),'2026-11-04T10:40:00.000Z');
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','asap',now,s),'2026-11-04T10:50:00.000Z');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',now,s),'2026-11-04T10:50:00.000Z');
  assert.deepEqual(managedFulfillmentSlots(location,'pickup','2026-10-30',now,s),fulfillmentSlots(location,'pickup','2026-10-30',now));
  assert.equal(resolveManagedFulfillmentTime(location,'pickup','asap',now,s),resolveFulfillmentTime(location,'pickup','asap',now));
 });
@@ -23,7 +23,7 @@ test('valid same-day 11:50 and 12:05 deliveries remain selectable before kitchen
   assert.equal(resolveManagedFulfillmentTime(location,'delivery',target,now,s),target);
   assert.equal(managedDeliverySelectionForSchedule(location,target,now,s),target);
  }
- assert.equal(managedDeliverySelectionForSchedule(location,'asap',now,s),'2026-10-30T10:40:00.000Z');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',now,s),'2026-10-30T10:50:00.000Z');
 });
 test('date exceptions replace weekly hours and exact closing is excluded',()=>{
  const s=schedule();s.exceptions=[{date:'2026-10-30',intervals:[{startMinute:720,endMinute:750}]}];
@@ -44,6 +44,14 @@ test('paused, disabled and unavailable preorder remain closed without affecting 
 });
 test('configured preparation floor delays selectable slots and invalidates too-early selections',()=>{
  const s={...schedule([5]),preparationMinutes:60};
- assert.equal(managedFulfillmentSlots(location,'delivery','2026-10-30',now,s)[0],'2026-10-30T11:20:00.000Z');
+ assert.equal(managedFulfillmentSlots(location,'delivery','2026-10-30',now,s)[0],'2026-10-30T11:30:00.000Z');
  assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T10:50:00.000Z',now,s));
 });
+
+ test('managed default is location preparation plus thirty minutes transport, without changing pickup',()=>{
+ const at=new Date('2026-10-30T11:40:00Z'),s=schedule([5]);
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','asap',at,s),'2026-10-30T12:30:00.000Z');
+ assert.equal(resolveManagedFulfillmentTime({...location,prep_time:30},'delivery','asap',at,s),'2026-10-30T12:40:00.000Z');
+ assert.equal(resolveManagedFulfillmentTime(location,'pickup','asap',at,s),'2026-10-30T12:00:00.000Z');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',at,s),'asap');
+ });
