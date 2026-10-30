@@ -36,6 +36,13 @@ current catalog repricing, and matching checkout completion isolation.
 
 ## Remaining acceptance boundaries
 
+The shared admin access/filter suite passed 72/72 locally on 2026-10-30 after
+updating the brand-layout harness for the V2 stylesheet, request headers and
+presentation provider. Its explicit dependency allowlist still rejects unexpected
+data dependencies, and the original scoped brand-read/client-props assertions
+remain unchanged. It also asserts V2 is disabled for the unrelated fixture brand.
+Typecheck passed after this harness correction. New-head CI is still required.
+
 These local results do not establish deployment success, real menu completeness,
 production domain routing, visual approval of every page, or end-to-end payment
 integration success. Those require repository gates, independent review and
