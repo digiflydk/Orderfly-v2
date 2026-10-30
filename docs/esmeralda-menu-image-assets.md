@@ -8,4 +8,6 @@ Chili, Dressing and Pesto had no dedicated photo in the public catalog. Their `*
 
 Assets are under `public/images/esmeralda-v2/menu/`. No production catalog records were changed. Beverage canvases have transparent side margins; the 96 px square display crops only those empty margins. Dip images use the same display size.
 
+The exact eight public image paths bypass brand-subdomain rewriting. This is required on `esmeralda2.orderfly.dk`; otherwise middleware prefixes `/esmeralda` and the images return 404. Adjacent image paths and other brand routes remain scoped. Middleware regression coverage includes the public hostname and App Hosting's forwarded-host header.
+
 Validation: TypeScript typecheck; scoped mapping and asset-presence tests (`tests/unit/esmeralda-menu-images.cjs`); relevant combo builder browser suite. Source-based cuts and illustrations were visually inspected, including a second Pepsi Max pass to remove a halo.

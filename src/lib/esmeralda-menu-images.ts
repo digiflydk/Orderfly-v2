@@ -10,6 +10,8 @@ const assets: Record<string, {file: string; illustration?: boolean}> = {
   'esmeralda-v2-combo-dip-pesto-20261030': {file: 'pesto-illustration', illustration: true},
 };
 
+export const ESMERALDA_MENU_IMAGE_PATHS = Object.values(assets).map(asset => `/images/esmeralda-v2/menu/${asset.file}.webp`);
+
 export function esmeraldaMenuImage(isV2: boolean, brandId: string, comboId: string, productId: string) {
   if (!isV2 || brandId !== 'oeypKaMyYcQjIwaa1PtV' || comboId !== 'esmeralda-v2-pizzamenu-20261030') return undefined;
   const asset = assets[productId];
