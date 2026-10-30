@@ -627,6 +627,8 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  await dialog.getByRole('button',{name:'Øg antal'}).click();
  await expect(dialog.getByText('Fra +15,00 kr. pr. stk. · Eventuelle ekstra tilvalg tillægges.',{exact:true})).toBeVisible();
  await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
+ await expect(dialog.locator('[data-retained-combo-product]')).toContainText('Fixture Pizza');
+ assert.equal(await dialog.getByRole('region',{name:'Pizza',exact:true}).getByRole('radio').count(),0);
  await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeChecked();
  await expect(dialog.getByRole('checkbox',{name:'Bacon',exact:true})).toBeChecked();
  await dialog.getByRole('radio',{name:'Fixture Soda',exact:true}).check();
@@ -639,4 +641,10 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  assert.equal(cart.firstItemQuantity,2);
  assert.equal(cart.firstItemTotal*cart.firstItemQuantity,210,'two menus total 210 before the bag fee');
  assert.equal(cart.total,214,'two menus retain both paid modifiers and the bag fee');
+ await page.reload();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const restored=JSON.parse(await page.locator('#cart-state').textContent());
+ assert.equal(restored.count,2);assert.equal(restored.total,214);assert.deepEqual(restored.comboModifiers,cart.comboModifiers);
+ const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));
+ assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].comboSelections[0].products[0].id,'p');
 });

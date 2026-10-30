@@ -16,10 +16,13 @@ before(async()=>{
  import{StorefrontV2Provider}from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
  import{ComboBuilderDialog}from ${JSON.stringify(path.join(root,'src/components/product/combo-builder-dialog.tsx'))};
  const product=${JSON.stringify(product)};
+ const fixedCase=location.search.includes('fixedcase');if(fixedCase)product.productName='Margherita';
+ const alternative={...product,id:'pepperoni',productName:'Pepperoni'};
  const combo={id:'combo',brandId:'b',comboName:'Testmenu',pickupPrice:100,productGroups:[{id:'main',groupName:'Pizza',productIds:['pizza'],minSelection:1,maxSelection:1,productPriceAdjustments:location.search.includes('surcharge')?{pizza:15}:undefined}]};
+ if(fixedCase)combo.productGroups[0].productIds.push('pepperoni');
  if(location.search.includes('twopizzas'))combo.productGroups.push({id:'second',groupName:'Pizza 2',productIds:['pizza'],minSelection:1,maxSelection:1,productPriceAdjustments:{pizza:15}});
  if(location.search.includes('optional'))combo.productGroups.push({id:'optional',groupName:'Ekstra pizza',productIds:['pizza'],minSelection:0,maxSelection:1,productPriceAdjustments:{pizza:15}});
- function App(){const[open,setOpen]=useState(true),[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved);setOpen(true);}}>Rediger gemt</button>{open&&<ComboBuilderDialog combo={combo} brandProducts={[product]} initialItem={initialItem} initialQuantity={2} preselectedProductId={initialItem?undefined:'pizza'} preselectedModifiers={location.search.includes('legacy')?undefined:[{id:'cheese',quantity:2},{id:'onion',quantity:1}]} isOpen={open} setIsOpen={setOpen}/>}</>};createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={location.search.includes('v2')}><App/></StorefrontV2Provider>);`);
+ function App(){const[open,setOpen]=useState(true),[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved);setOpen(true);}}>Rediger gemt</button>{open&&<ComboBuilderDialog combo={combo} brandProducts={fixedCase?[product,alternative]:[product]} initialItem={initialItem} initialQuantity={2} preselectedProductId={initialItem||location.search.includes('standalone')?undefined:'pizza'} preselectedModifiers={location.search.includes('legacy')?undefined:[{id:'cheese',quantity:2},{id:'onion',quantity:1}]} isOpen={open} setIsOpen={setOpen}/>}</>};createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={location.search.includes('v2')}><App/></StorefrontV2Provider>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const cart=file('cart',`const value={cartReady:true,deliveryType:'pickup',location:{id:'l'},cartTotal:0,addComboToCart:(combo,quantity,comboSelections,price,expected,toppings)=>{window.saved={id:combo.id,cartItemId:'saved',itemType:'combo',productName:combo.comboName,brandId:combo.brandId,quantity,comboSelections,price,basePrice:price,toppings};return true;}};export const useCart=()=>value;`);
  const aliases={
@@ -116,4 +119,39 @@ test('optional combo group can be cleared without retaining its surcharge',async
  assert.match(await page.getByRole('button',{name:/Tilføj til kurv/}).innerText(),/240/);
  await page.getByRole('button',{name:/Tilføj til kurv/}).click();const saved=await page.evaluate(()=>window.saved);
  assert.equal(saved.price,100);assert.deepEqual(saved.comboSelections.find(g=>g.groupId==='optional').products,[]);
+});
+
+for (const width of [320,1280]) test(`upgrade locks Margherita summary and retains modifiers/quantity while cart edit remains explicit (${width}px)`,async t=>{
+ const page=await browser.newPage({viewport:{width,height:844}});t.after(()=>page.close());
+ await page.goto(origin+'/?v2&fixedcase');
+ await page.getByRole('heading',{name:'Tilvalg til Margherita',exact:true}).waitFor();
+ const pizza=page.getByRole('region',{name:'Pizza',exact:true});
+ assert.match(await pizza.innerText(),/Margherita/);
+ assert.doesNotMatch(await pizza.innerText(),/Pepperoni/);
+ assert.equal(await pizza.getByRole('radio').count(),0);
+ assert.equal(await pizza.getByRole('checkbox').count(),0);
+ assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'2');
+ assert(await page.getByRole('checkbox',{name:'Uden løg',exact:true}).isChecked());
+ await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ const saved=await page.evaluate(()=>window.saved);
+ assert.equal(saved.quantity,2);assert.equal(saved.comboSelections[0].products[0].id,'pizza');
+ assert.deepEqual(saved.comboSelections[0].products[0].modifiers,[{id:'cheese',quantity:2},{id:'onion',quantity:1},{id:'water',quantity:1}]);
+ await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
+ assert(await page.getByRole('radio',{name:'Margherita',exact:true}).isChecked());
+ assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'2');
+ assert(await page.getByRole('radio',{name:'Vand',exact:true}).isChecked());
+ await page.getByRole('button',{name:/Gem ændringer/}).click();
+ const edited=await page.evaluate(()=>window.saved);assert.equal(edited.quantity,2);assert.deepEqual(edited.comboSelections,saved.comboSelections);
+});
+
+test('standalone menu retains both pizza choices and can select Pepperoni',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());await page.goto(origin+'/?v2&fixedcase&standalone');
+ const pizza=page.getByRole('region',{name:'Pizza',exact:true});await pizza.waitFor();
+ assert.equal(await pizza.getByRole('radio').count(),2);
+ await pizza.getByRole('radio',{name:'Pepperoni',exact:true}).check();
+ await page.getByRole('heading',{name:'Tilvalg til Pepperoni',exact:true}).waitFor();
+ await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ const saved=await page.evaluate(()=>window.saved);assert.equal(saved.comboSelections[0].products[0].id,'pepperoni');assert.equal(saved.quantity,2);
 });
