@@ -1,4 +1,5 @@
 import type { RouteDistance } from '../pricing/calculate';
+import { measureQuoteStep } from '../quotes/performance';
 
 /** Server-owned adapter boundary. Never deserialize an adapter from client input. */
 export type DeliveryAddress = { street: string; postalCode: string; city: string; countryCode: string };
@@ -32,7 +33,7 @@ export async function resolveDeliveryRoute(input: { pickup: DeliveryAddress; dro
   try {
     // Project allow-listed address fields; client extras such as coordinates cannot leak into resolution.
     const project = (a: DeliveryAddress): DeliveryAddress => ({street:a.street.trim(),postalCode:a.postalCode.trim(),city:a.city.trim(),countryCode:a.countryCode});
-    const resolutions = await Promise.allSettled([adapter.resolve(project(input.pickup)), adapter.resolve(project(input.dropoff))]);
+    const resolutions = await measureQuoteStep('routing_geocode',()=>Promise.allSettled([adapter.resolve(project(input.pickup)), adapter.resolve(project(input.dropoff))]));
     if(resolutions[0].status==='rejected'||resolutions[1].status==='rejected')return {ok:false,reason:'routing_unavailable'};
     const pickup = resolutions[0].value, dropoff = resolutions[1].value;
     for (const result of [pickup, dropoff]) {

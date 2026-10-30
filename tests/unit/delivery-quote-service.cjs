@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {loadTs}=require('../helpers/load-ts.cjs');
-const {quoteDelivery,quoteAddressBinding}=loadTs('src/lib/delivery/quotes/service.ts');
+const {quoteDelivery,quoteAddressBinding}=loadTs('src/lib/delivery/quotes/service.ts',{'server-only':{}});
 const {defaultDeliverySettings}=loadTs('src/lib/delivery/settings/schema.ts');
 const {validateQuoteAcceptance}=loadTs('src/lib/delivery/quotes/binding.ts');
 const at='2026-10-25T12:00:00Z';

@@ -1,7 +1,8 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { quoteTimingsSchema } from '@/lib/delivery/quotes/performance-schema';
 import { validManagedDeliveryQuote, type ManagedDeliveryQuoteView, type ManagedQuoteState, type ManagedQuoteAcceptance } from './managed-delivery-quote';
-export type CustomerQuoteResult=({ok:true}&ManagedDeliveryQuoteView)|{ok:false;code:string;message?:string};
+export type CustomerQuoteResult=(({ok:true}&ManagedDeliveryQuoteView)|{ok:false;code:string;message?:string})&{timings?:unknown};
 // Match the server's minimum remaining lifetime before opening hosted payment.
 export const managedQuotePaymentWindowMs=60_000;
 /** requestIdentity covers every cart/address/time/discount/scope input. Requests
@@ -20,15 +21,29 @@ export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,reques
   if(!key.current)key.current=Array.from(crypto.getRandomValues(new Uint8Array(32)),v=>v.toString(16).padStart(2,'0')).join('');
   const token=++sequence.current,expected=snapshot.requestIdentity;pending.current=true;attempted.current=expected;
   setStored({identity:expected,state:{kind:'loading'}});
+  // Start at invocation, excluding typing debounce and time spent waiting for an
+  // obsolete quote. The duration still includes network/server-action queueing.
+  const started=performance.now();let clientDuration:number|undefined,timings:unknown;
   try{
    const result=await snapshot.requestQuote({...snapshot.input,checkoutKey:key.current});
+   clientDuration=performance.now()-started;timings=result.timings;
    if(!mounted.current||token!==sequence.current||!current.current.enabled||current.current.requestIdentity!==expected)return;
    if(result.ok&&validManagedDeliveryQuote(result)&&result.expiresAtMs>Date.now()+managedQuotePaymentWindowMs){
     setPreviousFeeMinor(lastFee.current);lastFee.current=result.customerFeeMinor;
     setNow(Date.now());setStored({identity:expected,state:{kind:'ready',quote:result}});
    }else setStored({identity:expected,state:{kind:'unavailable',reason:result.ok?'quote_expired':result.code,pickupAllowed:false}});
   }catch{if(mounted.current&&token===sequence.current&&current.current.enabled&&current.current.requestIdentity===expected)setStored({identity:expected,state:{kind:'unavailable',reason:'delivery_unavailable',pickupAllowed:false}});}
-  finally{pending.current=false;if(mounted.current)setWake(value=>value+1);}
+  finally{
+   // Timing diagnostics are numeric only and must never affect payment behavior.
+   try {
+    const elapsed=clientDuration??performance.now()-started;
+    if(Number.isFinite(elapsed)&&elapsed>=0){
+     const parsed=quoteTimingsSchema.safeParse(timings);
+     console.info('delivery_quote_timing',{clientMs:Math.round(elapsed),...(parsed.success?{serverMs:parsed.data.serverMs,stages:parsed.data.stages}:{})});
+    }
+   } catch { /* Console availability is not checkout authority. */ }
+   pending.current=false;if(mounted.current)setWake(value=>value+1);
+  }
  },[]);
  useEffect(()=>{
   if(!enabled||!autoRequestReady||locked||pending.current||attempted.current===requestIdentity)return;
