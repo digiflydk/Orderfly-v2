@@ -11,6 +11,7 @@ function fixture({allowed=true}={}) {
     if (value && typeof value === 'object') for (const entry of Object.values(value)) strict(entry);
   }
   const api = loadTs('src/app/superadmin/combos/actions.ts', {
+    'server-only': {},
     'next/cache': { revalidatePath() {}, revalidateTag() {} }, 'next/navigation': { redirect: () => { throw Error('REDIRECT'); } },
     '@/lib/storefront-cache': {}, '@/lib/firebase': { db: {} },
     '../products/actions': { getProductsByIds: async () => [{ id: 'p', brandId: 'b', price: 75 }] },
@@ -66,4 +67,30 @@ test('combo entrypoints reject denied access and do not write',async()=>{
  await assert.rejects(api.getComboById('new'),/forbidden/);
  await assert.rejects(api.getCombos(),/forbidden/);
  assert.equal(saved.size,0);
+});
+
+test('combo admin preserves supplements, upgrade links and V2 visibility while rejecting invalid configuration', async () => {
+  const {api, form, saved} = fixture();
+  const input = form('');
+  const groups = JSON.parse(input.get('productGroups'));
+  groups[0].productPriceAdjustments = {p: 10};
+  input.set('productGroups', JSON.stringify(groups));
+  input.append('upgradeProductIds', 'p');
+  input.append('storefrontVersions', 'v2');
+  await assert.rejects(api.createOrUpdateCombo(null, input), /REDIRECT/);
+  const reopened = await api.getComboById('new');
+  assert.deepEqual(reopened.productGroups[0].productPriceAdjustments, {p: 10});
+  assert.deepEqual(reopened.upgradeProductIds, ['p']);
+  assert.deepEqual(reopened.storefrontVersions, ['v2']);
+  const before = JSON.stringify([...saved]);
+  for (const adjustments of [{p: -1}, {unknown: 10}]) {
+    const invalid = form('', 'new');
+    invalid.set('productGroups', JSON.stringify([{...groups[0], productPriceAdjustments: adjustments}]));
+    assert.equal((await api.createOrUpdateCombo(null, invalid)).error, true);
+    assert.equal(JSON.stringify([...saved]), before);
+  }
+  const invalidVersion = form('', 'new');
+  invalidVersion.append('storefrontVersions', 'v3');
+  assert.equal((await api.createOrUpdateCombo(null, invalidVersion)).error, true);
+  assert.equal(JSON.stringify([...saved]), before);
 });

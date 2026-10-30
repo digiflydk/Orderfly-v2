@@ -27,7 +27,7 @@ before(async()=>{
  const cart=file('cart',`const value={cartReady:true,deliveryType:'pickup',location:{id:'l'},cartTotal:0,addToCart:(product,quantity,toppings,basePrice,finalPrice)=>{window.saved={productId:product.id,quantity,toppings,basePrice,finalPrice};return true;}};export const useCart=()=>value;`);
  const aliases={
   '@/context/cart-context':cart,
-  '@/context/storefront-catalog':file('catalog',`const data={products:[${JSON.stringify(product)}],combos:new URLSearchParams(location.search).has('upgrade')?[{id:'test-combo',comboName:'Testmenu',pickupPrice:100,upgradeProductIds:['pizza'],productGroups:[{groupName:'Pizza',productIds:['pizza']}]}]:[]};export const useStorefrontCatalog=()=>data;`),
+  '@/context/storefront-catalog':file('catalog',`const data={products:[${JSON.stringify(product)}],combos:new URLSearchParams(location.search).has('upgrade')?[{id:'test-combo',comboName:'Testmenu',pickupPrice:100,upgradeProductIds:['pizza'],productGroups:[{id:'main',groupName:'Pizza',productIds:['pizza'],minSelection:1,maxSelection:1,productPriceAdjustments:location.search.includes('surcharge')?{pizza:15}:undefined}]}]:[]};export const useStorefrontCatalog=()=>data;`),
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'test'});`),
   '@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/lib/public-read':file('public-read',`export const publicRead=async()=>new URLSearchParams(location.search).has('allergens')?[{id:'milk',allergenName:'Mælk'}]:[];`),
@@ -310,4 +310,16 @@ test('V2 à la carte required tiles, exact choices and quantity clearance',async
  assert.ok(quantity.y+quantity.height<=footer.y,'quantity is fully reachable above fixed footer');
  if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,'v2-product-steak-390.png'),fullPage:true});
  await page.getByRole('button',{name:/Læg i kurv/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings.map(x=>x.name),['Medium','Hasselbackkartofler','Champignonsauce']);
+});
+
+test('V2 pinned upgrade action quotes the dish surcharge and keeps the existing draft',async t=>{
+ const context=await browser.newContext({viewport:{width:320,height:568}});t.after(()=>context.close());
+ const page=await context.newPage();await page.goto(origin+'/?v2&compact&upgrade&surcharge');
+ const upgrade=page.getByRole('button',{name:'Køb som menu',exact:true});await upgrade.waitFor();
+ await page.getByRole('dialog').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
+ const box=await upgrade.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=568);
+ assert.match(await page.locator('.commerce-inline-offers').innerText(),/40,00/);
+ await upgrade.click();assert.equal((await page.evaluate(()=>window.upgradeDraft)).productId,'pizza');
+ assert.equal(await page.evaluate(()=>window.saved),undefined);
+ await page.getByRole('button',{name:'Tilbage til produkt',exact:true}).click();await upgrade.waitFor();
 });

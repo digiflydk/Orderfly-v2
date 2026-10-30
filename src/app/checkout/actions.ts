@@ -562,7 +562,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
     const verifiedUpsellIds = validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
-      id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price,
+      id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price: combo ? validated.items[i].listUnitPrice : price,
       tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
     })), activeStandardDiscounts, upsells, {brandId,locationId,deliveryType});
     const eligibleLines = resolvedLines.map(({productSnap,catalog,combo,price:catalogPrice},index) => {
