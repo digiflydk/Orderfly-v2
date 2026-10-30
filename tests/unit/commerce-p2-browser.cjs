@@ -614,7 +614,12 @@ test('#780 V2 compatible product can open its catalogue menu upgrade',async t=>{
  await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
  await dialog.getByRole('checkbox',{name:'Ost',exact:true}).uncheck();
  await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
- await expect(page.getByRole('dialog').getByRole('heading',{name:'Pizza og drik'})).toBeVisible();
+ await expect(dialog.getByRole('heading',{name:'Fixture Pizza-menu',exact:true})).toBeVisible();
+ assert.equal(await dialog.getByRole('heading',{name:'Fixture Pizza-menu',exact:true}).count(),1);
+ assert.equal(await dialog.locator('[data-retained-combo-product]').count(),0,'the chosen pizza is not duplicated');
+ await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeHidden();
+ await dialog.getByRole('button',{name:'Tilpas',exact:true}).click();
+ await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).not.toBeChecked();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,0,'opening an upgrade does not write a draft to the cart');
 });
 
@@ -627,11 +632,21 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  await dialog.getByRole('button',{name:'Øg antal'}).click();
  await expect(dialog.getByText('Fra +15,00 kr. pr. stk. · Eventuelle ekstra tilvalg tillægges.',{exact:true})).toBeVisible();
  await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
- await expect(dialog.locator('[data-retained-combo-product]')).toContainText('Fixture Pizza');
+ await expect(dialog.getByRole('heading',{name:'Fixture Pizza-menu',exact:true})).toBeVisible();
+ assert.equal(await dialog.getByRole('heading',{name:'Fixture Pizza-menu',exact:true}).count(),1);
+ assert.equal(await dialog.locator('[data-retained-combo-product]').count(),0,'the chosen pizza appears once');
  assert.equal(await dialog.getByRole('region',{name:'Pizza',exact:true}).getByRole('radio').count(),0);
+ await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeHidden();
+ await dialog.getByRole('button',{name:'Tilpas',exact:true}).click();
  await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeChecked();
  await expect(dialog.getByRole('checkbox',{name:'Bacon',exact:true})).toBeChecked();
  await dialog.getByRole('radio',{name:'Fixture Soda',exact:true}).check();
+ await dialog.getByRole('button',{name:'Luk tilpasning',exact:true}).click();
+ await expect(dialog.getByRole('button',{name:/Se din menu/})).toHaveText('Se din menu210,00 kr.');
+ await dialog.getByRole('button',{name:/Se din menu/}).click();
+ await expect(dialog.getByRole('heading',{name:'Se din menu',exact:true})).toBeVisible();
+ await expect(dialog.getByText('Fixture Soda',{exact:true})).toBeVisible();
+ assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,0,'overview has not committed the menu');
  await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText('Tilføj til kurv210,00 kr.');
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
