@@ -25,6 +25,7 @@ import Image from 'next/image';
 import { Badge } from '../ui/badge';
 import {formatPrice} from '@/lib/storefront-format';
 import {safeImage} from '@/lib/images';
+import {esmeraldaMenuImage} from '@/lib/esmeralda-menu-images';
 
 interface ComboBuilderDialogProps {
   combo: ComboMenu;
@@ -60,6 +61,7 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, preselectedModifiers, onSaved, onBack }: ComboBuilderDialogProps) {
   const isV2 = useStorefrontV2();
+  const menuImage = (product: ProductForMenu) => esmeraldaMenuImage(isV2, combo.brandId, combo.id, product.id);
   const retainedGroupId = isV2 && preselectedProductId ? combo.productGroups.find(group => group.productIds.includes(preselectedProductId))?.id : undefined;
   const retainedProduct = retainedGroupId && preselectedProductId ? brandProducts.find(product => product.id === preselectedProductId) : undefined;
   const configureProducts = isV2 || preselectedModifiers !== undefined || !!initialItem?.comboSelections?.some(g => g.products.some(p => p.modifiers !== undefined));
@@ -273,8 +275,10 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
     setStep(next);
     setShowErrors(false);
     requestAnimationFrame(() => {
-      stepHeading.current?.scrollIntoView({block: 'start'});
-      stepHeading.current?.focus();
+      // Scroll the options viewport only; scrolling ancestors can hide the topbar.
+      const viewport = stepHeading.current?.closest('[data-radix-scroll-area-viewport]');
+      if (viewport) viewport.scrollTop = 0;
+      stepHeading.current?.focus({preventScroll: true});
     });
   }
   function continueMenu() {
@@ -302,7 +306,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
               <Button type="button" variant="ghost" size="icon" aria-label={step > 0 ? 'Tilbage til forrige trin' : onBack ? 'Tilbage til retten' : 'Tilbage til menu'} onClick={() => step > 0 ? goToStep(step - 1) : onBack ? onBack() : setIsOpen(false)}><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Button>
               <span>{`TRIN ${Math.min(step, steps.length) + 1} AF ${steps.length + 1}`}</span>
             </div>}
-            <ScrollArea className="flex-1">
+            <ScrollArea className="flex-1 min-h-0">
                 <div className="commerce-option-header">
                   <div className="commerce-option-image"><Image src={safeImage(retainedProduct ? retainedProduct.imageUrl : combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{retainedProduct ? `${retainedProduct.productName}-menu` : combo.comboName}</DialogTitle><DialogDescription>{isOverview ? 'Kontrollér dine valg.' : retainedProduct ? 'Dine tilpasninger følger med.' : combo.description || 'Sammensæt din menu.'}</DialogDescription>{retainedProduct && retainedGroupId && comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id) > 0 && <p className="text-sm">+{formatPrice(comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id))}</p>}{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
@@ -344,7 +348,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                                 {productsInGroup.map(p => (
                                 <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row data-selected={currentSelection.includes(p.id)} className="flex items-center gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                     <RadioGroupItem value={p.id} id={`${dialogId}-${group.id}-${p.id}`} />
-                                    {(!isV2 || p.imageUrl) && <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
+                                    {(!isV2 || menuImage(p) || p.imageUrl) && <Image src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                                 ))}
                             {Number(group.minSelection)===0 && <label data-option-row data-selected={currentSelection.length === 0} className="flex items-center gap-3 min-h-11 px-2 cursor-pointer"><RadioGroupItem value="__none" />{isV2 && /dip/i.test(group.groupName) ? 'Ingen dip' : 'Ingen tak'}</label>}
@@ -361,7 +365,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                {(!isV2 || p.imageUrl) && <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
+                                {(!isV2 || menuImage(p) || p.imageUrl) && <Image src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                             )
                             })
@@ -424,12 +428,13 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                 </div>}
                 <Button
                     size="lg"
-                    className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
+                    variant={isV2 && isOverview ? "outline" : "default"}
+                    className={isV2 ? "w-full min-h-12 h-auto py-3 font-bold text-base px-4" : "w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"}
                     onClick={isV2 ? continueMenu : handleAddToCart}
                     disabled={!cartReady || comboPrice === undefined || !optionsReady}
                 >
                     <div className="flex w-full justify-between items-center gap-3">
-                        <span>{isV2 && !isOverview ? (step === steps.length - 1 ? 'Se din menu' : 'Fortsæt') : !isSelectionValid || configurations.some(c => !c.resolved) ? (isV2 ? 'Vælg tilvalg' : 'Vælg de påkrævede tilvalg') : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                        <span>{isV2 && !isOverview ? (step === steps.length - 1 ? 'Se din menu' : 'Fortsæt') : !isSelectionValid || configurations.some(c => !c.resolved) ? (isV2 ? 'Vælg tilvalg' : 'Vælg de påkrævede tilvalg') : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i pose' : 'Tilføj til kurv'}</span>
                         <span>{formatPrice(totalItemPrice)}</span>
                     </div>
                 </Button>

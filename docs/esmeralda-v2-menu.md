@@ -15,3 +15,9 @@ Verification is tracked on #780 and its PR: relevant browser tests must cover V2
 The V2 menu now starts with a centered brand masthead, working category shortcut and an expandable restaurant-information button. The location photo hero is removed from the default V2 menu so it no longer pushes the food below the fold. Restaurant address, opening hours and reviews remain available under the information button. Fulfilment and live timing remain connected to the existing cart controls. Search precedes the horizontal category rail on mobile; the rail/search area remains sticky while the masthead scrolls away. Active promotions use an eligible catalog product image and the real offer wording, never illustrative mockup foods or prices.
 
 Product list rows retain their images on the left, compact descriptions and visible prices, with rectangular labelled actions. The shared V2 palette is neutral charcoal (#111413/#202323) and warm gold (#e8bf69). V1 retains its original hero, toolbar, layout and quick-add behavior. Visual acceptance requires actual rendered viewport evidence in addition to passing functional tests.
+
+### Mobile menu polish (#780)
+
+V2 product dialogs use a gold **Vælg menu** action and an outlined **Læg i pose** action with the total at the bottom. Menu step changes reset only the options viewport and focus the heading without scrolling the dialog, keeping the navigation and heading separate. The menu footer has a dark inset including the device safe area; its final add action uses the same secondary treatment. Product choice images use a larger contained transparent canvas. V1 labels and styling remain unchanged.
+
+Regression coverage: `tests/unit/tilvalg-storefront-browser.cjs` checks the two action variants at 320px; `tests/unit/combo-modifiers-browser.cjs` checks navigation/heading geometry and footer inset at 320px and 390px while completing and editing drink/dip selections.

@@ -71,8 +71,8 @@ for(const width of [390,1280])test(`combo retains and edits upgraded modifiers w
  await page.getByRole('button',{name:/Vælg (de påkrævede )?tilvalg/}).click();assert.equal(await page.evaluate(()=>window.saved),undefined);
  assert.equal(await page.getByRole('alert').first().isVisible(),true);
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); assert.match(await page.getByRole('button',{name:/Tilføj til kurv/}).innerText(),/240/);
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); assert.match(await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).innerText(),/240/);
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  let saved=await page.evaluate(()=>window.saved);assert.equal(saved.quantity,2);assert.equal(saved.price,100);assert.equal(saved.toppings.reduce((n,t)=>n+t.price,0),20);
  assert.deepEqual(saved.comboSelections[0].products[0].modifiers,[{id:'cheese',quantity:2},{id:'onion',quantity:1},{id:'water',quantity:1}]);
  await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
@@ -84,11 +84,11 @@ for(const width of [390,1280])test(`combo retains and edits upgraded modifiers w
 });
 test('combo cannot be submitted when options fail to load',async t=>{
  const page=await browser.newPage();t.after(()=>page.close());await page.goto(origin+'/?failure');await page.getByText('Tilvalg kunne ikke indlæses.',{exact:true}).waitFor();
- assert.equal(await page.getByRole('button',{name:/Tilføj til kurv/}).isDisabled(),true);assert.equal(await page.evaluate(()=>window.saved),undefined);
+ assert.equal(await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).isDisabled(),true);assert.equal(await page.evaluate(()=>window.saved),undefined);
 });
 test('V1 plain combo ignores paid defaults and product required groups',async t=>{
  const page=await browser.newPage();t.after(()=>page.close());await page.goto(origin+'/?legacy');
- const add=page.getByRole('button',{name:/Tilføj til kurv/});await add.waitFor();await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.includes('Tilføj til kurv')&&!b.disabled));
+ const add=page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/});await add.waitFor();await page.waitForFunction(()=>Array.from(document.querySelectorAll('button')).some(b=>b.textContent.includes('Tilføj til kurv')&&!b.disabled));
  assert.equal(await page.getByRole('heading',{name:'Tilvalg til Testpizza',exact:true}).count(),0);
  assert.match(await add.innerText(),/200/);await add.click();
  const saved=await page.evaluate(()=>window.saved);assert.deepEqual(saved.toppings,[]);assert.equal(saved.price,100);
@@ -101,7 +101,7 @@ test('V2 combo surcharge stays separate from modifiers, restores on edit and tot
  assert.equal(await page.getByText('+15,00 kr.',{exact:true}).count(),1);
  assert.equal(await page.locator('.commerce-option-header').getByText('100,00 kr.',{exact:true}).count(),0);
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- const add=page.getByRole('button',{name:/Tilføj til kurv/});assert.match(await add.innerText(),/270/);
+ const add=page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/});assert.match(await add.innerText(),/270/);
  const bounds=await add.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=845);
  await add.click();let saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,115);assert.equal(saved.toppings.reduce((n,t)=>n+t.price,0),20);
  await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
@@ -116,7 +116,7 @@ test('same dish in two combo groups keeps independent modifiers and group surcha
  await choices.nth(1).getByRole('button',{name:'Tilpas',exact:true}).click();
  await choices.nth(0).getByRole('radio',{name:'Vand',exact:true}).check();
  await choices.nth(1).getByRole('radio',{name:'Cola',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  const saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,115);assert.equal(saved.comboSelections.length,2);
  assert.ok(saved.comboSelections[0].products[0].modifiers.some(m=>m.id==='water'));
  assert.ok(saved.comboSelections[1].products[0].modifiers.some(m=>m.id==='cola'));
@@ -129,8 +129,8 @@ test('optional combo group can be cleared without retaining its surcharge',async
  await optional.getByRole('radio',{name:'Ingen tak',exact:true}).check();
  await page.getByRole('button',{name:'Tilpas',exact:true}).click();
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); assert.match(await page.getByRole('button',{name:/Tilføj til kurv/}).innerText(),/240/);
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();const saved=await page.evaluate(()=>window.saved);
+ await overview(page); assert.match(await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).innerText(),/240/);
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();const saved=await page.evaluate(()=>window.saved);
  assert.equal(saved.price,100);assert.deepEqual(saved.comboSelections.find(g=>g.groupId==='optional').products,[]);
 });
 
@@ -147,7 +147,7 @@ for (const width of [320,1280]) test(`upgrade locks Margherita summary and retai
  assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'2');
  assert(await page.getByRole('checkbox',{name:'Uden løg',exact:true}).isChecked());
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  const saved=await page.evaluate(()=>window.saved);
  assert.equal(saved.quantity,2);assert.equal(saved.comboSelections[0].products[0].id,'pizza');
  assert.deepEqual(saved.comboSelections[0].products[0].modifiers,[{id:'cheese',quantity:2},{id:'onion',quantity:1},{id:'water',quantity:1}]);
@@ -167,7 +167,7 @@ test('standalone menu retains both pizza choices and can select Pepperoni',async
  await pizza.getByRole('radio',{name:'Pepperoni',exact:true}).check();
  await page.getByRole('button',{name:'Tilpas Pepperoni',exact:true}).click();
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  const saved=await page.evaluate(()=>window.saved);assert.equal(saved.comboSelections[0].products[0].id,'pepperoni');assert.equal(saved.quantity,2);
 });
 
@@ -180,7 +180,7 @@ test('standalone menu retains both pizza choices and can select Pepperoni',async
  assert.equal(await page.getByRole('button',{name:'Luk tilpasning',exact:true}).getAttribute('aria-expanded'),'true');
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
  await page.getByRole('button',{name:'Luk tilpasning',exact:true}).click();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  const saved=await page.evaluate(()=>window.saved);assert.ok(saved.comboSelections[0].products[0].modifiers.some(m=>m.id==='water'));
  });
 
@@ -190,7 +190,7 @@ test('Esmeralda menu removes optional drink upsells while preserving required ch
  assert.equal(await page.getByText('Drikke til maden',{exact:true}).count(),0);
  await page.getByRole('region',{name:'Inkluderet sodavand',exact:true}).waitFor();
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  let saved=await page.evaluate(()=>window.saved);assert.equal(saved.comboSelections[1].products[0].id,'native-cola');
  assert.equal(saved.comboSelections[0].products[0].modifiers.some(m=>m.id==='extra-cola'),false);
  await page.goto(origin+'/?v2&fixedcase&duplicatemenu&selectedextra');
@@ -198,7 +198,7 @@ test('Esmeralda menu removes optional drink upsells while preserving required ch
  assert.equal(await page.getByText('Drikke til maden',{exact:true}).count(),0);
  await page.getByText('Sodavand vælges som en del af menuen.',{exact:true}).waitFor();
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  saved=await page.evaluate(()=>window.saved);assert.equal(saved.comboSelections[0].products[0].modifiers.some(m=>m.id==='extra-cola'),false);
  await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
  await page.getByRole('button',{name:'Tilpas Margherita',exact:true}).click();
@@ -212,7 +212,7 @@ test('Esmeralda menu removes optional drink upsells while preserving required ch
  await overview(page); await page.getByRole('button',{name:/Vælg (de påkrævede )?tilvalg/}).click();
  assert.equal(await page.evaluate(()=>window.saved),undefined);
  await page.getByRole('radio',{name:'Extra cola',exact:true}).check();
- await overview(page); await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await overview(page); await page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/}).click();
  assert.ok((await page.evaluate(()=>window.saved)).comboSelections[0].products[0].modifiers.some(m=>m.id==='extra-cola'));
  await page.goto(origin+'/?v2&fixedcase&duplicatemenu&otherbrand');
  await page.getByRole('button',{name:'Tilpas',exact:true}).click();
@@ -246,6 +246,10 @@ for(const width of [320,390])test(`drink then included dip then overview keeps p
  await page.getByRole('radio',{name:'Menu Cola',exact:true}).check();
  await page.getByRole('button',{name:/Fortsæt/}).click();
  await page.getByRole('radio',{name:'Pesto',exact:true}).check();
+ const topbar=await page.locator('.v2-product-topbar').boundingBox();
+ const heading=await page.locator('.v2-combo-step-title').boundingBox();
+ assert.ok(heading.y>=topbar.y+topbar.height, 'step heading remains below navigation');
+ assert.equal(await page.getByRole('dialog').evaluate(el=>el.scrollTop),0,'step changes must not scroll the outer dialog');
  assert.equal(await page.getByRole('radio',{name:'Menu Cola',exact:true}).count(),0);
  if(process.env.COMBO_QA_DIR)await page.screenshot({animations:'disabled',path:path.join(process.env.COMBO_QA_DIR,`dip-${width}.png`)});
  await page.getByRole('button',{name:/Se din menu/}).click();
@@ -255,8 +259,10 @@ for(const width of [320,390])test(`drink then included dip then overview keeps p
  assert.equal(await page.getByRole('radio',{name:'Pesto',exact:true}).isChecked(),true);
  await page.getByRole('radio',{name:'Ingen dip',exact:true}).check();
  await page.getByRole('button',{name:/Se din menu/}).click();
- const add=page.getByRole('button',{name:/Tilføj til kurv/});assert.match(await add.innerText(),/200/);
- const bounds=await add.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=845);
+ const add=page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/});assert.match(await add.innerText(),/200/);
+ assert.equal(await add.getAttribute('data-ui-variant'),'outline');
+ assert.match(await add.innerText(),/Læg i pose/);
+ const bounds=await add.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=828,'footer retains dark bottom inset');
  if(process.env.COMBO_QA_DIR)await page.screenshot({animations:'disabled',path:path.join(process.env.COMBO_QA_DIR,`overview-${width}.png`)});
  await add.click();let saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,100);assert.deepEqual(saved.comboSelections.find(g=>g.groupId==='dip').products,[]);
  await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
