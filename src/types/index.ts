@@ -221,6 +221,8 @@ export interface TimeSlotResponse {
  * @collection products
  */
 export type Product = {
+  /** Component of a combo only; never sold as a standalone product. */
+  comboOnly?: boolean;
   isTestData?: boolean;
   id: string;
   brandId: string;
@@ -247,7 +249,7 @@ export type Product = {
  * @description Lightweight product type for menu display to reduce payload size.
  */
 export type ProductForMenu = Pick<Product, 
-    'id' | 'productName' | 'description' | 'price' | 'priceDelivery' | 
+    'id' | 'productName' | 'description' | 'price' | 'priceDelivery' | 'comboOnly' |
     'imageUrl' | 'isFeatured' | 'isNew' | 'isPopular' | 'allergenIds' | 
     'toppingGroupIds' | 'toppingGroupConditions' | 'toppingOverrides' | 'categoryId' | 'brandId' | 'sortOrder' | 'isActive' | 'locationIds'
 >;
