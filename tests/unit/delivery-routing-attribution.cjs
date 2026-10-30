@@ -17,7 +17,7 @@ new Function('require','module','exports',code)(name=>{
 },mod,mod.exports);
 const {ManagedDeliveryQuote}=mod.exports;
 const quote={quoteId:'q',quoteToken:'token',checkoutFingerprint:'fingerprint',customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',expiresAtMs:Date.now()+300000,deliveryInterval:null};
-function render(q=quote,enabled=true){return renderToStaticMarkup(React.createElement(ManagedDeliveryQuote,{enabled,state:{kind:'ready',quote:q},checkoutFingerprint:'fingerprint',onRequest(){}}));}
+function render(q=quote,enabled=true,showPrices=true){return renderToStaticMarkup(React.createElement(ManagedDeliveryQuote,{enabled,showPrices,state:{kind:'ready',quote:q},checkoutFingerprint:'fingerprint',onRequest(){}}));}
 test('persisted source derives fixed Geoapify and OpenStreetMap attribution',()=>{
  const persisted=JSON.parse(JSON.stringify({economics:{route:{source:'geoapify'}}}));
  assert.deepEqual(deliveryRoutingAttribution(persisted.economics.route.source),{providerLabel:'Powered by Geoapify',providerUrl:'https://www.geoapify.com/',dataLabel:'© OpenStreetMap contributors',dataUrl:'https://www.openstreetmap.org/copyright'});
@@ -37,4 +37,12 @@ test('legacy unknown disabled and expired quote views do not invent attribution'
   const html=render(q);assert.doesNotMatch(html,/Powered by Geoapify|OpenStreetMap|<script>/);
  }
  assert.equal(render({...quote,routingSource:'geoapify'},false),'');
+});
+
+test('V2 upper panel omits prices while retaining delivery time and attribution',()=>{
+ const html=render({...quote,routingSource:'geoapify',deliveryInterval:{earliest:'2026-10-30T10:45:00Z',latest:'2026-10-30T11:00:00Z'}},true,false);
+ assert.doesNotMatch(html,/<dl|Samlet beløb inkl. levering|35,00|135,00/);
+ assert.match(html,/Forventet levering/);
+ assert.match(html,/Powered by Geoapify/);
+ assert.match(html,/OpenStreetMap contributors/);
 });

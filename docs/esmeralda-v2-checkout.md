@@ -23,3 +23,7 @@ The V2 mobile cart now fills the viewport instead of reusing a short bottom shee
 Checkout has its own heading, compact service/time cards, labelled 16px contact inputs and guest reassurance. Existing consent, offers, validation and order totals stay present. The fixed payment bar is inset with safe-area clearance; the online provider still owns payment selection. The V2-only selectors leave V1 presentation intact.
 
 `CHECKOUT_SCREENSHOT_DIR=/path/to/evidence` enables initial/scrolled 320px and 390px checkout captures in the browser suite. Geometry checks cover overflow, minimum input font size and sticky payment action position. The captures must also be visually reviewed against the mockups; these geometry tests alone do not establish visual approval.
+
+## Delivery price placement
+
+V2 shows the delivery fee and total in the order summary and the total in the fixed payment action. The upper delivery panel keeps the estimated time, routing attribution, loading/error states and retry action, but omits duplicate prices. V1 keeps its existing quote price display. Quote calculation, expiry and payment validation are unchanged.

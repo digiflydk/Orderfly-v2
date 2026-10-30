@@ -42,9 +42,9 @@ const messages:Record<string,string>={
 export function validManagedDeliveryQuote(q:ManagedDeliveryQuoteView){return !!q&&typeof q.quoteId==='string'&&q.quoteId.length>0&&q.quoteId.length<=128&&typeof q.quoteToken==='string'&&q.quoteToken.length>0&&q.quoteToken.length<=2048&&typeof q.checkoutFingerprint==='string'&&q.checkoutFingerprint.length>0&&q.checkoutFingerprint.length<=256&&Number.isSafeInteger(q.customerFeeMinor)&&q.customerFeeMinor>=0&&Number.isSafeInteger(q.checkoutTotalMinor)&&q.checkoutTotalMinor>=q.customerFeeMinor&&/^[A-Z]{3}$/.test(q.currency)&&Number.isSafeInteger(q.expiresAtMs)&&q.expiresAtMs>0&&(!q.deliveryInterval||(Number.isFinite(Date.parse(q.deliveryInterval.earliest))&&Number.isFinite(Date.parse(q.deliveryInterval.latest))&&Date.parse(q.deliveryInterval.earliest)<=Date.parse(q.deliveryInterval.latest)));}
 const money=(amount:number,currency:string)=>new Intl.NumberFormat('da-DK',{style:'currency',currency}).format(amount/100);
 const date=(value:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(value));
-export function ManagedDeliveryQuote({enabled,state,checkoutFingerprint,previousFeeMinor,onRequest,locked=false}: {
+export function ManagedDeliveryQuote({enabled,state,checkoutFingerprint,previousFeeMinor,onRequest,locked=false,showPrices=true}: {
  enabled:boolean;state:ManagedQuoteState;checkoutFingerprint:string;previousFeeMinor?:number|null;
- onRequest:()=>void;locked?:boolean;
+ onRequest:()=>void;locked?:boolean;showPrices?:boolean;
 }) {
  const [now,setNow]=useState(()=>Date.now());
  useEffect(()=>{if(!enabled)return;const timer=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(timer);},[enabled]);
@@ -56,7 +56,7 @@ export function ManagedDeliveryQuote({enabled,state,checkoutFingerprint,previous
  return <section className="space-y-3 rounded-lg border p-4" aria-labelledby="managed-delivery-heading" aria-busy={state.kind==='loading'}>
   <h3 id="managed-delivery-heading" className="text-lg font-semibold">Levering</h3>
   {state.kind==='loading'?<p role="status">Vi beregner leveringsprisen…</p>:state.kind==='unavailable'?<p role="alert">{messages[state.reason]||'Vi kan ikke beregne leveringsprisen lige nu. Prøv igen.'}</p>:!valid?<p role="status">{expired?messages.quote_expired:'Leveringsprisen beregnes automatisk, når navn, e-mail, telefon og leveringsadresse er udfyldt.'}</p>:<>
-   <dl className="space-y-2"><div className="flex flex-wrap justify-between gap-2"><dt>Leveringspris</dt><dd className="font-semibold">{money(q!.customerFeeMinor,q!.currency)}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>Samlet beløb inkl. levering</dt><dd className="font-semibold">{money(q!.checkoutTotalMinor,q!.currency)}</dd></div></dl>
+   {showPrices&&<dl className="space-y-2"><div className="flex flex-wrap justify-between gap-2"><dt>Leveringspris</dt><dd className="font-semibold">{money(q!.customerFeeMinor,q!.currency)}</dd></div><div className="flex flex-wrap justify-between gap-2"><dt>Samlet beløb inkl. levering</dt><dd className="font-semibold">{money(q!.checkoutTotalMinor,q!.currency)}</dd></div></dl>}
    {q!.deliveryInterval&&<p>Forventet levering: {date(q!.deliveryInterval.earliest)} – {date(q!.deliveryInterval.latest)}.</p>}
    {attribution&&<p className="text-sm text-muted-foreground"><a className="underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={attribution.providerUrl}>{attribution.providerLabel}</a>{' | '}<a className="underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2" href={attribution.dataUrl}>{attribution.dataLabel}</a></p>}
    {previousFeeMinor!==null&&previousFeeMinor!==undefined&&q!.customerFeeMinor>previousFeeMinor&&<p role="status">Leveringsprisen er opdateret. Kontrollér det samlede beløb, før du går til betaling.</p>}

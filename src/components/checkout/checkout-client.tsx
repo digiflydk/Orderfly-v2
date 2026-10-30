@@ -1028,7 +1028,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     </>
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
-                  <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
+                  <ManagedDeliveryQuote showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
                   {isV2 && <p className="v2-guest-note">Du kan bestille uden at oprette en konto.</p>}
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField
