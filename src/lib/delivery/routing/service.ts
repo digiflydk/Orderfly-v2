@@ -24,7 +24,7 @@ function verified(a: VerifiedAddress): boolean {
     && Math.abs(a.latitude) <= 90 && Math.abs(a.longitude) <= 180;
 }
 /** Resolves BOTH addresses itself. Caller-supplied coordinates and route costs are never accepted. */
-export async function resolveDeliveryRoute(input: { pickup: DeliveryAddress; dropoff: DeliveryAddress; profile: string },
+async function resolveFreshDeliveryRoute(input: { pickup: DeliveryAddress; dropoff: DeliveryAddress; profile: string },
   dependencies: { adapter: RoutingAdapter | null; now: () => Date }): Promise<RoutingResult> {
   if (!validAddress(input?.pickup) || !validAddress(input?.dropoff) || !text(input?.profile)) return { ok: false, reason: 'invalid_address' };
   const adapter = dependencies.adapter;
@@ -52,4 +52,18 @@ export async function resolveDeliveryRoute(input: { pickup: DeliveryAddress; dro
     return {ok:true,pickup:structuredClone(pickup.address),dropoff:structuredClone(dropoff.address),route:{meters:result.meters,durationSeconds:result.durationSeconds,method:'route',source:adapter.source,
       profile:input.profile,calculatedAt:date.toISOString(),pickupReference:pickup.address.reference,dropoffReference:dropoff.address.reference}};
   } catch { return {ok:false,reason:'routing_unavailable'}; }
+}
+
+// Short-lived server-only route reuse between price display and courier confirmation.
+// Scope, source and both addresses are bound; approvals are checked by callers on every request.
+const recentRoutes=new Map<string,{expires:number;result:RoutingResult}>();
+export async function resolveDeliveryRoute(input:Parameters<typeof resolveFreshDeliveryRoute>[0],dependencies:Parameters<typeof resolveFreshDeliveryRoute>[1]&{scope?:{brandId:string;locationId:string}}):Promise<RoutingResult>{
+ const key=dependencies.scope&&dependencies.adapter?JSON.stringify([dependencies.scope.brandId,dependencies.scope.locationId,dependencies.adapter.source,input]):null;
+ const now=dependencies.now().getTime();
+ for(const [k,v] of recentRoutes)if(v.expires<=now)recentRoutes.delete(k);
+ const cached=key?recentRoutes.get(key):null;
+ if(cached&&cached.expires>now)return structuredClone(cached.result);
+ const result=await resolveFreshDeliveryRoute(input,dependencies);
+ if(key&&result.ok){if(recentRoutes.size>=256)recentRoutes.delete(recentRoutes.keys().next().value!);recentRoutes.set(key,{expires:now+30000,result:structuredClone(result)});}
+ return result;
 }

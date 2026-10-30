@@ -37,7 +37,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const schedule=deliveryScheduleAt(settings,new Date(input.fulfillment.readyAt));
     if (!schedule.open) return {ok:false,reason:schedule.reason};
     const postal=(a:AddressInput)=>({street:`${a.street} ${a.building}`.trim(),postalCode:a.postcode,city:a.city,countryCode:a.country});
-    const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now}));
+    const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now,scope:input.fulfillment.scope}));
     if (!routeResult.ok) return routeResult;
     const {route,pickup,dropoff}=routeResult;
     const coordinates=(a:typeof pickup)=>({latitude:a.latitude,longitude:a.longitude,source:route.source});

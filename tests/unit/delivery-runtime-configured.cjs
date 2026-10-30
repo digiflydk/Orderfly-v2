@@ -36,3 +36,4 @@ test('routing approval and enrollment reads overlap but both gate adapter constr
   assert.equal(await create(g.deps).resolve(g.scope,g.draft),null);assert.deepEqual(g.calls,[]);
  }
 });
+test('price preview initializes routing without creating courier provider or requiring a customer draft',async()=>{const f=fixture();assert.ok(await create(f.deps).routing(f.scope));assert.deepEqual(f.calls,['routing']);f.deps.authorizeConfig=async()=>false;f.calls.length=0;assert.equal(await create(f.deps).routing(f.scope),null);assert.deepEqual(f.calls,[]);});
