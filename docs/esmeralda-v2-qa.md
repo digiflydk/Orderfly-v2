@@ -43,6 +43,13 @@ data dependencies, and the original scoped brand-read/client-props assertions
 remain unchanged. It also asserts V2 is disabled for the unrelated fixture brand.
 Typecheck passed after this harness correction. New-head CI is still required.
 
+The personal discount card service/browser suite passed 121/121 locally on
+2026-10-30 after the checkout-return harness loaded the actual V2 host helper
+through an explicit dependency allowlist. Existing same-brand return, expiry
+and redirect-rejection assertions remain unchanged; a new case verifies the V2
+alias retains Esmeralda checkout identity and rejects foreign/alias tenant paths.
+Typecheck passed. Current-head CI and live acceptance remain required.
+
 These local results do not establish deployment success, real menu completeness,
 production domain routing, visual approval of every page, or end-to-end payment
 integration success. Those require repository gates, independent review and
