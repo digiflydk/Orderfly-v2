@@ -9,11 +9,11 @@ export function checkoutItems(items: CartItem[]): MinimalCartItem[] {
     ...(item.upsellId ? {upsellId:item.upsellId} : {}),
     quantity: item.quantity, unitPrice: money(item.price),
     totalPrice: lineMoney(item.price, item.quantity, item.toppings.map(topping => topping.price)),
-    toppings: item.toppings.map(topping => topping.name),
-    ...(item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!), toppingQuantities: item.toppings.map(topping => topping.quantity ?? 1) } : {}),
+    toppings: item.itemType === 'combo' ? [] : item.toppings.map(topping => topping.name),
+    ...(item.itemType !== 'combo' && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!), toppingQuantities: item.toppings.map(topping => topping.quantity ?? 1) } : {}),
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
       groupId: group.groupId, groupName: group.groupName,
-      products: group.products.map(product => ({ id: product.id, name: product.name })),
+      products: group.products.map(product => ({ id: product.id, name: product.name, ...(product.modifiers ? {modifiers: product.modifiers} : {}) })),
     })) } : {}),
   }));
 }
@@ -38,6 +38,7 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
   let subtotal = 0;
   const validated = restored.items.map((line, index) => {
     const item = items[index];
+    if (line.itemType === 'combo' && ore(item.unitPrice) !== ore(line.basePrice)) throw new Error('Combo prices have changed. Please refresh your basket.');
     const toppingPrices = line.toppings.map(topping => topping.price);
     if (ore(item.totalPrice) !== ore(lineMoney(item.unitPrice, item.quantity, toppingPrices))) {
       throw new Error('Option prices have changed. Please refresh your basket.');

@@ -29,7 +29,7 @@ before(async()=>{
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'test'});`),
   '@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/lib/public-read':file('public-read',`export const publicRead=async()=>[];`),
-  '@/components/product/combo-builder-dialog':file('combo',`export const ComboBuilderDialog=()=>null;`),
+  '@/components/product/combo-builder-dialog':file('combo',`import React from 'react';export function ComboBuilderDialog(props){window.upgradeDraft={productId:props.preselectedProductId,quantity:props.initialQuantity,modifiers:props.preselectedModifiers};return <button onClick={()=>props.setIsOpen(false)}>Tilbage til produkt</button>;}`),
   'next/image':file('image',`import React from'react';export default function Image({fill,priority,...props}){return <img {...props} src="/product.svg" style={fill?{position:'absolute',width:'100%',height:'100%',objectFit:'cover'}:undefined}/>;}`),
   'next/link':file('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
   'react$':require.resolve('next/dist/compiled/react'),
@@ -42,7 +42,7 @@ before(async()=>{
   plugins:[new webpackModule.webpack.NormalModuleReplacementPlugin(/^\.\/combo-builder-dialog$/,resource=>{resource.request=aliases['@/components/product/combo-builder-dialog'];})],
   resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/tilvalg-storefront-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  execFileSync(path.join(root,'node_modules/.bin/tailwindcss'),['-c',path.join(root,'tailwind.config.ts'),'-i',path.join(root,'src/app/globals.css'),'-o',path.join(dir,'styles.css'),'--minify'],{cwd:root,stdio:'pipe'});
- let styles=fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8');
+ let styles=fs.readFileSync(path.join(dir,'styles.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/components/product/product-dialog-v2.css'),'utf8');
  const fontDir=process.env.TILVALG_FONT_DIR;
  if(fontDir) styles+="@font-face{font-family:'Bourton Base';src:url('/heading.woff2')}@font-face{font-family:'Brandon Text Office Regular';src:url('/body.ttf')}";
  server=http.createServer((req,res)=>{if(req.url==='/product.svg'){res.setHeader('content-type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="#28231b"/><circle cx="32" cy="32" r="25" fill="#c99950"/><circle cx="32" cy="32" r="21" fill="#f0cc78"/><g fill="#a94c37"><circle cx="23" cy="23" r="5"/><circle cx="40" cy="25" r="5"/><circle cx="31" cy="42" r="5"/></g></svg>');}if(fontDir&&['/heading.woff2','/body.ttf'].includes(req.url)){res.setHeader('content-type',req.url.endsWith('.woff2')?'font/woff2':'font/ttf');return res.end(fs.readFileSync(path.join(fontDir,req.url.slice(1))));}if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(styles);}if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');res.end(fs.readFileSync(path.join(dir,'bundle.js')));}else{res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div data-commerce-root data-brand-slug="esmeralda" id="root"'+(new URL(req.url,'http://localhost').searchParams.has('v2')?' data-storefront-version="2"':'')+'></div><script src="/bundle.js"></script></body></html>');}});
@@ -211,17 +211,18 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(await page.evaluate(()=>window.saved),undefined,'required choices must block add');
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ await page.getByRole('button',{name:'Tilpas ingredienser',exact:true}).click();
  await page.getByRole('button',{name:'Flere Ost',exact:true}).click();
  assert.equal(await page.getByRole('button',{name:'Flere Ost',exact:true}).isDisabled(),true,'maximum quantity remains enforced');
- await page.getByRole('button',{name:'Fjern ingredienser',exact:true}).click();
+
  await page.getByRole('checkbox',{name:'Uden løg',exact:true}).check();
- await page.getByRole('button',{name:'Saucer',exact:true}).click();
+
  await page.getByRole('button',{name:'Vis alle (12)',exact:true}).click();
  await page.getByRole('radio',{name:'Sauce 12',exact:true}).check();
  await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(await page.evaluate(()=>window.saved),undefined,'conditional required choice must block add');
  await page.getByRole('radio',{name:'Brød',exact:true}).check();
- const submit=page.getByRole('button',{name:/Tilføj til kurv/});
+ const submit=page.getByRole('button',{name:/Læg i kurv/});
  await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
  const bounds=await submit.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+1,'action stays in viewport after content scroll');
  assert.equal(await submit.evaluate(el=>getComputedStyle(el).borderRadius),'6px');
@@ -233,21 +234,31 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  assert.equal(saved.toppings.find(x=>x.id==='onion').name,'Uden løg');assert.equal(saved.toppings.some(x=>x.id==='water'),true);assert.equal(saved.toppings.some(x=>x.id==='cola'),false);
  assert.equal(saved.toppings.some(x=>x.id==='sauce12'),true);assert.equal(saved.toppings.some(x=>x.id==='side1'),true);
  await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
+ await page.getByRole('button',{name:'Tilpas ingredienser',exact:true}).click();
  assert.equal(await page.getByLabel('Valgt antal Ost',{exact:true}).innerText(),'3');
  assert.equal(await page.getByRole('radio',{name:'Vand',exact:true}).isChecked(),true);
- await page.getByRole('button',{name:'Fjern ingredienser',exact:true}).click();assert.equal(await page.getByRole('checkbox',{name:'Uden løg',exact:true}).isChecked(),true);
+assert.equal(await page.getByRole('checkbox',{name:'Uden løg',exact:true}).isChecked(),true);
  await page.getByRole('button',{name:/Gem ændringer/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings,saved.toppings);
  assert.deepEqual(errors,[]);
 });
 
-test('V2 menu upgrade cannot discard chosen product modifiers',async t=>{
+test('V2 menu upgrade passes chosen modifiers and preserves the draft on return',async t=>{
  const context=await browser.newContext({viewport:{width:390,height:850},reducedMotion:'reduce'});t.after(()=>context.close());
  const page=await context.newPage();await page.goto(origin+'/?v2&compact&upgrade');
- const upgrade=page.getByRole('button',{name:'Vælg menu',exact:true});await upgrade.waitFor();assert.equal(await upgrade.isEnabled(),true);
+ await page.getByRole('button',{name:'Tilpas ingredienser',exact:true}).click();
  await page.getByRole('checkbox',{name:'Ost',exact:true}).check();
- assert.equal(await upgrade.isDisabled(),true);assert.equal(await page.getByText('Denne menu understøtter ikke rettens tilvalg. Læg retten i kurven for at beholde dine valg.').isVisible(),true);
- await page.getByRole('button',{name:/Tilføj til kurv/}).click();
- assert.equal((await page.evaluate(()=>window.saved)).toppings.find(x=>x.id==='cheese').quantity,1);
- await page.goto(origin+'/?v2&requiredonly&upgrade');await upgrade.waitFor();
- assert.equal(await upgrade.isDisabled(),true,'unselected required group cannot be bypassed by upgrading');
+ await page.getByRole('button',{name:'Øg antal',exact:true}).click();
+ await page.getByRole('button',{name:'Vælg menu',exact:true}).click();
+ assert.deepEqual(await page.evaluate(()=>window.upgradeDraft),{productId:'pizza',quantity:2,modifiers:[{id:'cheese',quantity:1}]});
+ assert.equal(await page.evaluate(()=>window.saved),undefined,'opening a combo must not write a product to the cart');
+ await page.getByRole('button',{name:'Tilbage til produkt',exact:true}).click();
+ assert.equal(await page.getByRole('checkbox',{name:'Ost',exact:true}).isChecked(),true);
+ await page.getByRole('button',{name:/Læg i kurv/}).click();
+ const saved=await page.evaluate(()=>window.saved);assert.equal(saved.quantity,2);assert.equal(saved.toppings.find(x=>x.id==='cheese').quantity,1);
+ // Empty required choices remain explicit in the draft; the real combo builder's
+ // rejection of these choices is tested in combo-modifiers-browser.cjs.
+ await page.goto(origin+'/?v2&requiredonly&upgrade');
+ await page.getByRole('button',{name:'Vælg menu',exact:true}).click();
+ assert.deepEqual((await page.evaluate(()=>window.upgradeDraft)).modifiers,[]);
+ assert.equal(await page.evaluate(()=>window.saved),undefined);
 });

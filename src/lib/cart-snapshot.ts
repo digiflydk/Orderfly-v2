@@ -15,7 +15,7 @@ export const cartChoiceSchema = z.object({
   comboSelections: z.array(z.object({
     groupId: id.optional(),
     groupName: z.string().min(1).max(200),
-    products: z.array(z.object({ id })).max(40),
+    products: z.array(z.object({ id , modifiers: z.array(z.object({ id, quantity: z.number().int().min(1).max(MAX_TOPPINGS_PER_ITEM) }).strict()).max(MAX_TOPPINGS_PER_ITEM).optional() })).max(40),
   })).max(20).optional(),
 }).refine(choice => !choice.toppingIds || (choice.toppingIds.length === choice.toppings.length && new Set(choice.toppingIds).size === choice.toppingIds.length), 'Invalid topping identities.').refine(choice => !choice.toppingQuantities || (!!choice.toppingIds && choice.toppingQuantities.length === choice.toppingIds.length && choice.toppingQuantities.reduce((sum, count) => sum + count, 0) <= MAX_TOPPINGS_PER_ITEM), 'Invalid topping quantities.');
 export const cartChoicesSchema = z.array(cartChoiceSchema).max(100)
@@ -41,12 +41,12 @@ export function cartChoices(items: CartItem[]): CartChoice[] {
   return items.map(item => ({
     id: item.id, cartItemId: item.cartItemId, itemType: item.itemType, quantity: item.quantity,
     ...(item.upsellId ? {upsellId:item.upsellId} : {}),
-    toppings: item.toppings.map(topping => topping.name),
-    ...(item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!), toppingQuantities: item.toppings.map(topping => topping.quantity ?? 1) } : {}),
+    toppings: item.itemType === 'combo' ? [] : item.toppings.map(topping => topping.name),
+    ...(item.itemType !== 'combo' && item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!), toppingQuantities: item.toppings.map(topping => topping.quantity ?? 1) } : {}),
     offered: item.price < item.basePrice,
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
       ...(group.groupId ? { groupId: group.groupId } : {}),
-      groupName: group.groupName, products: group.products.map(product => ({ id: product.id })),
+      groupName: group.groupName, products: group.products.map(product => ({ id: product.id, ...(product.modifiers ? {modifiers: product.modifiers} : {}) })),
     })) } : {}),
   }));
 }

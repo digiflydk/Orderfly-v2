@@ -1,3 +1,4 @@
+import { resolveComboProductModifiers } from './combo-modifiers';
 import { resolveToppingOptions, cartTopping, toppingSelectionError } from './topping-options';
 import { money, sumMoney } from './money';
 import type { CartItem, ComboMenu, Product, StandardDiscount, Topping, ToppingGroup, Upsell } from '@/types';
@@ -60,7 +61,13 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
         const products = ids.flatMap(id => {
           const selectedProduct = catalog.products.find(p => p.id === id && scoped(p) && group.productIds.includes(id));
           if (!selectedProduct) { valid = false; return []; }
-          return [{ id, name: selectedProduct.productName }];
+          const modifiers = matches[0]?.products.find(p => p.id === id)?.modifiers;
+          // Absence is the legacy plain-combo contract: no component customization.
+          // An explicit array (including []) opts into the full product rules.
+          const resolved = modifiers === undefined ? [] : resolveComboProductModifiers(selectedProduct, modifiers, catalog, scope);
+          if (!resolved) { valid = false; return []; }
+          toppings.push(...resolved.map(t => ({...t, name: `${selectedProduct.productName}: ${t.name}`})));
+          return [{ id, name: selectedProduct.productName, ...(modifiers !== undefined ? {modifiers} : {}) }];
         });
         return { groupId: group.id, groupName: group.groupName, products };
       });

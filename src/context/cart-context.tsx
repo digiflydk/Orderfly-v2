@@ -33,7 +33,7 @@ interface CartContextType {
   toggleBagFee: (include: boolean) => void;
   setDeliveryType: (type: 'delivery' | 'pickup') => void;
   addToCart: (product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem, upsellId?: string) => boolean;
-  addComboToCart: (combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem) => boolean;
+  addComboToCart: (combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem, modifiers?: CartItemTopping[]) => boolean;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, newQuantity: number) => void;
   clearCart: () => void;
@@ -312,11 +312,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, expected);
   }, [commitItem]);
 
-  const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem) => {
+  const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem, modifiers: CartItemTopping[] = []) => {
     return commitItem({
       id: combo.id, cartItemId: crypto.randomUUID(), itemType: 'combo', productName: combo.comboName,
       description: combo.description, imageUrl: combo.imageUrl || undefined, basePrice: money(price),
-      price: money(price), quantity, itemTotal: money(price), toppings: [], brandId: combo.brandId,
+      price: money(price), quantity, itemTotal: sumMoney([price, ...modifiers.map(t => t.price)]), toppings: modifiers, brandId: combo.brandId,
       comboSelections: selections,
     }, expected);
   }, [commitItem]);

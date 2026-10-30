@@ -524,7 +524,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     }));
     const selectedProductIds = [...new Set(cartItems.flatMap(item => item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || []))];
     if (selectedProductIds.length > 400) throw new Error('Too many combo selections.');
-    const needsOptions = resolvedLines.some(line => line.catalog?.toppingGroupIds?.length);
+    const needsOptions = selectedProductIds.length > 0 || resolvedLines.some(line => line.catalog?.toppingGroupIds?.length);
     const [comboProducts, toppingRows, groupRows] = await Promise.all([
       Promise.all(selectedProductIds.map(id => getDoc(doc(db, 'products', id)))),
       needsOptions ? getDocs(query(collection(db, 'toppings'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
@@ -537,7 +537,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
       catalogProducts.set(snapshot.id, product);
     }
     // Native linked option products are resolved afresh, never from browser data.
-    const attachedGroupIds = new Set(resolvedLines.flatMap(line=>line.catalog?.toppingGroupIds || []));
+    const attachedGroupIds = new Set([...catalogProducts.values()].flatMap(product=>product.toppingGroupIds || []));
     const linkedIds = [...new Set(toppingRows.docs.filter(row=>attachedGroupIds.has(row.data().groupId)).map(row=>row.data().productId).filter((id): id is string=>typeof id==='string'))];
     if(linkedIds.length>500 || linkedIds.some(id=>!/^[A-Za-z0-9_-]{1,128}$/.test(id))) throw new Error('Ugyldige produktreferencer for tilvalg.');
     const linkedProducts = await Promise.all(linkedIds.map(id=>getDoc(doc(db,'products',id))));

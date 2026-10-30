@@ -27,6 +27,8 @@ before(async()=>{
  export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return useMemo(()=>new URLSearchParams(search),[search]);}
  export const usePathname=()=>location.pathname;export const useParams=()=>({brandSlug:'fixture',locationSlug:'restaurant'});export const useRouter=()=>({push:href=>location.assign(href)});`);
  const entry=fixture('entry',`import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';
+ import {StorefrontV2Provider} from '@/context/storefront-v2-context';
+ import {StorefrontCatalog} from '@/context/storefront-catalog';
  import {Header} from '@/components/layout/header';
  import {StorefrontOverviewView} from '@/components/superadmin/storefront-overview';
  import LandingClient from ${JSON.stringify(path.join(root,'src/app/brand-site/m3pizza/landing-client.tsx'))};
@@ -42,18 +44,19 @@ before(async()=>{
  if(new URLSearchParams(window.location.search).get('upsell')==='required')products[0].toppingGroupIds=['required'];
  const capGroups=${JSON.stringify(capGroups)},capToppings=${JSON.stringify(capToppings)};
  const capProduct={...products[0],id:'cap-product',productName:'Cap Product',toppingGroupIds:capGroups.map(group=>group.id)};
- function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[]})}</pre>;}
+ function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[],comboModifiers:cart.cartItems[0]?.comboSelections?.flatMap(group=>group.products.flatMap(product=>product.modifiers||[]))||[]})}</pre>;}
  const conditionalGroups=['size','regular','family','drink'].map(id=>({id,locationIds:['l'],groupName:id,minSelection:id==='size'||id==='drink'?1:0,maxSelection:1}));
  const conditionalToppings=[['alm','size',0],['fam','size',60],['menu','size',30],['cheese','regular',10],['family-cheese','family',20],['cola','drink',0]].map(([id,groupId,price])=>({id,groupId,price,toppingName:id,isActive:true,locationIds:['l'],isDefault:id==='alm'||id==='cola'}));
  const conditionalProduct={...products[0],toppingGroupIds:conditionalGroups.map(g=>g.id),toppingGroupConditions:{regular:['alm'],family:['fam'],drink:['menu']}};
  function EditorFixture(){const [rules,setRules]=useState({});return <><ToppingConditionEditor groups={conditionalGroups} toppings={conditionalToppings} value={rules} onChange={setRules}/><pre id="rules">{JSON.stringify(rules)}</pre></>;}
  function ConditionalFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={conditionalProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={conditionalGroups} allToppings={conditionalToppings}/><Debug/></>;}
+ function ProductV2Fixture(){const cart=useCart();const [open,setOpen]=useState(true);useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);const item={...products[0],toppingGroupIds:new URLSearchParams(window.location.search).has('required')?['required','g']:['g']};return <StorefrontV2Provider enabled><div data-commerce-root data-brand-slug="esmeralda" data-storefront-version="2"><StorefrontCatalog products={products} combos={[combo]}><ProductDialog product={item} isOpen={open} setIsOpen={setOpen} allToppingGroups={${JSON.stringify(groups)}} allToppings={${JSON.stringify(toppings)}}/><Debug/></StorefrontCatalog></div></StorefrontV2Provider>;}
  function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
  import {BrandTracking} from '@/components/brand-tracking';
  function ConsentFixture(){const [events,setEvents]=useState([]);useEffect(()=>{const original=window.fetch;window.fetch=(url,options)=>{if(url==='/api/analytics/collect')setEvents(previous=>[...previous,JSON.parse(options.body)]);return original(url,options);};return()=>{window.fetch=original;};},[]);const consent=statistics=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics}));window.dispatchEvent(new Event('orderfly:consent'));};return <aside><button onClick={()=>consent(true)}>Allow analytics</button><button onClick={()=>consent(false)}>Reject analytics</button><pre id="funnel-events">{JSON.stringify(events)}</pre></aside>;}
  function DashboardFixture(){const [count,setCount]=useState(1);const data={totals:{sessions:2,measuredPurchasingSessions:1,view_menu:2,view_product:1,add_to_cart:1,start_checkout:1,click_purchase:1,payment_succeeded:count,revenue_paid:count*100},daily:[],byLocation:[],attribution:[],dataQualityWarnings:[]};return <><button onClick={()=>setCount(7)}>Receive refreshed report</button><AnalyticsDashboardClient initialData={data} locations={[]} searchParams={{dateFrom:'2026-09-01',dateTo:'2026-09-11',counting:'events'}}/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/brand-header'?<Header brand={new URLSearchParams(window.location.search).has('no-logo')?{...brand,slug:'other-brand',name:'Another very long restaurant brand name for narrow screens',logoUrl:null}:brand}/>:window.location.pathname==='/website-admin-fixture'?<StorefrontOverviewView brands={[{id:'b',name:'Fixture Pizza',brandStatus:'active',href:'/fixture',canEditBrand:false,locations:[{id:'l',name:'Restaurant',active:true,href:'/fixture/restaurant'},{id:'off',name:'Closed location',active:false,href:'/fixture/closed'}]}]}/>:window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:window.location.pathname==='/location-picker'?<div data-commerce-root data-brand-slug="esmeralda"><button onClick={()=>openDeliveryModal({brandSlug:new URLSearchParams(window.location.search).get('brand')||'esmeralda',locationSlug:'restaurant',location})}>Vælg restaurant</button><DeliveryMethodModal/></div>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/brand-header'?<Header brand={new URLSearchParams(window.location.search).has('no-logo')?{...brand,slug:'other-brand',name:'Another very long restaurant brand name for narrow screens',logoUrl:null}:brand}/>:window.location.pathname==='/website-admin-fixture'?<StorefrontOverviewView brands={[{id:'b',name:'Fixture Pizza',brandStatus:'active',href:'/fixture',canEditBrand:false,locations:[{id:'l',name:'Restaurant',active:true,href:'/fixture/restaurant'},{id:'off',name:'Closed location',active:false,href:'/fixture/closed'}]}]}/>:window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/product-v2'?<ProductV2Fixture/>:window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:window.location.pathname==='/location-picker'?<div data-commerce-root data-brand-slug="esmeralda"><button onClick={()=>openDeliveryModal({brandSlug:new URLSearchParams(window.location.search).get('brand')||'esmeralda',locationSlug:'restaurant',location})}>Vælg restaurant</button><DeliveryMethodModal/></div>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
@@ -74,7 +77,7 @@ before(async()=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname==='/tracking/frame'){res.setHeader('Content-Type','text/html');return res.end(loadTs('src/lib/brand-tracking-frame.ts').BRAND_TRACKING_DOCUMENT);}
   if(url.pathname.endsWith('.js')){const file=path.join(dir,path.basename(url.pathname));if(fs.existsSync(file)){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(fs.readFileSync(file));}}
-  if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8'));}
+  if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/styles/storefront-v2.css'),'utf8')+'\n'+fs.readFileSync(path.join(root,'src/components/product/product-dialog-v2.css'),'utf8'));}
   if(url.pathname==='/image.png'){res.setHeader('Content-Type','image/png');return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1YAAAAASUVORK5CYII=','base64'));}
   res.setHeader('Content-Type','application/json');
   if(url.pathname==='/restore'){restoreReads++;let raw='';for await(const c of req)raw+=c;const input=JSON.parse(raw);return res.end(JSON.stringify({...restoreCartItems(input.choices,{products,combos:[combo],toppings,groups,discounts:[],upsells:[]},input),discounts:[]}));}
@@ -573,4 +576,63 @@ test('visible recommendation acceptance keeps the same measured interaction and 
  assert.equal(shown.params.locationId,'l');assert.equal(accepted.params.locationId,'l');
  assert.equal(accepted.params.sessionId,shown.params.sessionId);
  assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')))).choices.find(c=>c.id==='drink').upsellId,'u');
+});
+
+for(const width of [390,1280])test(`#780 V2 product hero, required choices and optional panel preserve the cart (${width})`,async t=>{
+ const page=await setup(t,width,'/product-v2?required');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const dialog=page.getByRole('dialog');
+ const hero=await dialog.locator('.v2-product-hero').boundingBox();
+ const panel=await dialog.boundingBox();
+ assert.ok(hero.width>panel.width-4,'hero spans the sheet width');
+ assert.ok(hero.height>180,'photo has hero proportions');
+ await expect(dialog.getByRole('radio',{name:'Tynd bund'})).toBeVisible();
+ await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeHidden();
+ await dialog.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
+ await expect(dialog.getByRole('alert')).toHaveText(/Vælg 1/);
+ assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,0);
+ await dialog.getByRole('radio',{name:'Tynd bund'}).check();
+ await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
+ await dialog.getByRole('checkbox',{name:'Bacon',exact:true}).check();
+ await expect(dialog.getByRole('checkbox',{name:'Dressing',exact:true})).toBeDisabled();
+ await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
+ await expect(dialog.getByRole('checkbox',{name:'Bacon',exact:true})).toBeHidden();
+ await dialog.getByRole('button',{name:'Øg antal'}).click();
+ const footer=await dialog.locator('.commerce-product-footer').boundingBox();
+ assert.ok(footer.y+footer.height<=901,'primary action stays inside the viewport');
+ await dialog.getByRole('button',{name:/Læg i kurv/}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
+ const cart=JSON.parse(await page.locator('#cart-state').textContent());
+ assert.deepEqual(cart.toppingIds.sort(),['base','bacon','t'].sort());
+ assert.equal(cart.total,184,'two products include exact modifier totals and the existing bag fee');
+});
+
+test('#780 V2 compatible product can open its catalogue menu upgrade',async t=>{
+ const page=await setup(t,390,'/product-v2');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
+ await dialog.getByRole('checkbox',{name:'Ost',exact:true}).uncheck();
+ await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Pizza og drik'})).toBeVisible();
+ assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,0,'opening an upgrade does not write a draft to the cart');
+});
+
+for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients and quantity through cart commit (${width})`,async t=>{
+ const page=await setup(t,width,'/product-v2');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
+ await dialog.getByRole('checkbox',{name:'Bacon',exact:true}).check();
+ await dialog.getByRole('button',{name:'Øg antal'}).click();
+ await expect(dialog.getByText('105,00 kr. pr. menu · +15,00 kr. pr. stk.',{exact:true})).toBeVisible();
+ await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
+ await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeChecked();
+ await expect(dialog.getByRole('checkbox',{name:'Bacon',exact:true})).toBeChecked();
+ await dialog.getByRole('radio',{name:'Fixture Soda',exact:true}).check();
+ await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
+ const cart=JSON.parse(await page.locator('#cart-state').textContent());
+ assert.deepEqual(cart.comboModifiers,[{id:'t',quantity:1},{id:'bacon',quantity:1}]);
+ assert.equal(cart.total,214,'two menus retain both paid modifiers and the bag fee');
 });

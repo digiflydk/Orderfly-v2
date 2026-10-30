@@ -499,6 +499,7 @@ export type ComboSelection = {
     products: {
         id: string;
         name: string;
+        modifiers?: { id: string; quantity: number }[];
     }[];
 }
 
