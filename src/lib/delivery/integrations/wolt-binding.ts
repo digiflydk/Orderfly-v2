@@ -14,6 +14,7 @@ import { woltInstant } from '../providers/wolt/schedule';
 import type { WoltBinding } from '../providers/wolt/binding';
 import type { WoltEnvironment } from '../providers/wolt/config';
 import type { WoltPrivateQuote, WoltProviderDependencies } from '../providers/wolt/provider';
+import { measureQuoteStep } from '../quotes/performance';
 
 // Reuse the SDK connection; accessSecretVersion and both native authority
 // checks below still run for every operation. No secret payload is cached.
@@ -97,7 +98,7 @@ export async function createClaimedWoltStorage(capability:WoltDispatchCapability
 }
 async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,authorize:(tx:FirebaseFirestore.Transaction)=>Promise<void>):Promise<Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>>{
  const exact=(candidate:DeliveryScope)=>candidate.brandId===scope.brandId&&candidate.locationId===scope.locationId;
- async function current(){return sanitized(()=>getAdminDb().runTransaction(async tx=>{await authorize(tx);return loadWoltBindingInTransaction(tx,scope,environment);}));}
+ async function current(){return measureQuoteStep('wolt_authority',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{await authorize(tx);return loadWoltBindingInTransaction(tx,scope,environment);})) );}
  // Fail before returning a usable adapter and re-authorize every operation thereafter.
  await current();
  const storage:Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>={
@@ -107,17 +108,17 @@ async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,aut
    return sanitized(async()=>{
     const before=await current();if(before.secretRef!==reference||before.environment!==context.environment||before.merchantId!==context.merchantId)throw new WoltStorageError('secret_unavailable');
     let value:string|undefined;
-    try{const client=secretClient??=new SecretManagerServiceClient();const [version]=await client.accessSecretVersion({name:before.secretRef});const data=version.payload?.data;value=typeof data==='string'?Buffer.from(data,'base64').toString('utf8'):data?Buffer.from(data).toString('utf8'):undefined;}catch{throw new WoltStorageError('secret_unavailable');}
+    try{const client=secretClient??=new SecretManagerServiceClient();const [version]=await measureQuoteStep('wolt_secret',()=>client.accessSecretVersion({name:before.secretRef}));const data=version.payload?.data;value=typeof data==='string'?Buffer.from(data,'base64').toString('utf8'):data?Buffer.from(data).toString('utf8'):undefined;}catch{throw new WoltStorageError('secret_unavailable');}
     const after=await current();if(!isDeepStrictEqual(before,after))throw new WoltStorageError('secret_unavailable');
     return value;
    });
   },
-  async saveQuote(raw){const quote=woltPrivateQuoteSchema.parse(raw);await sanitized(()=>getAdminDb().runTransaction(async tx=>{
+  async saveQuote(raw){const quote=woltPrivateQuoteSchema.parse(raw);await measureQuoteStep('wolt_store',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{
     await authorize(tx);const binding=await loadWoltBindingInTransaction(tx,scope,environment);const expiresAtMs=freshQuote(quote,binding,Date.now());
     const ref=getAdminDb().collection('deliveryPrivateWoltQuotes').doc(woltPrivateQuoteDocumentId(scope,environment,quote.quoteRef));const old=await tx.get(ref);
     if(old.exists){if(!isDeepStrictEqual(old.data()?.quote,quote))throw new WoltStorageError('quote_conflict');return;}
     freshQuote(quote,binding,Date.now());tx.create(ref,{schemaVersion:1,quote,expiresAtMs});
-   }));},
+   })));},
   async loadQuote(candidate,quoteRef){if(!exact(candidate))throw new AuthorityError('forbidden');return sanitized(()=>getAdminDb().runTransaction(async tx=>{
     await authorize(tx);const binding=await loadWoltBindingInTransaction(tx,scope,environment);
     const row=await tx.get(getAdminDb().collection('deliveryPrivateWoltQuotes').doc(woltPrivateQuoteDocumentId(scope,environment,quoteRef)));if(!row.exists)return null;

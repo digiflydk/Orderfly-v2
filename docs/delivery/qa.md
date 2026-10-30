@@ -108,3 +108,7 @@ The customer sees a nonmodal “Henter leveringsprisen…” popup immediately w
 Address completion alone cannot authorize a binding quote: customer identity, pricing/club/newsletter rules and provider contact need valid name, email and phone too. An address-complete/contact-incomplete checkout explicitly asks for those details rather than pretending a provider request started. Backend authority and payment-proof guards are unchanged.
 
 Chromium regression in `tests/unit/managed-delivery-checkout-ui-browser.cjs` covers visibility before the debounce, focus retention, serialized obsolete requests, error closure, dismissal without cancellation, changed-input reopening and missing-prerequisite suppression.
+
+## Quote latency measurement (2026-10-30)
+
+Quote responses include bounded timing metadata containing only fixed stage names, integer milliseconds and counts. AsyncLocalStorage isolates concurrent requests; inputs, contacts, addresses, quote capabilities, provider payloads and errors are excluded. The checkout logs `delivery_quote_timing` with client elapsed time around the awaited server action and validated server timings. Client duration includes framework/network waiting but excludes typing and the debounce. Nested and parallel stage totals overlap and must not be summed as total latency. Instrumentation does not authorize payment or change quote failure handling. Use an explicitly authorized non-payment checkout test to collect live timings before attributing a bottleneck or claiming a speed improvement.

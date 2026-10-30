@@ -24,7 +24,7 @@ before(async () => {
     import {useManagedDeliveryQuote} from ${JSON.stringify(path.join(root, 'src/components/checkout/use-managed-delivery-quote.ts'))};
     function Fixture(){const [address,setAddress]=React.useState(''),[cart,setCart]=React.useState('pizza'),[time,setTime]=React.useState('asap'),[enabled,setEnabled]=React.useState(true),[tracking,setTracking]=React.useState(null),[showDeliveryTime,setShowDeliveryTime]=React.useState(true),[fallback,setFallback]=React.useState(null),[contactReady,setContactReady]=React.useState(true);
     window.changeAddress=setAddress;window.changeCart=setCart;window.changeTime=setTime;window.setManagedEnabled=setEnabled;window.setTracking=setTracking;window.showDeliveryTime=setShowDeliveryTime;window.setFallback=setFallback;window.setContactReady=setContactReady;
-    const identity=JSON.stringify({address,cart,time,contactReady});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise(resolve=>{window.requests=window.requests||[];window.requests.push({value,resolve});}),[]);
+    const identity=JSON.stringify({address,cart,time,contactReady});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise((resolve,reject)=>{window.requests=window.requests||[];window.requests.push({value,resolve,reject});}),[]);
     const flow=useManagedDeliveryQuote({enabled,requestIdentity:identity,input,requestQuote:fetchQuote,autoRequestReady:address.length>=3&&contactReady});window.paymentProof=flow.paymentProof;
     return React.createElement(React.Fragment,null,React.createElement(ManagedDeliveryLoading,{pending:flow.loadingPending,requestIdentity:identity}),React.createElement('p',null,'Kurv: 2 pizzaer'),React.createElement('label',null,'Adresse',React.createElement('input',{value:address,onChange:event=>setAddress(event.target.value)})),React.createElement(ManagedDeliveryQuote,{enabled,state:flow.state,checkoutFingerprint:flow.state.kind==='ready'?flow.state.quote.checkoutFingerprint:'',previousFeeMinor:flow.previousFeeMinor,onRequest:flow.request,showDeliveryTime}),React.createElement('button',{disabled:!flow.paymentProof,onClick:()=>window.submittedProof=flow.paymentProof},'Test betaling'),React.createElement(ManagedDeliveryTracking,{enabled,orderId:'order-a',data:tracking,fallbackDeliveryTime:fallback,onRefresh:()=>{}}));}
     createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,sessionId:window.__receiptSession,receiptToken:window.__receiptToken,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
@@ -201,4 +201,33 @@ test('missing required contact or incomplete address never claims a price reques
  const page=await quotePage(t);await page.clock.install();const popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'}),address=page.getByRole('textbox',{name:'Adresse'});
  await page.evaluate(()=>window.setContactReady(false));await address.fill('Testvej 1');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await page.evaluate(()=>window.setContactReady(true));await expect(popup).toBeVisible();await address.fill('');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
+});
+
+
+test('quote timings measure invocation only and log strictly numeric server aggregates',async t=>{
+ const page=await quotePage(t);await page.clock.install();await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));
+ await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.clock.runFor(5000);
+ await page.getByRole('textbox',{name:'Adresse'}).fill('private address');await page.clock.runFor(250);await waitRequests(page,1);await page.clock.runFor(800);
+ const timings={serverMs:700,stages:{scope:{ms:50,count:1},provider:{ms:400,count:1}}};await respond(page,quote({timings}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
+ const logs=await page.evaluate(()=>window.timingLogs);assert.deepEqual(logs,[['delivery_quote_timing',{clientMs:800,...timings}]]);assert.doesNotMatch(JSON.stringify(logs),/private address|opaque-token|quote-a|fingerprint-a|checkoutKey/);
+});
+
+test('invalid server timing objects never leak unknown fields or disable valid payment',async t=>{
+ const page=await quotePage(t);await page.clock.install();await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});
+ const values=[{serverMs:1,stages:{provider:{ms:1,count:1}},address:'PRIVATE'},{serverMs:1,stages:{PRIVATE_STAGE:{ms:1,count:1}}},{serverMs:-1,stages:{}},{serverMs:1,stages:{provider:{ms:1,count:1,token:'PRIVATE'}}}];
+ for(let index=0;index<values.length;index++){
+  await page.getByRole('textbox',{name:'Adresse'}).fill('address-'+index);await page.clock.runFor(300);await waitRequests(page,index+1);await respond(page,quote({timings:values[index]}),index);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
+ }
+ const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,values.length);for(const [tag,payload]of logs){assert.equal(tag,'delivery_quote_timing');assert.deepEqual(Object.keys(payload),['clientMs']);assert.ok(Number.isSafeInteger(payload.clientMs)&&payload.clientMs>=0);}assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|address|token/);
+});
+
+test('timing logging cannot break a quote when the browser console throws',async t=>{
+ const page=await quotePage(t);await page.evaluate(()=>{console.info=()=>{throw Error('Console unavailable');};});await page.getByRole('textbox',{name:'Adresse'}).fill('first');await waitRequests(page,1);await respond(page,quote({timings:{serverMs:1,stages:{}}}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
+});
+
+test('obsolete and failed quote completion log durations without exposing results or enabling stale proof',async t=>{
+ const page=await quotePage(t);await page.clock.install();await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(300);await waitRequests(page,1);
+ await page.getByRole('textbox',{name:'Adresse'}).fill('second');await respond(page,quote({quoteId:'private-obsolete-id',timings:{serverMs:10,stages:{provider:{ms:5,count:1}}}}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(300);await waitRequests(page,2);
+ await page.evaluate(()=>window.requests[1].reject(Error('PRIVATE_PROVIDER_ERROR')));await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();
+ const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,2);assert.equal(logs[0][1].serverMs,10);assert.deepEqual(Object.keys(logs[1][1]),['clientMs']);assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|private-obsolete-id|first|second/);
 });

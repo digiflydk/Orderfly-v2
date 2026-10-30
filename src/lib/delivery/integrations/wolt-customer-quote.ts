@@ -7,6 +7,7 @@ import { loadDeliverySettingsInTransaction } from '../settings/server';
 import { deliveryIdSchema, deliveryQuoteRequestSchema, type DeliveryProvider, type DeliveryScope } from '../provider-contract';
 import { createCustomerWoltStorage } from './wolt-binding';
 import { createWoltProvider } from '../providers/wolt/provider';
+import { measureQuoteStep } from '../quotes/performance';
 
 const integer=z.number().int().nonnegative().safe(),digest=z.string().regex(/^[a-f0-9]{64}$/);
 const draftSchema=z.object({checkoutKeyHash:digest,requestDigest:digest,draftRevision:integer,addressRevision:integer,
@@ -58,7 +59,7 @@ export async function createCustomerWoltQuoteProvider(rawDraft:unknown,rawEnviro
  capabilities.set(capability,{draft:structuredClone(draft),environment,expiresAtMs:Date.now()+300000});
  const scope={brandId:draft.binding.brandId,locationId:draft.binding.locationId};
  try{
-  await getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope));
+  await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope)));
   const storage=await createCustomerWoltStorage(capability,environment);
   const provider=createWoltProvider({...storage,environment,validateClaimedAttempt:async()=>false,loadCancellation:async()=>null});
   return Object.freeze({providerId:provider.providerId,capabilities:provider.capabilities,
@@ -66,7 +67,7 @@ export async function createCustomerWoltQuoteProvider(rawDraft:unknown,rawEnviro
     const request=deliveryQuoteRequestSchema.parse(raw),fields=(a:typeof request.pickup)=>[a.country,a.postcode,a.city,a.street,a.building,a.unit];
     if(request.providerId!=='wolt'||request.scope.brandId!==scope.brandId||request.scope.locationId!==scope.locationId||request.checkoutRef!==draft.checkoutKeyHash
       ||request.readyAt!==draft.binding.fulfillmentAt||JSON.stringify([fields(request.pickup),fields(request.dropoff)])!==draft.binding.normalizedAddress)throw new Error('delivery_customer_quote_request_changed');
-    await getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope));
+    await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope)));
     return provider.quote(request);
    },
    async create(){return {kind:'rejected' as const,error:forbidden()};},

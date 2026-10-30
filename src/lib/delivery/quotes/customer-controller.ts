@@ -15,6 +15,7 @@ import {normalizeDanishDeliveryAddress} from './address';
 import {checkoutKeyHash,issueCustomerQuote,type AuthoritativeDraft} from './customer-boundary';
 import {persistCustomerQuoteClaim,reserveCustomerQuoteRate,saveAuthoritativeCustomerDraft,loadCurrentCustomerDraft} from './customer-store';
 import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from './runtime';
+import { measureQuoteStep } from './performance';
 export type NativeManagedPricing={brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
@@ -47,15 +48,15 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
  const scope={brandId:input.brand.id,locationId:input.location.id};
  // Preserve the configuration/retention gate before persisting customer drafts.
  // The action does not repeat this probe; the resolver rechecks after persistence.
- if(!await managedDeliveryRuntimeAvailable(scope))return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
+ if(!await measureQuoteStep('configuration',()=>managedDeliveryRuntimeAvailable(scope)))return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
  trace('draft');
- const native=await prepareNativeManagedDraft(input),draft=await saveAuthoritativeCustomerDraft(native.draft);
+ const {native,draft}=await measureQuoteStep('draft',async()=>{const native=await prepareNativeManagedDraft(input);return {native,draft:await saveAuthoritativeCustomerDraft(native.draft)};});
  trace('runtime');
- const runtime=await resolveManagedDeliveryRuntime(scope,draft,native.runtimeEnvironment,trace);
+ const runtime=await measureQuoteStep('runtime',()=>resolveManagedDeliveryRuntime(scope,draft,native.runtimeEnvironment,trace));
  if(!runtime)return {ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
  let boundaryStage:'quote'|'claim'='quote';
  // Global aggregate budget is deliberately conservative until trusted edge identity is configured; never trust client IP headers.
- return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:async claim=>{boundaryStage='claim';trace('claim');return persistCustomerQuoteClaim(claim);},onFailure:error=>trace(boundaryStage,error),createQuote:async()=>{
+ return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:async claim=>{boundaryStage='claim';trace('claim');return measureQuoteStep('claim',()=>persistCustomerQuoteClaim(claim));},onFailure:error=>trace(boundaryStage,error),createQuote:async()=>{
   trace('quote');
   const result=await quoteDelivery({...(input.freeDeliveryCampaignIds.length&&native.settings.pricingRules?{appliedCampaign:{kind:'native_free_delivery' as const,campaignIds:input.freeDeliveryCampaignIds,maxDistanceMeters:Math.min(native.settings.maxDistanceMeters,native.settings.pricingRules.maxDistanceMeters)}}:{}),settings:native.settings,binding:draft.binding,quoteRef:randomBytes(16).toString('hex'),itemSubtotalAfterDiscountMinor:draft.itemSubtotalAfterDiscountMinor,
    freshnessMs:300000,maxRouteAgeMs:60000,routeProfile:'car',fulfillment:{version:1,scope:{brandId:input.brand.id,locationId:input.location.id},checkoutRef:draft.binding.checkoutReference,providerId:draft.binding.providerId,

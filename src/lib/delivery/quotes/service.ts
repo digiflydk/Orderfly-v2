@@ -1,4 +1,5 @@
 import type {DeliveryCampaignSnapshot} from './schema';
+import { measureQuoteStep } from './performance';
 import { deliveryQuoteRequestSchema, deliveryQuoteResultSchema, type DeliveryQuoteRequest, type DeliveryProvider } from '../provider-contract';
 import { deliverySettingsSchema, type DeliverySettings } from '../settings/schema';
 import { deliveryScheduleAt } from '../settings/schedule';
@@ -37,7 +38,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const schedule=deliveryScheduleAt(settings,new Date(deliveryAt));
     if (!schedule.open) return {ok:false,reason:schedule.reason};
     const postal=(a:AddressInput)=>({street:`${a.street} ${a.building}`.trim(),postalCode:a.postcode,city:a.city,countryCode:a.country});
-    const routeResult=await resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now});
+    const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now}));
     if (!routeResult.ok) return routeResult;
     const {route,pickup,dropoff}=routeResult;
     const coordinates=(a:typeof pickup)=>({latitude:a.latitude,longitude:a.longitude,source:route.source});
@@ -54,7 +55,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const areaAllowed=deps.areaAllows(route);
     const initialCoverage=checkDeliveryCoverage({settings,schedule,route,areaAllowed,providerAvailable:true,nowMs:deps.now().getTime(),maxRouteAgeMs:input.maxRouteAgeMs});
     if (!initialCoverage.eligible) return {ok:false,reason:initialCoverage.reason};
-    const providerQuote=deliveryQuoteResultSchema.parse(await deps.provider.quote(fulfillment));
+    const providerQuote=deliveryQuoteResultSchema.parse(await measureQuoteStep('provider',()=>deps.provider!.quote(fulfillment)));
     if (providerQuote.kind==='error') return {ok:false,reason:'provider_error',diagnostic:providerQuote.error.code};
     if (providerQuote.kind==='unavailable') return {ok:false,reason:`provider_${providerQuote.reason}`};
     if (providerQuote.providerId!==settings.providerId) return {ok:false,reason:'provider_mismatch'};

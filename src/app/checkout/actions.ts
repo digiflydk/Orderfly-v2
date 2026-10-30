@@ -1,5 +1,7 @@
 'use server';
 import {recordQuoteDiagnostic} from '@/lib/delivery/quotes/diagnostics';
+import {withQuoteTimings,measureQuoteStep} from '@/lib/delivery/quotes/performance';
+import type {QuoteTimings} from '@/lib/delivery/quotes/performance-schema';
 import {quoteDiagnosticCode,type QuoteDiagnostic,type QuoteTrace} from '@/lib/delivery/quotes/diagnostic-schema';
 import {customerQuoteFailure} from '@/lib/delivery/quotes/customer-failure';
 import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
@@ -662,7 +664,12 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     freeDeliveryCampaignIds:activeStandardDiscounts.filter(d=>d.discountType==='free_delivery'&&subtotalAfterDiscount>=(d.minOrderValue||0)).map(d=>d.id).sort()};
 }
 
-export async function requestManagedDeliveryQuoteAction(input: {
+export async function requestManagedDeliveryQuoteAction(input:Parameters<typeof executeManagedDeliveryQuote>[0]):Promise<(import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteDto|import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteFailure)&{timings:QuoteTimings}> {
+  const {result,timings}=await withQuoteTimings(()=>executeManagedDeliveryQuote(input));
+  return {...result,timings};
+}
+
+async function executeManagedDeliveryQuote(input: {
   checkoutKey:string;cartItems:MinimalCartItem[];customerInfo:CustomerInfo;brandId:string;locationId:string;
   paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;brandSlug:string;locationSlug:string;deliveryTime?:string;
 }):Promise<import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteDto|import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteFailure> {
@@ -684,13 +691,13 @@ export async function requestManagedDeliveryQuoteAction(input: {
   const trace:QuoteTrace=(stage,reason)=>{diagnostic={stage,code:quoteDiagnosticCode(reason),atMs:Date.now()};};
   const report=()=>scopeVerified?recordQuoteDiagnostic({brandId:input.brandId,locationId:input.locationId},diagnostic):Promise.resolve();
   try {
-    const [brand,location]=await Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]);
+    const [brand,location]=await measureQuoteStep('scope',()=>Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]));
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
     scopeVerified=true;
     // The controller checks configuration before saving the draft, then the
     // resolver rechecks it. Avoid an additional duplicate probe here.
     trace('pricing');
-    const priced=await resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false});
+    const priced=await measureQuoteStep('pricing',()=>resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false}));
     trace('time');
     if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime({...location,delivery_time:MANAGED_DELIVERY_TRANSPORT_MINUTES},'delivery',input.deliveryTime);
     const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
