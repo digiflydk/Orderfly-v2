@@ -43,6 +43,8 @@ test('Change dialog uses shared calculator: expired day cannot be selected, next
       '@/app/superadmin/locations/actions':{getTimeSlots},
       '@/lib/time-slots':{calculateTimeSlots},
       '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
+      '@/lib/delivery/public-schedule':loadTs('src/lib/delivery/public-schedule.ts'),
+      '@/context/delivery-price-context':{useManagedDeliverySchedule:()=>null},
       '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
       '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'2026-09-06T10:20:00.000Z',setSelectedTime:v=>saved=v})},
     });

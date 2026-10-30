@@ -11,7 +11,9 @@ import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
-import { resolveFulfillmentTime, displayFulfillmentTime, managedDeliverySelection } from '@/lib/fulfillment-time';
+import { displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { managedDeliverySelectionForSchedule, resolveManagedFulfillmentTime } from '@/lib/delivery/public-schedule';
+import { useManagedDeliverySchedule } from '@/context/delivery-price-context';
 import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
@@ -399,6 +401,8 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
 
   const managedActive=managedDeliveryEnabled&&deliveryType==='delivery';
+  const publicDeliverySchedule = useManagedDeliverySchedule();
+  const deliverySchedule = managedActive ? publicDeliverySchedule : null;
   const minOrderAmount = location?.minOrder ?? 0;
   const isDeliveryBelowMinOrder = !managedActive && deliveryType === 'delivery' && subtotal < minOrderAmount;
 
@@ -584,21 +588,25 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
   const asapText = useMemo(() => {
     if (!timeSlots) return "Indlæser…";
+    if (deliverySchedule) {
+      try { return displayFulfillmentTime(resolveManagedFulfillmentTime(location, 'delivery', 'asap', new Date(), deliverySchedule)); }
+      catch { return 'Ingen ledige leveringstider'; }
+    }
     const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
     return text || "Currently unavailable";
-  }, [timeSlots, deliveryType]);
+  }, [timeSlots, deliveryType, deliverySchedule, location]);
 
   const effectiveTime = useMemo(() => {
     if (!managedActive) return selectedTime;
-    try { return managedDeliverySelection(location,selectedTime); }
+    try { return managedDeliverySelectionForSchedule(location,selectedTime,new Date(),deliverySchedule); }
     catch { return selectedTime; }
-  }, [managedActive,location,selectedTime,timeSlots]);
+  }, [managedActive,location,selectedTime,timeSlots,deliverySchedule]);
   const displayTime = effectiveTime === 'asap' ? asapText : displayFulfillmentTime(effectiveTime);
 
   const isOrderTimeValid = useMemo(() => {
-    try { if (!deliveryType) return false; resolveFulfillmentTime(location, deliveryType, selectedTime); return true; }
+    try { if (!deliveryType) return false; resolveManagedFulfillmentTime(location, deliveryType, selectedTime, new Date(), deliverySchedule); return true; }
     catch { return false; }
-  }, [location, selectedTime, deliveryType, timeSlots]);
+  }, [location, selectedTime, deliveryType, timeSlots, deliverySchedule]);
 
   const quoteForm=form.watch();
   const quoteJoiningClub=clubSignupShown&&!!quoteForm.subscribeToNewsletter&&!!quoteForm.clubTermsAccepted;
@@ -663,7 +671,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
       if(managedActive){if(!deliveryConsent||!managedQuote||quoteIdentityRef.current!==quoteIdentity||managedQuote.expiresAtMs<=Date.now()+managedQuotePaymentWindowMs){setCheckoutError('Vent på en opdateret leveringspris, og kontrollér beløbet før betaling.');return;}paymentDetails.deliveryFee=deliveryConsent.customerFeeMinor/100;}
 
       // Recheck even if the page or an upsell dialog has been open for a while.
-      try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
+      try { resolveManagedFulfillmentTime(location, deliveryType!, selectedTime, new Date(), deliverySchedule); }
       catch { setCheckoutError('Vælg et nyt ledigt tidspunkt.'); setIsTimeDialogOpen(true); return; }
       const finalDeliveryTime = effectiveTime;
       // The server resolves consent ownership from its HttpOnly cookie.
@@ -915,7 +923,8 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                         {isLoadingTimes ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <p className="font-semibold">{localizeTime(displayTime)}</p>
+                          <><p className="font-semibold">{localizeTime(displayTime)}</p>
+                          {managedActive && !isOrderTimeValid && <p role="alert" className="mt-1 text-sm text-destructive">{selectedTime === 'asap' ? 'Der er ingen ledige leveringstider. Vælg en anden dato.' : 'Det valgte tidspunkt er ikke tilgængeligt for levering. Vælg et nyt tidspunkt.'}</p>}</>
                         )}
                       </div>
                     </div>

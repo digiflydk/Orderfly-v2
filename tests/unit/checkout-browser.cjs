@@ -26,7 +26,7 @@ before(async()=>{
  const scenario=new URLSearchParams(window.location.search).get('case')||'success';
  const presentation=scenario.startsWith('presentation');
  const newsletter=scenario.startsWith('ui-newsletter')||scenario.startsWith('ui-club');
- export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location={...${JSON.stringify(location)},...(scenario.startsWith('v2-')?{paymentMethods:{online:!scenario.includes('offline'),payAtPickup:true}}:{})};
+ export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location={...${JSON.stringify(location)},...(scenario.startsWith('managed-schedule-')?{openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'11:00',close:'22:00'}]))}:{}),...(scenario.startsWith('v2-')?{paymentMethods:{online:!scenario.includes('offline'),payAtPickup:true}}:{})};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
  const reduced={...item,id:'offer',cartItemId:'offer',basePrice:75,price:45};
@@ -44,13 +44,14 @@ before(async()=>{
   React.useEffect(()=>{window.replaceFixtureItems=setItems;},[]);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
   const applyDiscount=React.useCallback(d=>setDiscount(d),[]),removeDiscount=React.useCallback(()=>setDiscount(null),[]);
-  const setCartContext=React.useCallback(()=>{},[]),setSelectedTime=React.useCallback(()=>{},[]);
+  const setCartContext=React.useCallback(()=>{},[]);
+  const [selectedTime,setSelectedTime]=React.useState(scenario.startsWith('managed-schedule-')?'2026-10-30T10:50:00.000Z':'asap');
   const saveCartForCheckout=React.useCallback(id=>{if(window.storageUnavailable)throw Error('storage denied');window.savedCheckout=id;},[]);
   const total=items.reduce((sum,i)=>sum+i.price*i.quantity,0);
   const bagFee=includeBagFee?brand.bagFee:0;
   const totals=basketTotals({cartItems:items,appliedDiscount:discount,standardDiscounts,deliveryType:'pickup',location,brand,includeBagFee});
   const value={brand,location,cartReady,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
-   deliveryType,setDeliveryType,selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
+   deliveryType,setDeliveryType,selectedTime,itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
    applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,removeFromCart:id=>setItems(items=>items.filter(i=>i.cartItemId!==id)),
    ...(newsletter?{...totals,cartDiscount:totals.automaticCartDiscount}:{})};
   return React.createElement(context.Provider,{value},children);
@@ -94,10 +95,14 @@ before(async()=>{
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
  import {StorefrontCatalog} from ${JSON.stringify(path.join(root,'src/context/storefront-catalog.tsx'))};
  import {StorefrontV2Provider} from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
+ import {DeliveryPriceProvider} from ${JSON.stringify(path.join(root,'src/context/delivery-price-context.tsx'))};
  import {FixtureCart,brand,location} from ${JSON.stringify(cart)};
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
- const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},surface):surface;
+ const scenario=new URLSearchParams(window.location.search).get('case')||'';
+ const schedule=scenario.startsWith('managed-schedule-')?{enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(scenario==='managed-schedule-closed'?3:5)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[]}:null;
+ const scheduledSurface=React.createElement(DeliveryPriceProvider,{managed:scenario.startsWith('managed-'),schedule},surface);
+ const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},scheduledSurface):scheduledSurface;
  createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
@@ -113,7 +118,6 @@ before(async()=>{
   '@/lib/analytics':fixture('telemetry',`import {statisticsAllowed,trackingConsent,trackClientEvent as track} from ${JSON.stringify(path.join(root,'src/lib/analytics.ts'))};export {statisticsAllowed,trackingConsent};export const trackClientEvent=(...args)=>{if(window.telemetryUnavailable)throw Error('analytics denied');return track(...args);};`),
   '@/hooks/use-toast':fixture('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/app/superadmin/locations/client-actions':fixture('times',`export const calculateTimeSlots=()=>({asap_pickup:'Today - 18:20',asap_delivery:'Today - 18:40',pickup_times:['Today - 18:20'],delivery_times:['Today - 18:40']});`),
-  [path.join(root,'src/components/checkout/timeslot-dialog')]:fixture('time-dialog','export const TimeSlotDialog=()=>null;'),
   'next/navigation':navigation,
   'next/image':fixture('image',`import React from 'react';export default function Image({fill,priority,...props}){return React.createElement('img',props);}`),
   'next/link':fixture('link',`import React from 'react';export default function Link(props){return React.createElement('a',props);}`),
@@ -158,6 +162,7 @@ async function setup(t,scenario,email='test@example.test'){
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
  if(scenario==='telemetry')await page.addInitScript(()=>{window.telemetryUnavailable=true;});
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
+ if(scenario.startsWith('managed-schedule-'))await page.clock.setFixedTime(new Date('2026-10-30T08:45:00.000Z'));
  if(scenario==='managed-future')await page.clock.setFixedTime(new Date('2026-10-27T22:00:00.000Z'));
  await page.goto(origin+'/?case='+scenario);
  await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast dit navn':'John Doe',{exact:true}).waitFor().catch(async error=>{
@@ -610,4 +615,33 @@ for (const width of [320,390]) test(`V2 checkout layout keeps the payment action
  const scrolled=await cta.boundingBox();assert.equal(scrolled.y,initial.y);
  if(process.env.CHECKOUT_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.CHECKOUT_SCREENSHOT_DIR,`checkout-${width}-scrolled.png`)});
  assert.equal(requests.has('v2-layout-mobile-'+width),false,'visual check creates no payment');
+});
+
+
+test('managed Friday closure blocks a saved Friday choice and the actual picker offers no Friday slots',async t=>{
+ const page=await setup(t,'managed-schedule-closed');
+ await fillDeliveryAddress(page);
+ await expect(page.getByRole('alert')).toContainText('Det valgte tidspunkt er ikke tilgængeligt for levering');
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.waitForTimeout(900);assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
+ await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).click();
+ const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Gem tidspunkt'})).toBeDisabled();
+ await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
+ const old=page.getByRole('option',{name:'fre. 30. okt. 11:50 (ikke længere ledigt)',exact:true});await expect(old).toBeDisabled();
+ await expect(page.getByRole('option',{name:'fre. 30. okt. 12:05',exact:true})).toHaveCount(0);
+ await expect(page.getByRole('option',{name:'Hurtigst muligt (ons. 4. nov. 11:40)',exact:true})).toBeEnabled();
+});
+test('before opening actual picker changes valid Friday 11:50 to 12:05 and automatically requotes payment',async t=>{
+ const page=await setup(t,'managed-schedule-valid');
+ await expect(page.getByText('fre. 30. okt. 11:50',{exact:true})).toBeVisible();
+ await fillDeliveryAddress(page);await quoted(page);
+ assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime),'2026-10-30T10:50:00.000Z');
+ await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).click();
+ const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
+ await page.getByRole('option',{name:'fre. 30. okt. 12:05',exact:true}).click();
+ await dialog.getByRole('button',{name:'Gem tidspunkt'}).click();
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await expect.poll(()=>page.evaluate(()=>window.quoteInputs?.at(-1).deliveryTime)).toBe('2026-10-30T11:05:00.000Z');
+ await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');
+ assert.equal(requests.get('managed-schedule-valid')[0][9],'2026-10-30T11:05:00.000Z');
 });

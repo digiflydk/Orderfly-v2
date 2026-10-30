@@ -60,3 +60,24 @@ Reviewed implementation slices independently from their authors. Confirmed corre
 Executed independently: pricing arithmetic/boundaries/overflow, settings native scope/CAS/audit, quote service and immutable store, booking/event transaction mocks, query scope/pagination, and actual Chromium administration UI. All reported passes apply to the respective reviewed commits, not an as-yet-unverified release commit. The coordinator must run the final combined candidate's internal tests/typecheck/build and record its exact SHA.
 
 The reviewed release boundary is **preparatory Levering administration and inactive delivery foundations**. This is not a complete delivery module: live routing, Wolt sandbox/production acceptance, actual checkout-payment-dispatch integration, compensation worker and launch activation remain separate gates. No real courier, charge, print output or production mutation was performed by QA.
+
+## Managed delivery time selection correction, 2026-10-30
+
+Read-only investigation of the reported Friday checkout failure found that the effective delivery schedule allowed Wednesday 11:00–21:00 and had no Friday interval. The storefront could nevertheless offer Friday times from the location's native hours. The quote service then correctly rejected that closed delivery day before pricing. This configuration observation explains the reported failure; it is not permission to open additional delivery days.
+
+The correction must apply the effective, brand/location-scoped managed delivery schedule to customer time selection. Offer only native delivery slots that also satisfy that schedule, including date exceptions, disabled/paused state and Europe/Copenhagen time handling. Preserve native kitchen preparation/readiness and route feasibility checks: an open delivery interval alone is not enough to promise arrival. Pickup and unmanaged delivery retain their existing policies.
+
+A closed current day must not prevent the customer from explicitly selecting a valid future day. Conversely, an explicit closed or stale selection must remain rejected with a clear request to choose another time. Do not silently replace the customer's selected time, reinterpret it as ASAP, or change delivery settings to make a rejected quote succeed. The server remains authoritative at quote creation and checkout; browser filtering is not an authorization boundary.
+
+### Candidate validation
+
+- Reproduce the Wednesday-only schedule with a Friday request: Friday slots are unavailable and a forged or stale Friday selection cannot obtain a quote or payment session.
+- Verify an explicit future Wednesday slot before the restaurant opens is selectable and accepted when preparation, route and provider constraints are satisfied.
+- Cover schedule exceptions, exact closing boundaries, disabled/paused delivery, empty future availability and brand/location isolation.
+- In the real component browser harness, verify changing the selected time recalculates the quote, stale prices cannot enable payment, and no explicit selection is silently changed.
+- Run relevant native/quote and browser regressions, full typecheck, production build and independent current-head review. Record commands, counts and the reviewed SHA after execution; this section does not claim they have passed.
+- After merge, verify deployed release ancestry and read-only storefront time selection. This bounded correction does not establish completion of Stripe/Wolt courier lifecycle, print or feedback acceptance in #691/#694.
+
+The user requested correction of the reported failure. Authenticated administration verified native Friday hours of 11:00–22:00 and preorders enabled. Only Friday's local delivery interval was corrected from closed to 11:00–22:00 in the existing sandbox merchant configuration; the save confirmation and rendered values were verified. Other days, activation and provider environment were preserved. No payment or courier booking was performed.
+
+Internal regression: 54/54 unit/native tests and 85/85 actual Chromium component tests passed, zero skips. Commands: `node --test tests/unit/delivery-public-schedule.cjs tests/unit/delivery-public-schedule-server.cjs tests/unit/delivery-native-checkout.cjs tests/unit/checkout-availability.cjs tests/unit/delivery-customer-failure.cjs tests/unit/delivery-quote-service.cjs tests/unit/delivery-settings.cjs`; `CART_CHROMIUM_PATH=/tmp/chromium node --test tests/unit/checkout-browser.cjs tests/unit/managed-delivery-checkout-ui-browser.cjs`. Full typecheck passed. Native controlled fixtures verify Friday 11:50 and 12:05 before opening, rejection with Wednesday-only settings, and accepted quote/payment when Friday is enabled. These are internal provider/payment fixtures, not a new external payment or courier test. Production build and final review/release verification are recorded in the PR.
