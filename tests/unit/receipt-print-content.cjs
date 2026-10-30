@@ -119,7 +119,7 @@ test('only exact scoped reliable native pickup estimate reaches print facts',asy
   f.rows.get('locations/l1/printers/p1').configuration.paperWidthMm=width;
   const rendered=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});
   const text=rendered.payload.toString().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
-  assert.match(text,/Forventet afhentning af bud/);assert.match(text,/16[.:]20/);assert.match(text,/17[.:]00/);
+  assert.equal((text.match(/Klar til afhentning/g)||[]).length,1);assert.doesNotMatch(text,/Forventet afhentning af bud|Planlagt afhentning|planlagt/);assert.equal((text.match(/16[.:]20/g)||[]).length,1);assert.match(text,/17[.:]00/);
  }
  for(const change of [row=>row.brandId='other',row=>row.providerDeliveryId='other',row=>row.pickupReliable=false]){
   const g=managedFixture({reliable:true});change(g.rows.get('orders/o1/deliveryEstimates/current'));
@@ -155,7 +155,7 @@ test('original kitchen print includes scoped booking pickup ETA before courier u
   const snapshot=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);
   assert.equal(snapshot.order.delivery.reliablePickup,null);assert.equal(snapshot.order.delivery.plannedPickup.earliest,'2026-10-30T10:45:00Z');
   const result=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});const text=result.payload.toString().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
-  assert.match(text,/Klar til afhentning/);assert.match(text,/planlagt/);assert.match(text,/11[.:]45/);assert.doesNotMatch(text,/Forventet afhentning af bud/);
+  assert.equal((text.match(/Klar til afhentning/g)||[]).length,1);assert.equal((text.match(/11[.:]45/g)||[]).length,1);assert.doesNotMatch(text,/planlagt|Planlagt afhentning|Forventet afhentning af bud/);
   for(const [field,value] of [['requestDigest','b'.repeat(64)],['attemptRef','other'],['providerId','other']]){
    const prior=record[field];record[field]=value;
    const rejected=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);assert.equal(rejected.order.delivery.plannedPickup,null);record[field]=prior;

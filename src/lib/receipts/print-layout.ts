@@ -104,7 +104,10 @@ function printDelivery(doc: Layout, delivery: DeliveryPrintDetails, kitchen = fa
     return;
   }
   const pickup = delivery.reliablePickup ?? delivery.plannedPickup;
-  if (kitchen && pickup) doc.box(delivery.reliablePickup ? 'Klar til afhentning' : 'Klar til afhentning (planlagt)', date(pickup.earliest));
+  if (kitchen && pickup) {
+    doc.box('Klar til afhentning', date(pickup.earliest));
+    return;
+  }
   doc.line(delivery.reliablePickup ? `Forventet afhentning af bud: ${interval(delivery.reliablePickup)}` : delivery.plannedPickup ? `Planlagt afhentning af bud: ${interval(delivery.plannedPickup)}` : 'Afhentning af bud: Tidspunkt ikke bekræftet', { size: 30 });
 }
 
