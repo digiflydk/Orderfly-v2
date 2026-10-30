@@ -1,4 +1,5 @@
 import { isEsmeraldaV2Host } from './esmeralda-v2-host';
+import { ESMERALDA_MENU_IMAGE_PATHS } from './esmeralda-menu-images';
 
 // Brand subdomains under orderfly.dk (#12). The existing unique brand `slug`
 // is the subdomain label, so `esmeralda` serves https://esmeralda.orderfly.dk.
@@ -86,6 +87,7 @@ export function brandSlugFromHost(hostHeader: string | null | undefined): string
 // App-wide paths keep their own routes on a brand subdomain.
 const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/terminal', '/mapp', '/verify'];
 const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json', '/fonts/inter/inter-latin-wght-normal.woff2']);
+for (const path of ESMERALDA_MENU_IMAGE_PATHS) PASSTHROUGH_FILES.add(path);
 
 /**
  * Internal path for a request on a brand subdomain, or null when no rewrite is

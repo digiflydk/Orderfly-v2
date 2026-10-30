@@ -1,7 +1,8 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),ts=require('typescript'),vm=require('node:vm');
 // Load the actual pure host helper, while rejecting any unexpected dependency.
 const host={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/esmeralda-v2-host.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:host,exports:host.exports});
-const routes={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/brand-subdomain.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:routes,exports:routes.exports,require:name=>{assert.equal(name,'./esmeralda-v2-host');return host.exports;}});
+const images={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/esmeralda-menu-images.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:images,exports:images.exports});
+const routes={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/lib/brand-subdomain.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:routes,exports:routes.exports,require:name=>{if(name==='./esmeralda-menu-images')return images.exports;assert.equal(name,'./esmeralda-v2-host');return host.exports;}});
 const m={exports:{}};vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/[brandSlug]/club/login/checkout-return.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{module:m,exports:m.exports,require:name=>{assert.equal(name,'@/lib/brand-subdomain');return routes.exports;}});
 const {safeCheckoutReturn:valid,readCheckoutReturn:read,checkoutReturnKey:key}=m.exports;
 test('only same-brand relative checkout paths allowed',()=>{

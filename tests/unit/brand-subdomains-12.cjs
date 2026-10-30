@@ -60,6 +60,19 @@ function middlewareFor() {
   return { run, mw, calls };
 }
 
+test('#802 exact public menu images bypass brand rewrites without opening adjacent routes', () => {
+  const { run } = middlewareFor();
+  const { ESMERALDA_MENU_IMAGE_PATHS } = loadTs('src/lib/esmeralda-menu-images.ts');
+  for (const path of ESMERALDA_MENU_IMAGE_PATHS) {
+    assert.ok(require('node:fs').existsSync(`public${path}`));
+    assert.deepEqual(run(`https://esmeralda2.orderfly.dk${path}`), {kind:'next'});
+    assert.deepEqual(run(`https://backend.internal${path}`, {'x-forwarded-host':'esmeralda2.orderfly.dk'}), {kind:'next'});
+  }
+  for (const path of ['/images', '/images/other-brand/menu.webp', '/images/esmeralda-v2/menu/private', '/images/esmeralda-v2/menu/pepsi.webp/extra']) {
+    assert.deepEqual(run(`https://esmeralda2.orderfly.dk${path}`), {kind:'rewrite', path:`/esmeralda${path}`});
+  }
+});
+
 test('#12 middleware rewrites brand subdomains and keeps the apex and www behavior', () => {
   const { run, mw } = middlewareFor();
   assert.deepEqual(run('https://esmeralda.orderfly.dk/'), { kind: 'rewrite', path: '/esmeralda' });
