@@ -57,3 +57,36 @@ post-deployment read-only live verification. Production orders/payments must
 not be created by unattended QA. The product-dialog harness captures the cart
 handoff through a test adapter; cart continuity is exercised separately with the
 real CartProvider.
+
+## Visual correction follow-up (#780, 2026-10-30)
+
+Independent QA exercised the updated production components against loopback-only
+fixtures. No production orders, payment sessions or catalog mutations were made.
+
+- `menu-refresh-browser.cjs`: 11 cases pass, including unchanged V1 coverage at
+  320/390/768/1280/1600 px and V2 menu/cart checks at 320/390/1280 px. V2 cases
+  check compact first-product visibility, rectangular actions, document/panel
+  overflow, full-height mobile cart, viewport-pinned checkout action, quantity
+  changes and cart refresh continuity. Restaurant details, delivery-price notice
+  and search/reset remain available in the compact layout.
+- `checkout-browser.cjs` plus `tilvalg-storefront-browser.cjs`: 88 cases pass.
+  Coverage includes V1 and V2 modifier validation, saved selections, combo draft
+  preservation, allergen disclosure, small-view scrolling, hosted payment
+  handoff, invalid contact rejection, disabled payment configuration and existing
+  checkout recovery/discount/delivery safeguards.
+- `cart-browser.cjs`: 19 persistence, repricing, edit and tenant isolation cases
+  pass.
+- `storefront-v2-payment.cjs`, `esmeralda-v2-host.cjs` and
+  `marketing-layout-boundary.cjs`: 7 boundary cases pass.
+- Integrated TypeScript checking passes with `npm run typecheck`.
+
+The visual review found a legacy `max-height:85dvh !important` overriding the
+new full-height cart. The V2 override was corrected and an explicit mobile
+viewport-height assertion now prevents that regression.
+
+Screenshot evidence uses actual React components and production CSS but synthetic
+catalog data and imagery. It establishes layout and interaction geometry, not
+production food images or brand-logo accuracy. Visual acceptance is a separate
+review against the approved mockups, not a consequence of these functional test
+results. Final hosted-route verification with the real catalog, CI on the release
+commit and the separately blocked menu-catalog mapping remain separate gates.

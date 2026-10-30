@@ -9,7 +9,7 @@ import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
-import { Minus, Plus, ChevronDown } from 'lucide-react';
+import { Minus, Plus, ChevronDown, ArrowLeft, SlidersHorizontal } from 'lucide-react';
 import type { CartItem, ComboMenu, Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
@@ -231,11 +231,23 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     group.minSelection === 0 && group.toppings.some(topping => topping.id === option.id)));
   const hasOptions = allergenError || allergens.length > 0 || relevantToppingGroups.length > 0;
 
+  const quantityControl = (
+    <div className="commerce-option-quantity flex shrink-0 items-center gap-1" role="group" aria-label="Antal produkter">
+      <Button type="button" variant="outline" size="icon" aria-label="Reducer antal" disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-11 w-11 rounded-lg"><Minus className="h-4 w-4" /></Button>
+      <span className="w-7 text-center text-lg font-semibold tabular-nums">{quantity}</span>
+      <Button type="button" variant="outline" size="icon" aria-label="Øg antal" disabled={quantity >= 100} onClick={() => setQuantity(q => Math.min(100,q + 1))} className="h-11 w-11 rounded-lg"><Plus className="h-4 w-4" /></Button>
+    </div>
+  );
+
   if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} preselectedModifiers={isV2 ? Object.values(selectedToppings).map(option => ({id: option.id!, quantity: option.quantity ?? 1})) : undefined} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" data-product-options data-v2-product={isV2 ? "true" : undefined} className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
         <div className="flex min-h-0 flex-col overflow-hidden">
+            {isV2 && <div className="v2-product-topbar">
+              <DialogClose asChild><Button type="button" variant="ghost" size="icon" aria-label="Tilbage til menu"><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Button></DialogClose>
+              <span>ESMERALDA</span>
+            </div>}
             {!isV2 && <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
@@ -245,11 +257,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                   <div className="v2-product-hero"><Image src={safeImage(product.imageUrl)} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" /></div>
                   <DialogHeader className="v2-product-heading text-left"><DialogTitle>{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="v2-product-price">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>}
-                <div className="px-4 pb-3 pt-2 space-y-2">
+                <div className="v2-product-body px-4 pb-3 pt-2 space-y-2">
                     {hasOptions && (
                         <>
                             {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
-                        {allergens.length > 0 && (
+                        {!isV2 && allergens.length > 0 && (
                                 <div>
                                     <h3 className="font-semibold text-lg mb-2">Allergener</h3>
                                     <div className="flex flex-wrap gap-2">
@@ -268,7 +280,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                               showErrors={showErrors} selectionText={getSelectionText(group)} onQuantity={handleToppingQuantity} />)}
                             {isV2 && relevantToppingGroups.some(group => group.minSelection === 0) && <section className="v2-product-customization">
                               <Button type="button" variant="outline" className="v2-product-customize" aria-expanded={customizing} aria-controls={`${dialogId}-ingredients`} onClick={() => setCustomizing(value => !value)}>
-                                <span>Tilpas ingredienser</span><ChevronDown aria-hidden="true" className={customizing ? 'rotate-180' : ''} />
+                                <SlidersHorizontal aria-hidden="true" className="h-5 w-5" /><span>Tilpas ingredienser</span><ChevronDown aria-hidden="true" className={customizing ? 'rotate-180' : ''} />
                               </Button>
                               {!customizing && optionalSelections.length > 0 && <p className="v2-product-customize-help">{optionalSelections.map(option => `${(option.quantity ?? 1) > 1 ? `${option.quantity} × ` : ''}${option.name}`).join(', ')}</p>}
                               <div id={`${dialogId}-ingredients`} hidden={!customizing}>
@@ -280,6 +292,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                             </section>}
                         </>
                     )}
+                  {isV2 && allergens.length > 0 && <details className="v2-product-allergens">
+                    <summary>Allergener <ChevronDown aria-hidden="true" className="h-4 w-4" /></summary>
+                    <div className="flex flex-wrap gap-2">{allergens.map(allergen => <Badge key={allergen.id} variant="secondary" className="gap-1.5">{allergen.icon && <DynamicIcon name={allergen.icon} className="h-4 w-4" />}{allergen.allergenName}</Badge>)}</div>
+                  </details>}
+                  {isV2 && <div className="v2-product-quantity">{quantityControl}</div>}
                   {combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id))).slice(0,2).map(c => {
                     const price = deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice;
                     if (price === undefined) return null;
@@ -297,16 +314,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
             <div className="commerce-product-footer shrink-0 border-t bg-inherit px-3 py-3">
               {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className={completedRequiredGroups === requiredGroups.length ? "sr-only" : "mb-2 text-xs text-muted-foreground"}>{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
               <div className="flex items-center gap-3">
-                <div className="commerce-option-quantity flex shrink-0 items-center gap-1" role="group" aria-label="Antal produkter">
-                  <Button type="button" variant="outline" size="icon" aria-label="Reducer antal" disabled={quantity <= 1} onClick={() => setQuantity(q => Math.max(1, q - 1))} className="h-11 w-11 rounded-lg"><Minus className="h-4 w-4" /></Button>
-                  <span className="w-7 text-center text-lg font-semibold tabular-nums">{quantity}</span>
-                  <Button type="button" variant="outline" size="icon" aria-label="Øg antal" disabled={quantity >= 100} onClick={() => setQuantity(q => Math.min(100,q + 1))} className="h-11 w-11 rounded-lg"><Plus className="h-4 w-4" /></Button>
-                </div>
+                {!isV2 && quantityControl}
                 <Button size="lg" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
                   onClick={handleAddToCart} disabled={!cartReady}
                   aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
                   <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i kurv' : 'Tilføj til kurv'}</span>
-                  <span className="text-sm tabular-nums">{formatPrice(totalItemPrice)}</span>
+                  <span aria-hidden="true" className="v2-product-price-divider">·</span><span className="text-sm tabular-nums">{formatPrice(totalItemPrice)}</span>
                 </Button>
               </div>
             </div>

@@ -187,7 +187,7 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
     });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 commerce-order-summary">
       {cartItems.map(item => {
         const toppingsPrice =
           item.toppings.reduce((sum, topping) => sum + topping.price, 0) * item.quantity;
@@ -858,7 +858,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
   return (
     <>
-      <div className="mb-6">
+      <div className={isV2 ? "v2-checkout-heading" : "mb-6"}>
         {isProcessing || paymentUncertain || paymentUrl ? (
           <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen</Button>
         ) : (
@@ -868,6 +868,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
             </Link>
           </Button>
         )}
+        {isV2 && <h1>Checkout</h1>}
       </div>
       <FormProvider {...form}>
         <form data-storefront-version={isV2 ? '2' : undefined} data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
@@ -887,8 +888,8 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                 </div>
               </section>}
               {isV2 && !enabledPaymentMethods.length && <p role="alert" className="text-destructive">Online betaling er ikke tilgængelig hos restauranten lige nu. Kontakt restauranten for at bestille.</p>}
-              <section>
-                <h2 className="text-2xl font-bold mb-4">Levering og tidspunkt</h2>
+              <section className={isV2 ? "v2-fulfillment" : undefined}>
+                <h2 className={isV2 ? "sr-only" : "text-2xl font-bold mb-4"}>Levering og tidspunkt</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
                     <div className="flex items-center gap-3">
@@ -938,9 +939,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Fulde navn</FormLabel>
+                        <FormLabel>{isV2 ? "Navn" : "Fulde navn"}</FormLabel>
                         <FormControl>
-                          <Input autoComplete="name" enterKeyHint="next" placeholder="John Doe" {...field} />
+                          <Input autoComplete="name" enterKeyHint="next" placeholder={isV2 ? "Indtast dit navn" : "John Doe"} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -953,7 +954,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                       <FormItem>
                         <FormLabel>E-mail</FormLabel>
                         <FormControl>
-                          <Input autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" enterKeyHint="next" type="email" placeholder="john@example.com" {...field} />
+                          <Input autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" enterKeyHint="next" type="email" placeholder={isV2 ? "Indtast e-mail" : "john@example.com"} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -964,9 +965,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Telefonnummer</FormLabel>
+                        <FormLabel>{isV2 ? "Mobilnummer" : "Telefonnummer"}</FormLabel>
                         <FormControl>
-                          <Input autoComplete="tel" inputMode="tel" enterKeyHint="next" type="tel" placeholder="+123456789" {...field} />
+                          <Input autoComplete="tel" inputMode="tel" enterKeyHint="next" type="tel" placeholder={isV2 ? "Indtast mobilnummer" : "+123456789"} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -1019,6 +1020,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
                   <ManagedDeliveryQuote enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
+                  {isV2 && <p className="v2-guest-note">Du kan bestille uden at oprette en konto.</p>}
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField
                     control={form.control}

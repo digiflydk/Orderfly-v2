@@ -17,7 +17,9 @@ before(async()=>{
  import{StorefrontV2Provider}from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
  const product=${JSON.stringify(product)},groups=${JSON.stringify(groups)},toppings=${JSON.stringify(toppings)};
  if(location.search.includes('long')){product.toppingGroupIds.push('sauces','side');product.toppingGroupConditions={side:['sauce12']};groups.push({id:'side',groupName:'Tilbehør til sauce',minSelection:1,maxSelection:1,locationIds:['l']});toppings.push({id:'side1',groupId:'side',toppingName:'Brød',price:0,isActive:true,locationIds:['l']});groups.push({id:'sauces',groupName:'Saucer',minSelection:0,maxSelection:1,locationIds:['l']});for(let n=1;n<=12;n++)toppings.push({id:'sauce'+n,groupId:'sauces',toppingName:'Sauce '+n,price:n,isActive:true,locationIds:['l']});}
+ if(location.search.includes('allergens')) product.allergenIds=['milk'];
  if(location.search.includes('compact')){product.toppingGroupIds=['extras','removals'];product.toppingOverrides={};}
+ if(location.search.includes('steak')){product.productName='Grillet entrecôte';product.description='Med valgfrit tilbehør og sauce.';product.toppingOverrides={};product.toppingGroupIds=['doneness','side','sauce'];groups.splice(0);toppings.splice(0);for(const [id,name,choices] of [['doneness','Stegning',['Rød','Medium','Gennemstegt']],['side','Tilbehør',['Pommes frites','Hasselbackkartofler']],['sauce','Sauce',['Bearnaise','Champignonsauce']]]){groups.push({id,groupName:name,selectionMode:'single',minSelection:1,maxSelection:1,locationIds:['l']});choices.forEach((label,n)=>toppings.push({id:id+n,groupId:id,toppingName:label,price:0,maxQuantity:1,isActive:true,locationIds:['l']}));}}
  if(location.search.includes('requiredonly')){product.toppingGroupIds=['drink'];product.toppingOverrides={};}
  if(location.search.includes('wide')){product.productName='Pizza med ekstra mozzarella, grøntsager og friske krydderurter';product.price=12345.5;product.description='En fyldig pizza med grøntsager og frisk mozzarella. '.repeat(8);toppings[0].toppingName='Ekstra frisk mozzarella og grillede grøntsager';}
  function App(){const[open,setOpen]=useState(true);const[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved?{...window.saved,id:product.id,cartItemId:'saved',itemType:'product',productName:product.productName,brandId:product.brandId,price:75,itemTotal:75}:undefined);setOpen(true);}}>Rediger gemt</button><ProductDialog product={product} initialItem={initialItem} allToppingGroups={groups} allToppings={toppings} isOpen={open} setIsOpen={setOpen}/></>};createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={new URLSearchParams(location.search).has('v2')}><App/></StorefrontV2Provider>);`);
@@ -28,7 +30,7 @@ before(async()=>{
   '@/context/storefront-catalog':file('catalog',`const data={products:[${JSON.stringify(product)}],combos:new URLSearchParams(location.search).has('upgrade')?[{id:'test-combo',comboName:'Testmenu',pickupPrice:100,upgradeProductIds:['pizza'],productGroups:[{groupName:'Pizza',productIds:['pizza']}]}]:[]};export const useStorefrontCatalog=()=>data;`),
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'test'});`),
   '@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),
-  '@/lib/public-read':file('public-read',`export const publicRead=async()=>[];`),
+  '@/lib/public-read':file('public-read',`export const publicRead=async()=>new URLSearchParams(location.search).has('allergens')?[{id:'milk',allergenName:'Mælk'}]:[];`),
   '@/components/product/combo-builder-dialog':file('combo',`import React from 'react';export function ComboBuilderDialog(props){window.upgradeDraft={productId:props.preselectedProductId,quantity:props.initialQuantity,modifiers:props.preselectedModifiers};return <button onClick={()=>props.setIsOpen(false)}>Tilbage til produkt</button>;}`),
   'next/image':file('image',`import React from'react';export default function Image({fill,priority,...props}){return <img {...props} src="/product.svg" style={fill?{position:'absolute',width:'100%',height:'100%',objectFit:'cover'}:undefined}/>;}`),
   'next/link':file('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
@@ -206,8 +208,8 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  await page.goto(origin+'/?v2&long');
  const panel=page.getByRole('dialog');await panel.waitFor();
  assert.equal(await panel.getAttribute('data-storefront-version'),'2');
- assert.equal(await page.locator('#root').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(23, 22, 20)');
- assert.equal(await panel.evaluate(el=>getComputedStyle(el).getPropertyValue('--primary').trim()),'40 58% 61%');
+ assert.equal(await page.locator('#root').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 20, 19)');
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).getPropertyValue('--primary').trim()),'41 73% 66%');
  await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(await page.evaluate(()=>window.saved),undefined,'required choices must block add');
  await page.getByRole('radio',{name:'Vand',exact:true}).check();
@@ -226,8 +228,8 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
  const bounds=await submit.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+1,'action stays in viewport after content scroll');
  assert.equal(await submit.evaluate(el=>getComputedStyle(el).borderRadius),'6px');
- assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(213, 176, 98)');
- assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(23, 22, 20)');
+ assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(232, 191, 105)');
+ assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 20, 19)');
  assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'dialog must not overflow horizontally');
  await submit.click();
  const saved=await page.evaluate(()=>window.saved);assert.equal(saved.quantity,1);assert.equal(saved.toppings.find(x=>x.id==='cheese').quantity,3);
@@ -261,4 +263,51 @@ test('V2 menu upgrade passes chosen modifiers and preserves the draft on return'
  await page.getByRole('button',{name:'Vælg menu',exact:true}).click();
  assert.deepEqual((await page.evaluate(()=>window.upgradeDraft)).modifiers,[]);
  assert.equal(await page.evaluate(()=>window.saved),undefined);
+});
+
+// Layout checks supplement, rather than replace, manual reference comparison.
+for (const [width,height] of [[320,568],[390,850],[1280,850]]) test(`V2 mockup structure and allergen disclosure (${width}px)`, async t=>{
+ const context=await browser.newContext({viewport:{width,height},reducedMotion:'reduce'});t.after(()=>context.close());
+ const page=await context.newPage();await page.goto(origin+'/?v2&compact&allergens');
+ const panel=page.getByRole('dialog');await panel.waitFor();
+ const hero=await page.locator('.v2-product-hero').boundingBox();const box=await panel.boundingBox();
+ if(width<640)assert.ok(box.y<1&&Math.abs(box.height-height)<2,'mobile sheet fills viewport');
+ assert.ok(Math.abs(hero.width-box.width)<3,'photo spans the product sheet');
+ assert.ok(Math.abs(hero.width/hero.height-16/9)<0.05,'photo uses the mockup landscape proportion');
+ assert.ok(hero.y>=(await page.locator('.v2-product-topbar').boundingBox()).height,'brand bar sits above the photo');
+ const heading=await page.getByRole('heading',{name:'Testpizza',exact:true}).boundingBox();assert.ok(heading.y>=hero.y+hero.height,'product title follows the hero');
+ const customize=page.getByRole('button',{name:'Tilpas ingredienser',exact:true});
+ assert.equal(await customize.evaluate(el=>getComputedStyle(el).borderTopWidth),'1px');
+ assert.equal(await customize.evaluate(el=>getComputedStyle(el).borderTopColor),'rgb(232, 191, 105)');
+ await page.locator('.v2-product-allergens').waitFor();
+ assert.equal(await page.getByText('Mælk',{exact:true}).isVisible(),false);
+ await page.locator('.v2-product-allergens summary').click();
+ assert.equal(await page.getByText('Mælk',{exact:true}).isVisible(),true);
+ await page.locator('.v2-product-allergens summary').click();
+ await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=0);
+ const submit=page.getByRole('button',{name:/Læg i kurv/});const action=await submit.boundingBox();
+ assert.ok(action.width>box.width*.85,'purchase action spans the bottom bar');
+ assert.ok(action.y+action.height<=height+1,'bottom action is visible');
+ assert.equal(await page.getByRole('button',{name:'Tilbage til menu',exact:true}).isVisible(),true);
+ if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,`v2-product-mockup-${width}.png`),fullPage:true});
+ await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
+ const quantity=await page.getByRole('group',{name:'Antal produkter',exact:true}).boundingBox();const footer=await page.locator('.commerce-product-footer').boundingBox();
+ assert.ok(quantity.y+quantity.height<=footer.y,'quantity is fully reachable above fixed action');
+ if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,`v2-product-scrolled-${width}.png`),fullPage:true});
+ await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await panel.waitFor({state:'hidden'});
+});
+
+test('V2 à la carte required tiles, exact choices and quantity clearance',async t=>{
+ const context=await browser.newContext({viewport:{width:390,height:850},reducedMotion:'reduce'});t.after(()=>context.close());
+ const page=await context.newPage();await page.goto(origin+'/?v2&steak');await page.getByRole('dialog').waitFor();
+ await page.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();assert.equal(await page.evaluate(()=>window.saved),undefined);
+ for(const name of ['Medium','Hasselbackkartofler','Champignonsauce'])await page.getByRole('radio',{name,exact:true}).check();
+ for(const group of await page.getByRole('radiogroup').all())assert.equal(await group.evaluate(el=>getComputedStyle(el).display),'grid');
+ const medium=page.locator('[data-option-row]').filter({has:page.getByRole('radio',{name:'Medium',exact:true})});
+ assert.notEqual(await medium.evaluate(el=>getComputedStyle(el).boxShadow),'none','chosen tile has visible gold treatment');
+ await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
+ const quantity=await page.getByRole('group',{name:'Antal produkter',exact:true}).boundingBox();const footer=await page.locator('.commerce-product-footer').boundingBox();
+ assert.ok(quantity.y+quantity.height<=footer.y,'quantity is fully reachable above fixed footer');
+ if(process.env.TILVALG_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.TILVALG_SCREENSHOT_DIR,'v2-product-steak-390.png'),fullPage:true});
+ await page.getByRole('button',{name:/Læg i kurv/}).click();assert.deepEqual((await page.evaluate(()=>window.saved)).toppings.map(x=>x.name),['Medium','Hasselbackkartofler','Champignonsauce']);
 });
