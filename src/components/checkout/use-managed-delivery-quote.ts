@@ -38,5 +38,8 @@ export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,reques
  const state:ManagedQuoteState=enabled&&stored.identity===requestIdentity?stored.state:{kind:'idle'};
  const quote=autoRequestReady&&state.kind==='ready'&&state.quote.expiresAtMs>Math.max(now,Date.now())+managedQuotePaymentWindowMs?state.quote:null;
  const paymentProof:ManagedQuoteAcceptance|null=quote?{quoteId:quote.quoteId,quoteToken:quote.quoteToken,checkoutFingerprint:quote.checkoutFingerprint,customerFeeMinor:quote.customerFeeMinor,checkoutTotalMinor:quote.checkoutTotalMinor,currency:quote.currency}:null;
- return {state,paymentProof,request,previousFeeMinor,checkoutKey:key.current};
+ // Render feedback immediately, including debounce and a newer identity queued
+ // behind an obsolete request. Failure/expiry stays explicit-retry only.
+ const loadingPending=enabled&&autoRequestReady&&input!==null&&(state.kind==='loading'||!locked&&state.kind==='idle');
+ return {state,paymentProof,request,previousFeeMinor,checkoutKey:key.current,loadingPending};
 }

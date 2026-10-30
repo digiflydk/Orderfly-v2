@@ -19,6 +19,19 @@ function fixture(options = {}) {
 }
 const brand = (extra={})=>({scope:'brand',brandId:'brand',locationId:null,expectedRevision:0,settings:schema.defaultDeliverySettings(),...extra});
 const local = (extra={})=>({scope:'location',brandId:'brand',locationId:'location',expectedRevision:0,expectedBrandRevision:0,overrides:{paused:true},...extra});
+test('brand and local settings read concurrently within the supplied transaction',{timeout:2000},async()=>{
+ const f=fixture();let releaseBrand,localRead=false;
+ const gate=new Promise(resolve=>{releaseBrand=resolve;});
+ const tx={get:async ref=>{
+  if(ref.path==='deliverySettings/brand')await gate;
+  else {assert.equal(ref.path,'deliverySettings/brand/locations/location');localRead=true;}
+  return {exists:false,data:()=>undefined};
+ }};
+ const pending=f.service.loadDeliverySettingsInTransaction(tx,'brand','location');
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(localRead,true);
+ releaseBrand();const {result}=await pending;
+ assert.equal(result.settings.enabled,false);assert.equal(result.brandRevision,0);assert.equal(result.revision,0);
+});
 test('settings reject bad dates, overlaps, duplicates, unknown keys and noninteger distances',()=>{
  assert.equal(schema.deliverySettingsSchema.safeParse({...schema.defaultDeliverySettings(),providerId:'future_courier'}).success,true);
  for(const patch of [{maxDistanceMeters:0.5},{providerId:'../test'},{foo:1},{exceptions:[{date:'2026-02-30',intervals:[]}]},{weeklyHours:Array.from({length:7},()=>({day:0,intervals:[]}))}]) assert.equal(schema.deliverySettingsSchema.safeParse({...schema.defaultDeliverySettings(),...patch}).success,false);

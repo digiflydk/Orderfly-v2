@@ -17,12 +17,17 @@ export type ManagedRuntimeDependencies={
 export function createConfiguredManagedDeliveryRuntimeResolver(deps:ManagedRuntimeDependencies){
  async function config(scope:Scope){
   const c=await deps.loadConfig(scope);
-  if(!c||c.scope.brandId!==scope.brandId||c.scope.locationId!==scope.locationId||!['sandbox','production'].includes(c.environment)||!c.routingApprovalRef.trim()||!c.retentionApprovalRef.trim()||!await deps.hasApprovedRoutingSource(c.routingSource))return null;
-  if(deps.authorizeConfig){if(!await deps.authorizeConfig(c))return null;}
+  if(!c||c.scope.brandId!==scope.brandId||c.scope.locationId!==scope.locationId||!['sandbox','production'].includes(c.environment)||!c.routingApprovalRef.trim()||!c.retentionApprovalRef.trim())return null;
+  if(deps.authorizeConfig){
+   // Independent read-only approval checks. Both must pass before construction.
+   const [routingApproved,scopeApproved]=await Promise.all([deps.hasApprovedRoutingSource(c.routingSource),deps.authorizeConfig(c)]);
+   if(!routingApproved||!scopeApproved)return null;
+  }
   else {
    const env=deps.environment();
    if(!deps.dispatchEnabled()||env.ORDERFLY_DELIVERY_CHECKOUT_ENABLED!=='true'||env.ORDERFLY_DELIVERY_ROUTING_ENABLED!=='true'||c.environment!==env.ORDERFLY_DELIVERY_ENVIRONMENT)return null;
    if(c.environment==='production'&&env.ORDERFLY_DELIVERY_PRODUCTION_ENABLED!=='true')return null;
+   if(!await deps.hasApprovedRoutingSource(c.routingSource))return null;
   }
   if(!c.pickupContact.name.trim()||!/^\+[1-9]\d{7,14}$/.test(c.pickupContact.phone)||!Number.isFinite(Date.parse(c.pickupContact.verifiedAt)))return null;
   return c;

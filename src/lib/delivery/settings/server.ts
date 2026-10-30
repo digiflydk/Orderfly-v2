@@ -26,13 +26,16 @@ function paths(brandId: string, locationId: string | null) {
 }
 /** Internal transaction loader; caller must authorize the exact native scope in the same transaction. */
 export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Transaction, brandId: string, locationId: string | null) {
-  const refs = paths(brandId, locationId), brandSnapshot = await tx.get(refs.brand);
+  const refs = paths(brandId, locationId);
+  // These document identities are known before either read; keep both in the
+  // caller's transaction without adding an unnecessary network round trip.
+  const [brandSnapshot, localSnapshot] = await Promise.all([tx.get(refs.brand), refs.local ? tx.get(refs.local) : Promise.resolve(null)]);
   const brand = brandSnapshot.exists ? brandRecord.safeParse(brandSnapshot.data()) : null;
   if (brand && (!brand.success || brand.data.brandId !== brandId)) return unavailable();
   const brandRevision = brand?.success ? brand.data.revision : 0;
   const settings = brand?.success ? brand.data.settings : defaultDeliverySettings();
   if (!refs.local) return { refs, result: { brandId, locationId, brandRevision, revision: brandRevision, settings, brandSettings: settings, overrides: {}, inheritedKeys: [], editable: false } as DeliverySettingsResponse };
-  const localSnapshot = await tx.get(refs.local), local = localSnapshot.exists ? locationRecord.safeParse(localSnapshot.data()) : null;
+  const local = localSnapshot?.exists ? locationRecord.safeParse(localSnapshot.data()) : null;
   if (local && (!local.success || local.data.brandId !== brandId || local.data.locationId !== locationId)) return unavailable();
   const overrides = local?.success ? local.data.overrides : {};
   return { refs, result: { brandId, locationId, brandRevision, revision: local?.success ? local.data.revision : 0, brandSettings: settings, ...resolveDeliverySettings(settings, overrides), overrides, editable: false } };

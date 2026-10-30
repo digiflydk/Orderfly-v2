@@ -4,6 +4,16 @@ const { loadTs } = require('../helpers/load-ts.cjs');
 const modulePath = 'src/lib/delivery/management/secrets.ts';
 const scope = { environment: 'sandbox', merchantId: 'merchant_a', kind: 'api' };
 const value = 'synthetic_api_secret_not_real';
+test('default stores reuse SDK transport but re-read pinned secrets and propagate later IAM denial',async()=>{
+ let constructions=0,reads=0;
+ const {createHash}=require('node:crypto');
+ const reference=`projects/orderfly-private-test/secrets/orderfly-wolt-sandbox-${createHash('sha256').update(JSON.stringify(['sandbox','merchant_a'])).digest('hex')}/versions/1`;
+ const client={accessSecretVersion:async input=>{reads++;assert.equal(input.name,reference);if(reads>1)throw {code:7};return [{name:reference,payload:{data:Buffer.from(value)}}];}};
+ const mod=loadTs(modulePath,{'server-only':{},'@/lib/firebase-admin':{},'@google-cloud/secret-manager':{SecretManagerServiceClient:function(){constructions++;return client;}}});
+ const first=mod.createDeliverySecretStore({projectId:'orderfly-private-test'}),second=mod.createDeliverySecretStore({projectId:'orderfly-private-test'});
+ assert.equal(constructions,1);assert.equal(await first.read(reference,scope),value);
+ await assert.rejects(second.read(reference,scope),error=>error.code==='secret_permission_denied');assert.equal(reads,2);
+});
 function fixture() {
   const calls = [], values = new Map();
   const client = {

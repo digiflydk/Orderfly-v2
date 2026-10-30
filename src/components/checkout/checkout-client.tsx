@@ -4,6 +4,7 @@ import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
 import { Textarea } from '@/components/ui/textarea';
 import { ManagedDeliveryQuote, type ManagedDeliveryQuoteView } from './managed-delivery-quote';
+import { ManagedDeliveryLoading } from './managed-delivery-loading';
 import { customerDeliveryEstimate } from '@/lib/delivery/customer-eta';
 import { useManagedDeliveryQuote, managedQuotePaymentWindowMs } from './use-managed-delivery-quote';
 import { normalizeDeliveryPhone } from '@/lib/delivery/quotes/phone';
@@ -621,6 +622,10 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const quoteIdentity=JSON.stringify({...quoteInput,customerInfo:{...quoteCustomer,acceptTerms:undefined}});
   const quoteIdentityRef=useRef(quoteIdentity);quoteIdentityRef.current=quoteIdentity;
   const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
+  let addressReady=true;
+  try { normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country}); } catch { addressReady=false; }
+  let contactReady=checkoutSchema.pick({name:true,email:true,phone:true}).safeParse(quoteForm).success;
+  try { normalizeDeliveryPhone(quoteForm.phone); } catch { contactReady=false; }
   let quoteReady=!!quoteInput&&cartItems.length>0&&isOrderTimeValid&&checkoutSchema.omit({acceptTerms:true}).safeParse(quoteForm).success;
   try {
     normalizeDeliveryPhone(quoteForm.phone);
@@ -868,6 +873,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
   return (
     <>
+      <ManagedDeliveryLoading pending={managed.loadingPending} requestIdentity={quoteIdentity} />
       <div className={isV2 ? "v2-checkout-heading" : "mb-6"}>
         {isProcessing || paymentUncertain || paymentUrl ? (
           <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen</Button>
@@ -1030,6 +1036,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     </>
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
+                  {managedActive&&addressReady&&!contactReady&&<p role="status" className="text-sm text-muted-foreground">Udfyld navn, e-mail og mobilnummer, så beregner vi leveringsprisen.</p>}
                   <ManagedDeliveryQuote showDeliveryTime={false} showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
                   {isV2 && <p className="v2-guest-note">Du kan bestille uden at oprette en konto.</p>}
                   <Separator className="!mt-6" />
