@@ -2,6 +2,8 @@
 'use client';
 
 import { displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { resolveManagedFulfillmentTime } from '@/lib/delivery/public-schedule';
+import { useManagedDeliverySchedule } from '@/context/delivery-price-context';
 import { useCart } from "@/context/cart-context";
 import { Button } from "../ui/button";
 import { Truck, Clock, Store } from "lucide-react";
@@ -35,6 +37,7 @@ interface TimeSelectorProps {
 
 export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: TimeSelectorProps) {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
+    const schedule = useManagedDeliverySchedule();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     
     // OF-522-126 - Use the prop directly, no internal fetching.
@@ -42,9 +45,13 @@ export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: Time
 
     const asapText = useMemo(() => {
         if (!timeSlots) return "Indlæser…";
+        if (schedule && location && deliveryType === 'delivery') {
+            try { return displayFulfillmentTime(resolveManagedFulfillmentTime(location, 'delivery', 'asap', new Date(), schedule)); }
+            catch { return 'Ingen ledige leveringstider'; }
+        }
         const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
         return text || "Currently unavailable";
-    }, [timeSlots, deliveryType]);
+    }, [timeSlots, deliveryType, schedule, location]);
 
     // Keep hooks unconditional. The cart context receives the location after
     // the first render, so returning before useMemo changes the hook order.

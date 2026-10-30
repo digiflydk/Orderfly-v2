@@ -67,3 +67,27 @@ test('invalid public quote request reports only schema stage and fixed field to 
  assert.equal(result.ok,false);assert.equal(result.code,'invalid_request');assert.equal(diagnostic.data.stage,'request');assert.equal(diagnostic.data.field,'cart');assert.equal(diagnostic.data.code,'schema_invalid');
  assert.deepEqual(Object.keys(diagnostic.data).sort(),['atMs','code','field','stage']);
 });
+
+
+test('Friday before opening accepts valid scheduled 11:50 and 12:05 only when managed Friday hours permit them',async()=>{
+ const baseline=new Date('2026-10-27T12:00:00Z').getTime();
+ mock.timers.setTime(new Date('2026-10-30T08:45:00Z').getTime());
+ try {
+  for(const target of ['2026-10-30T10:50:00.000Z','2026-10-30T11:05:00.000Z']){
+   const f=await fixture(undefined,true,true,'sandbox',false,{prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(d=>[d,{isOpen:true,open:'11:00',close:'22:00'}]))});
+   const settings=f.records.get('deliverySettings/b').settings;
+   settings.preparationMinutes=20;
+   settings.weeklyHours.forEach(row=>row.intervals=row.day===3?[{startMinute:660,endMinute:1260}]:[]);
+   f.input.deliveryTime=target;
+   const unavailable=await f.actions.requestManagedDeliveryQuoteAction(f.input);
+   assert.equal(unavailable.ok,false);assert.equal(unavailable.code,'closed');
+   assert.equal(f.events.includes('stripe'),false);
+   settings.weeklyHours.find(row=>row.day===5).intervals=[{startMinute:660,endMinute:1260}];
+   const q=await f.actions.requestManagedDeliveryQuoteAction(f.input);
+   assert.equal(q.ok,true,JSON.stringify(q));
+   assert.equal(f.records.get(`deliveryQuotes/${q.quoteId}`).fulfillment.desiredDelivery.interval.earliest,target);
+   assert.equal((await pay(f,q)).success,true);
+   assert.equal(f.records.get('orders/ORD-TEST').fulfillmentAt,target);
+  }
+ } finally {mock.timers.setTime(baseline);}
+});

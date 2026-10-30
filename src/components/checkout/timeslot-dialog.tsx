@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { resolveFulfillmentTime, fulfillmentSlots, displayFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
+import { displayFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
+import { managedFulfillmentSlots, resolveManagedFulfillmentTime } from '@/lib/delivery/public-schedule';
+import { useManagedDeliverySchedule } from '@/context/delivery-price-context';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
 import { da } from 'date-fns/locale';
@@ -20,6 +22,7 @@ interface TimeSlotDialogProps {
 
 export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialogProps) {
   const { deliveryType, selectedTime, setSelectedTime, location } = useCart();
+  const schedule = useManagedDeliverySchedule();
   const [clock, setClock] = useState(Date.now());
   const today = startOfDay(toZonedTime(new Date(clock), 'Europe/Copenhagen'));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
@@ -40,15 +43,15 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
       date = startOfDay(toZonedTime(new Date(selectedTime), 'Europe/Copenhagen'));
       // Slots after midnight belong to the previous opening day.
       const previous = addDays(date, -1);
-      if (!fulfillmentSlots(location, deliveryType, format(date, 'yyyy-MM-dd'), now).includes(selectedTime)
-        && fulfillmentSlots(location, deliveryType, format(previous, 'yyyy-MM-dd'), now).includes(selectedTime)) date = previous;
+      if (!managedFulfillmentSlots(location, deliveryType, format(date, 'yyyy-MM-dd'), now, schedule).includes(selectedTime)
+        && managedFulfillmentSlots(location, deliveryType, format(previous, 'yyyy-MM-dd'), now, schedule).includes(selectedTime)) date = previous;
     }
     setSelectedDate(date);
     setMonth(date);
     setInternalTime(selectedTime);
     setSaveError(false);
     setClock(now.getTime());
-  }, [isOpen, locationId, deliveryType, location, selectedTime]);
+  }, [isOpen, locationId, deliveryType, location, selectedTime, schedule]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -59,12 +62,12 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   }, [isOpen]);
 
   const availableTimes = useMemo(() => location && deliveryType
-    ? fulfillmentSlots(location, deliveryType, format(selectedDate, 'yyyy-MM-dd'), new Date(clock)) : [],
-    [location, deliveryType, selectedDate, clock]);
+    ? managedFulfillmentSlots(location, deliveryType, format(selectedDate, 'yyyy-MM-dd'), new Date(clock), schedule) : [],
+    [location, deliveryType, selectedDate, clock, schedule]);
   const asapInstant = useMemo(() => {
-    try { return location && deliveryType ? resolveFulfillmentTime(location, deliveryType, 'asap', new Date(clock)) : null; }
+    try { return location && deliveryType ? resolveManagedFulfillmentTime(location, deliveryType, 'asap', new Date(clock), schedule) : null; }
     catch { return null; }
-  }, [location, deliveryType, clock]);
+  }, [location, deliveryType, clock, schedule]);
   const canSelectAsap = isSameDay(selectedDate, today) && !!asapInstant;
   const selectionValid = internalTime === 'asap' ? canSelectAsap : availableTimes.includes(internalTime);
   const unavailableSelection = !!internalTime && !selectionValid;
@@ -79,7 +82,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   const handleSave = () => {
     try {
       if (!selectionValid || !location || !deliveryType) throw new Error(unavailableTime);
-      resolveFulfillmentTime(location, deliveryType, internalTime, new Date());
+      resolveManagedFulfillmentTime(location, deliveryType, internalTime, new Date(), schedule);
       setSelectedTime(internalTime);
       setIsOpen(false);
     } catch {
