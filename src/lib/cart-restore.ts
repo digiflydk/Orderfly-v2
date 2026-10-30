@@ -50,13 +50,14 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
       const selected = choice.comboSelections || [];
       const matchesGroup = (selection: typeof selected[number], group: typeof combo.productGroups[number]) =>
         selection.groupId ? selection.groupId === group.id : selection.groupName === group.groupName;
-      // Each submitted group must resolve exactly once, including optional groups.
-      // Do not silently discard unknown groups merely because minSelection is zero.
-      if (selected.length !== combo.productGroups.length || selected.some(selection =>
+      // Every submitted group must still resolve exactly once. A newly added
+      // optional group may be absent in an older cart; canonicalize it to no choice.
+      // Unknown, ambiguous or duplicate groups must never be silently discarded.
+      if (selected.some(selection =>
         combo.productGroups.filter(group => matchesGroup(selection, group)).length !== 1)) valid = false;
       comboSelections = combo.productGroups.map(group => {
         const matches = selected.filter(selection => matchesGroup(selection, group));
-        if (matches.length !== 1) valid = false;
+        if (matches.length > 1 || (matches.length === 0 && group.minSelection !== 0)) valid = false;
         const ids = matches[0]?.products.map(p => p.id) || [];
         if (ids.length < group.minSelection || (group.maxSelection > 0 && ids.length > group.maxSelection) || new Set(ids).size !== ids.length) valid = false;
         const products = ids.flatMap(id => {
