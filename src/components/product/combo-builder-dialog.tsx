@@ -60,6 +60,8 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, preselectedModifiers, onSaved, onBack }: ComboBuilderDialogProps) {
   const isV2 = useStorefrontV2();
+  const retainedGroupId = isV2 && preselectedProductId ? combo.productGroups.find(group => group.productIds.includes(preselectedProductId))?.id : undefined;
+  const retainedProduct = retainedGroupId && preselectedProductId ? brandProducts.find(product => product.id === preselectedProductId) : undefined;
   const configureProducts = isV2 || preselectedModifiers !== undefined || !!initialItem?.comboSelections?.some(g => g.products.some(p => p.modifiers !== undefined));
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
@@ -168,6 +170,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
   function handleSelectionChange(groupId: string, productId: string, multi: boolean, checked?: boolean) {
     const group = combo.productGroups.find(g => g.id === groupId);
     if (!group) return;
+    // A dish-origin upgrade keeps that dish; only remaining combo choices may change.
+    if (group.id === retainedGroupId && (Number(group.maxSelection) === 1 || productId === preselectedProductId)) return;
 
     const max = Number(group.maxSelection);
 
@@ -261,8 +265,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
             </div>}
             <ScrollArea className="flex-1">
                 <div className="commerce-option-header">
-                  <div className="commerce-option-image"><Image src={safeImage(combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
-                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription>{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
+                  <div className="commerce-option-image"><Image src={safeImage(retainedProduct ? retainedProduct.imageUrl : combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{retainedProduct ? `${retainedProduct.productName} er med. Vælg resten af din menu.` : combo.description || 'Sammensæt din menu.'}</DialogDescription>{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
                 </div>
                 <div className="p-4 space-y-3">
                     {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
@@ -272,15 +276,22 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
 
                     const isSingleSelect = Number(group.maxSelection) === 1;
                     const currentSelection = selection[group.id] || [];
+                    const retainsDish = group.id === retainedGroupId && !!retainedProduct;
 
                     return (
                         <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
                         <div className="mb-1">
                             <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
-                            <p className="text-sm text-muted-foreground">{Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
+                            {!retainsDish && <p className="text-sm text-muted-foreground">{Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>}
                         </div>
                         {showErrors && currentSelection.length < Number(group.minSelection) && <p role="alert" className="text-sm text-destructive">{getSelectionText(group)} fra {group.groupName}.</p>}
-                        <div className="space-y-0">
+                        {retainsDish && <div data-retained-combo-product className="flex items-center gap-3 rounded-md border p-3">
+                          <Image src={safeImage(retainedProduct.imageUrl)} alt="" width={56} height={56} className="h-14 w-14 rounded object-cover" />
+                          <div className="min-w-0 flex-1"><p className="text-sm text-muted-foreground">Din valgte ret</p><p className="font-semibold">{retainedProduct.productName}</p><p className="text-sm text-muted-foreground">Dine tilpasninger følger med.</p></div>
+                          {comboProductAdjustment(group,retainedProduct.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,retainedProduct.id))}</span>}
+                        </div>}
+                        {!(retainsDish && isSingleSelect) && <div className="space-y-0">
+                        {retainsDish && <p className="mt-3 text-sm text-muted-foreground">Vælg resten til {group.groupName}. Din valgte ret tæller med.</p>}
                         {isSingleSelect ? (
                             <RadioGroup className="gap-0" value={currentSelection[0] || (Number(group.minSelection)===0 ? '__none' : '')} onValueChange={(val) => val === '__none' ? setSelection(previous => ({...previous,[group.id]:[]})) : handleSelectionChange(group.id, val, false)}>
                                 {productsInGroup.map(p => (
@@ -292,7 +303,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                             {Number(group.minSelection)===0 && <label className="flex items-center gap-3 min-h-11 px-2 cursor-pointer"><RadioGroupItem value="__none" />Ingen tak</label>}
                             </RadioGroup>
                         ) : (
-                            productsInGroup.map(p => {
+                            productsInGroup.filter(p => !retainsDish || p.id !== preselectedProductId).map(p => {
                             const isChecked = currentSelection.includes(p.id);
                             const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                             return (
@@ -308,7 +319,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                             )
                             })
                         )}
-                        </div>
+                        </div>}
                         </section>
                     );
                     })}

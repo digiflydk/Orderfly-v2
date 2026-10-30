@@ -11,3 +11,9 @@ Product group `productPriceAdjustments` maps product IDs to nonnegative DKK supp
 Optional `storefrontVersions` controls merchandising visibility: absent or empty means both storefronts, while `['v2']` exposes the deal and upgrade only in V2 browsing. This is not an authorization restriction or a separate catalog.
 
 Validation: real-component Chromium suites `combo-modifiers-browser.cjs` and `tilvalg-storefront-browser.cjs` cover modifier continuity, editing, required-choice rejection, option-load failure, V1 legacy behavior, mobile pinned actions, surcharge totals, independent same-dish groups and clearing optional choices. These use local synthetic catalogs and create no real orders or payments. Release/live verification is recorded separately in issue #780.
+
+## Dish-origin upgrade correction
+
+In V2, when a customer opens a dish and chooses “Køb som menu”, the first matching combo group displays that dish as a fixed “Din valgte ret” summary. A single-dish group does not offer other pizza choices. The retained dish's modifiers remain available below, while drinks and other combo groups remain selectable. Returning to the dish keeps the original draft. For a multi-dish group, the retained dish counts toward its limits and only remaining slots can be filled.
+
+Opening a standalone deal still offers its dish choices. Editing a saved combo restores its selected dishes, modifiers and quantity using the existing cart behavior. This presentation correction adds no catalog migration or price changes.
