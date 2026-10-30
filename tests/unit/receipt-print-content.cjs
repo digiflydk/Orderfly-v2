@@ -145,3 +145,30 @@ test('managed output keeps delivery instructions even when optional customer not
  const result=await f.api.prepareReceiptPrintContent({...scope,kind:'customer'});
  assert.match(result.payload.toString(),/Ring twice &lt;please&gt;/);
 });
+
+test('original kitchen print includes scoped booking pickup ETA before courier update, on both widths',async()=>{
+ for(const width of [58,80]){
+  const f=managedFixture();f.rows.delete('orders/o1/deliveryEstimates/current');
+  const attempt=f.rows.get('orders/o1/deliveryAttempts/original');
+  const record={scope:attempt.scope,providerId:'wolt',requestDigest:attempt.requestDigest,attemptRef:attempt.reference,result:{kind:'accepted',providerDeliveryId:attempt.providerDeliveryId,nativeReference:'native',trackingUrl:null,pickupEstimateProvenance:{source:'wolt.create',reliability:'preliminary',observedAt:'2026-10-30T09:00:00Z'},pickupInterval:{earliest:'2026-10-30T10:45:00Z',latest:'2026-10-30T10:50:00Z'},deliveryInterval:null,cost:null}};
+  f.rows.set('orders/o1/deliveryDispatchResults/original',record);f.rows.get('locations/l1/printers/p1').configuration.paperWidthMm=width;
+  const snapshot=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);
+  assert.equal(snapshot.order.delivery.reliablePickup,null);assert.equal(snapshot.order.delivery.plannedPickup.earliest,'2026-10-30T10:45:00Z');
+  const result=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});const text=result.payload.toString().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
+  assert.match(text,/Klar til afhentning/);assert.match(text,/planlagt/);assert.match(text,/11[.:]45/);assert.doesNotMatch(text,/Forventet afhentning af bud/);
+  for(const [field,value] of [['requestDigest','b'.repeat(64)],['attemptRef','other'],['providerId','other']]){
+   const prior=record[field];record[field]=value;
+   const rejected=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);assert.equal(rejected.order.delivery.plannedPickup,null);record[field]=prior;
+  }
+  for(const status of ['cancelled','failed']){
+   f.rows.set('orders/o1/deliveryState/current',{...attempt.scope,provider:'wolt',providerDeliveryId:attempt.providerDeliveryId,status});
+   const stopped=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);assert.equal(stopped.order.delivery.plannedPickup,null);assert.equal(stopped.order.delivery.reliablePickup,null);assert.equal(stopped.order.delivery.pickupUnavailable,status);
+   const rendered=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});assert.doesNotMatch(rendered.payload.toString(),/Klar til afhentning/);
+  }
+  f.rows.delete('orders/o1/deliveryState/current');
+  f.rows.set('orders/o1/deliveryCancellation/original',{version:1,...attempt.scope,attemptRef:attempt.reference,providerDeliveryId:attempt.providerDeliveryId,environment:'sandbox',state:'cancelled',reconcileRequired:false,result:{kind:'cancelled',fee:null}});
+  const cancelled=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope);assert.equal(cancelled.order.delivery.plannedPickup,null);
+  f.rows.delete('orders/o1/deliveryCancellation/original');
+  record.scope={...record.scope,brandId:'foreign'};assert.equal((await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope)).order.delivery.plannedPickup,null);
+ }
+});

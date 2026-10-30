@@ -89,6 +89,44 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         timer = setTimeout(poll, 1500);
         return () => { stopped = true; controller.abort(); clearTimeout(timer); clearTimeout(deadline); };
     }, [sessionId, receiptToken, orderId, brand?.id, location?.id, order?.paymentStatus, retry]);
+    const [deliveryLoading, setDeliveryLoading] = useState(false);
+    const [deliveryError, setDeliveryError] = useState(false);
+    const trackingStatus = order?.managedDeliveryTracking;
+    const deliveryFinished = trackingStatus?.deliveryStatus === 'delivered' || trackingStatus?.paymentStatus === 'refunded' || order?.paymentStatus === 'Failed';
+    useEffect(() => {
+        // Retain the receipt capability and tenant scope. Poll native status only,
+        // never replay payment reconciliation on each delivery refresh.
+        if (!sessionId || !brand || !location || !trackingStatus || order?.deliveryType !== 'Delivery' || order.paymentStatus === 'Pending' || (deliveryFinished && retry === 0)) return;
+        let stopped = false, inFlight = false;
+        let timer: ReturnType<typeof setTimeout>;
+        let controller: AbortController | undefined;
+        const poll = async () => {
+            if (stopped || inFlight) return;
+            clearTimeout(timer);
+            if (document.hidden) { timer = setTimeout(poll, 10000); return; }
+            inFlight = true;
+            controller = new AbortController();
+            const timeout = setTimeout(() => controller?.abort(), 10000);
+            setDeliveryLoading(true);
+            try {
+                const query = new URLSearchParams({ session_id: sessionId, brand_id: brand.id, location_id: location.id, status_only: 'true', order_id: order.id });
+                if (receiptToken) query.set('receipt_token', receiptToken);
+                const response = await fetch(`/api/orders/lookup-by-session?${query}`, { cache: 'no-store', signal: controller.signal });
+                const result = await response.json();
+                if (!response.ok || !result.found || result.order?.id !== order.id || result.order?.brandId !== brand.id || result.order?.locationId !== location.id || !result.order?.managedDeliveryTracking) throw Error('status_unavailable');
+                if (!stopped) { setOrder(result.order); setDeliveryError(false); }
+            } catch { if (!stopped) setDeliveryError(true); }
+            finally {
+                clearTimeout(timeout); inFlight = false;
+                if (!stopped) { setDeliveryLoading(false); if (!deliveryFinished) timer = setTimeout(poll, 10000); }
+            }
+        };
+        const resume = () => { if (!document.hidden) void poll(); };
+        timer = setTimeout(poll, 1500);
+        document.addEventListener('visibilitychange', resume);
+        window.addEventListener('focus', resume);
+        return () => { stopped = true; clearTimeout(timer); controller?.abort(); document.removeEventListener('visibilitychange', resume); window.removeEventListener('focus', resume); };
+    }, [sessionId, receiptToken, brand?.id, location?.id, order?.id, order?.deliveryType, order?.paymentStatus, !!trackingStatus, deliveryFinished, retry]);
     const { completeCheckout } = useCart();
     const storefront = useStorefrontPath(brand?.slug);
     const pickupAccepted = order?.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
@@ -149,7 +187,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
-            {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking}/>}
+            {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
             {!failed&&!refunded && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
             <Button asChild variant="outline" className="ml-2"><Link href={storefront(location.slug)}>Tilbage til menuen</Link></Button>
         </main>;
@@ -199,7 +237,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                         </p>
                     </div>
 
-                    {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking}/>}
+                    {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
                              <CardHeader><CardTitle>Kundeoplysninger</CardTitle></CardHeader>

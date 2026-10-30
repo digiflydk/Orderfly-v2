@@ -23,7 +23,7 @@ export type GuestReceipt = Pick<OrderDetail,
 
 // The existing random Stripe session ID is a guest capability, not a user ID.
 // Never recover or disclose it from a predictable order ID. Keep it out of logs.
-export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceipt | null> {
+export async function readGuestReceipt(proof: ReceiptProof, options: { reconcilePayment?: boolean } = {}): Promise<GuestReceipt | null> {
   const validSession = /^cs_(test_|live_)?[A-Za-z0-9_]{8,250}$/.test(proof.sessionId || '');
   if (!validSession && (proof.sessionId || !proof.orderId)) return null;
   let order = proof.orderId ? await getOrderById(proof.orderId) : await getOrderByCheckoutSessionId(proof.sessionId!);
@@ -44,7 +44,7 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
 
   // A delayed webhook must not produce either a false receipt or a second order.
   // A failed read stays Pending and can be retried; it is not payment failure.
-  if (!pickup && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
+  if (options.reconcilePayment !== false && !pickup && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
     try {
       // getOrderById/getOrderByCheckoutSessionId are private native server reads.
       // Keep payment authority fields local; the public receipt projection below never includes them.

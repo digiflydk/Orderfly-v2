@@ -13,8 +13,9 @@ import { kitchenCatalogLabelApplies } from '@/lib/receipts/kitchen-category-scop
 import { renderKitchenReceiptSvg, renderCustomerReceiptSvg } from '@/lib/receipts/print-layout';
 import { rasterizeReceipt, resolveReceiptLogo } from '@/lib/receipts/print-raster';
 
-import { managedDeliveryBindingSchema, deliveryIntervalSchema } from '@/lib/delivery/provider-contract';
+import { managedDeliveryBindingSchema, deliveryIntervalSchema, deliveryCreateResultSchema } from '@/lib/delivery/provider-contract';
 import { storedDeliveryQuoteSchema } from '@/lib/delivery/quotes/schema';
+import { projectCustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import { bookingIntentSchema } from '@/lib/delivery/booking/state';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -78,10 +79,13 @@ async function managedDeliveryDetails(context: NativeTransactionContext, scope: 
   if (!managed.success) return fail();
   const { db, transaction: tx } = context;
   const orderRef = db.collection('orders').doc(scope.orderId);
-  const [quoteRow, estimateRow, attemptRow] = await Promise.all([
+  const [quoteRow, estimateRow, attemptRow, resultRow, stateRow, cancellationRow] = await Promise.all([
     tx.get(db.collection('deliveryQuotes').doc(managed.data.quoteRef)),
     tx.get(orderRef.collection('deliveryEstimates').doc('current')),
     tx.get(orderRef.collection('deliveryAttempts').doc('original')),
+    tx.get(orderRef.collection('deliveryDispatchResults').doc('original')),
+    tx.get(orderRef.collection('deliveryState').doc('current')),
+    tx.get(orderRef.collection('deliveryCancellation').doc('original')),
   ]);
   const quote = storedDeliveryQuoteSchema.safeParse(quoteRow.data());
   let requested: DeliveryPrintDetails['requested'] = null;
@@ -101,7 +105,23 @@ async function managedDeliveryDetails(context: NativeTransactionContext, scope: 
     const interval = deliveryIntervalSchema.safeParse(estimate.pickup);
     if (interval.success) reliablePickup = interval.data;
   }
-  return { address: raw.customerDetails?.address ?? '', requested, reliablePickup };
+  // Booking ETA is available before the first verified courier callback. Keep
+  // it explicitly planned, and never substitute the customer's delivery time.
+  let plannedPickup: DeliveryPrintDetails['plannedPickup'] = null;
+  const record = resultRow.data(), result = deliveryCreateResultSchema.safeParse(record?.result);
+  if (attempt.success && attempt.data.state === 'booked' && result.success && result.data.kind === 'accepted'
+    && attempt.data.scope.brandId === scope.brandId && attempt.data.scope.locationId === scope.locationId && attempt.data.scope.orderId === scope.orderId
+    && attempt.data.provider === managed.data.providerId && attempt.data.requestDigest === managed.data.requestDigest
+    && record?.scope?.brandId === scope.brandId && record.scope.locationId === scope.locationId && record.scope.orderId === scope.orderId
+    && record.providerId === managed.data.providerId && record.requestDigest === managed.data.requestDigest && record.attemptRef === attempt.data.reference
+    && result.data.providerDeliveryId === attempt.data.providerDeliveryId) {
+    plannedPickup = result.data.pickupInterval;
+  }
+  const tracking = projectCustomerDeliveryTracking(scope.orderId, raw, attemptRow.data(), record, stateRow.data(), estimate, cancellationRow.data());
+  const pickupUnavailable = raw.status === 'Canceled' || tracking?.deliveryStatus === 'cancelled' ? 'cancelled'
+    : tracking?.deliveryStatus === 'failed' ? 'failed' : undefined;
+  if (pickupUnavailable) { reliablePickup = null; plannedPickup = null; }
+  return { address: raw.customerDetails?.address ?? '', requested, reliablePickup, plannedPickup, ...(pickupUnavailable ? { pickupUnavailable } : {}) };
 }
 
 async function nativeSnapshot(context: NativeTransactionContext, input: Scope) {
