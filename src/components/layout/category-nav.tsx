@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Search, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import type { Brand, Category } from '@/types';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 
 interface CategoryNavProps {
   categories: Category[];
@@ -17,6 +18,7 @@ interface CategoryNavProps {
 }
 
 export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, brand, activeCategory, search = '', onSearchChange }: CategoryNavProps) {
+  const isV2 = useStorefrontV2();
   const navRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
   const [canScroll, setCanScroll] = useState({left: false, right: false});
@@ -55,7 +57,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
     const offset = (header && getComputedStyle(header).position === 'sticky' ? header.getBoundingClientRect().height : 0) + (categories?.getBoundingClientRect().height || 0) + 16;
     window.scrollTo({top: target.getBoundingClientRect().top + window.scrollY - offset, behavior: motion()});
   };
-  return <div className="flex min-w-0 flex-col items-stretch gap-3 md:flex-row md:items-center">
+  return <div data-v2-menu-navigation={isV2 || undefined} className="flex min-w-0 flex-col items-stretch gap-3 md:flex-row md:items-center">
     <nav aria-label="Menukategorier" className="flex min-w-0 flex-1 items-center gap-1">
       <Button type="button" variant="ghost" size="icon" aria-label="Vis tidligere kategorier" disabled={!canScroll.left} onClick={() => navRef.current?.scrollBy({left: -240, behavior: motion()})} className="h-11 w-9 shrink-0"><ChevronLeft className="h-4 w-4" /></Button>
       <div ref={navRef} className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -67,7 +69,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
     </nav>
     <div className="relative w-full shrink-0 md:w-56">
       <Search aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-      <Input type="search" aria-label="Søg i menuen" value={search} onChange={event => onSearchChange?.(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') onSearchChange?.(''); }} placeholder="Søg i menuen…" className="pl-10 pr-11 h-11 w-full text-base [&::-webkit-search-cancel-button]:hidden" />
+      <Input type="search" aria-label="Søg i menuen" value={search} onChange={event => onSearchChange?.(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') onSearchChange?.(''); }} placeholder={isV2 ? "Søg efter en ret" : "Søg i menuen…"} className="pl-10 pr-11 h-11 w-full text-base [&::-webkit-search-cancel-button]:hidden" />
       {search && <button type="button" aria-label="Ryd menusøgning" onClick={() => onSearchChange?.('')} className="absolute inset-y-0 right-0 flex w-11 items-center justify-center"><X className="h-4 w-4" /></button>}
     </div>
   </div>;

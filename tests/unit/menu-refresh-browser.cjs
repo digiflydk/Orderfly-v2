@@ -14,9 +14,9 @@ const products=categories.flatMap((c,i)=>Array.from({length:3},(_,j)=>({id:'p'+i
 function file(name,code){const p=path.join(dir,name+'.js');fs.writeFileSync(p,code);return p;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'menu-refresh-browser-'));
- const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';import{CartProvider}from'@/context/cart-context';import{MenuHeader}from'@/components/layout/menu-header';import{DeliveryPriceProvider}from'@/context/delivery-price-context';import{MenuClient}from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
+ const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';import{CartProvider}from'@/context/cart-context';import{StorefrontV2Provider}from'@/context/storefront-v2-context';import{MenuHeader}from'@/components/layout/menu-header';import{DeliveryPriceProvider}from'@/context/delivery-price-context';import{MenuClient}from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
  const brand=${JSON.stringify(brand)},location=${JSON.stringify(location)};const q=new URLSearchParams(window.location.search);if(q.has('other'))brand.slug='other';if(q.has('pickupOnly'))location.deliveryTypes=['pickup'];const mode=q.get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(<div data-commerce-root data-brand-slug={brand.slug}><CartProvider><DeliveryPriceProvider managed={q.has('managed')}><MenuHeader brand={brand} initialLocation={location} initialNow={Date.now()}/><main><MenuClient brand={brand} location={location} initialDeliveryType={mode} initialCategories={${JSON.stringify(categories)}} initialProducts={${JSON.stringify(products)}} initialActiveCombos={[]} initialActiveStandardDiscounts={[]}/></main></DeliveryPriceProvider></CartProvider></div>);`);
+ createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={q.has('v2')}><div data-commerce-root data-brand-slug={brand.slug} data-storefront-version={q.has('v2')?'2':undefined}><CartProvider><DeliveryPriceProvider managed={q.has('managed')}><MenuHeader brand={brand} initialLocation={location} initialNow={Date.now()}/><main><MenuClient brand={brand} location={location} initialDeliveryType={mode} initialCategories={${JSON.stringify(categories)}} initialProducts={${JSON.stringify(products)}} initialActiveCombos={[]} initialActiveStandardDiscounts={[]}/></main></DeliveryPriceProvider></CartProvider></div></StorefrontV2Provider>);`);
  const aliases={
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'fixture'});`),
   '@/components/feedback/public-reviews-link':file('reviews','export const PublicReviewsLink=()=>null;'),
@@ -29,7 +29,7 @@ before(async()=>{
  };
  const loader=file('loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/menu-refresh-browser-.*\.js$/,use:[loader]}]}}).run((e,s)=>e?reject(e):s.hasErrors()?reject(Error(s.toString({all:false,errors:true}))):resolve()));
- const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync('src/app/globals.css','utf8'),{from:undefined})).css+'\n'+fs.readFileSync('src/styles/commerce-ui.css','utf8');
+ const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync('src/app/globals.css','utf8'),{from:undefined})).css+'\n'+fs.readFileSync('src/styles/commerce-ui.css','utf8')+'\n'+fs.readFileSync('src/styles/storefront-v2.css','utf8')+'\n'+fs.readFileSync('src/styles/storefront-v2-checkout.css','utf8')+'\n'+fs.readFileSync('src/components/product/product-dialog-v2.css','utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname.endsWith('.js')){const p=path.join(dir,path.basename(url.pathname));if(fs.existsSync(p)){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(fs.readFileSync(p));}}
@@ -77,4 +77,81 @@ test('search empty state and keyboard reset, fulfillment labels, minimum and che
 test('pickup-only and other-brand boundary',async t=>{
  const page=await setup(t,390,'&pickupOnly');assert.equal(await page.getByRole('button',{name:'Levering',exact:true}).isEnabled(),false);
  await page.goto(origin+'/other/amager?deliveryMethod=pickup&other');await page.getByRole('button',{name:'Afhentning',exact:true}).waitFor();assert.equal(await page.locator('[data-menu-refresh],[data-menu-hero]').count(),0);assert.doesNotMatch(await page.getByRole('heading',{level:1}).evaluate(e=>getComputedStyle(e).fontFamily),/Esmeralda Inter/);
+});
+
+// V2 uses the same production components and cart. Catalog and images here are
+// synthetic fixtures, so these screenshots establish layout, not catalog accuracy.
+for(const width of [320,390,1280])test(`V2 compact menu and product-to-cart geometry (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2');
+ const screenshotDir=process.env.V2_DESIGN_SCREENSHOT_DIR||dir;
+ fs.mkdirSync(screenshotDir,{recursive:true});
+ const take=async name=>page.screenshot({path:path.join(screenshotDir,`v2-${name}-${width}.png`),fullPage:false});
+ const noOverflow=async()=>assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal document overflow');
+ await noOverflow();
+ const header=page.locator('[data-storefront-header]');
+ const firstProduct=page.locator('[data-v2-product-card]').first();
+ await firstProduct.waitFor();
+ assert.ok((await firstProduct.boundingBox()).y<600,'menu products appear without a large restaurant hero');
+ assert.equal(await page.locator('[data-menu-hero]:visible').count(),0,'V2 removes the legacy restaurant hero');
+ const add=page.getByRole('button',{name:'Tilføj Margherita',exact:true});
+ assert.equal(await add.innerText(),'Tilføj');
+ assert.ok(parseFloat(await add.evaluate(el=>getComputedStyle(el).borderRadius))<=10,'rectangular Add action');
+ await take('menu');
+ await add.click();
+ const product=page.getByRole('dialog');await product.getByRole('heading',{name:'Margherita',exact:true}).waitFor();
+ await product.getByRole('button',{name:/Læg i kurv|Tilføj til kurv/}).click();
+ await product.waitFor({state:'hidden'});
+ if(width>=1024){
+  const sidebar=page.getByRole('complementary',{name:'Din kurv'});
+  await sidebar.getByRole('heading',{name:'Margherita',exact:true}).waitFor();
+  assert.equal(await sidebar.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'desktop cart has no horizontal overflow');
+  await take('cart');
+  await sidebar.getByRole('button',{name:'Tilføj én Margherita',exact:true}).click();
+  await page.reload();await sidebar.getByRole('heading',{name:'Margherita',exact:true}).waitFor();
+  await noOverflow();return;
+ }
+ const cartButton=page.locator('[data-v2-cart-bar]');
+ await cartButton.waitFor();
+ await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+ const bar=await cartButton.boundingBox();assert.ok(bar.y>=0&&bar.y+bar.height<=901,'cart action remains within viewport after scrolling');
+ await noOverflow();await take('menu-scrolled');
+ await cartButton.click();
+ const cart=page.getByRole('dialog');await cart.getByRole('heading',{name:'Din kurv',exact:true}).waitFor();
+ // Radix's entrance animation can still be translating the sheet after its
+ // heading is visible. Wait for final geometry, then enforce full-height layout.
+ await page.waitForFunction(()=>{const el=document.querySelector('[data-commerce-panel="cart"][data-state="open"]');if(!el)return false;const box=el.getBoundingClientRect();return box.y<=1&&box.height>=innerHeight-1;},null,{timeout:2000});
+ const cartBox=await cart.boundingBox();assert.ok(cartBox.y<=1&&cartBox.height>=899,`V2 cart fills mobile viewport: ${JSON.stringify(cartBox)}`);
+ assert.equal(await cart.getByRole('heading',{name:'Margherita',exact:true}).count(),1);
+ assert.equal(await cart.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'cart panel has no horizontal overflow');
+ const checkout=cart.getByRole('button',{name:/Til kassen|Gå til checkout|Gå til betaling/});
+ await checkout.waitFor();
+ const cta=await checkout.boundingBox();assert.ok(cta.y>=0&&cta.y+cta.height<=901,'cart checkout action remains in viewport');
+ await take('cart');
+ await cart.getByRole('button',{name:'Tilføj én Margherita',exact:true}).click();
+ assert.equal(await cart.getByRole('heading',{name:'Margherita',exact:true}).count(),1);
+ await cart.getByRole('button',{name:'Tilføj flere retter',exact:true}).click();
+ await cart.waitFor({state:'hidden'});
+ await page.reload();
+ await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
+ const restored=width<1024?page.locator('[data-v2-cart-bar]'):header.getByRole('button',{name:'Se kurv · 2',exact:true});
+ await restored.waitFor();assert.match(await restored.innerText(),/Se kurv · 2/,'basket survives refresh');
+});
+
+test('V2 retains restaurant information, delivery context and searchable menu',async t=>{
+ const page=await setup(t,390,'&v2&managed');
+ const info=page.getByRole('button',{name:'Restaurantoplysninger',exact:true});
+ await info.click();
+ assert.equal(await info.getAttribute('aria-expanded'),'true');
+ await page.getByRole('region',{name:'Lokationsoplysninger'}).getByRole('link',{name:/Albaniensgade 6/}).waitFor();
+ await info.click();
+ assert.equal(await page.getByRole('region',{name:'Lokationsoplysninger'}).count(),0);
+ await page.getByRole('button',{name:'Levering',exact:true}).click();
+ await page.getByText('Leveringspris beregnes i kassen',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Afhentning',exact:true}).click();
+ assert.equal(await page.getByText('Leveringspris beregnes i kassen',{exact:true}).count(),0);
+ const search=page.getByRole('searchbox',{name:'Søg i menuen'});
+ await search.fill('nothingmatches');
+ await page.getByRole('status').filter({hasText:'Ingen varer matcher'}).waitFor();
+ await page.getByRole('button',{name:'Ryd menusøgning'}).click();
+ await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
 });

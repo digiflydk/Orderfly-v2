@@ -98,7 +98,7 @@ before(async()=>{
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},surface):surface;
- createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},content):content))));
+ createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
  const aliases={
@@ -144,7 +144,8 @@ before(async()=>{
    return res.end(JSON.stringify({success:true,url:origin+'/stripe?case='+key,orderId:'ORD-TEST'}));
   }
   if(url.pathname==='/stripe')return res.end('Hosted payment fixture');
-  if(url.pathname==='/image.png'){res.statusCode=204;return res.end();}
+  if(url.pathname==='/fonts/inter/inter-latin-wght-normal.woff2'){res.setHeader('Content-Type','font/woff2');return res.end(fs.readFileSync(path.join(root,'public/fonts/inter/inter-latin-wght-normal.woff2')));}
+  if(url.pathname==='/image.png'){res.setHeader('Content-Type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#303532"/><circle cx="80" cy="80" r="66" fill="#c7954e"/><circle cx="80" cy="80" r="57" fill="#b1462a"/><circle cx="80" cy="80" r="51" fill="#e5bd67"/><g fill="#9b3425"><circle cx="55" cy="53" r="12"/><circle cx="101" cy="51" r="12"/><circle cx="80" cy="87" r="12"/><circle cx="49" cy="106" r="12"/><circle cx="112" cy="104" r="12"/></g></svg>');}
   res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><div id="root"></div><script src="/bundle.js"></script>');
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
@@ -159,12 +160,12 @@ async function setup(t,scenario,email='test@example.test'){
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
  if(scenario==='managed-future')await page.clock.setFixedTime(new Date('2026-10-27T22:00:00.000Z'));
  await page.goto(origin+'/?case='+scenario);
- await page.getByPlaceholder('John Doe',{exact:true}).waitFor().catch(async error=>{
+ await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast dit navn':'John Doe',{exact:true}).waitFor().catch(async error=>{
   t.diagnostic(JSON.stringify({body:await page.locator('body').innerText(),errors}));throw error;
  });
- await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer');
- await page.getByPlaceholder('john@example.com',{exact:true}).fill(email);
- await page.getByPlaceholder('+123456789',{exact:true}).fill('12345678');
+ await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast dit navn':'John Doe',{exact:true}).fill('Test Customer');
+ await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast e-mail':'john@example.com',{exact:true}).fill(email);
+ await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast mobilnummer':'+123456789',{exact:true}).fill('12345678');
  await page.locator('.commerce-terms').getByRole('checkbox').first().check();
  return page;
 }
@@ -571,8 +572,8 @@ test('V2 mobile checkout has no payment selector and hands online payment to hos
  await expect(page.getByText('Betal ved afhentning',{exact:true})).toHaveCount(0);
  const button=page.getByRole('button',{name:/Gå til betaling/}).last();
  await expect(button).toBeVisible();
- await expect(button).toHaveCSS('background-color','rgb(213, 176, 98)');
- await expect(page.locator('form[data-storefront-version="2"]')).toHaveCSS('background-color','rgb(23, 22, 20)');
+ await expect(button).toHaveCSS('background-color','rgb(232, 191, 105)');
+ await expect(page.locator('form[data-storefront-version="2"]')).toHaveCSS('background-color','rgb(17, 20, 19)');
  await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
  const box=await button.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=900,'payment CTA stays in viewport');
  await pay(page);await page.waitForURL('**/stripe?*');
@@ -581,7 +582,7 @@ test('V2 mobile checkout has no payment selector and hands online payment to hos
 });
 test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
  const page=await setup(t,'v2-invalid-mobile');
- await page.getByPlaceholder('john@example.com').fill('invalid');await pay(page);
+ await page.getByPlaceholder('Indtast e-mail').fill('invalid');await pay(page);
  await expect(page.getByText('Indtast en gyldig e-mailadresse',{exact:true})).toBeVisible();
  await expect(page.getByRole('alert').filter({visible:true})).toContainText('Kontrollér de markerede felter');
  assert.equal(requests.has('v2-invalid-mobile'),false);
@@ -593,4 +594,20 @@ test('V2 never silently enables online payment when merchant disables it',async 
  await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
  await page.locator('form').evaluate(form=>form.requestSubmit());
  await page.waitForTimeout(100);assert.equal(requests.has('v2-offline-mobile'),false);
+});
+
+for (const width of [320,390]) test(`V2 checkout layout keeps the payment action visible and contact fields readable at ${width}px`,async t=>{
+ const page=await setup(t,'v2-layout-mobile-'+width);await page.setViewportSize({width,height:844});
+ await page.evaluate(()=>window.scrollTo(0,0));await page.mouse.move(0,0);
+ await expect(page.getByRole('heading',{name:'Checkout',exact:true})).toBeVisible();
+ const cta=page.locator('.commerce-checkout-bar button[type="submit"]');
+ const initial=await cta.boundingBox();assert.ok(initial.x>=12&&initial.x+initial.width<=width-12);
+ assert.ok(initial.y>=0&&initial.y+initial.height<=844);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'checkout has no horizontal overflow');
+ assert.ok(await page.getByPlaceholder('Indtast dit navn').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16),'contact input avoids mobile zoom');
+ if(process.env.CHECKOUT_SCREENSHOT_DIR){fs.mkdirSync(process.env.CHECKOUT_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.CHECKOUT_SCREENSHOT_DIR,`checkout-${width}-initial.png`)});}
+ await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+ const scrolled=await cta.boundingBox();assert.equal(scrolled.y,initial.y);
+ if(process.env.CHECKOUT_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.CHECKOUT_SCREENSHOT_DIR,`checkout-${width}-scrolled.png`)});
+ assert.equal(requests.has('v2-layout-mobile-'+width),false,'visual check creates no payment');
 });
