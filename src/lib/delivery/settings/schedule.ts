@@ -15,3 +15,9 @@ export function deliveryScheduleAt(input: DeliverySettings, instant: Date): { op
   const open = ranges.some(range => minute >= range.startMinute && minute < range.endMinute);
   return { open, reason: open ? 'open' : 'closed', localDate };
 }
+
+/** Recheck the planned pickup and any supplier-provided pickup estimate together. */
+export function deliveryPickupWindowAllows(settings: DeliverySettings, readyAt: string, pickupInterval: {earliest:string;latest:string} | null = null): boolean {
+  const instants = pickupInterval ? [readyAt, pickupInterval.earliest, pickupInterval.latest] : [readyAt];
+  return instants.every(at => deliveryScheduleAt(settings, new Date(at)).open);
+}

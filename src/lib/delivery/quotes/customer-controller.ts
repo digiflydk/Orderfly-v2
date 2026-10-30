@@ -1,4 +1,5 @@
 import {deliveryPreparationMinutes,deliveryKitchenOpenAt,resolveDeliveryKitchenReadyTime} from '@/lib/fulfillment-time';
+import {resolveManagedFulfillmentTime,MANAGED_DELIVERY_TRANSPORT_MINUTES} from '../public-schedule';
 import {deliveryScheduleAt} from '../settings/schedule';
 import {normalizeDeliveryPhone} from './phone';
 import type {QuoteTrace} from './diagnostic-schema';
@@ -26,15 +27,19 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  ]);
  if(!result.settings.enabled||result.settings.paused||!result.settings.providerId)throw Error('delivery_disabled');
  const now=new Date(),scheduled=!!input.deliverySelection&&input.deliverySelection!=='asap';
- if(!scheduled&&(!deliveryKitchenOpenAt(location,now)||!deliveryScheduleAt(result.settings,now).open))throw Error('delivery_kitchen_closed');
+ if(!preservedReadyAt&&!scheduled&&!deliveryKitchenOpenAt(location,now))throw Error('delivery_kitchen_closed');
  const preparationMinutes=deliveryPreparationMinutes(location,result.settings.preparationMinutes);
- const readyAt=preservedReadyAt??resolveDeliveryKitchenReadyTime(location,now,result.settings.preparationMinutes);
+ // The chosen customer arrival is distinct from the courier pickup window.
+ // Preserve the accepted pickup instant when revalidating payment; never add
+ // preparation again or shift a quoted request as the clock advances.
+ const readyAt=preservedReadyAt??(scheduled?new Date(Date.parse(resolveManagedFulfillmentTime(location,'delivery',input.deliverySelection!,now,result.settings))-MANAGED_DELIVERY_TRANSPORT_MINUTES*60000).toISOString():resolveDeliveryKitchenReadyTime(location,now,result.settings.preparationMinutes));
+ if(!deliveryScheduleAt(result.settings,new Date(readyAt)).open)throw Error('delivery_kitchen_closed');
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
  const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
  const key=checkoutKeyHash(input.checkoutKey);
  if(!runtimeEnvironment)throw Error('delivery_environment_unconfigured');
  if(expectedEnvironment!==undefined&&runtimeEnvironment!==expectedEnvironment)throw Error('delivery_environment_changed');
- const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment,preparationMinutes,kitchenHours:location.openingHours,items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
+ const cartDigest=quoteContentDigest(JSON.parse(JSON.stringify({runtimeEnvironment,preparationMinutes,kitchenHours:location.openingHours,pickupSchedule:{mode:result.settings.scheduleMode,weeklyHours:result.settings.weeklyHours,exceptions:result.settings.exceptions,openingOffset:result.settings.pickupOpeningOffsetMinutes,closingOffset:result.settings.pickupClosingOffsetMinutes},items:input.cartItems,itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),
    bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0),discount:input.payment.cartDiscountTotal||0,
    customer:{name:customer.name,email:customer.email.trim().toLowerCase(),phone:normalizeDeliveryPhone(customer.phone),deliveryInstructions:customer.deliveryInstructions||'',subscribeToNewsletter:customer.subscribeToNewsletter,subscribeToClub:!!customer.subscribeToClub},selection:input.deliverySelection,freeDeliveryCampaignIds:input.freeDeliveryCampaignIds})));
  const binding={brandId:brand.id,locationId:location.id,checkoutReference:key,providerId:result.settings.providerId,

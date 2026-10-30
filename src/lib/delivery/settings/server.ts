@@ -1,5 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
+import type { Location } from '@/types';
+import { resolveRestaurantDeliverySchedule } from './restaurant-schedule';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { AuthorityError, principalKey } from '@/lib/access/authority';
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
@@ -38,7 +40,13 @@ export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Tr
   const local = localSnapshot?.exists ? locationRecord.safeParse(localSnapshot.data()) : null;
   if (local && (!local.success || local.data.brandId !== brandId || local.data.locationId !== locationId)) return unavailable();
   const overrides = local?.success ? local.data.overrides : {};
-  return { refs, result: { brandId, locationId, brandRevision, revision: local?.success ? local.data.revision : 0, brandSettings: settings, ...resolveDeliverySettings(settings, overrides), overrides, editable: false } };
+  const resolved = resolveDeliverySettings(settings, overrides);
+  if (resolved.settings.scheduleMode === 'restaurant') {
+    const location = await tx.get(getAdminDb().collection('locations').doc(locationId!));
+    if (!location.exists || location.data()?.brandId !== brandId) return unavailable();
+    resolved.settings = resolveRestaurantDeliverySchedule(resolved.settings, location.data()?.openingHours as Location['openingHours']);
+  }
+  return { refs, result: { brandId, locationId, brandRevision, revision: local?.success ? local.data.revision : 0, brandSettings: settings, ...resolved, overrides, editable: false } };
 }
 export async function readDeliverySettings(input: unknown): Promise<DeliverySettingsResponse> {
   const identity = await verifiedOrderflyIdentity();
@@ -71,6 +79,11 @@ export async function writeDeliverySettings(input: unknown): Promise<DeliverySet
       const brandSnapshot = await tx.get(refs.brand);
       const brand = brandSnapshot.exists ? brandRecord.parse(brandSnapshot.data()).settings : defaultDeliverySettings();
       effective = resolveDeliverySettings(brand, command.overrides);
+      if (effective.settings.scheduleMode === 'restaurant') {
+        const location = await tx.get(getAdminDb().collection('locations').doc(command.locationId));
+        if (!location.exists || location.data()?.brandId !== command.brandId) return unavailable();
+        effective.settings = resolveRestaurantDeliverySchedule(effective.settings, location.data()?.openingHours as Location['openingHours']);
+      }
     }
     tx.create(auditRef, { ...record, action: 'delivery.settings.update', actorId: principalKey(identity), previousRevision: result.revision, brandRevision: result.brandRevision, createdAt: getAdminFieldValue().serverTimestamp() });
     if (result.revision === 0) tx.create(ref, record); else tx.set(ref, record);

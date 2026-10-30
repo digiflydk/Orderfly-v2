@@ -699,7 +699,8 @@ async function executeManagedDeliveryQuote(input: {
     trace('pricing');
     const priced=await measureQuoteStep('pricing',()=>resolveAuthoritativeCheckoutPricing({...input,brand,location,deliveryType:'delivery',enforceLegacyDeliveryMinimum:false}));
     trace('time');
-    if(input.deliveryTime && input.deliveryTime!=='asap')resolveFulfillmentTime({...location,delivery_time:MANAGED_DELIVERY_TRANSPORT_MINUTES},'delivery',input.deliveryTime);
+    // Managed customer arrival is validated against the authoritative courier
+    // pickup schedule by the controller, including arrivals after kitchen close.
     const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
       subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
     if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
@@ -772,7 +773,7 @@ export async function createStripeCheckoutSessionAction(
     }
     
     if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
-    let fulfillmentAt = resolveFulfillmentTime(managedDeliveryAcceptance ? {...location,delivery_time:MANAGED_DELIVERY_TRANSPORT_MINUTES} : location, deliveryType, deliveryTime);
+    let fulfillmentAt = managedDeliveryAcceptance ? '' : resolveFulfillmentTime(location, deliveryType, deliveryTime);
     const priced = await resolveAuthoritativeCheckoutPricing({cartItems,customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId,enforceLegacyDeliveryMinimum:!managedDeliveryAcceptance});
     cartItems=priced.cartItems;
     const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,appliedDiscountIdForOrder,
@@ -790,7 +791,7 @@ export async function createStripeCheckoutSessionAction(
       serverPaymentDetails.deliveryFee=managedQuote.economics.customerFee.amountMinor/100;
       serverPaymentDetails.vatAmount=money(totalAmount*((brand.vatPercentage??25)/(100+(brand.vatPercentage??25))));
       if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet udløber snart. Beregn levering igen.');
-      fulfillmentAt=managedQuote.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:managedDraft.binding.fulfillmentAt;
+      fulfillmentAt=managedDraft.binding.fulfillmentAt;
     }
 
     // Modern checkout always sends the displayed cart discount (including zero).

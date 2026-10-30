@@ -17,4 +17,18 @@ test('service composes trusted address route, hours, provider and immutable pric
 test('closed, missing routing, scope/address mismatch and outside coverage never call quote provider',async()=>{for(const [mutate,reason] of [[f=>f.input.settings.paused=true,'paused'],[f=>f.deps.routing=null,'routing_unconfigured'],[f=>f.input.binding.brandId='foreign','scope_mismatch'],[f=>f.input.fulfillment.dropoff={...f.input.fulfillment.dropoff,building:'2'},'scope_mismatch'],[f=>f.deps.areaAllows=()=>false,'outside_area']]){const f=fixture();mutate(f);assert.equal((await quoteDelivery(f.input,f.deps)).reason,reason);assert.equal(f.calls(),0);}});
 test('provider unavailable, wrong provider, unknown tax and expired quotes cannot be accepted',async()=>{for(const [mutate,reason] of [[f=>f.deps.provider.quote=async()=>({kind:'unavailable',reason:'capacity'}),'provider_capacity'],[f=>f.available.providerId='other','provider_mismatch'],[f=>f.available.cost.taxBasis='unknown','incompatible_money'],[f=>f.available.expiresAt=at,'quote_unavailable'],[f=>f.available.cost.amountMinor=99999,'caps_conflict']]){const f=fixture();mutate(f);assert.equal((await quoteDelivery(f.input,f.deps)).reason,reason);}});
 test('provider TTL limits local TTL and route staleness after network call rejects',async()=>{const f=fixture();f.available.expiresAt='2026-10-25T12:00:30Z';assert.equal((await quoteDelivery(f.input,f.deps)).quote.expiresAtMs,Date.parse(at)+30000);let tick=0;f.deps.now=()=>new Date(Date.parse(at)+(tick++<2?0:61000));assert.equal((await quoteDelivery(f.input,f.deps)).reason,'stale_route');});
-test('scheduled coverage uses target delivery hours independently from kitchen readiness day',async()=>{const f=fixture();f.input.settings.exceptions=[{date:'2026-10-25',intervals:[]}];const target='2026-10-26T12:00:00Z';f.input.fulfillment.desiredDelivery={kind:'scheduled',interval:{earliest:target,latest:target}};assert.equal((await quoteDelivery(f.input,f.deps)).ok,true);f.input.settings.exceptions.push({date:'2026-10-26',intervals:[]});const before=f.calls();assert.equal((await quoteDelivery(f.input,f.deps)).reason,'closed');assert.equal(f.calls(),before);f.input.fulfillment.desiredDelivery={kind:'asap'};assert.equal((await quoteDelivery(f.input,f.deps)).reason,'closed');assert.equal(f.calls(),before);});
+test('scheduled coverage constrains pickup while allowing customer arrival after pickup closing',async()=>{
+ const f=fixture();f.input.settings.scheduleMode='manual';
+ f.input.settings.weeklyHours.forEach(row=>row.intervals=[{startMinute:660,endMinute:1301}]);
+ const pickup='2026-10-25T20:40:00Z',target='2026-10-25T21:10:00Z';
+ f.input.binding.fulfillmentAt=pickup;f.input.fulfillment.readyAt=pickup;
+ f.input.fulfillment.desiredDelivery={kind:'scheduled',interval:{earliest:target,latest:target}};
+ assert.equal((await quoteDelivery(f.input,f.deps)).ok,true);
+ f.input.settings.exceptions=[{date:'2026-10-25',intervals:[]}];const before=f.calls();
+ assert.equal((await quoteDelivery(f.input,f.deps)).reason,'closed');assert.equal(f.calls(),before);
+});
+test('provider pickup estimate outside the effective pickup window rejects the quote',async()=>{
+ const f=fixture();f.input.settings.weeklyHours.forEach(row=>row.intervals=[{startMinute:660,endMinute:1301}]);
+ f.available.pickupInterval={earliest:'2026-10-25T20:45:00Z',latest:'2026-10-25T20:50:00Z'};
+ assert.equal((await quoteDelivery(f.input,f.deps)).reason,'unsupported_schedule');
+});

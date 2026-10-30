@@ -100,7 +100,7 @@ before(async()=>{
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const scenario=new URLSearchParams(window.location.search).get('case')||'';
- const schedule=scenario.startsWith('managed-schedule-')?{enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(scenario==='managed-schedule-closed'?3:5)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[]}:null;
+ const schedule=scenario.startsWith('managed-schedule-')?{...(scenario==='managed-schedule-inherited'?{}:{scheduleMode:'manual'}),enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(scenario!=='managed-schedule-valid'?3:5)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[]}:null;
  const scheduledSurface=React.createElement(DeliveryPriceProvider,{managed:scenario.startsWith('managed-'),schedule},surface);
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},scheduledSurface):scheduledSurface;
  createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
@@ -686,4 +686,12 @@ test('email benefit preview serializes stale lookups and coalesces latest contac
  await page.evaluate(()=>window.cardPreviewRequests[0].resolve());await expect.poll(()=>page.evaluate(()=>window.cardPreviewCalls.length)).toBe(2);assert.deepEqual(await page.evaluate(()=>window.cardPreviewCalls),['first@example.test','latest@example.test']);await expect(page.locator('[data-discount-card-offer]')).toHaveCount(0);
  await page.evaluate(()=>window.cardPreviewRequests[1].resolve());await expect(page.locator('[data-discount-card-offer]')).toContainText('latest@example.test');await page.clock.runFor(400);assert.equal(await page.evaluate(()=>window.cardPreviewCalls.length),2);
  await page.evaluate(()=>{window.holdCardPreview=false;window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('focus'));});await page.clock.runFor(300);await expect.poll(()=>page.evaluate(()=>window.cardPreviewCalls.length)).toBe(3);await expect(page.locator('[data-discount-card-offer]')).toContainText('latest@example.test');
+});
+
+test('missing schedule mode inherits restaurant Friday despite old Wednesday-only delivery hours',async t=>{
+ const page=await setup(t,'managed-schedule-inherited');
+ await expect(page.getByText('Forventet levering ca. fre. 30. okt. 11:50',{exact:true})).toBeVisible();
+ await fillDeliveryAddress(page);await quoted(page);
+ assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime),'2026-10-30T10:50:00.000Z');
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeEnabled();
 });

@@ -31,7 +31,7 @@ function quote(){
  const q={version:1,quoteRef:'q1',providerQuoteRef:'native:1',binding:{...scope,checkoutReference:'checkout-1',providerId:'wolt',normalizedAddress:'test',cartDigest:'a'.repeat(64),fulfillmentAt:at,brandRevision:1,locationRevision:0},fingerprint:'',createdAtMs:now,expiresAtMs:now+60000,fulfillment,providerQuote:{kind:'available',providerId:'wolt',quoteRef:'native:1',cost:{...cost,taxMinor:null},surcharges:[],expiresAt:null,pickupInterval:null,pickupEstimateProvenance:null,deliveryInterval:null,distance:route,capabilities},economics:calc.calculateDeliveryPrice({rules,route,itemSubtotalAfterDiscountMinor:10000,providerCost:cost}).snapshot};
  q.fingerprint=binding.quoteFingerprint(q.binding);q.contentDigest=quoteContentDigest(q);return q;
 }
-async function prepared(options={}){const f=fixture(options);f.records.set('deliverySettings/brand',{schemaVersion:1,brandId:'brand',locationId:null,revision:1,settings:{...schema.defaultDeliverySettings(),enabled:true,providerId:'wolt',pricingRules:rules}});return f;}
+async function prepared(options={}){const f=fixture(options);f.records.set('deliverySettings/brand',{schemaVersion:1,brandId:'brand',locationId:null,revision:1,settings:{...schema.defaultDeliverySettings(),enabled:true,providerId:'wolt',pricingRules:rules,scheduleMode:'manual',weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:[{startMinute:0,endMinute:1440}]}))}});return f;}
 const read={brandId:'brand',locationId:'location',quoteRef:'q1'};
 test('immutable trusted create and scoped read; duplicate cannot overwrite',async()=>{
  const f=await prepared();const q=quote();await f.service.createTrustedDeliveryQuote(q);assert.deepEqual(await f.service.readDeliveryQuote(read),q);
@@ -59,4 +59,15 @@ test('changing active settings invalidates existing quote without rewriting it',
 test('self-consistent envelope cannot replace current configured tariff',async()=>{
  const f=await prepared(),q=quote();q.economics.rules.version='unapproved';q.contentDigest=quoteContentDigest(q);
  await assert.rejects(f.service.createTrustedDeliveryQuote(q),/quote_changed/);assert.equal(f.records.has('deliveryQuotes/q1'),false);
+});
+
+test('live inherited location hours revoke a quote without rewriting delivery settings revision',async()=>{
+ const f=await prepared(),settings=f.records.get('deliverySettings/brand').settings;
+ settings.scheduleMode='restaurant';settings.pickupOpeningOffsetMinutes=0;settings.pickupClosingOffsetMinutes=0;
+ const openingHours=Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'00:00',close:'23:59'}]));
+ f.records.get('locations/location').openingHours=openingHours;
+ await f.service.createTrustedDeliveryQuote(quote());
+ Object.values(f.records.get('locations/location').openingHours).forEach(day=>day.isOpen=false);
+ await assert.rejects(f.service.readDeliveryQuote(read),/quote_changed/);
+ assert.equal(f.records.get('deliverySettings/brand').revision,1);
 });

@@ -23,6 +23,7 @@ test('brand and local settings read concurrently within the supplied transaction
  const f=fixture();let releaseBrand,localRead=false;
  const gate=new Promise(resolve=>{releaseBrand=resolve;});
  const tx={get:async ref=>{
+  if(ref.path==='locations/location')return {exists:true,data:()=>({brandId:'brand',openingHours:{}})};
   if(ref.path==='deliverySettings/brand')await gate;
   else {assert.equal(ref.path,'deliverySettings/brand/locations/location');localRead=true;}
   return {exists:false,data:()=>undefined};

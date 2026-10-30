@@ -21,8 +21,8 @@ export async function readPublicManagedDeliverySchedule(scope: { brandId: string
       const adoption = adoptionSchema.parse(marker.data());
       if (adoption.brandId !== parsed.brandId || adoption.locationId !== parsed.locationId) throw Error('delivery_scope_invalid');
       const { result } = await loadDeliverySettingsInTransaction(tx, parsed.brandId, parsed.locationId);
-      const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes } = result.settings;
-      return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes };
+      const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes } = result.settings;
+      return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes };
     });
   } catch { return unavailableManagedDeliverySchedule(); }
 }
