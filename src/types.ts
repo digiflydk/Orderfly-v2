@@ -565,6 +565,8 @@ discountMethod: 'percentage' | 'fixed_amount' | 'buy_x_pay_y' | 'bundle_price' |
  * @description Defines a group of products within a combo menu.
  */
 export type ProductGroup = {
+  /** DKK supplement per selected product, shared across fulfillment modes. */
+  productPriceAdjustments?: Record<string, number>;
   id: string;
   groupName: string;
   productIds: string[];
@@ -590,6 +592,8 @@ export type ComboSelection = {
  * @collection comboMenus
  */
 export type ComboMenu = {
+  /** Merchandising visibility only; absent means both storefront versions. */
+  storefrontVersions?: ('v1' | 'v2')[];
   isTestData?: boolean;
   upgradeProductIds?: string[];
   id: string;

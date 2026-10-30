@@ -2,6 +2,7 @@
 'use client';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { lineMoney, money, sumMoney } from '@/lib/money';
+import { comboMinimumAdjustments } from '@/lib/combo-pricing';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, cartTopping, toppingSelectionError, reconcileToppingQuantities, type EffectiveTopping } from '@/lib/topping-options';
 import { orderPresentedOptions } from '@/lib/option-presentation';
@@ -239,7 +240,9 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     </div>
   );
 
-  if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} preselectedModifiers={isV2 ? Object.values(selectedToppings).map(option => ({id: option.id!, quantity: option.quantity ?? 1})) : undefined} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
+  const availableUpgrades = combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id)) && typeof (deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice) === 'number');
+
+  if (upgrade) return <ComboBuilderDialog onBack={() => setUpgrade(null)} combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} preselectedModifiers={isV2 ? Object.values(selectedToppings).map(option => ({id: option.id!, quantity: option.quantity ?? 1})) : undefined} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); onAdded?.(); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" data-product-options data-v2-product={isV2 ? "true" : undefined} className="p-0 flex flex-col max-w-lg bg-[#FFF8F0]">
@@ -297,14 +300,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     <div className="flex flex-wrap gap-2">{allergens.map(allergen => <Badge key={allergen.id} variant="secondary" className="gap-1.5">{allergen.icon && <DynamicIcon name={allergen.icon} className="h-4 w-4" />}{allergen.allergenName}</Badge>)}</div>
                   </details>}
                   {isV2 && <div className="v2-product-quantity">{quantityControl}</div>}
-                  {combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id))).slice(0,2).map(c => {
+                  {availableUpgrades.map(c => {
                     const price = deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice;
                     if (price === undefined) return null;
-                    const menuPrice = isV2 ? sumMoney([price, toppingsTotal]) : price;
-                    const delta = isV2 ? price - finalPrice : price - finalPrice - toppingsTotal;
-                    return <section className="commerce-inline-offers" key={c.id}>
-                      <h3 className="font-semibold">Gør det til {c.comboName}</h3><p className="text-sm">{c.description || c.productGroups.map(g=>g.groupName).join(' + ')}</p>
-                      <p className="text-sm">{formatPrice(menuPrice)} pr. menu · {delta>=0?`+${formatPrice(delta)}`:`Spar ${formatPrice(-delta)}`} pr. stk.</p>
+                    const minimumPrice = sumMoney([price, comboMinimumAdjustments(c, product.id)]);
+                    const delta = isV2 ? minimumPrice - finalPrice : minimumPrice - finalPrice - toppingsTotal;
+                    return <section id={`${dialogId}-upgrade-${c.id}`} className="commerce-inline-offers" key={c.id}>
+                      <div className="flex gap-3 items-center mb-2">
+                        {isV2 && c.imageUrl && <Image src={safeImage(c.imageUrl)} alt="" width={72} height={72} className="h-[72px] w-[72px] rounded-md object-cover shrink-0" />}
+                        <div><h3 className="font-semibold">Gør det til {c.comboName}</h3><p className="text-sm">{c.description || c.productGroups.map(g=>g.groupName).join(' + ')}</p></div>
+                      </div>
+                      <p className="text-sm">{delta>=0?`Fra +${formatPrice(delta)}`:`Spar op til ${formatPrice(-delta)}`} pr. stk. · Eventuelle ekstra tilvalg tillægges.</p>
                       {!isV2 && Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
                       <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>Vælg menu</Button>
                     </section>;
@@ -313,6 +319,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
             </div>
             <div className="commerce-product-footer shrink-0 border-t bg-inherit px-3 py-3">
               {requiredGroups.length > 0 && <p role="status" aria-label="Valgstatus" className={completedRequiredGroups === requiredGroups.length ? "sr-only" : "mb-2 text-xs text-muted-foreground"}>{completedRequiredGroups} af {requiredGroups.length} påkrævede grupper valgt</p>}
+              {isV2 && availableUpgrades.length > 0 && <Button type="button" variant="outline" className="mb-2 w-full min-h-11 rounded-lg" onClick={() => {
+                if (availableUpgrades.length === 1) setUpgrade(availableUpgrades[0]);
+                else document.getElementById(`${dialogId}-upgrade-${availableUpgrades[0].id}`)?.scrollIntoView({block:'center', behavior:'smooth'});
+              }}>Køb som menu</Button>}
               <div className="flex items-center gap-3">
                 {!isV2 && quantityControl}
                 <Button size="lg" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"

@@ -3,9 +3,10 @@ import { da } from 'date-fns/locale';
 import { calendarDay, calendarDate, promotionDay } from '@/lib/promotion-calendar';
 
 import { z } from 'zod';
+import { comboProductAdjustmentsSchema, validComboAdjustmentKeys } from '@/lib/combo-pricing-schema';
 import { optionalImageUrl } from '@/lib/optional-image-url';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useFormContext, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
@@ -75,6 +76,7 @@ import { Checkbox } from '../ui/checkbox';
 const productGroupSchema = z
   .object({
     id: z.string(),
+    productPriceAdjustments: comboProductAdjustmentsSchema,
     groupName: z
       .string()
       .min(1, 'Group name is required.'),
@@ -90,6 +92,7 @@ const productGroupSchema = z
       .number()
       .min(0, 'Max selection must be 0 or more.'),
   })
+  .refine(validComboAdjustmentKeys, {message: 'Pristillæg skal tilhøre et valgt produkt.', path: ['productPriceAdjustments']})
   .refine(
     data =>
       data.maxSelection === 0 ||
@@ -151,6 +154,7 @@ const comboMenuSchema = z
       .optional()
       .default([]),
     isTestData: z.boolean().default(false),
+    storefrontVersions: z.array(z.enum(['v1', 'v2'])).min(1).optional(),
     upgradeProductIds: z.array(z.string()).default([]),
     productGroups: z
       .array(productGroupSchema)
@@ -234,6 +238,17 @@ function ProductGroupCard({
 }: ProductGroupCardProps) {
   const [categoryFilter, setCategoryFilter] =
     useState<string>('all');
+  const { getValues, setValue } = useFormContext();
+  const selectedIds: string[] = useWatch({control, name: `productGroups.${index}.productIds`}) || [];
+  const selectedIdsKey = JSON.stringify(selectedIds);
+  useEffect(() => {
+    const path = `productGroups.${index}.productPriceAdjustments`;
+    const current = getValues(path) || {};
+    const allowed: string[] = JSON.parse(selectedIdsKey);
+    if (Object.keys(current).some(id => !allowed.includes(id))) {
+      setValue(path, Object.fromEntries(Object.entries(current).filter(([id]) => allowed.includes(id))));
+    }
+  }, [selectedIdsKey, index, getValues, setValue]);
 
   const filteredProducts = useMemo(() => {
     if (categoryFilter === 'all') return brandProducts;
@@ -390,6 +405,18 @@ function ProductGroupCard({
           </FormItem>
         )}
       />
+      {selectedIds.length > 0 && <FormField control={control} name={`productGroups.${index}.productPriceAdjustments`} render={({field}) => (
+        <FormItem className="mt-4">
+          <FormLabel>Pristillæg pr. produkt</FormLabel>
+          <FormDescription>0 kr. er inkluderet i menuprisen. Tillæg gælder både afhentning og levering og lægges til én gang pr. valgt produkt.</FormDescription>
+          {selectedIds.map(id => <label key={id} className="flex items-center justify-between gap-3 py-1 text-sm">
+            <span>{brandProducts.find(product => product.id === id)?.productName || id}</span>
+            <Input aria-label={`Pristillæg for ${brandProducts.find(product => product.id === id)?.productName || id}`} className="w-28" type="number" min="0" max="100000" step="0.01" value={field.value?.[id] ?? 0}
+              onChange={event => field.onChange({...field.value, [id]: event.target.value === '' ? 0 : Number(event.target.value)})} />
+          </label>)}
+          <FormMessage />
+        </FormItem>
+      )} />}
     </Card>
   );
 }
@@ -428,6 +455,7 @@ export function ComboFormPage({
             combo.deliveryPrice ?? undefined,
           productGroups:
             combo.productGroups || [],
+          storefrontVersions: combo.storefrontVersions || ['v1', 'v2'],
           upgradeProductIds: combo.upgradeProductIds || [],
           isTestData: combo.isTestData || false,
           activeTimeSlots:
@@ -446,6 +474,7 @@ export function ComboFormPage({
             { start: '00:00', end: '23:59' },
           ],
           productGroups: [],
+          storefrontVersions: ['v1', 'v2'],
           upgradeProductIds: [],
           isTestData: false,
           tags: [],
@@ -492,7 +521,8 @@ export function ComboFormPage({
           combo.deliveryPrice ?? undefined,
         productGroups:
           combo.productGroups || [],
-        upgradeProductIds: combo.upgradeProductIds || [],
+        storefrontVersions: combo.storefrontVersions || ['v1', 'v2'],
+          upgradeProductIds: combo.upgradeProductIds || [],
           isTestData: combo.isTestData || false,
         activeTimeSlots:
           combo.activeTimeSlots || [],
@@ -988,6 +1018,7 @@ export function ComboFormPage({
 
             <Card>
               <CardHeader>
+                <FormField control={control} name="storefrontVersions" render={({field}) => <div className="space-y-2 rounded-lg border p-4"><FormLabel>Vis menuen på</FormLabel><FormDescription>Styrer synlighed i menukortet og ved menuopgradering. Eksisterende kurve bevares.</FormDescription>{(['v1', 'v2'] as const).map(version => <label key={version} className="flex items-center gap-3"><Checkbox checked={(field.value || ['v1', 'v2']).includes(version)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []), version] : (field.value || []).filter((value: string) => value !== version))} /><span>{version === 'v1' ? 'Eksisterende bestillingsside (V1)' : 'Ny bestillingsside (V2)'}</span></label>)}<FormMessage /></div>} />
                 <FormField control={control} name="isTestData" render={({field})=><label className="flex gap-3 rounded-lg border p-4"><Checkbox checked={field.value===true} onCheckedChange={field.onChange} /><span>Testdata: skjul i den offentlige menu og afvis i checkout</span></label>} />
               <Card><CardHeader><CardTitle>Opgradering fra produkt</CardTitle><CardDescription>Vis denne menu som en opgradering på de valgte produkter. Produktet skal indgå i en af menuens grupper.</CardDescription></CardHeader><CardContent>
                 <FormField control={control} name="upgradeProductIds" render={({field}) => <div className="space-y-2">{Array.from(new Set<string>(watchedProductGroups.flatMap((g: any)=>g.productIds || []))).map(id => <label key={id} className="flex items-center gap-3 p-2"><Checkbox checked={(field.value || []).includes(id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []),id] : (field.value || []).filter((value: string)=>value !== id))} /><span>{brandProducts.find(p=>p.id===id)?.productName || id}</span></label>)}</div>} />

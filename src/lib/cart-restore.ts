@@ -1,3 +1,4 @@
+import { comboSelectionAdjustments } from './combo-pricing';
 import { resolveComboProductModifiers } from './combo-modifiers';
 import { resolveToppingOptions, cartTopping, toppingSelectionError } from './topping-options';
 import { money, sumMoney } from './money';
@@ -22,7 +23,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
     const rawPrice = product ? (scope.deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price)
       : scope.deliveryType === 'delivery' ? combo!.deliveryPrice : combo!.pickupPrice;
     if (typeof rawPrice !== 'number' || !Number.isFinite(rawPrice) || rawPrice < 0) { removed++; continue; }
-    const basePrice = money(rawPrice);
+    let basePrice = money(rawPrice);
     const toppings: CartItem['toppings'] = [];
     const identities = choice.toppingIds;
     let valid = identities
@@ -71,6 +72,10 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
         });
         return { groupId: group.id, groupName: group.groupName, products };
       });
+    }
+    if (combo && valid) {
+      try { basePrice = sumMoney([basePrice, comboSelectionAdjustments(combo, comboSelections || [])]); }
+      catch { valid = false; }
     }
     if (!valid) { removed++; continue; }
     items.push({ ...(choice.upsellId ? {upsellId:choice.upsellId} : {}), id: record.id, cartItemId: choice.cartItemId, itemType: choice.itemType,

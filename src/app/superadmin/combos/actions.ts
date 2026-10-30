@@ -13,6 +13,7 @@ import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/
 import { Timestamp } from 'firebase-admin/firestore';
 import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
+import { comboProductAdjustmentsSchema, validComboAdjustmentKeys } from '@/lib/combo-pricing-schema';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
 import { optionalImageUrl } from '@/lib/optional-image-url';
@@ -21,11 +22,12 @@ import { promotionDate } from '@/lib/promotion-date';
 
 const productGroupSchema = z.object({
   id: z.string(),
+  productPriceAdjustments: comboProductAdjustmentsSchema,
   groupName: z.string().min(1, "Group name is required."),
   productIds: z.array(z.string()).min(1, "Each group must have at least one product."),
   minSelection: z.coerce.number().min(0, "Min selection must be 0 or more."),
   maxSelection: z.coerce.number().min(0, "Max selection must be 0 or more."),
-}).refine(data => data.maxSelection === 0 || data.maxSelection >= data.minSelection, {
+}).refine(validComboAdjustmentKeys, {message: 'Supplements must refer to selected products.', path: ['productPriceAdjustments']}).refine(data => data.maxSelection === 0 || data.maxSelection >= data.minSelection, {
     message: "Max selection must be 0 (for unlimited) or greater than or equal to min selection.",
     path: ["maxSelection"],
 });
@@ -52,6 +54,7 @@ const comboMenuSchema = z.object({
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
     isTestData: z.boolean().optional(),
+    storefrontVersions: z.array(z.enum(['v1', 'v2'])).min(1).optional(),
     upgradeProductIds: z.array(z.string()).max(30).default([]),
     productGroups: z.array(productGroupSchema).min(1, 'At least one product group must be configured.'),
 }).refine(data => data.pickupPrice !== undefined || data.deliveryPrice !== undefined, {
@@ -105,6 +108,7 @@ export async function createOrUpdateCombo(
       orderTypes: formData.getAll('orderTypes'),
       activeDays: formData.getAll('activeDays'),
       tags: formData.getAll('tags'),
+      storefrontVersions: formData.has('storefrontVersions') ? formData.getAll('storefrontVersions') : undefined,
       upgradeProductIds: formData.getAll('upgradeProductIds'),
     };
 

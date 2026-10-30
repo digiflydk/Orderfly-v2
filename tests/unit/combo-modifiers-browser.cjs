@@ -13,10 +13,13 @@ const toppings=[{id:'cheese',groupId:'extras',toppingName:'Ost',price:10,maxQuan
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'tilvalg-storefront-browser-'));
  const entry=file('entry',`import React,{useState}from'react';import{createRoot}from'react-dom/client';
+ import{StorefrontV2Provider}from ${JSON.stringify(path.join(root,'src/context/storefront-v2-context.tsx'))};
  import{ComboBuilderDialog}from ${JSON.stringify(path.join(root,'src/components/product/combo-builder-dialog.tsx'))};
  const product=${JSON.stringify(product)};
- const combo={id:'combo',brandId:'b',comboName:'Testmenu',pickupPrice:100,productGroups:[{id:'main',groupName:'Pizza',productIds:['pizza'],minSelection:1,maxSelection:1}]};
- function App(){const[open,setOpen]=useState(true),[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved);setOpen(true);}}>Rediger gemt</button>{open&&<ComboBuilderDialog combo={combo} brandProducts={[product]} initialItem={initialItem} initialQuantity={2} preselectedProductId={initialItem?undefined:'pizza'} preselectedModifiers={location.search.includes('legacy')?undefined:[{id:'cheese',quantity:2},{id:'onion',quantity:1}]} isOpen={open} setIsOpen={setOpen}/>}</>};createRoot(document.getElementById('root')).render(<App/>);`);
+ const combo={id:'combo',brandId:'b',comboName:'Testmenu',pickupPrice:100,productGroups:[{id:'main',groupName:'Pizza',productIds:['pizza'],minSelection:1,maxSelection:1,productPriceAdjustments:location.search.includes('surcharge')?{pizza:15}:undefined}]};
+ if(location.search.includes('twopizzas'))combo.productGroups.push({id:'second',groupName:'Pizza 2',productIds:['pizza'],minSelection:1,maxSelection:1,productPriceAdjustments:{pizza:15}});
+ if(location.search.includes('optional'))combo.productGroups.push({id:'optional',groupName:'Ekstra pizza',productIds:['pizza'],minSelection:0,maxSelection:1,productPriceAdjustments:{pizza:15}});
+ function App(){const[open,setOpen]=useState(true),[initialItem,setInitialItem]=useState();return <><button onClick={()=>{setInitialItem(window.saved);setOpen(true);}}>Rediger gemt</button>{open&&<ComboBuilderDialog combo={combo} brandProducts={[product]} initialItem={initialItem} initialQuantity={2} preselectedProductId={initialItem?undefined:'pizza'} preselectedModifiers={location.search.includes('legacy')?undefined:[{id:'cheese',quantity:2},{id:'onion',quantity:1}]} isOpen={open} setIsOpen={setOpen}/>}</>};createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={location.search.includes('v2')}><App/></StorefrontV2Provider>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const cart=file('cart',`const value={cartReady:true,deliveryType:'pickup',location:{id:'l'},cartTotal:0,addComboToCart:(combo,quantity,comboSelections,price,expected,toppings)=>{window.saved={id:combo.id,cartItemId:'saved',itemType:'combo',productName:combo.comboName,brandId:combo.brandId,quantity,comboSelections,price,basePrice:price,toppings};return true;}};export const useCart=()=>value;`);
  const aliases={
@@ -77,4 +80,40 @@ test('V1 plain combo ignores paid defaults and product required groups',async t=
  assert.match(await add.innerText(),/200/);await add.click();
  const saved=await page.evaluate(()=>window.saved);assert.deepEqual(saved.toppings,[]);assert.equal(saved.price,100);
  assert.equal(Object.hasOwn(saved.comboSelections[0].products[0],'modifiers'),false);
+});
+
+test('V2 combo surcharge stays separate from modifiers, restores on edit and total remains at bottom',async t=>{
+ const page=await browser.newPage({viewport:{width:320,height:844}});t.after(()=>page.close());await page.goto(origin+'/?v2&surcharge');
+ await page.getByRole('heading',{name:'Tilvalg til Testpizza',exact:true}).waitFor();
+ assert.equal(await page.getByText('+15,00 kr.',{exact:true}).count(),1);
+ assert.equal(await page.locator('.commerce-option-header').getByText('100,00 kr.',{exact:true}).count(),0);
+ await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ const add=page.getByRole('button',{name:/Tilføj til kurv/});assert.match(await add.innerText(),/270/);
+ const bounds=await add.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=845);
+ await add.click();let saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,115);assert.equal(saved.toppings.reduce((n,t)=>n+t.price,0),20);
+ await page.getByRole('button',{name:'Rediger gemt',exact:true}).click();
+ assert.match(await page.getByRole('button',{name:/Gem ændringer/}).innerText(),/270/);
+ await page.getByRole('button',{name:/Gem ændringer/}).click();saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,115);
+});
+
+test('same dish in two combo groups keeps independent modifiers and group surcharges',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());await page.goto(origin+'/?v2&twopizzas');
+ const choices=page.getByRole('region',{name:'Tilvalg til Testpizza',exact:true});await choices.nth(1).waitFor();
+ await choices.nth(0).getByRole('radio',{name:'Vand',exact:true}).check();
+ await choices.nth(1).getByRole('radio',{name:'Cola',exact:true}).check();
+ await page.getByRole('button',{name:/Tilføj til kurv/}).click();
+ const saved=await page.evaluate(()=>window.saved);assert.equal(saved.price,115);assert.equal(saved.comboSelections.length,2);
+ assert.ok(saved.comboSelections[0].products[0].modifiers.some(m=>m.id==='water'));
+ assert.ok(saved.comboSelections[1].products[0].modifiers.some(m=>m.id==='cola'));
+ assert.equal(saved.comboSelections[1].products[0].modifiers.some(m=>m.id==='water'),false);
+});
+test('optional combo group can be cleared without retaining its surcharge',async t=>{
+ const page=await browser.newPage();t.after(()=>page.close());await page.goto(origin+'/?v2&optional');
+ const optional=page.getByRole('region',{name:'Ekstra pizza',exact:true});await optional.waitFor();
+ await optional.getByRole('radio',{name:/Testpizza/}).check();
+ await optional.getByRole('radio',{name:'Ingen tak',exact:true}).check();
+ await page.getByRole('radio',{name:'Vand',exact:true}).check();
+ assert.match(await page.getByRole('button',{name:/Tilføj til kurv/}).innerText(),/240/);
+ await page.getByRole('button',{name:/Tilføj til kurv/}).click();const saved=await page.evaluate(()=>window.saved);
+ assert.equal(saved.price,100);assert.deepEqual(saved.comboSelections.find(g=>g.groupId==='optional').products,[]);
 });

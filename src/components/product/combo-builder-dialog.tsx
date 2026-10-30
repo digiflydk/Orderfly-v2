@@ -7,6 +7,7 @@ import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, reconcileToppingQuantities, cartTopping, type EffectiveTopping } from '@/lib/topping-options';
 import { resolveComboProductModifiers } from '@/lib/combo-modifiers';
 import { money, sumMoney } from '@/lib/money';
+import { comboProductAdjustment, comboSelectionAdjustments } from '@/lib/combo-pricing';
 
 import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
@@ -19,7 +20,7 @@ import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu, Topping, ToppingGroup } from '@/types';
-import { Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus, ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '../ui/badge';
 import {formatPrice} from '@/lib/storefront-format';
@@ -32,6 +33,7 @@ interface ComboBuilderDialogProps {
   preselectedProductId?: string;
   preselectedModifiers?: {id: string; quantity: number}[];
   onSaved?: () => void;
+  onBack?: () => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   brandProducts: ProductForMenu[];
@@ -56,7 +58,7 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
     return "Vælg tilvalg";
 }
 
-export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, preselectedModifiers, onSaved }: ComboBuilderDialogProps) {
+export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, preselectedModifiers, onSaved, onBack }: ComboBuilderDialogProps) {
   const isV2 = useStorefrontV2();
   const configureProducts = isV2 || preselectedModifiers !== undefined || !!initialItem?.comboSelections?.some(g => g.products.some(p => p.modifiers !== undefined));
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
@@ -174,7 +176,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
       if (multi) {
         let newSelection;
         if (checked) {
-          newSelection = [...current, productId];
+          newSelection = Array.from(new Set([...current, productId]));
         } else {
           newSelection = current.filter(id => id !== productId);
         }
@@ -208,8 +210,14 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
     });
   }, [selection, combo.productGroups, brandProducts]);
 
+  const selectionAdjustments = comboSelectionAdjustments(combo, Object.entries(selection).map(([groupId, ids]) => ({
+    groupId, groupName: combo.productGroups.find(g => g.id === groupId)?.groupName || '',
+    products: ids.map(id => ({id, name: ''})),
+  })));
+  const selectedComboPrice = comboPrice === undefined ? undefined : sumMoney([comboPrice, selectionAdjustments]);
+
   const handleAddToCart = () => {
-    if (!cartReady || committed.current || comboPrice === undefined) return;
+    if (!cartReady || committed.current || selectedComboPrice === undefined) return;
     if (!isSelectionValid || !optionsReady || configurations.some(c => !c.resolved)) {
       setShowErrors(true);
       const group = combo.productGroups.find(g => {
@@ -233,24 +241,28 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
         })
       };
     });
-    if (addComboToCart(combo, quantity, comboSelections, comboPrice, initialItem, modifierToppings) === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen.'}); return;}
+    if (addComboToCart(combo, quantity, comboSelections, selectedComboPrice, initialItem, modifierToppings) === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen.'}); return;}
     committed.current = true;
     onSaved?.();
     toast({title: initialItem ? 'Kurven er opdateret' : 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
-    trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money((comboPrice + modifierTotal) * quantity), deliveryType});
+    trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money((selectedComboPrice + modifierTotal) * quantity), deliveryType});
     setIsOpen(false);
   };
   
-  const totalItemPrice = sumMoney([comboPrice || 0, modifierTotal]) * quantity;
+  const totalItemPrice = sumMoney([selectedComboPrice || 0, modifierTotal]) * quantity;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent data-storefront-version={isV2 ? "2" : undefined} data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            {isV2 && <div className="v2-product-topbar">
+              <Button type="button" variant="ghost" size="icon" aria-label={onBack ? 'Tilbage til retten' : 'Tilbage til menu'} onClick={() => onBack ? onBack() : setIsOpen(false)}><ArrowLeft aria-hidden="true" className="h-5 w-5" /></Button>
+              <span>SAMMENSÆT DIN MENU</span>
+            </div>}
             <ScrollArea className="flex-1">
                 <div className="commerce-option-header">
                   <div className="commerce-option-image"><Image src={safeImage(combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
-                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription><p className="font-semibold">{formatPrice(comboPrice || 0)}</p></DialogHeader>
+                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription>{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
                 </div>
                 <div className="p-4 space-y-3">
                     {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
@@ -267,15 +279,17 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                             <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
                             <p className="text-sm text-muted-foreground">{Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
                         </div>
+                        {showErrors && currentSelection.length < Number(group.minSelection) && <p role="alert" className="text-sm text-destructive">{getSelectionText(group)} fra {group.groupName}.</p>}
                         <div className="space-y-0">
                         {isSingleSelect ? (
-                            <RadioGroup className="gap-0" value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
+                            <RadioGroup className="gap-0" value={currentSelection[0] || (Number(group.minSelection)===0 ? '__none' : '')} onValueChange={(val) => val === '__none' ? setSelection(previous => ({...previous,[group.id]:[]})) : handleSelectionChange(group.id, val, false)}>
                                 {productsInGroup.map(p => (
                                 <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                     <RadioGroupItem value={p.id} id={`${dialogId}-${group.id}-${p.id}`} />
-                                    <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>
+                                    <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                                 ))}
+                            {Number(group.minSelection)===0 && <label className="flex items-center gap-3 min-h-11 px-2 cursor-pointer"><RadioGroupItem value="__none" />Ingen tak</label>}
                             </RadioGroup>
                         ) : (
                             productsInGroup.map(p => {
@@ -289,7 +303,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>
+                                <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                             )
                             })
@@ -318,7 +332,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     })}
             </div>
             </ScrollArea>
-            <div className="w-full mt-auto sticky bottom-0">
+            <div className="commerce-combo-footer w-full shrink-0 mt-auto sticky bottom-0">
                 <div className="commerce-option-quantity flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"

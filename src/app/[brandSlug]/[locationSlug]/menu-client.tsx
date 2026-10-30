@@ -12,6 +12,7 @@ import type {
   TimeSlotResponse,
 } from '@/types';
 import { useCart } from '@/context/cart-context';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { comboEligible, comboProductsAvailable } from '@/lib/combo-eligibility';
 import { searchMenu, type DisplayProduct } from '@/lib/menu-display';
 import { DesktopCart } from '@/components/cart/desktop-cart';
@@ -51,6 +52,7 @@ export function MenuClient({
   initialActiveCombos,
   initialActiveStandardDiscounts,
 }: MenuClientProps) {
+  const isV2 = useStorefrontV2();
   const { setCartContext, deliveryType, itemCount, standardDiscounts, cartReady } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
   const [toolbarSlots, setToolbarSlots] = useState<{controls: Element; cart: Element} | null>(null);
@@ -79,9 +81,10 @@ export function MenuClient({
   const activeStandardDiscounts = cartReady ? standardDiscounts : deliveryType === initialDeliveryType || !deliveryType ? initialActiveStandardDiscounts : [];
   const mode = deliveryType || initialDeliveryType;
   const activeCombos = useMemo(() => initialActiveCombos.filter(combo =>
+    (!combo.storefrontVersions?.length || combo.storefrontVersions.includes(isV2 ? 'v2' : 'v1')) &&
     comboProductsAvailable(combo, initialProducts) &&
     comboEligible(combo, {brandId: brand.id, locationId: location.id, deliveryType: mode, now})
-  ), [initialActiveCombos, initialProducts, brand.id, location.id, mode, now]);
+  ), [initialActiveCombos, initialProducts, brand.id, location.id, mode, now, isV2]);
   const visibleProducts = useMemo(() => searchMenu(initialProducts, search), [initialProducts, search]);
   const visibleCombos = useMemo(() => searchMenu(activeCombos, search), [activeCombos, search]);
   const visibleCategories = initialCategories.filter(c => c.id === 'offers' || visibleProducts.some(p => (p.displayCategoryId || p.categoryId) === c.id));

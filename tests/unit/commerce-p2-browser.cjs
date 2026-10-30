@@ -44,7 +44,7 @@ before(async()=>{
  if(new URLSearchParams(window.location.search).get('upsell')==='required')products[0].toppingGroupIds=['required'];
  const capGroups=${JSON.stringify(capGroups)},capToppings=${JSON.stringify(capToppings)};
  const capProduct={...products[0],id:'cap-product',productName:'Cap Product',toppingGroupIds:capGroups.map(group=>group.id)};
- function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[],comboModifiers:cart.cartItems[0]?.comboSelections?.flatMap(group=>group.products.flatMap(product=>product.modifiers||[]))||[]})}</pre>;}
+ function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,firstItemTotal:cart.cartItems[0]?.itemTotal,firstItemQuantity:cart.cartItems[0]?.quantity,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[],comboModifiers:cart.cartItems[0]?.comboSelections?.flatMap(group=>group.products.flatMap(product=>product.modifiers||[]))||[]})}</pre>;}
  const conditionalGroups=['size','regular','family','drink'].map(id=>({id,locationIds:['l'],groupName:id,minSelection:id==='size'||id==='drink'?1:0,maxSelection:1}));
  const conditionalToppings=[['alm','size',0],['fam','size',60],['menu','size',30],['cheese','regular',10],['family-cheese','family',20],['cola','drink',0]].map(([id,groupId,price])=>({id,groupId,price,toppingName:id,isActive:true,locationIds:['l'],isDefault:id==='alm'||id==='cola'}));
  const conditionalProduct={...products[0],toppingGroupIds:conditionalGroups.map(g=>g.id),toppingGroupConditions:{regular:['alm'],family:['fam'],drink:['menu']}};
@@ -625,14 +625,18 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  await dialog.getByRole('button',{name:'Tilpas ingredienser'}).click();
  await dialog.getByRole('checkbox',{name:'Bacon',exact:true}).check();
  await dialog.getByRole('button',{name:'Øg antal'}).click();
- await expect(dialog.getByText('105,00 kr. pr. menu · +15,00 kr. pr. stk.',{exact:true})).toBeVisible();
+ await expect(dialog.getByText('Fra +15,00 kr. pr. stk. · Eventuelle ekstra tilvalg tillægges.',{exact:true})).toBeVisible();
  await dialog.getByRole('button',{name:'Vælg menu',exact:true}).click();
  await expect(dialog.getByRole('checkbox',{name:'Ost',exact:true})).toBeChecked();
  await expect(dialog.getByRole('checkbox',{name:'Bacon',exact:true})).toBeChecked();
  await dialog.getByRole('radio',{name:'Fixture Soda',exact:true}).check();
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText('Tilføj til kurv210,00 kr.');
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const cart=JSON.parse(await page.locator('#cart-state').textContent());
  assert.deepEqual(cart.comboModifiers,[{id:'t',quantity:1},{id:'bacon',quantity:1}]);
+ assert.equal(cart.firstItemTotal,105,'each menu includes its exact paid modifiers');
+ assert.equal(cart.firstItemQuantity,2);
+ assert.equal(cart.firstItemTotal*cart.firstItemQuantity,210,'two menus total 210 before the bag fee');
  assert.equal(cart.total,214,'two menus retain both paid modifiers and the bag fee');
 });
