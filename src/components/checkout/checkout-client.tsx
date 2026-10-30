@@ -449,15 +449,41 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
     return () => { current = false; window.removeEventListener('focus', refresh); };
   }, [brand?.id, location?.id, form]);
   const newsletterEmail = form.watch('email');
+  const discountCardLookup = useRef<Promise<{name:string;percentage:number}|null>|null>(null);
   useEffect(() => {
-    let current = true;
+    let current = true, running = false, queued = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // Revoke the previous contact's benefit immediately, before the debounce.
     setDiscountCardOffer(null);
-    if (!brand?.id || !location?.id || !newsletterEmail) return;
-    const refresh = () => { void getDiscountCardCheckoutOfferAction(brand.id,brand.slug,location.id,newsletterEmail)
-      .then(offer => { if (current) setDiscountCardOffer(offer); })
-      .catch(() => { if (current) setDiscountCardOffer(null); }); };
+    const email = newsletterEmail.trim();
+    if (!brand?.id || !location?.id || !z.string().email().max(254).safeParse(email).success) return;
+    const drain = async () => {
+      if (running || !current) return;
+      running = true;
+      try {
+        while (current && queued) {
+          queued = false;
+          // Waiting effects never enqueue obsolete Server Actions. A contact or
+          // scope change can only request its latest valid lookup after this one.
+          while (discountCardLookup.current) {
+            await discountCardLookup.current;
+            if (!current) return;
+          }
+          if (!current) return;
+          queued = false; // Fold focus events received while waiting into this lookup.
+          const pending = Promise.resolve().then(() => getDiscountCardCheckoutOfferAction(brand.id,brand.slug,location.id,email)).catch(() => null);
+          discountCardLookup.current = pending;
+          try { const offer = await pending; if (current) setDiscountCardOffer(offer); }
+          finally { if (discountCardLookup.current === pending) discountCardLookup.current = null; }
+        }
+      } finally { running = false; }
+    };
+    const refresh = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { queued = true; void drain(); }, 300);
+    };
     refresh(); window.addEventListener('focus',refresh);
-    return () => { current = false; window.removeEventListener('focus',refresh); };
+    return () => { current = false; if (timer) clearTimeout(timer); window.removeEventListener('focus',refresh); };
   },[brand?.id,brand?.slug,location?.id,newsletterEmail]);
   useEffect(()=>{consentAttempt.current=null;},[newsletterSelected,newsletterEmail]);
   const newsletterStacking = newsletterAllowsStacking(newsletterOffer);

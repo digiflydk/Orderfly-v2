@@ -14,6 +14,6 @@ export async function readManagedDeliveryAdoption(scope:{brandId:string;location
   const value=markerSchema.parse(marker.data());
   if(value.brandId!==scope.brandId||value.locationId!==scope.locationId)throw Error('delivery_adoption_scope_invalid');
   return 'managed';
- });}catch{return 'unavailable';}
+ },{readOnly:true});}catch{return 'unavailable';}
 }
 export async function managedDeliveryRequired(scope:{brandId:string;locationId:string}):Promise<boolean>{return await readManagedDeliveryAdoption(scope)!=='legacy';}

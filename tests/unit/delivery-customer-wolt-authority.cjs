@@ -6,7 +6,7 @@ function fixture(){
  const rows=new Map([['deliveryCheckoutDrafts/'+key,{...structuredClone(draft),expiresAt:new Date(Date.now()+600000)}],['brands/A',{name:'Brand'}],['locations/A1',{brandId:'A',isActive:true}]]);
  const settings={enabled:true,paused:false,providerId:'wolt'};let service,capability,network=0,factories=0,enabled=true;
  const tx={get:async ref=>({exists:rows.has(ref.path),data:()=>rows.get(ref.path)})};
- const db={collection:name=>({doc:id=>({path:name+'/'+id})}),runTransaction:async fn=>fn(tx)};
+ const db={collection:name=>({doc:id=>({path:name+'/'+id})}),runTransaction:async (fn,options)=>{assert.deepEqual(options,{readOnly:true});return fn(tx);}};
  const mocks={'../management-runtime':{deliveryScopeRuntimeAllowed:async()=>enabled},'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'../settings/server':{loadDeliverySettingsInTransaction:async()=>({result:{settings,brandRevision:1,revision:0}})},
  './wolt-binding':{createCustomerWoltStorage:async(cap,environment)=>{capability=cap;assert.deepEqual(service.inspectCustomerWoltQuoteCapability(cap),{...scope,environment});await service.authorizeCustomerWoltQuoteInTransaction(tx,cap,scope);return{authorizeScope:async candidate=>{await service.authorizeCustomerWoltQuoteInTransaction(tx,cap,candidate);return true;}};}},
  '../providers/wolt/provider':{createWoltProvider:deps=>{factories++;return{providerId:'wolt',capabilities:{quote:true,create:true},quote:async req=>{assert.equal(await deps.authorizeScope(req.scope),true);network++;return{kind:'unavailable',reason:'capacity'}},create:async()=>{throw Error('write called')},cancel:async()=>{throw Error('write called')},reconcile:async()=>{throw Error('read called')}}}}};

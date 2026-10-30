@@ -59,7 +59,7 @@ export async function createCustomerWoltQuoteProvider(rawDraft:unknown,rawEnviro
  capabilities.set(capability,{draft:structuredClone(draft),environment,expiresAtMs:Date.now()+300000});
  const scope={brandId:draft.binding.brandId,locationId:draft.binding.locationId};
  try{
-  await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope)));
+  await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope),{readOnly:true}));
   const storage=await createCustomerWoltStorage(capability,environment);
   const provider=createWoltProvider({...storage,environment,validateClaimedAttempt:async()=>false,loadCancellation:async()=>null});
   return Object.freeze({providerId:provider.providerId,capabilities:provider.capabilities,
@@ -67,7 +67,7 @@ export async function createCustomerWoltQuoteProvider(rawDraft:unknown,rawEnviro
     const request=deliveryQuoteRequestSchema.parse(raw),fields=(a:typeof request.pickup)=>[a.country,a.postcode,a.city,a.street,a.building,a.unit];
     if(request.providerId!=='wolt'||request.scope.brandId!==scope.brandId||request.scope.locationId!==scope.locationId||request.checkoutRef!==draft.checkoutKeyHash
       ||request.readyAt!==draft.binding.fulfillmentAt||JSON.stringify([fields(request.pickup),fields(request.dropoff)])!==draft.binding.normalizedAddress)throw new Error('delivery_customer_quote_request_changed');
-    await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope)));
+    await measureQuoteStep('wolt_authority',()=>getAdminDb().runTransaction(tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope),{readOnly:true}));
     return provider.quote(request);
    },
    async create(){return {kind:'rejected' as const,error:forbidden()};},
