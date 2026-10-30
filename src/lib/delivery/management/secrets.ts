@@ -7,6 +7,10 @@ export type DeliverySecretScope = {
   environment: 'sandbox' | 'production'; merchantId: string; kind: 'api' | 'webhook' | 'geoapify';
 };
 type SecretClient = Pick<SecretManagerServiceClient, 'createSecret' | 'addSecretVersion' | 'accessSecretVersion'>;
+// Reuse SDK transport/auth plumbing, never secret payloads or authorization results.
+// Every read still accesses the exact pinned version and propagates IAM rejection.
+let defaultSecretClient: SecretManagerServiceClient | undefined;
+const sharedSecretClient = () => defaultSecretClient ??= new SecretManagerServiceClient();
 export class DeliverySecretError extends Error {
   constructor(readonly code: 'secret_configuration_missing' | 'secret_permission_denied' | 'secret_store_unavailable' | 'invalid_secret_input' | 'secret_reference_mismatch') {
     super(code); this.name = 'DeliverySecretError';
@@ -38,7 +42,7 @@ function translated(error: unknown): DeliverySecretError {
 export function createDeliverySecretStore(options: { projectId: string; client?: SecretClient }) {
   const projectId = options.projectId;
   if (typeof projectId !== 'string' || !/^[a-z][a-z0-9-]{4,62}$/.test(projectId)) throw new DeliverySecretError('secret_configuration_missing');
-  const client = options.client ?? new SecretManagerServiceClient();
+  const client = options.client ?? sharedSecretClient();
   function secretName(scope: DeliverySecretScope) {
     validateScope(scope);
     const suffix = createHash('sha256').update(JSON.stringify([scope.environment, scope.merchantId])).digest('hex');

@@ -14,7 +14,7 @@ function fixture(options = {}) {
   const db={collection:name=>({doc:id=>ref(`${name}/${id}`)}),runTransaction(run){const pending=chain.then(async()=>{for(;;){const staged=new Map(structuredClone([...records]));let writing=false;const writes=[];
     const tx={async get(r){assert.equal(writing,false);return {id:r.id,exists:staged.has(r.path),data:()=>structuredClone(staged.get(r.path))};},create(r,v){writing=true;if(options.failAudit&&r.path.includes('/audit/'))throw Error('PRIVATE');assert.equal(staged.has(r.path),false);staged.set(r.path,v);writes.push(r.path);},set(r,v){writing=true;staged.set(r.path,v);writes.push(r.path);}};
     const result=await run(tx);if(options.retry&&!retried){retried=true;options.retry(records);continue;}records.clear();for(const row of staged)records.set(...row);commits.push(writes);return result;}});chain=pending.catch(()=>{});return pending;}};
-  const mocks={'server-only':{},'@/lib/access/authority':authority,'./authority':authority,'@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>({serverTimestamp:true})})},'@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>{if(options.anonymous)throw new authority.AuthorityError('unauthorized',401);return {provider:'firebase',subject:'writer'};}},'./wolt-customer-quote':{inspectCustomerWoltQuoteCapability:()=>{throw new authority.AuthorityError('forbidden');},authorizeCustomerWoltQuoteInTransaction:async()=>{throw new authority.AuthorityError('forbidden');}},'../booking/dispatcher':{inspectWoltDispatchCapability:()=>{throw new authority.AuthorityError('forbidden');},authorizeWoltDispatchInTransaction:async()=>{throw new authority.AuthorityError('forbidden');}},'@google-cloud/secret-manager':{SecretManagerServiceClient:class {async accessSecretVersion(){if(options.secretHook)options.secretHook(records);if(options.secretError)throw Error('PRIVATE_SECRET');return [{payload:{data:Buffer.from('sandbox_test_key_not_real_123')}}];}}},'@/lib/url':{getOrigin:async()=> 'https://orderfly.dk'}};
+  const mocks={'server-only':{},'@/lib/access/authority':authority,'./authority':authority,'@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>({serverTimestamp:true})})},'@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>{if(options.anonymous)throw new authority.AuthorityError('unauthorized',401);return {provider:'firebase',subject:'writer'};}},'./wolt-customer-quote':{inspectCustomerWoltQuoteCapability:()=>{throw new authority.AuthorityError('forbidden');},authorizeCustomerWoltQuoteInTransaction:async()=>{throw new authority.AuthorityError('forbidden');}},'../booking/dispatcher':{inspectWoltDispatchCapability:()=>{throw new authority.AuthorityError('forbidden');},authorizeWoltDispatchInTransaction:async()=>{throw new authority.AuthorityError('forbidden');}},'@google-cloud/secret-manager':{SecretManagerServiceClient:class {constructor(){options.onSecretClient?.();}async accessSecretVersion(){if(options.secretHook)options.secretHook(records);if(options.secretError)throw Error('PRIVATE_SECRET');return [{payload:{data:Buffer.from('sandbox_test_key_not_real_123')}}];}}},'@/lib/url':{getOrigin:async()=> 'https://orderfly.dk'}};
   return {records,commits,settings:loadTs('src/lib/delivery/settings/server.ts',mocks),service:loadTs('src/lib/delivery/integrations/wolt-binding.ts',mocks)};
 }
 const scope={brandId:'brand',locationId:'location'};
@@ -47,6 +47,17 @@ test('secret resolution revalidates native binding and rejects swapped environme
  await assert.rejects(b.resolveSecret(config.secretRef,{environment:'sandbox',merchantId:'merchant'}),/secret_unavailable/);
  const denied=prepared({secretError:true});const c=await denied.service.createAuthorizedWoltStorage(scope,'sandbox');
  await assert.rejects(c.resolveSecret(config.secretRef,{environment:'sandbox',merchantId:'merchant'}),e=>e.message==='secret_unavailable');
+});
+test('Wolt reuses SDK transport while each secret operation still reaches IAM and current binding',async()=>{
+ let constructions=0,reads=0;
+ const options={onSecretClient:()=>{constructions++;},secretHook:()=>{reads++;},secretError:false};
+ const f=prepared(options),a=await f.service.createAuthorizedWoltStorage(scope,'sandbox'),b=await f.service.createAuthorizedWoltStorage(scope,'sandbox');
+ const context={environment:'sandbox',merchantId:'merchant'};
+ await a.resolveSecret(config.secretRef,context);options.secretError=true;
+ await assert.rejects(b.resolveSecret(config.secretRef,context),/secret_unavailable/);
+ assert.equal(constructions,1);assert.equal(reads,2);
+ options.secretError=false;f.records.get(f.key).active=false;
+ await assert.rejects(a.resolveSecret(config.secretRef,context),/binding_unavailable/);assert.equal(reads,2);
 });
 test('transaction retry rechecks authorization and binding before quote commit',async()=>{
  const f=prepared(),a=await f.service.createAuthorizedWoltStorage(scope,'sandbox');f.records.get('platformAdminControl/access-v1').principals[0].active=false;

@@ -19,13 +19,14 @@ before(async () => {
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {ConfirmationClient} from ${JSON.stringify(path.join(root, 'src/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client.tsx'))};
     import {ManagedDeliveryQuote} from ${JSON.stringify(path.join(root, 'src/components/checkout/managed-delivery-quote.tsx'))};
+    import {ManagedDeliveryLoading} from ${JSON.stringify(path.join(root, 'src/components/checkout/managed-delivery-loading.tsx'))};
     import {ManagedDeliveryTracking} from ${JSON.stringify(path.join(root, 'src/components/checkout/managed-delivery-tracking.tsx'))};
     import {useManagedDeliveryQuote} from ${JSON.stringify(path.join(root, 'src/components/checkout/use-managed-delivery-quote.ts'))};
-    function Fixture(){const [address,setAddress]=React.useState(''),[cart,setCart]=React.useState('pizza'),[time,setTime]=React.useState('asap'),[enabled,setEnabled]=React.useState(true),[tracking,setTracking]=React.useState(null),[showDeliveryTime,setShowDeliveryTime]=React.useState(true),[fallback,setFallback]=React.useState(null);
-    window.changeAddress=setAddress;window.changeCart=setCart;window.changeTime=setTime;window.setManagedEnabled=setEnabled;window.setTracking=setTracking;window.showDeliveryTime=setShowDeliveryTime;window.setFallback=setFallback;
-    const identity=JSON.stringify({address,cart,time});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise(resolve=>{window.requests=window.requests||[];window.requests.push({value,resolve});}),[]);
-    const flow=useManagedDeliveryQuote({enabled,requestIdentity:identity,input,requestQuote:fetchQuote,autoRequestReady:address.length>=3});window.paymentProof=flow.paymentProof;
-    return React.createElement(React.Fragment,null,React.createElement('p',null,'Kurv: 2 pizzaer'),React.createElement('label',null,'Adresse',React.createElement('input',{value:address,onChange:event=>setAddress(event.target.value)})),React.createElement(ManagedDeliveryQuote,{enabled,state:flow.state,checkoutFingerprint:flow.state.kind==='ready'?flow.state.quote.checkoutFingerprint:'',previousFeeMinor:flow.previousFeeMinor,onRequest:flow.request,showDeliveryTime}),React.createElement('button',{disabled:!flow.paymentProof,onClick:()=>window.submittedProof=flow.paymentProof},'Test betaling'),React.createElement(ManagedDeliveryTracking,{enabled,orderId:'order-a',data:tracking,fallbackDeliveryTime:fallback,onRefresh:()=>{}}));}
+    function Fixture(){const [address,setAddress]=React.useState(''),[cart,setCart]=React.useState('pizza'),[time,setTime]=React.useState('asap'),[enabled,setEnabled]=React.useState(true),[tracking,setTracking]=React.useState(null),[showDeliveryTime,setShowDeliveryTime]=React.useState(true),[fallback,setFallback]=React.useState(null),[contactReady,setContactReady]=React.useState(true);
+    window.changeAddress=setAddress;window.changeCart=setCart;window.changeTime=setTime;window.setManagedEnabled=setEnabled;window.setTracking=setTracking;window.showDeliveryTime=setShowDeliveryTime;window.setFallback=setFallback;window.setContactReady=setContactReady;
+    const identity=JSON.stringify({address,cart,time,contactReady});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise(resolve=>{window.requests=window.requests||[];window.requests.push({value,resolve});}),[]);
+    const flow=useManagedDeliveryQuote({enabled,requestIdentity:identity,input,requestQuote:fetchQuote,autoRequestReady:address.length>=3&&contactReady});window.paymentProof=flow.paymentProof;
+    return React.createElement(React.Fragment,null,React.createElement(ManagedDeliveryLoading,{pending:flow.loadingPending,requestIdentity:identity}),React.createElement('p',null,'Kurv: 2 pizzaer'),React.createElement('label',null,'Adresse',React.createElement('input',{value:address,onChange:event=>setAddress(event.target.value)})),React.createElement(ManagedDeliveryQuote,{enabled,state:flow.state,checkoutFingerprint:flow.state.kind==='ready'?flow.state.quote.checkoutFingerprint:'',previousFeeMinor:flow.previousFeeMinor,onRequest:flow.request,showDeliveryTime}),React.createElement('button',{disabled:!flow.paymentProof,onClick:()=>window.submittedProof=flow.paymentProof},'Test betaling'),React.createElement(ManagedDeliveryTracking,{enabled,orderId:'order-a',data:tracking,fallbackDeliveryTime:fallback,onRefresh:()=>{}}));}
     createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,sessionId:window.__receiptSession,receiptToken:window.__receiptToken,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
@@ -173,4 +174,31 @@ test('preliminary estimate is suppressed for unsafe states and non-ISO saved cho
  }
  await page.evaluate(data=>window.setTracking(data),data);
  for(const value of ['asap','12:00','invalid','2026-02-30T11:00:00.000Z']){await page.evaluate(value=>window.setFallback(value),value);await expect(page.getByText(/Foreløbigt forventet levering/)).toHaveCount(0);}
+});
+
+
+test('price popup appears before debounce, retains input focus and closes on the current result',async t=>{
+ const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ await address.fill('Testvej 1');await expect(popup).toBeVisible();await expect(address).toBeFocused();assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
+ await page.clock.runFor(200);await expect(popup).toBeVisible();assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
+ await page.clock.runFor(100);await waitRequests(page,1);await respond(page,quote());await expect(popup).toHaveCount(0);await expect(address).toBeFocused();
+});
+
+test('price popup covers an obsolete queued request and closes on latest error without retrying',async t=>{
+ const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ await address.fill('first');await page.clock.runFor(300);await waitRequests(page,1);await address.fill('second');await expect(popup).toBeVisible();await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests.length),1);
+ await respond(page,quote({quoteId:'obsolete'}));await expect(popup).toBeVisible();await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(300);await waitRequests(page,2);
+ await respond(page,{ok:false,code:'outside_area'},1);await expect(popup).toHaveCount(0);await expect(page.getByRole('alert')).toContainText('uden for restaurantens');await page.clock.runFor(5000);assert.equal(await page.evaluate(()=>window.requests.length),2);
+});
+
+test('price popup can be dismissed while work continues and reopens for changed input',async t=>{
+ const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ await address.fill('first');await expect(popup).toBeVisible();await address.press('Escape');await expect(popup).toHaveCount(0);await expect(address).toBeFocused();await page.clock.runFor(300);await waitRequests(page,1);
+ await address.fill('second');await expect(popup).toBeVisible();await expect(address).toBeFocused();await page.getByRole('button',{name:'Skjul beskeden'}).click();await expect(popup).toHaveCount(0);await respond(page,quote({quoteId:'old'}));await page.clock.runFor(300);await waitRequests(page,2);await respond(page,quote({quoteId:'current'}),1);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
+});
+
+test('missing required contact or incomplete address never claims a price request is pending',async t=>{
+ const page=await quotePage(t);await page.clock.install();const popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'}),address=page.getByRole('textbox',{name:'Adresse'});
+ await page.evaluate(()=>window.setContactReady(false));await address.fill('Testvej 1');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
+ await page.evaluate(()=>window.setContactReady(true));await expect(popup).toBeVisible();await address.fill('');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
 });

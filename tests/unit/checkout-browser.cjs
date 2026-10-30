@@ -655,3 +655,17 @@ test('valid provider ETA replaces default in the single checkout time field befo
  await expect(page.getByText(/Forventet levering/)).toHaveCount(1);
  await expect(page.getByText(/13.40.*13.50/)).toHaveCount(0);
 });
+
+
+test('actual checkout announces delivery pricing immediately on completed address without stealing city focus',async t=>{
+ const page=await setup(t,'managed-loading');await page.clock.install();await page.evaluate(()=>window.holdQuote=true);await fillDeliveryAddress(page);
+ const popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});await expect(popup).toBeVisible();await expect(page.getByLabel('By',{exact:true})).toBeFocused();assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
+ await page.clock.runFor(300);await expect.poll(()=>page.evaluate(()=>window.quoteInputs?.length||0)).toBe(1);await expect(popup).toBeVisible();await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.evaluate(()=>window.releaseQuote());await expect(popup).toHaveCount(0);await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeEnabled();
+});
+
+test('actual checkout asks for missing contact instead of pretending address-only pricing has started',async t=>{
+ const page=await setup(t,'managed-missing-contact');await page.getByPlaceholder('john@example.com',{exact:true}).fill('');await page.clock.install();await fillDeliveryAddress(page);
+ await expect(page.getByText('Udfyld navn, e-mail og mobilnummer, så beregner vi leveringsprisen.',{exact:true})).toBeVisible();await expect(page.getByRole('dialog',{name:'Henter leveringsprisen…'})).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
+ await page.getByPlaceholder('john@example.com',{exact:true}).fill('test@example.test');await expect(page.getByRole('dialog',{name:'Henter leveringsprisen…'})).toBeVisible();await expect(page.getByPlaceholder('john@example.com',{exact:true})).toBeFocused();
+});
