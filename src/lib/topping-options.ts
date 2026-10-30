@@ -29,7 +29,7 @@ export function resolveToppingOptions(product: OptionProduct, groups: ToppingGro
       const matches = products.filter(p => p.id === option.productId);
       const linked = matches[0];
       const brandId = scope?.brandId ?? product.brandId;
-      if (matches.length !== 1 || !linked || !brandId || linked.brandId !== brandId || !linked.isActive || isSyntheticProduct(linked) ||
+      if (matches.length !== 1 || !linked || linked.comboOnly === true || !brandId || linked.brandId !== brandId || !linked.isActive || isSyntheticProduct(linked) ||
           linked.id === product.id || linked.toppingGroupIds?.length ||
           (!Array.isArray(linked.locationIds) || (linked.locationIds.length > 0 &&
             (scope ? !linked.locationIds.includes(scope.locationId) : !product.locationIds?.every(id => linked.locationIds!.includes(id)))))) return [];

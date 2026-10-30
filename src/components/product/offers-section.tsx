@@ -35,7 +35,7 @@ export function OffersSection({ brand, location, activeDiscounts, allProducts, c
 
     if (productIdsInOffers.size === 0) return [];
     
-    const products = allProducts.filter(p => productIdsInOffers.has(p.id));
+    const products = allProducts.filter(p => p.comboOnly !== true && productIdsInOffers.has(p.id));
 
     // Keep native IDs and category scope; ProductCard applies the best item price.
     return products;

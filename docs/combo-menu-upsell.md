@@ -14,6 +14,20 @@ Validation: real-component Chromium suites `combo-modifiers-browser.cjs` and `ti
 
 ## Dish-origin upgrade correction
 
-In V2, when a customer opens a dish and chooses “Køb som menu”, the first matching combo group displays that dish as a fixed “Din valgte ret” summary. A single-dish group does not offer other pizza choices. The retained dish's modifiers remain available below, while drinks and other combo groups remain selectable. Returning to the dish keeps the original draft. For a multi-dish group, the retained dish counts toward its limits and only remaining slots can be filled.
+In V2, when a customer opens a dish and chooses “Køb som menu”, the first matching combo group retains the dish. A single-dish group is represented once by the dialog header (`<dish>-menu`) and its image, without a repeated “Din valgte ret” box or another dish selector. For a multi-dish group, the retained dish still counts toward its limits and remaining slots stay selectable.
 
-Opening a standalone deal still offers its dish choices. Editing a saved combo restores its selected dishes, modifiers and quantity using the existing cart behavior. This presentation correction adds no catalog migration or price changes.
+Dish customization panels are initially closed behind “Tilpas”. Selected customization summaries remain visible; opening and closing a panel does not modify quantities or prices. Missing required choices keep submission blocked and automatically open the relevant panel when the customer presses the bottom action. Included menu groups are completed through the guided steps described below. Standalone deals retain their normal dish choices and saved-cart editing preserves the selections.
+
+The verified Esmeralda pilot `esmeralda-v2-pizzamenu-20261030`, brand `oeypKaMyYcQjIwaa1PtV`, omits the optional drink-upsell group `D7lnGx57JS0BnSFqSzHn` from new combo customization. This is the observed “Drikke til maden” group containing larger extra drinks, while the menu already includes a 0.33 l drink. The policy uses exact catalog identities, not translated names. It applies only to this V2 pilot. Optional selected drink extras are removed with an explanatory notice, while required groups remain available. Server validation and V1 behavior remain unchanged. The dip setup is described in the separate migration documentation.
+
+Local real-component browser coverage includes compact 320/1280 layouts, hidden/expanded customization, required-choice recovery, retained modifiers and quantity, standalone dish selection, optional drink suppression, removal of optional drink extras and preservation of required/other-brand behavior. CI and deployed verification remain separate release gates recorded in #780.
+
+### V2 guided menu choices (30 October 2026)
+
+V2 now shows one configured combo product group per step, followed by a compact overview. A retained single dish is shown only in the header and is excluded from the selection steps. Standalone menu selection still starts with the dish. Existing cart edits start on the overview, with `Skift` returning to the corresponding group. Back navigation preserves all choices. Product modifiers stay under `Tilpas`; invalid required modifiers open for correction and block adding to the cart. Quantity and the final cart action appear on the overview; the total and next action remain at the bottom throughout.
+
+Optional groups retain an explicit empty selection, including `Ingen dip`. Dip prices come from the combo rather than the standalone product price. Cards use actual catalog images when available and otherwise use neutral text cards. No inferred product photos are displayed.
+
+For the approved Esmeralda pilot menu only, the optional extra-drinks modifier group is excluded. Previously selected optional drinks are removed from outgoing modifiers and the recalculated total, with the notice “Sodavand vælges som en del af menuen.” Required rules and other brands are unchanged. Native combo selections, modifiers, validation and pricing still use the existing server contract. V1 rendering remains unchanged.
+
+Validation: `npm run typecheck`; `CART_CHROMIUM_PATH=/tmp/chromium node --test tests/unit/combo-modifiers-browser.cjs`. Browser coverage includes 320/390 px layouts, sequential drink/dip steps, overview edits, no-dip serialization, unchanged base pricing, required-modifier rejection, retained ingredients, duplicate drink removal, and V1 behavior.

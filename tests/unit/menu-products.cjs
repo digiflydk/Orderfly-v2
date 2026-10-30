@@ -44,3 +44,11 @@ test('disabled native locations and suspended brands do not read products',async
   assert.deepEqual(await f.api.publicMenuProducts('l',['one'],'a'),[]);assert.deepEqual(f.queries,[]);
  }
 });
+test('combo-only metadata survives scoped component hydration but is excluded from standalone search',async()=>{
+ const f=fixture();f.rows.set('products/dip',{brandId:'a',locationIds:['l'],isActive:true,price:0,productName:'Chili',comboOnly:true});
+ const products=await f.api.publicMenuProducts('l',['one','dip'],'a');
+ assert.equal(products.find(p=>p.id==='dip').comboOnly,true);
+ const {searchMenu}=loadTs('src/lib/menu-display.ts');
+ assert.deepEqual(searchMenu(products,'').map(p=>p.id),['one']);
+ assert.deepEqual(searchMenu(products,'Chili'),[]);
+});

@@ -9,7 +9,7 @@ export function relevantUpsellProducts(offered: ProductForMenu[], catalog: Produ
   const seen = new Set<string>();
   return offered.flatMap(candidate => {
     const product = known.get(candidate.id);
-    if (!product || product.isActive === false || included.has(product.id) || seen.has(product.id)) return [];
+    if (!product || product.comboOnly === true || product.isActive === false || included.has(product.id) || seen.has(product.id)) return [];
     seen.add(product.id);
     return [product];
   }).slice(0, limit);

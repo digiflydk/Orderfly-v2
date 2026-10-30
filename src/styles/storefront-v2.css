@@ -179,3 +179,18 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
 body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product-card] p.text-sm { font-size: 13px; line-height: 18px; }
 body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-product-card] > div:last-child > .mt-2 { margin-top: 0; }
 [data-v2-menu-header] .v2-delivery-summary { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 16px; padding-bottom: 8px; }
+
+/* One decision at a time: compact combo choices and a persistent total. */
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-step-title { font-size: 1.3rem; font-weight: 650; outline: none; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [data-option-row] { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 120px; padding: 16px 10px; border: 1px solid #45413a; border-radius: 6px; text-align: center; background: #282622; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [data-option-row][data-selected="true"] { border-color: #dcb876; box-shadow: inset 0 0 0 1px #dcb876; background: #363025; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [data-option-row]:focus-within { outline: 2px solid #dcb876; outline-offset: 3px; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [role="radio"] { position: absolute; top: 10px; right: 10px; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid img { width: 64px; height: 64px; object-fit: contain; border-radius: 4px; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [data-option-row] > span { flex: none; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-summary-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 0; border-bottom: 1px solid #45413a; }
+[data-storefront-version="2"][data-combo-step-flow] .commerce-option-header { grid-template-columns: 64px 1fr; gap: 12px; padding: 16px 16px 4px; }
+[data-storefront-version="2"][data-combo-step-flow] .commerce-option-image { width: 64px; height: 64px; }
+[data-storefront-version="2"][data-combo-step-flow] .commerce-option-header h2 { font-size: 1.125rem; line-height: 1.3; }
+[data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid [data-option-row]:not(:has(img)) { min-height: 76px; }

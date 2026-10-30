@@ -23,3 +23,7 @@ test('offer and standard discount compete on channel base price and never stack'
  const standardWins=productPriceData(product,[{...discount,discountValue:40}],'delivery');
  assert.equal(standardWins.finalPrice,60);assert.equal(standardWins.applicableDiscount.discountValue,40);
 });
+test('combo-only components never become standalone upsell recommendations',()=>{
+ const products=[...catalog,{id:'chili',price:0,isActive:true,comboOnly:true}];
+ assert.deepEqual(relevantUpsellProducts([{id:'chili'}],products,[]),[]);
+});

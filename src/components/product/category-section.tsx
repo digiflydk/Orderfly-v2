@@ -15,7 +15,8 @@ interface CategorySectionProps {
 
 export function CategorySection({ category, products, activeDiscounts, categoryRef }: CategorySectionProps) {
   
-  if (products.length === 0) {
+  const visibleProducts = products.filter(product => product.comboOnly !== true);
+  if (visibleProducts.length === 0) {
     return null;
   }
 
@@ -28,7 +29,7 @@ export function CategorySection({ category, products, activeDiscounts, categoryR
         )}
       </div>
        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-          {products.map(product => (
+          {visibleProducts.map(product => (
             <ProductCard
                 key={product.id}
                 product={product}
