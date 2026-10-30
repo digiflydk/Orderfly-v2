@@ -1,5 +1,6 @@
 import 'server-only';
 import type { RoutingAdapter, VerifiedAddress } from '../service';
+import { measureQuoteStep } from '../../quotes/performance';
 
 const ENDPOINT = 'https://api-eu.geoapify.com';
 const MAX_BYTES = 1_000_000;
@@ -26,9 +27,9 @@ export function createGeoapifyRoutingAdapter(options: {
   let geocodes = 0, routeUsed = false;
   const resolved: VerifiedAddress[] = [];
   const request = async (path: string, params: URLSearchParams): Promise<any> => {
-    quoteReservation ??= Promise.resolve().then(() => reserveQuote()).then(value => value === true, () => false);
+    quoteReservation ??= measureQuoteStep('routing_budget',() => Promise.resolve().then(() => reserveQuote())).then(value => value === true, () => false);
     if (!await quoteReservation) throw Error('routing_budget_unavailable');
-    const grant = await reserveRequest();
+    const grant = await measureQuoteStep('routing_budget',()=>reserveRequest());
     if (!grant || typeof grant !== 'object' || Array.isArray(grant)
       || !Number.isSafeInteger(grant.sendBeforeMs)) throw Error('routing_budget_unavailable');
     const sendBeforeMs = grant.sendBeforeMs;
@@ -39,7 +40,7 @@ export function createGeoapifyRoutingAdapter(options: {
     });
     params.set('apiKey', apiKey);
     try {
-      return await Promise.race([timeout, (async () => {
+      return await measureQuoteStep('routing_http',()=>Promise.race([timeout, (async () => {
         const url = `${ENDPOINT}${path}?${params}`;
         const init: RequestInit = {
           method: 'GET', redirect: 'error', cache: 'no-store', signal: controller.signal,
@@ -64,7 +65,7 @@ export function createGeoapifyRoutingAdapter(options: {
           body += decoder.decode();
           return JSON.parse(body);
         } finally { await reader.cancel().catch(() => undefined); }
-      })()]);
+      })()]));
     } finally { if (timer) clearTimeout(timer); }
   };
   return {

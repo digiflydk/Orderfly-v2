@@ -2,6 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import type { WoltHttpClient, WoltHttpError } from './http';
 import { woltInstant, woltTiming } from './schedule';
+import { measureQuoteStep } from '../../quotes/performance';
 
 const currency = z.string().regex(/^[A-Z]{3}$/);
 const money = z.object({ amount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER), currency });
@@ -39,10 +40,10 @@ export async function requestWoltQuote(client: WoltHttpClient, rawInput: WoltQuo
   const input = parsed.data;
   let timing: ReturnType<typeof woltTiming>;
   try { timing = woltTiming(input, nowMs); } catch { return { status: 'unavailable', reason: 'unsupported_schedule' }; }
-  const response = await client.request({ method: 'POST', path: `/v1/venues/${input.venueId}/shipment-promises`, operation: 'quote', body: {
+  const response = await measureQuoteStep('wolt_http',()=>client.request({ method: 'POST', path: `/v1/venues/${input.venueId}/shipment-promises`, operation: 'quote', body: {
     street: `${input.address.street} ${input.address.building}`, city: input.address.city, post_code: input.address.postCode,
     ...(input.address.coordinates ?? {}), ...timing, parcels: input.parcels,
-  } });
+  } }));
   if (!response.ok) return response.error.code === 'unavailable' ? { status: 'unavailable', reason: response.error.nativeCode ?? 'unavailable' } : { status: 'error', error: response.error };
   const result = responseSchema.safeParse(response.data);
   const badResponse = (): WoltQuoteResult => ({ status: 'error', error: { code: 'invalid_response', retryClass: 'never', outcome: 'rejected', status: response.status } });
