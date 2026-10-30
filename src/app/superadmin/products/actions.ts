@@ -53,6 +53,7 @@ const baseFields = {
     try { return JSON.parse(value); } catch { return null; }
   }, toppingConditionsSchema.optional()),
   isTestData: z.preprocess(asBool,z.boolean()).optional(),
+  comboOnly: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
 

@@ -55,3 +55,60 @@ test('real checkout persists authoritative surcharge plus modifiers and rejects 
  items[0].unitPrice=100;items[0].totalPrice=220;
  const invalid=await checkout({items,seed,paymentOverrides:{subtotal:220}});assert.equal(invalid.result.success,false);assert.equal(invalid.writes.length,0);
 });
+
+function dipCatalog() {
+ const c=f.catalog();
+ c.combos[0].pickupPrice=95;c.combos[0].deliveryPrice=95;
+ c.products.push({id:'chili',productName:'Chili',brandId:'b',locationIds:['l'],isActive:true,price:0,comboOnly:true},
+  {id:'garlic',productName:'Hvidløgsbæger',brandId:'b',locationIds:['l'],isActive:true,price:10});
+ c.combos[0].productGroups.push({id:'dip',groupName:'Dip',productIds:['chili','garlic'],minSelection:0,maxSelection:1});
+ return c;
+}
+function dipChoice(id) {
+ const choice=structuredClone(f.comboChoice);
+ choice.comboSelections.push({groupId:'dip',groupName:'Dip',products:id?[{id,modifiers:[]}]:[]});
+ return choice;
+}
+test('included dip and explicit no-dip retain the same menu price through reload and checkout',()=>{
+ const c=dipCatalog();
+ for(const id of ['chili','garlic',undefined])for(const deliveryType of ['pickup','delivery']){
+  const scope={...f.scope,deliveryType},choice=dipChoice(id);choice.quantity=2;
+  const restored=f.restoreCartItems([choice],c,scope);assert.equal(restored.removed,0);
+  assert.equal(restored.items[0].itemTotal,95);assert.equal(restored.items[0].basePrice,95);
+  const saved=f.cartChoices(restored.items),reloaded=f.restoreCartItems(saved,c,scope);
+  assert.deepEqual(reloaded.items[0].comboSelections[1].products.map(p=>p.id),id?[id]:[]);
+  const result=validateCheckoutItems(checkoutItems(reloaded.items),c,scope);assert.equal(result.subtotal,190);
+ }
+});
+test('dip group rejects excess, unknown, missing, inactive and cross-tenant component choices',()=>{
+ for(const mutate of [x=>x.comboSelections.pop(),x=>x.comboSelections[1].products.push({id:'garlic'}),x=>x.comboSelections[1].products[0].id='unknown']) {
+  const choice=dipChoice('chili');mutate(choice);assert.equal(f.restoreCartItems([choice],dipCatalog(),f.scope).removed,1);
+ }
+ for(const mutate of [p=>p.isActive=false,p=>p.brandId='foreign',p=>p.locationIds=['other']]){
+  const c=dipCatalog();mutate(c.products.find(p=>p.id==='chili'));
+  assert.equal(f.restoreCartItems([dipChoice('chili')],c,f.scope).removed,1);
+ }
+});
+test('combo-only products cannot become free standalone items or linked toppings',()=>{
+ const c=dipCatalog(),standalone={...f.choice,id:'chili',quantity:1};
+ assert.equal(f.restoreCartItems([standalone],c,f.scope).removed,1);
+ assert.throws(()=>validateCheckoutItems([{id:'chili',itemType:'product',name:'Chili',quantity:1,unitPrice:0,totalPrice:0,toppings:[]}],c,f.scope),/no longer available/);
+ c.toppings[0].productId='chili';
+ const choice=structuredClone(f.choice);choice.toppings=['Chili'];choice.toppingIds=['t'];choice.toppingQuantities=[1];
+ assert.equal(f.restoreCartItems([choice],c,f.scope).removed,1);
+ assert.equal(f.restoreCartItems([{...f.choice,id:'garlic',toppings:[]}],c,f.scope).removed,0);
+});
+test('real checkout persists included or declined dip and rejects standalone combo-only purchase before writes',async()=>{
+ const {checkout}=require('../helpers/checkout-fixture.cjs');const c=dipCatalog();
+ const seed=[...c.products.map(p=>['products/'+p.id,p]),['comboMenus/combo',c.combos[0]],['toppings/t',c.toppings[0]],['topping_groups/g',c.groups[0]]];
+ for(const id of ['chili',undefined]){
+  const items=checkoutItems(f.restoreCartItems([dipChoice(id)],c,f.scope).items);
+  const result=await checkout({items,seed,paymentOverrides:{subtotal:95}});
+  assert.equal(result.result.success,true,JSON.stringify(result.result));
+  const order=result.writes.find(w=>w.ref.collection==='orders').data;
+  assert.equal(order.productItems[0].totalPrice,95);
+  assert.deepEqual(order.productItems[0].comboSelections[1].products.map(p=>p.id),id?[id]:[]);
+ }
+ const invalid=await checkout({items:[{id:'chili',itemType:'product',name:'Chili',quantity:1,unitPrice:0,totalPrice:0,toppings:[]}],seed,paymentOverrides:{subtotal:0}});
+ assert.equal(invalid.result.success,false);assert.equal(invalid.writes.length,0);
+});

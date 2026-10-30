@@ -19,7 +19,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
     const product = choice.itemType === 'product' ? catalog.products.find(p => p.id === choice.id || `${p.id}-offer` === choice.id) : undefined;
     const combo = choice.itemType === 'combo' ? catalog.combos.find(c => c.id === choice.id) : undefined;
     const record = product || combo;
-    if (!record || !scoped(record) || (combo && !comboEligible(combo, {...scope, now}))) { removed++; continue; }
+    if (!record || product?.comboOnly === true || !scoped(record) || (combo && !comboEligible(combo, {...scope, now}))) { removed++; continue; }
     const rawPrice = product ? (scope.deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price)
       : scope.deliveryType === 'delivery' ? combo!.deliveryPrice : combo!.pickupPrice;
     if (typeof rawPrice !== 'number' || !Number.isFinite(rawPrice) || rawPrice < 0) { removed++; continue; }

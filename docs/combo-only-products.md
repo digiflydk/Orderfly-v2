@@ -1,0 +1,11 @@
+# Combo-only catalog components
+
+`products.comboOnly: true` marks a native catalog product that can be selected inside a configured Combo Deal but has no standalone sale offer. The optional flag is preserved in `ProductForMenu` and scoped public component hydration. Existing products without the flag retain their behavior.
+
+The Esmeralda included-dip migration uses this for new Chili, Dressing and Pesto components with zero bookkeeping price; this is not a free standalone product promotion. Existing Hvidløgsbæger remains an unchanged, separately sellable product. Combo groups supply the included selection and authoritative menu price.
+
+Menu search, category cards, standard offers and upsell recommendations exclude combo-only records. Full scoped catalogs retain them so combo eligibility and selection work. Product-linked topping resolution also excludes them, preventing an unrelated product from gaining an unpriced component through a linked modifier.
+
+The authoritative cart restore and checkout validation reject a combo-only record submitted as an ordinary product. Configured combo selections retain all existing tenant, location, activity, group membership and quantity validation. A declined optional dip is serialized as its group with an empty `products` array, so reload and checkout retain the explicit choice.
+
+Validation: `node --test tests/unit/combo-pricing.cjs tests/unit/combo-modifiers.cjs tests/unit/menu-products.cjs tests/unit/relevant-upsell-products.cjs` covers included dip and no-dip price stability, cart reload, checkout, excessive/unknown/cross-tenant choices, component projection, search and upsell exclusion. The real checkout-action fixture confirms accepted dip selections persist to the order and standalone combo-only submissions fail before any database write. No live order or payment is submitted by these tests.

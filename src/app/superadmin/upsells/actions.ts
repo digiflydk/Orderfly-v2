@@ -350,7 +350,7 @@ export async function getActiveUpsellForCart({
               // Fetch full product details
               // Only return products that are currently public at this restaurant.
               // If an old offer has no valid products, continue to the next offer.
-              const products = await getProductsByIds(finalProductIds, brandId, locationId);
+              const products = (await getProductsByIds(finalProductIds, brandId, locationId)).filter(product => product.comboOnly !== true);
               
               if (products.length > 0) {
                   // Read only. UI telemetry records impressions when actually visible.
