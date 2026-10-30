@@ -21,10 +21,14 @@ test('only identity-matched estimates override accepted delivery and reliable pi
 test('guest delivery is reached only after original receipt session/token/scope proof',async()=>{
  const token='1'.repeat(64),hash=createHash('sha256').update(token).digest('hex');let reads=0;
  const order={id:'order',brandId:'brand',locationId:'location',managedDelivery:managed,deliveryType:'Delivery',paymentMethod:'Stripe',paymentStatus:'Paid',status:'Received',psp:{checkoutSessionId:'cs_test_abcdefgh1234'},receiptTokenHash:hash,customerDetails:{id:'customer',address:'Test'},paymentDetails:{},createdAt:new Date(),productItems:[]};
- const {readGuestReceipt}=loadTs('src/lib/server/guest-receipt.ts',{'server-only':{},'@/app/checkout/order-actions':{getOrderById:async()=>order,getOrderByCheckoutSessionId:async()=>order},'@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=>null},'./settle-checkout':{settlePaidCheckoutSession:async()=>{}},'@/lib/delivery/tracking-server':{readReceiptDeliveryTracking:async()=>{reads++;return {orderId:'order'};}}});
+ let paymentReads=0;
+ const {readGuestReceipt}=loadTs('src/lib/server/guest-receipt.ts',{'server-only':{},'@/app/checkout/order-actions':{getOrderById:async()=>order,getOrderByCheckoutSessionId:async()=>order},'@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=>{paymentReads++;return null;}},'./settle-checkout':{settlePaidCheckoutSession:async()=>{}},'@/lib/delivery/tracking-server':{readReceiptDeliveryTracking:async()=>{reads++;return {orderId:'order'};}}});
  const proof={orderId:'order',brandId:'brand',locationId:'location',sessionId:order.psp.checkoutSessionId,receiptToken:token};
  for(const bad of [{orderId:'order'},{...proof,sessionId:'cs_test_wrong12345'},{...proof,receiptToken:'2'.repeat(64)},{...proof,brandId:'other'},{...proof,locationId:'other'}])assert.equal(await readGuestReceipt(bad),null);
  assert.equal(reads,0);assert.equal((await readGuestReceipt(proof)).managedDeliveryTracking.orderId,'order');assert.equal(reads,1);
+ delete order.managedDelivery;
+ for(const bad of [{...proof,receiptToken:'2'.repeat(64)},{...proof,brandId:'other'}])assert.equal(await readGuestReceipt(bad,{reconcilePayment:false}),null);
+ assert.equal((await readGuestReceipt(proof,{reconcilePayment:false})).id,'order');assert.equal(paymentReads,0);assert.equal(reads,2);
 });
 test('receipt tracking reread suppresses rotated proof and swapped scope before subcollection reads',async()=>{
  const {order,attempt,result}=fixture();const verified={...order,id:'order',receiptTokenHash:'hash',psp:{checkoutSessionId:'cs_test_abcdefgh'}};
