@@ -65,7 +65,7 @@ before(async()=>{
  export const newsletterSyncAvailableAction=async()=>true;
  export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
- export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:scenario==='managed-eta'?{earliest:'2026-10-30T12:40:00Z',latest:'2026-10-30T12:50:00Z'}:null,expiresAtMs:Date.now()+120000};}
+ export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);if(window.holdQuote)await new Promise(resolve=>{window.releaseQuote=resolve;});return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:scenario==='managed-eta'?{earliest:'2026-10-30T12:40:00Z',latest:'2026-10-30T12:50:00Z'}:null,expiresAtMs:Date.now()+120000};}
  export async function validateDiscountAction(){if(scenario==='managed-discount')return {success:true,discount:{id:'code-discount',applicationType:'code',discountType:'percentage',discountValue:10,code:'TEST10',isActive:true}};throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -637,11 +637,14 @@ test('before opening actual picker changes valid Friday 11:50 to 12:05 and autom
  await fillDeliveryAddress(page);await quoted(page);
  assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime),'2026-10-30T10:50:00.000Z');
  await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).click();
+ await page.evaluate(()=>{window.holdQuote=true;});
  const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
  await page.getByRole('option',{name:'fre. 30. okt. 12:05',exact:true}).click();
  await dialog.getByRole('button',{name:'Gem tidspunkt'}).click();
  await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
  await expect.poll(()=>page.evaluate(()=>window.quoteInputs?.at(-1).deliveryTime)).toBe('2026-10-30T11:05:00.000Z');
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.evaluate(()=>{window.holdQuote=false;window.releaseQuote();});
  await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');
  assert.equal(requests.get('managed-schedule-valid')[0][9],'2026-10-30T11:05:00.000Z');
 });
