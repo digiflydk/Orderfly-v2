@@ -17,7 +17,7 @@ function DurationInput({ id, label, minutes, minimum, maximum, disabled, onChang
 type MailJob = { id: string; eventId?: string; brandId: string; kind: string; state: string; attempts: number; updatedAt: number };
 const states: Record<string, string> = { pending: 'I kø', preparing: 'Forberedes', dispatching: 'Afventer svar', accepted: 'Accepteret af Mpanel', uncertain: 'Kræver kontrol', failed: 'Fejl', suppressed: 'Stoppet' };
 type SettingsBrand = FeedbackAutomation & Partial<ExternalReviewSettings> & { adminNotificationsEnabled: boolean; adminNotificationEmail: string | null; adminNotificationConfigured: boolean; canEdit?: boolean; emailConfigured: boolean; id: string; name: string; slug: string; publicReviewsEnabled: boolean };
-export function FeedbackSettingsView({ brands: initialBrands, locations, questionVersions, canEdit: defaultCanEdit, jobs: initialJobs = [] }: { jobs?: MailJob[]; brands: SettingsBrand[]; locations: { id: string; brandId: string; name: string; slug: string }[]; questionVersions: { id: string; name: string; language: string; orderTypes: string[]; scope?: 'default' | 'brand'; brandId?: string | null }[]; canEdit: boolean }) {
+export function FeedbackSettingsView({ brands: initialBrands, locations, questionVersions, canEdit: defaultCanEdit, jobs: initialJobs = [] }: { jobs?: MailJob[]; brands: SettingsBrand[]; locations: { id: string; brandId: string; name: string; slug: string; isActive?: boolean }[]; questionVersions: { id: string; name: string; language: string; orderTypes: string[]; scope?: 'default' | 'brand'; brandId?: string | null }[]; canEdit: boolean }) {
   const [brands, setBrands] = useState(initialBrands), [selected, setSelected] = useState(initialBrands[0]?.id || '');
   const [pending, setPending] = useState(false), [message, setMessage] = useState<{ ok: boolean; message: string } | null>(null);
   const [jobs, setJobs] = useState(initialJobs);
@@ -27,6 +27,14 @@ export function FeedbackSettingsView({ brands: initialBrands, locations, questio
   return <div className="max-w-2xl space-y-6">
     <h1 className="text-2xl font-bold">Feedbackindstillinger</h1>
     <div className="space-y-3"><Label htmlFor="feedback-brand">Brand</Label><select id="feedback-brand" className="h-10 w-full rounded-md border bg-background px-3" value={selected} disabled={pending} onChange={event => { setSelected(event.target.value); setMessage(null); }}>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+    {brand && <section className="space-y-3 rounded-lg border p-5" aria-label="Feedback via QR-kode">
+      <h2 className="text-lg font-semibold">Feedback fra gæster i restauranten</h2>
+      <p className="text-sm text-muted-foreground">Brug det faste link i jeres QR-kode. Gæsten kan svare anonymt uden booking eller onlineordre. Efter indsendelse bruges indstillingerne for Google og Trustpilot nedenfor.</p>
+      <ul className="space-y-3">{locations.filter(l => l.brandId === brand.id && l.isActive !== false && l.slug && brand.slug).map(l => {
+        const href = `https://orderfly.dk/feedback/dine-in/${encodeURIComponent(brand.slug)}/${encodeURIComponent(l.slug)}`;
+        return <li key={l.id} className="space-y-1"><p className="font-medium">{l.name}</p><a className="block break-all text-sm underline" href={href} target="_blank" rel="noreferrer">{href}</a></li>;
+      })}</ul>
+    </section>}
     {brand && <form className="space-y-5 rounded-lg border p-5" onSubmit={async event => {
       event.preventDefault(); if (pending || !canEdit) return; setPending(true); setMessage(null);
       try { setMessage(await saveFeedbackSettings({ brandId: brand.id, externalReviewsEnabled: brand.externalReviewsEnabled ?? false, externalReviewsMinRating: brand.externalReviewsMinRating ?? 4.7, googleReviewUrl: brand.googleReviewUrl ?? '', trustpilotReviewUrl: brand.trustpilotReviewUrl ?? '', publicReviewsEnabled: brand.publicReviewsEnabled, emailEnabled: brand.emailEnabled, automaticRequests: brand.automaticRequests, bookingAutomaticRequests: brand.bookingAutomaticRequests, bookingDelayMinutes: brand.bookingDelayMinutes, bookingReminderAfterMinutes: brand.bookingReminderAfterMinutes, bookingMaxReminders: brand.bookingMaxReminders, delayHours: brand.delayHours, reminderAfterHours: brand.reminderAfterHours, maxReminders: brand.maxReminders, autoReplyEnabled: brand.autoReplyEnabled, language: brand.language, questionVersionId: brand.questionVersionId, adminNotificationsEnabled: brand.adminNotificationsEnabled, adminNotificationEmail: brand.adminNotificationEmail })); }

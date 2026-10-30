@@ -148,3 +148,36 @@ test('customer history also enforces feedback session and brand boundary without
  f.auth.cookie=true;f.auth.uid='qa-editor';assert.equal(await history.customerFeedbackHistory('other','c'),null);assert.equal(f.reads.length,0);
  const rows=await history.customerFeedbackHistory('b','c');assert.equal(rows.length,1);assert.equal(rows[0].receivedAt,null);assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_NOTE|private@example|customerId/);
 });
+
+test('QR restaurant visits are a separate source and never count as online orders',async()=>{
+ const f=fixture();
+ for(const[id,sourceType]of [['legacy',undefined],['online','commerce_order'],['booking','booking'],['qr','dine_in']])f.records.set('feedback/'+id,row({sourceType,customerId:sourceType==='dine_in'?'':'c'}));
+ const input={from:'2026-09-09',to:'2026-09-09',brandId:'b'};
+ const all=await f.report.getFeedbackReport(input);
+ assert.equal(all.summary.orders,2);assert.equal(all.summary.bookings,1);assert.equal(all.summary.dineIn,1);assert.equal(all.summary.responses,4);
+ const qr=await f.report.getFeedbackReport({...input,source:'dine_in'});
+ assert.equal(qr.summary.responses,1);assert.equal(qr.summary.orders,0);assert.equal(qr.summary.bookings,0);assert.equal(qr.summary.dineIn,1);
+ assert.equal((await f.report.getFeedbackReport({...input,source:'commerce_order'})).summary.responses,2);
+ assert.equal((await f.admin.updateFeedback('qr',{showPublicly:true})).error,false);
+ assert.equal(f.records.get('publicFeedbackReviews/qr').displayName,'Anonym kunde');
+ assert.equal(f.reads.some(read=>read.key==='customers/'),false);
+});
+
+test('public QR page resolves only route scope and language, with unavailable forms returning not-found',async()=>{
+ const fs=require('node:fs'),ts=require('typescript');const calls=[];let available=true;
+ const context={sourceType:'dine_in',brandId:'b',customerId:'',invitationToken:'signed'};
+ const questionsVersion={id:'v1',language:'da'};
+ const jsx=(type,props)=>({type,props}),mocks={
+  'react/jsx-runtime':{jsx,jsxs:jsx},'next/navigation':{notFound:()=>{throw Error('NOT_FOUND');}},
+  '@/lib/next/resolve-props':{resolveSearchParams:async p=>p||{}},
+  '@/lib/feedback/dine-in':{getDineInFeedbackContext:async(...args)=>{calls.push(args);return available?{context,questionsVersion}:null;}},
+  '@/app/feedback/form-client':{FeedbackFormClient:'form'},
+ };
+ const code=ts.transpileModule(fs.readFileSync('src/app/feedback/dine-in/[brandSlug]/[locationSlug]/page.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+ const mod={exports:{}};new Function('require','module','exports',code)(name=>{assert.ok(name in mocks,name);return mocks[name]},mod,mod.exports);
+ assert.equal(mod.exports.dynamic,'force-dynamic');assert.equal(mod.exports.revalidate,0);
+ const props={params:Promise.resolve({brandSlug:'esmeralda',locationSlug:'amager'}),searchParams:Promise.resolve({lang:'en',customerId:'forged',brandId:'foreign'})};
+ assert.deepEqual((await mod.exports.default(props)).props,{context,questionsVersion});assert.deepEqual(calls.pop(),['esmeralda','amager','en']);
+ await mod.exports.default({...props,searchParams:Promise.resolve({lang:['en','da']})});assert.deepEqual(calls.pop(),['esmeralda','amager','da']);
+ available=false;await assert.rejects(()=>mod.exports.default(props),/NOT_FOUND/);
+});

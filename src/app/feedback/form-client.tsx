@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { submitFeedbackAction } from './actions';
+import { submitDineInFeedbackAction } from './dine-in/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -92,10 +93,12 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     setError(null);
     startTransition(async () => {
       try {
-      const result = await submitFeedbackAction(null, formData);
+      const submit = context.sourceType === 'dine_in' ? submitDineInFeedbackAction : submitFeedbackAction;
+      const result = await submit(null, formData);
       if (result?.error) {
-        setError(questionsVersion.language === 'en' ? result.message : copy.error);
-        toast({ variant: 'destructive', title: questionsVersion.language === 'en' ? 'Error' : 'Fejl', description: questionsVersion.language === 'en' ? result.message : copy.error });
+        const message = context.sourceType === 'dine_in' || english ? result.message : copy.error;
+        setError(message);
+        toast({ variant: 'destructive', title: english ? 'Error' : 'Fejl', description: message });
       }
       } catch (error) {
         // Next redirects are handled by the router; transport errors retain the answers.
@@ -207,14 +210,14 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     }
   };
 
-  const isBooking = context.sourceType === 'booking';
+  const isVisit = context.sourceType === 'booking' || context.sourceType === 'dine_in';
 
   return (
     <ExperienceShell brandId={context.brandId} brandName={context.brandName} logoUrl={context.brandLogoUrl}>
       <div className="px-5 py-8 sm:px-10 sm:py-10">
         <div className="mb-9 text-left">
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--feedback-accent)]">{questionsVersion.language === 'en' ? 'Your experience matters' : 'Din oplevelse betyder noget'}</p>
-          <h1 className="heading-style-h1">{isBooking ? copy.visit : copy.order}</h1>
+          <h1 className="heading-style-h1">{isVisit ? copy.visit : copy.order}</h1>
           <p className="text-size-regular mt-4 max-w-xl text-[var(--feedback-muted)]">{copy.intro}</p>
           <p className="mt-4 text-xs text-[var(--feedback-accent)]">{questionsVersion.questions.length} {questionsVersion.language === 'en' ? 'questions · about 1 minute' : 'spørgsmål · cirka 1 minut'}</p>
           <p className="mt-2 text-xs text-[var(--feedback-muted)]">{context.displayReference}</p>
@@ -236,7 +239,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
           <Button type="submit" className="button w-full focus-visible:ring-[var(--feedback-accent)]" disabled={isPending}>
             {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{copy.sending}</> : copy.send}
           </Button>
-          <p className="text-left text-sm leading-6 text-[var(--feedback-muted)]">{copy.private}</p>
+          <p className="text-left text-sm leading-6 text-[var(--feedback-muted)]">{context.sourceType === 'dine_in' ? (english ? 'Your answers are anonymous and shared with the restaurant. No name, email or booking is required.' : 'Dine svar er anonyme og deles med restauranten. Du behøver ikke oplyse navn, e-mail eller booking.') : copy.private}</p>
         </form>
       </div>
     </ExperienceShell>
