@@ -23,14 +23,19 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     }, [editingItem]);
     if (!itemCount && floating)
         return null;
+    const trigger = <SheetTrigger asChild>
+      <Button data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating
+        ? isV2 ? 'w-full h-[54px] text-base font-bold' : 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold'
+        : 'font-bold min-h-11'}>
+        <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span>}</span>
+      </Button>
+    </SheetTrigger>;
     return <>
     {floating && <div data-v2-cart-clearance={isV2 || undefined} className="h-20 lg:hidden" aria-hidden="true"/>}
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <Button data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating ? 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold' : 'font-bold min-h-11'}>
-          <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span>}</span>
-        </Button>
-      </SheetTrigger>
+      {isV2 && floating
+        ? <div data-v2-cart-dock className="fixed inset-x-0 bottom-0 z-40 lg:hidden">{trigger}</div>
+        : trigger}
       <SheetContent data-storefront-version={isV2 ? '2' : undefined} side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
         {isV2 && <div className="v2-cart-brandbar"><Button variant="ghost" size="icon" aria-label="Tilbage til menuen" onClick={() => setOpen(false)}><ArrowLeft className="size-5" /></Button><span>ESMERALDA</span></div>}
         <SheetHeader className="p-4 pr-14 shrink-0"><SheetTitle>{isV2 ? 'Din kurv' : `Din kurv · ${itemCountLabel(itemCount)}`}</SheetTitle><SheetDescription>{isV2 ? `${deliveryType === 'delivery' ? 'Levering' : 'Afhentning'}${location?.name ? ` · ${location.name}` : ''}` : 'Rediger dine varer, eller gå videre til kassen.'}</SheetDescription></SheetHeader>
