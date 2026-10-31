@@ -13,7 +13,7 @@ const enabled = fn => async () => {
   const before = keys.map(k => process.env[k]); keys.forEach(k => process.env[k] = 'true');
   try { await fn(); } finally { keys.forEach((k, i) => before[i] === undefined ? delete process.env[k] : process.env[k] = before[i]); }
 };
-async function fixture() {
+async function fixture(menu = false) {
   const now = Date.now(), draft = credentials.createPrinterDeviceCredentialDraft({ ...scope, printerRevision: 3, credentialRevision: 1 });
   const configuration = { id: 'p1', brandId: 'b1', locationId: 'l1', name: 'Køkken', manufacturer: 'star',
     model: 'mc-print3', transport: 'cloudprnt-http', state: 'active', paperWidthMm: 80 };
@@ -34,6 +34,14 @@ async function fixture() {
     ['products/pizza', { brandId: 'b1', productName: 'Pizza æøå', isActive: true, locationIds: ['l1'], categoryId: 'cat' }],
     ['categories/cat', { isActive: true, locationIds: ['l1'] }],
   ]);
+  if (menu) {
+    rows.set('combos/menu', {brandId:'b1',locationIds:['l1'],isActive:true});
+    for(const id of ['cola','dip']) rows.set('products/'+id,{brandId:'b1',productName:id,isActive:true,locationIds:['l1'],categoryId:'cat'});
+    rows.get('orders/o1').productItems=[{id:'menu',itemType:'combo',name:'Pizzamenu',quantity:2,toppings:['Margherita: Almindelig bund'],comboSelections:[
+      {groupName:'Pizza',products:[{id:'pizza',name:'Margherita',modifiers:[{id:'base',quantity:1}]}]},
+      {groupName:'Sodavand',products:[{id:'cola',name:'Pepsi Max'}]}, {groupName:'Dip',products:[{id:'dip',name:'Chili'}]}]},
+      {id:'pizza',itemType:'product',name:'Margherita',quantity:1,toppings:['Glutenfri bund']}];
+  }
   const window = { schemaVersion: 1, ...scope, printerRevision: 3, credentialRevision: 1,
     model: 'mc-print3', paperWidthMm: 80, issuedAt: now - 5000, expiresAt: now - 5000 + 3600000,
     qualificationId: 'q'.repeat(43), routingRevision: 1, trust: 'supervised_order_test', actorId: 'firebase:supervisor', stoppedAt: null,
@@ -78,7 +86,7 @@ async function fixture() {
     .projectNativePrintCatalog({ db, transaction }, { orderId: 'o1', brandId: 'b1', locationId: 'l1' }));
   rows.set('orders/o1/printIntents/original', { schemaVersion: 1, id: 'original', orderId: 'o1', brandId: 'b1', locationId: 'l1',
     originalRevision: 0, policyRevision: 1, routingRevision: 1, rulesHash: 'a'.repeat(64), catalogHash: hash(catalog), createdAt: job.createdAt,
-    targets: [{ printerId: 'p1', printerRevision: 3, configurationHash: hash(configuration), kinds: ['kitchen'], lineIds: ['line-0'] }] });
+    targets: [{ printerId: 'p1', printerRevision: 3, configurationHash: hash(configuration), kinds: ['kitchen'], lineIds: catalog.lines.map(line=>line.lineId) }] });
   commits.length = 0;
   const command = { ...scope, authorization: `Basic ${Buffer.from(`orderfly:${draft.secret}`).toString('base64')}` };
   const poll = () => api.pollOrdinaryPrint({ ...command, ready: true });
@@ -384,4 +392,21 @@ test('expired never-downloaded offer is archived after reenable and cannot be re
   await assert.rejects(f.download(offer.jobToken));assert.equal(await f.replay(),false,'archived original is terminal');
   assert.equal(f.rows.has(path('jobs',f.job.id)),false);
  }finally{Date.now=clock;}
+}));
+
+test('mixed menu order offers real PNG once, preserves immutable bytes and confirms without replay',enabled(async()=>{
+ const f=await fixture(true), offered=await f.poll();
+ assert.equal(offered.jobReady,true);
+ const downloaded=await f.download(offered.jobToken);
+ assert.equal(downloaded.payload.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+ await assert.rejects(f.download(offered.jobToken),/ordinary_print_conflict/);
+ assert.equal(await f.replay(),false);
+ await f.confirm(offered.jobToken);assert.equal((await f.poll()).jobReady,false);
+}));
+
+test('changed menu selection after immutable manifest refuses original rather than reprinting changed food',enabled(async()=>{
+ const f=await fixture(true);
+ f.rows.get('orders/o1').productItems[0].comboSelections[1].products[0].name='Changed drink';
+ await assert.rejects(f.poll(),/ordinary_content_unavailable/);
+ assert.equal(f.rows.has(path('ordinaryDispatches',f.job.id)),false);
 }));

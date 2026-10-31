@@ -172,3 +172,21 @@ test('original kitchen print includes scoped booking pickup ETA before courier u
   record.scope={...record.scope,brandId:'foreign'};assert.equal((await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},scope)).order.delivery.plannedPickup,null);
  }
 });
+
+test('routed menu prints only selected components and their saved modifiers, without leaking exclusions',async()=>{
+ const f=fixture();f.order.productItems=[{id:'menu',itemType:'combo',name:'Pizzamenu',quantity:2,toppings:['Margherita: Uden ost','Margherita: 2 × Chili'],comboSelections:[
+ {groupName:'Pizza',products:[{id:'pasta',name:'Margherita',modifiers:[{id:'remove',quantity:1},{id:'chili',quantity:2}]}]},
+ {groupName:'Sodavand',products:[{id:'cola',name:'Pepsi'}]},{groupName:'Dip',products:[]}]}];
+ const drink=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},{...scope,lineIds:['line-0-group-1-product-0']});
+ assert.deepEqual(drink.order.lines[0].modifiers,[]);assert.equal(drink.order.lines[0].groups[0].products[0].quantity,2);
+ assert.doesNotMatch(JSON.stringify(drink),/Margherita|Uden ost|Chili/);
+ const food=await f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},{...scope,lineIds:['line-0-group-0-product-0']});
+ assert.deepEqual(food.order.lines[0].modifiers,['Margherita: Uden ost','Margherita: 2 × Chili']);assert.doesNotMatch(JSON.stringify(food),/Pepsi/);
+ for(const lineIds of [['line-0'],['line-0-group-2-product-0'],['line-0-group-00-product-0'],['line-0-group-0-product-0','line-0-group-0-product-0']])await assert.rejects(f.api.prepareKitchenPrintSnapshot({db:f.db,transaction:f.tx},{...scope,lineIds}),/receipt_content_unavailable/);
+ const manual=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});
+ assert.match(manual.payload.toString(),/2 × Margherita/);assert.match(manual.payload.toString(),/2 × Pepsi/);assert.match(manual.payload.toString(),/Uden ost/);
+});
+test('manual historical receipt keeps checkout-supported component modifier counts above automatic routing limit',async()=>{
+ const f=fixture();f.order.productItems=[{id:'menu',itemType:'combo',name:'Pizzamenu',quantity:1,toppings:Array.from({length:9},(_,i)=>'Pizza: Option '+i),comboSelections:[{groupName:'Pizza',products:[{id:'pasta',name:'Pizza',modifiers:Array.from({length:9},(_,i)=>({id:'t'+i,quantity:1}))}]}]}];
+ const printed=await f.api.prepareReceiptPrintContent({...scope,kind:'kitchen'});assert.match(printed.payload.toString(),/Option 8/);
+});

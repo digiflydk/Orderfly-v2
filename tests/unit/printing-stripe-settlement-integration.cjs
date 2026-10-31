@@ -556,3 +556,28 @@ test('permanent policy suppresses old orders, unsupported combos and disabled pr
   assert.equal(await f.settle(),true,mode);assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.jobs().length,0,mode);
  }}finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
 });
+
+test('permanent Stripe menu settlement creates component-routed manifests and jobs once',async()=>{
+ const before=process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED='true';
+ try{
+  const f=await fixture();activatePermanent(f);f.records.delete(policyPath);
+  const ordinary=f.order().productItems[0];
+  f.records.set('combos/menu',{brandId:'b',locationIds:['l'],isActive:true});
+  for(const id of ['cola','dip']){
+   f.records.set('products/'+id,{brandId:'b',locationIds:['l'],categoryId:'sides',isActive:true,productName:id});
+  }
+  f.records.set('categories/sides',{locationIds:['l'],isActive:true});
+  f.records.get(rulesPath).rules[1].match={type:'all'};
+  f.order().productItems=[{...ordinary,id:'menu',itemType:'combo',name:'Pizzamenu',quantity:2,
+   toppings:['Margherita: Almindelig bund'],comboSelections:[
+    {groupName:'Pizza',products:[{id:'p',name:'Margherita',modifiers:[{id:'base',quantity:1}]}]},
+    {groupName:'Sodavand',products:[{id:'cola',name:'Pepsi Max'}]},
+    {groupName:'Dip',products:[{id:'dip',name:'Chili'}]}]},ordinary];
+  assert.equal(await f.settle(),true);assert.equal(f.jobs().length,2);
+  const manifest=f.records.get(`orders/${f.orderId}/printIntents/original`);
+  assert.deepEqual(manifest.targets.find(target=>target.printerId==='pizza').lineIds,['line-0-group-0-product-0','line-1']);
+  assert.deepEqual(manifest.targets.find(target=>target.printerId==='packing').lineIds,
+   ['line-0-group-0-product-0','line-0-group-1-product-0','line-0-group-2-product-0','line-1']);
+  const original=structuredClone([...f.records]);assert.equal(await f.settle(),false);assert.deepEqual([...f.records],original);
+ }finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
+});

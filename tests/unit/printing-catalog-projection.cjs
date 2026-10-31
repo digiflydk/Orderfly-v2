@@ -67,9 +67,9 @@ test('malformed location lists/duplicates/oversized arrays reject before reading
  const f=fixture(),huge=new Array(1000000);Object.defineProperty(huge,'0',{get(){assert.fail('must not traverse oversized array');}});
  f.rows.get('products/p1').locationIds=huge;await rejected(f,'invalid_catalog');
 });
-test('combos and ambiguous combo selections reject the entire order before any product lookup',async()=>{
+test('malformed or empty combos and ambiguous product selections reject before product lookup',async()=>{
  for(const patch of [{itemType:'combo'},{comboSelections:[]},{comboSelections:[{products:[{id:'p1'}]}]}]){
-  const f=fixture();f.order().productItems=[item(),item(patch)];await rejected(f,'combo_requires_projection');assert.ok(!f.reads.some(x=>x.startsWith('products/')));
+  const f=fixture();f.order().productItems=[item(),item(patch)];await rejected(f,'invalid_order');assert.ok(!f.reads.some(x=>x.startsWith('products/')));
  }
 });
 test('invalid order rows/quantities/note mappings fail without partial lines',async()=>{
@@ -144,4 +144,52 @@ test('quantity and removal snapshots retain parent count and option labels throu
  assert.deepEqual(result.lines[0].modifiers,['2 × Ost','Uden løg']);
  assert.deepEqual(f.writes,[]);
  assert.equal(result.dispatchAuthorized,false);
+});
+
+function menuFixture() {
+ const f=fixture();
+ f.rows.set('combos/menu',{brandId:'b1',locationIds:['l1'],isActive:true});
+ for(const [id,categoryId] of [['cola','drink'],['dip','side']]){
+  f.rows.set('products/'+id,{brandId:'b1',locationIds:['l1'],isActive:true,productName:id,categoryId});
+  f.rows.set('categories/'+categoryId,{locationIds:['l1'],isActive:true});
+ }
+ f.order().productItems=[{id:'menu',itemType:'combo',name:'Pizzamenu',quantity:2,toppings:['Margherita: Uden ost','Margherita: 2 × Chili'],
+  comboSelections:[{groupName:'Pizza',products:[{id:'p1',name:'Margherita',modifiers:[{id:'remove',quantity:1},{id:'chili',quantity:2}]}]},
+   {groupName:'Sodavand',products:[{id:'cola',name:'Pepsi'}]},{groupName:'Dip',products:[{id:'dip',name:'Hvidløg'}]}]}];
+ return f;
+}
+test('menu projects scoped components and exact historical modifiers at menu quantity, without prices',async()=>{
+ const f=menuFixture(), r=await f.projectNativePrintCatalog(f.context,scope);
+ assert.deepEqual(r.lines.map(l=>[l.lineId,l.productId,l.quantity,l.modifiers]),[
+ ['line-0-group-0-product-0','p1',2,['Margherita: Uden ost','Margherita: 2 × Chili']],
+ ['line-0-group-1-product-0','cola',2,[]],['line-0-group-2-product-0','dip',2,[]]]);
+ assert.deepEqual(r.lines.map(l=>l.categoryId),['c1','drink','side']);assert.equal(f.writes.length,0);
+ f.order().productItems[0].comboSelections[2].products=[];
+ assert.equal((await f.projectNativePrintCatalog(f.context,scope)).lines.length,2,'no dip is a valid empty optional group');
+ f.order().productItems[0].comboSelections.push({groupName:'Pizza two',products:[{id:'p1',name:'Margherita'}]});
+ assert.equal((await f.projectNativePrintCatalog(f.context,scope)).lines.at(-1).lineId,'line-0-group-3-product-0');
+});
+test('menu native ownership, deletion/activity and malformed or unbound modifier labels fail closed',async()=>{
+ for(const [path,patch]of [['combos/menu',{brandId:'other'}],['combos/menu',{locationIds:['other']}],['combos/menu',{isActive:false}],['products/cola',{brandId:'other'}],['products/dip',{isActive:false}],['categories/drink',{locationIds:['other']}],['products/cola',{deleted:true}]]){
+  const f=menuFixture();Object.assign(f.rows.get(path),patch);await rejected(f,'invalid_catalog');
+ }
+ const missing=menuFixture();missing.rows.delete('products/dip');await rejected(missing,'invalid_catalog');
+ const labels=menuFixture();labels.order().productItems[0].toppings=['Foreign component: Uden ost'];await rejected(labels,'invalid_order');
+ const allEmpty=menuFixture();allEmpty.order().productItems[0].comboSelections=[];await rejected(allEmpty,'invalid_order');
+});
+test('menu context accepts both maximum valid labels within the routing note budget',async()=>{
+ const f=menuFixture();f.order().productItems[0].name='m'.repeat(160);f.order().productItems[0].comboSelections[0].groupName='g'.repeat(160);
+ assert.equal((await f.projectNativePrintCatalog(f.context,scope)).lines[0].kitchenNote.length,322);
+});
+
+test('menu aggregate modifiers can exceed eight while every component stays within its routing bound',async()=>{
+ const f=menuFixture(),menu=f.order().productItems[0];
+ const product={id:'p1',name:'Margherita',modifiers:Array.from({length:5},(_,i)=>({id:'choice'+i,quantity:1}))};
+ menu.comboSelections=[{groupName:'First pizza',products:[product]},{groupName:'Second pizza',products:[structuredClone(product)]}];
+ menu.toppings=Array.from({length:10},(_,i)=>'Margherita: Option '+i);
+ const result=await f.projectNativePrintCatalog(f.context,scope);
+ assert.deepEqual(result.lines.map(line=>line.modifiers.length),[5,5]);
+ assert.equal(result.lines[1].modifiers[0],'Margherita: Option 5');
+ product.modifiers=Array.from({length:9},(_,i)=>({id:'choice'+i,quantity:1}));
+ await rejected(f,'invalid_order');
 });
