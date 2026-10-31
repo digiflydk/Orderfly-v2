@@ -17,7 +17,8 @@ import type { WoltPrivateQuote, WoltProviderDependencies } from '../providers/wo
 import { measureQuoteStep } from '../quotes/performance';
 
 // Reuse the SDK connection; accessSecretVersion and both native authority
-// checks below still run for every operation. No secret payload is cached.
+// checks remain fresh for operators/dispatch. Customer quotes reuse only their
+// one-shot preflight, with a fresh final transaction. No secret payload is cached.
 let secretClient: SecretManagerServiceClient | undefined;
 
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -87,7 +88,7 @@ export async function createCustomerWoltStorage(capability:CustomerWoltQuoteCapa
  const inspected=inspectCustomerWoltQuoteCapability(capability),environment=environmentSchema.parse(rawEnvironment);
  if(inspected.environment!==environment)throw new AuthorityError('forbidden');
  const scope=Object.freeze({brandId:inspected.brandId,locationId:inspected.locationId});
- return createStorage(scope,environment,tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope));
+ return createStorage(scope,environment,tx=>authorizeCustomerWoltQuoteInTransaction(tx,capability,scope),true);
 }
 /** Only the native dispatcher can mint a capability accepted by the fixed authority accessor. */
 export async function createClaimedWoltStorage(capability:WoltDispatchCapability,rawEnvironment:unknown){
@@ -96,12 +97,18 @@ export async function createClaimedWoltStorage(capability:WoltDispatchCapability
  const scope=Object.freeze({brandId:inspected.brandId,locationId:inspected.locationId});
  return createStorage(scope,environment,tx=>authorizeWoltDispatchInTransaction(tx,capability,scope));
 }
-async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,authorize:(tx:FirebaseFirestore.Transaction)=>Promise<void>):Promise<Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>>{
+async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,authorize:(tx:FirebaseFirestore.Transaction)=>Promise<void>,quoteRequestOnly=false):Promise<Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>>{
  const exact=(candidate:DeliveryScope)=>candidate.brandId===scope.brandId&&candidate.locationId===scope.locationId;
  // This snapshot contains no writes. Read-only transactions retain the scoped
  // authority/binding checks without an empty read/write commit or read locks.
- async function current(){return measureQuoteStep('wolt_authority',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{await authorize(tx);return loadWoltBindingInTransaction(tx,scope,environment);},{readOnly:true})) );}
- // Fail before returning a usable adapter and re-authorize every operation thereafter.
+ let snapshot:WoltBindingRecord|undefined;const deadline=Date.now()+30000;
+ async function current(){
+  if(quoteRequestOnly&&snapshot){if(Date.now()>=deadline)throw new WoltStorageError('binding_unavailable');return structuredClone(snapshot);}
+  const result=await measureQuoteStep('wolt_authority',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{const [,binding]=await Promise.all([authorize(tx),loadWoltBindingInTransaction(tx,scope,environment)]);return binding;},{readOnly:true})));
+  if(quoteRequestOnly)snapshot=structuredClone(result);return result;
+ }
+ // Fail before returning an adapter. Only the fixed one-shot customer composition
+ // reuses this snapshot; operators and dispatch continue to reauthorize every operation.
  await current();
  const storage:Pick<WoltProviderDependencies,'authorizeScope'|'resolveBinding'|'resolveSecret'|'saveQuote'|'loadQuote'>={
   async authorizeScope(candidate){if(!exact(candidate))return false;try{await current();return true;}catch{return false;}},
@@ -116,7 +123,9 @@ async function createStorage(scope:DeliveryScope,environment:WoltEnvironment,aut
    });
   },
   async saveQuote(raw){const quote=woltPrivateQuoteSchema.parse(raw);await measureQuoteStep('wolt_store',()=>sanitized(()=>getAdminDb().runTransaction(async tx=>{
-    await authorize(tx);const binding=await loadWoltBindingInTransaction(tx,scope,environment);const expiresAtMs=freshQuote(quote,binding,Date.now());
+    const [,binding]=await Promise.all([authorize(tx),loadWoltBindingInTransaction(tx,scope,environment)]);
+    if(quoteRequestOnly&&(!snapshot||Date.now()>=deadline||!isDeepStrictEqual(binding,snapshot)))throw new WoltStorageError('binding_unavailable');
+    const expiresAtMs=freshQuote(quote,binding,Date.now());
     const ref=getAdminDb().collection('deliveryPrivateWoltQuotes').doc(woltPrivateQuoteDocumentId(scope,environment,quote.quoteRef));const old=await tx.get(ref);
     if(old.exists){if(!isDeepStrictEqual(old.data()?.quote,quote))throw new WoltStorageError('quote_conflict');return;}
     freshQuote(quote,binding,Date.now());tx.create(ref,{schemaVersion:1,quote,expiresAtMs});

@@ -43,6 +43,8 @@ import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Cu
 import { getDiscountByCode, getDiscountById } from '@/lib/server/checkout-discounts';
 import { bestAutomaticDiscount, isQuantityMethod, type OfferLine } from '@/lib/automatic-discounts';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
+import {withDeliveryRequest} from '@/lib/delivery/quotes/request-context';
+import {loadQuoteRestaurant} from '@/lib/delivery/quotes/restaurant-cache';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 import { getToppings } from '../superadmin/toppings/actions';
@@ -665,17 +667,17 @@ async function resolveAuthoritativeCheckoutPricing(input: {
 }
 
 export async function requestManagedDeliveryQuoteAction(input:Parameters<typeof executeManagedDeliveryQuote>[0]):Promise<(import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteDto|import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteFailure)&{timings:QuoteTimings}> {
-  const {result,timings}=await withQuoteTimings(()=>executeManagedDeliveryQuote(input));
+  const {result,timings}=await withQuoteTimings(()=>withDeliveryRequest(()=>executeManagedDeliveryQuote(input)));
   return {...result,timings};
 }
 
 async function executeManagedDeliveryQuote(input: {
-  checkoutKey:string;cartItems:MinimalCartItem[];customerInfo:CustomerInfo;brandId:string;locationId:string;
+  routeReceipt?:string;checkoutKey:string;cartItems:MinimalCartItem[];customerInfo:CustomerInfo;brandId:string;locationId:string;
   paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;brandSlug:string;locationSlug:string;deliveryTime?:string;
 }):Promise<import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteDto|import('@/lib/delivery/quotes/customer-boundary').CustomerQuoteFailure> {
-  // No approved live route source is registered. Do not expose private provider prices or pretend a quote exists.
+  // Provider prices and authority remain server-owned; preview is never payment proof.
   const failure={ok:false as const,code:'delivery_unavailable' as const,message:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
-  if (!input || !/^[a-f0-9]{64}$/.test(input.checkoutKey)) return {...failure,code:'invalid_request'};
+  if (!input || input.routeReceipt!==undefined&&(typeof input.routeReceipt!=='string'||input.routeReceipt.length>8192) || !/^[a-f0-9]{64}$/.test(input.checkoutKey)) return {...failure,code:'invalid_request'};
   const parsed=deliveryQuoteRequestSchema.safeParse([input.cartItems,input.customerInfo,'delivery',input.brandId,input.locationId,input.paymentDetails,input.appliedDiscountId,input.brandSlug,input.locationSlug,input.deliveryTime,undefined]);
   if(!parsed.success){
     const fields=['cart','customer','scope','scope','scope','payment','discount','brand_slug','location_slug','time'] as const;
@@ -691,7 +693,7 @@ async function executeManagedDeliveryQuote(input: {
   const trace:QuoteTrace=(stage,reason)=>{diagnostic={stage,code:quoteDiagnosticCode(reason),atMs:Date.now()};};
   const report=()=>scopeVerified?recordQuoteDiagnostic({brandId:input.brandId,locationId:input.locationId},diagnostic):Promise.resolve();
   try {
-    const [brand,location]=await measureQuoteStep('scope',()=>Promise.all([getBrandById(input.brandId),getLocationById(input.locationId)]));
+    const {brand,location}=await measureQuoteStep('scope',()=>loadQuoteRestaurant(input.brandId,input.locationId));
     if(!brand||!location||location.brandId!==brand.id||brand.slug!==input.brandSlug||location.slug!==input.locationSlug)return {...failure,code:'invalid_request'};
     scopeVerified=true;
     // The controller checks configuration before saving the draft, then the
@@ -702,7 +704,7 @@ async function executeManagedDeliveryQuote(input: {
     // Managed customer arrival is validated against the authoritative courier
     // pickup schedule by the controller, including arrivals after kitchen close.
     const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
-      subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
+      routeReceipt:input.routeReceipt,subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
     if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
     return result;
   }catch(error){trace(diagnostic.stage,error);await report();return customerQuoteFailure(error);}

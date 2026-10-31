@@ -5,6 +5,7 @@ import { measureQuoteStep } from '../quotes/performance';
 export type DeliveryAddress = { street: string; postalCode: string; city: string; countryCode: string };
 export type VerifiedAddress = { reference: string; latitude: number; longitude: number };
 export type RoutingAdapter = {
+  receipts?:{issue:(identity:string,result:RoutingResult,now:number)=>string|undefined;verify:(receipt:string,identity:string,now:number)=>RoutingResult|null};
   source: string;
   resolve(address: DeliveryAddress): Promise<{ kind: 'verified'; address: VerifiedAddress } | { kind: 'invalid' | 'ambiguous' | 'unavailable' }>;
   route(input: { pickup: VerifiedAddress; dropoff: VerifiedAddress; profile: string }): Promise<
@@ -13,7 +14,7 @@ export type RoutingAdapter = {
 export type RouteEvidence = RouteDistance & {
   pickupReference: string; dropoffReference: string; durationSeconds: number;
 };
-export type RoutingResult = { ok: true; route: RouteEvidence; pickup: VerifiedAddress; dropoff: VerifiedAddress } | { ok: false; reason:
+export type RoutingResult = { ok: true; receipt?:string; route: RouteEvidence; pickup: VerifiedAddress; dropoff: VerifiedAddress } | { ok: false; reason:
   'routing_unconfigured' | 'invalid_address' | 'ambiguous_address' | 'routing_unavailable' | 'no_route' | 'invalid_route' };
 const text = (s: unknown) => typeof s === 'string' && s.trim().length > 0 && s.length <= 200;
 function validAddress(a: DeliveryAddress): boolean {
@@ -57,13 +58,18 @@ async function resolveFreshDeliveryRoute(input: { pickup: DeliveryAddress; dropo
 // Short-lived server-only route reuse between price display and courier confirmation.
 // Scope, source and both addresses are bound; approvals are checked by callers on every request.
 const recentRoutes=new Map<string,{expires:number;result:RoutingResult}>();
-export async function resolveDeliveryRoute(input:Parameters<typeof resolveFreshDeliveryRoute>[0],dependencies:Parameters<typeof resolveFreshDeliveryRoute>[1]&{scope?:{brandId:string;locationId:string}}):Promise<RoutingResult>{
+export async function resolveDeliveryRoute(input:Parameters<typeof resolveFreshDeliveryRoute>[0],dependencies:Parameters<typeof resolveFreshDeliveryRoute>[1]&{scope?:{brandId:string;locationId:string};receipt?:string}):Promise<RoutingResult>{
  const key=dependencies.scope&&dependencies.adapter?JSON.stringify([dependencies.scope.brandId,dependencies.scope.locationId,dependencies.adapter.source,input]):null;
  const now=dependencies.now().getTime();
+ if(key&&dependencies.receipt&&dependencies.adapter?.receipts){
+  const verified=dependencies.adapter.receipts.verify(dependencies.receipt,key,now);
+  if(verified?.ok)return measureQuoteStep('route_receipt_hit',async()=>structuredClone(verified));
+ }
  for(const [k,v] of recentRoutes)if(v.expires<=now)recentRoutes.delete(k);
  const cached=key?recentRoutes.get(key):null;
- if(cached&&cached.expires>now)return structuredClone(cached.result);
- const result=await resolveFreshDeliveryRoute(input,dependencies);
+ if(cached&&cached.expires>now)return measureQuoteStep('route_cache_hit',async()=>structuredClone(cached.result));
+ const result=await measureQuoteStep('route_cache_miss',()=>resolveFreshDeliveryRoute(input,dependencies));
+ if(key&&result.ok&&dependencies.adapter?.receipts)result.receipt=dependencies.adapter.receipts.issue(key,result,dependencies.now().getTime());
  if(key&&result.ok){if(recentRoutes.size>=256)recentRoutes.delete(recentRoutes.keys().next().value!);recentRoutes.set(key,{expires:now+30000,result:structuredClone(result)});}
  return result;
 }

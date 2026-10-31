@@ -27,7 +27,7 @@ function paths(brandId: string, locationId: string | null) {
   return { brand, local: locationId ? brand.collection('locations').doc(locationId) : null };
 }
 /** Internal transaction loader; caller must authorize the exact native scope in the same transaction. */
-export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Transaction, brandId: string, locationId: string | null) {
+export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Transaction, brandId: string, locationId: string | null, locationSnapshot?:Promise<FirebaseFirestore.DocumentSnapshot>) {
   const refs = paths(brandId, locationId);
   // These document identities are known before either read; keep both in the
   // caller's transaction without adding an unnecessary network round trip.
@@ -42,7 +42,7 @@ export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Tr
   const overrides = local?.success ? local.data.overrides : {};
   const resolved = resolveDeliverySettings(settings, overrides);
   if (resolved.settings.scheduleMode === 'restaurant') {
-    const location = await tx.get(getAdminDb().collection('locations').doc(locationId!));
+    const location = await (locationSnapshot??tx.get(getAdminDb().collection('locations').doc(locationId!)));
     if (!location.exists || location.data()?.brandId !== brandId) return unavailable();
     resolved.settings = resolveRestaurantDeliverySchedule(resolved.settings, location.data()?.openingHours as Location['openingHours']);
   }

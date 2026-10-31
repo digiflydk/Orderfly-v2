@@ -209,7 +209,7 @@ test('quote timings measure invocation only and log strictly numeric server aggr
  await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.clock.runFor(5000);
  await page.getByRole('textbox',{name:'Adresse'}).fill('private address');await page.clock.runFor(250);await waitRequests(page,1);await page.clock.runFor(800);
  const timings={serverMs:700,stages:{scope:{ms:50,count:1},provider:{ms:400,count:1}}};await respond(page,quote({timings}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
- const logs=await page.evaluate(()=>window.timingLogs);assert.deepEqual(logs,[['delivery_quote_timing',{clientMs:800,...timings}]]);assert.doesNotMatch(JSON.stringify(logs),/private address|opaque-token|quote-a|fingerprint-a|checkoutKey/);
+ const logs=await page.evaluate(()=>window.timingLogs);assert.deepEqual(logs,[['delivery_quote_timing',JSON.stringify({clientMs:800,...timings})]]);assert.doesNotMatch(JSON.stringify(logs),/private address|opaque-token|quote-a|fingerprint-a|checkoutKey/);
 });
 
 test('invalid server timing objects never leak unknown fields or disable valid payment',async t=>{
@@ -218,7 +218,7 @@ test('invalid server timing objects never leak unknown fields or disable valid p
  for(let index=0;index<values.length;index++){
   await page.getByRole('textbox',{name:'Adresse'}).fill('address-'+index);await page.clock.runFor(300);await waitRequests(page,index+1);await respond(page,quote({timings:values[index]}),index);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
  }
- const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,values.length);for(const [tag,payload]of logs){assert.equal(tag,'delivery_quote_timing');assert.deepEqual(Object.keys(payload),['clientMs']);assert.ok(Number.isSafeInteger(payload.clientMs)&&payload.clientMs>=0);}assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|address|token/);
+ const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,values.length);for(const [tag,raw]of logs){const payload=JSON.parse(raw);assert.equal(tag,'delivery_quote_timing');assert.deepEqual(Object.keys(payload),['clientMs']);assert.ok(Number.isSafeInteger(payload.clientMs)&&payload.clientMs>=0);}assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|address|token/);
 });
 
 test('timing logging cannot break a quote when the browser console throws',async t=>{
@@ -229,5 +229,5 @@ test('obsolete and failed quote completion log durations without exposing result
  const page=await quotePage(t);await page.clock.install();await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(300);await waitRequests(page,1);
  await page.getByRole('textbox',{name:'Adresse'}).fill('second');await respond(page,quote({quoteId:'private-obsolete-id',timings:{serverMs:10,stages:{provider:{ms:5,count:1}}}}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(300);await waitRequests(page,2);
  await page.evaluate(()=>window.requests[1].reject(Error('PRIVATE_PROVIDER_ERROR')));await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();
- const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,2);assert.equal(logs[0][1].serverMs,10);assert.deepEqual(Object.keys(logs[1][1]),['clientMs']);assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|private-obsolete-id|first|second/);
+ const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,2);assert.equal(JSON.parse(logs[0][1]).serverMs,10);assert.deepEqual(Object.keys(JSON.parse(logs[1][1])),['clientMs']);assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|private-obsolete-id|first|second/);
 });

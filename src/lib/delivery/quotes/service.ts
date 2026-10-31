@@ -10,7 +10,7 @@ import { buildQuote, quoteFingerprint, type QuoteBindingInput, type BoundQuote }
 type AddressInput = Omit<DeliveryQuoteRequest['pickup'], 'coordinates'>;
 type FulfillmentInput = Omit<DeliveryQuoteRequest, 'pickup' | 'dropoff'> & {pickup:AddressInput;dropoff:AddressInput};
 export type DeliveryQuoteServiceInput = {
-  appliedCampaign?:DeliveryCampaignSnapshot; settings: DeliverySettings; binding: QuoteBindingInput; fulfillment: FulfillmentInput;
+  routeReceipt?:string; appliedCampaign?:DeliveryCampaignSnapshot; settings: DeliverySettings; binding: QuoteBindingInput; fulfillment: FulfillmentInput;
   quoteRef: string; itemSubtotalAfterDiscountMinor: number; freshnessMs: number; maxRouteAgeMs: number; routeProfile: string;
 };
 export function quoteAddressBinding(pickup:AddressInput,dropoff:AddressInput):string {
@@ -37,7 +37,7 @@ export async function quoteDelivery(input:DeliveryQuoteServiceInput, deps:{
     const schedule=deliveryScheduleAt(settings,new Date(input.fulfillment.readyAt));
     if (!schedule.open) return {ok:false,reason:schedule.reason};
     const postal=(a:AddressInput)=>({street:`${a.street} ${a.building}`.trim(),postalCode:a.postcode,city:a.city,countryCode:a.country});
-    const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now,scope:input.fulfillment.scope}));
+    const routeResult=await measureQuoteStep('routing',()=>resolveDeliveryRoute({pickup:postal(input.fulfillment.pickup),dropoff:postal(input.fulfillment.dropoff),profile:input.routeProfile},{adapter:deps.routing,now:deps.now,scope:input.fulfillment.scope,receipt:input.routeReceipt}));
     if (!routeResult.ok) return routeResult;
     const {route,pickup,dropoff}=routeResult;
     const coordinates=(a:typeof pickup)=>({latitude:a.latitude,longitude:a.longitude,source:route.source});

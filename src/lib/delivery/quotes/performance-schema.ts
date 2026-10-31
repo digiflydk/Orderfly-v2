@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const quoteTimingStages = ['scope', 'configuration', 'pricing', 'draft', 'runtime', 'routing', 'provider', 'claim', 'wolt_authority', 'wolt_secret', 'wolt_http', 'wolt_store', 'routing_geocode', 'routing_http', 'routing_budget'] as const;
+export const quoteTimingStages = ['scope', 'configuration', 'pricing', 'draft', 'runtime', 'routing', 'provider', 'claim', 'wolt_authority', 'wolt_secret', 'wolt_http', 'wolt_store', 'routing_geocode', 'routing_http', 'routing_budget', 'route_receipt_hit', 'route_cache_hit', 'route_cache_miss'] as const;
 export type QuoteTimingStage = typeof quoteTimingStages[number];
 const milliseconds = z.number().int().nonnegative().max(3_600_000);
 export const quoteTimingsSchema = z.object({

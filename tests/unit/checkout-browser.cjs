@@ -130,7 +130,7 @@ before(async()=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
   if(url.pathname==='/bundle.js'){res.setHeader('Content-Type','application/javascript');return res.end(fs.readFileSync(path.join(dir,'bundle.js')));}
-  if(url.pathname==='/api/delivery/price-preview'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({ok:true,baseFeeMinor:3500,currency:'DKK',minimumMinor:0,freeMinimumMinor:null,routingSource:'geoapify'}));}
+  if(url.pathname==='/api/delivery/price-preview'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({ok:true,baseFeeMinor:3500,currency:'DKK',minimumMinor:0,freeMinimumMinor:null,routingSource:'geoapify',routeReceipt:'server-route-receipt'}));}
   if(url.pathname==='/api/public/upsell'){
    let raw='';for await(const chunk of req)raw+=chunk;const input=JSON.parse(raw);
    const eligible=input.cartItems.some(item=>item.id==='pizza')&&!input.excludedUpsellIds.includes('u');
@@ -703,5 +703,6 @@ test('address price is visible before contact details and courier confirmation, 
  await expect(page.getByText('35,00 kr.',{exact:true}).filter({visible:true}).first()).toBeVisible();assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
  await page.getByLabel('E-mail',{exact:true}).fill('test@example.test');await expect.poll(()=>page.evaluate(()=>window.quoteInputs?.length||0)).toBe(1);
  await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).routeReceipt),'server-route-receipt');
  await page.evaluate(()=>window.releaseQuote());await quoted(page);
 });

@@ -1,4 +1,5 @@
 import 'server-only';
+import {reuseDeliveryRead} from './request-context';
 import type {QuoteTrace} from './diagnostic-schema';
 import type {AuthoritativeDraft} from './customer-boundary';
 import type {ManagedDeliveryRuntime} from './runtime';
@@ -15,7 +16,7 @@ export type ManagedRuntimeDependencies={
 };
 /** Dependencies belong to the server composition root. Nothing supplied in a customer request registers an adapter or grants approval. */
 export function createConfiguredManagedDeliveryRuntimeResolver(deps:ManagedRuntimeDependencies){
- async function config(scope:Scope){
+ async function configFresh(scope:Scope){
   const c=await deps.loadConfig(scope);
   if(!c||c.scope.brandId!==scope.brandId||c.scope.locationId!==scope.locationId||!['sandbox','production'].includes(c.environment)||!c.routingApprovalRef.trim()||!c.retentionApprovalRef.trim())return null;
   if(deps.authorizeConfig){
@@ -32,6 +33,7 @@ export function createConfiguredManagedDeliveryRuntimeResolver(deps:ManagedRunti
   if(!c.pickupContact.name.trim()||!/^\+[1-9]\d{7,14}$/.test(c.pickupContact.phone)||!Number.isFinite(Date.parse(c.pickupContact.verifiedAt)))return null;
   return c;
  }
+ const config=(scope:Scope)=>reuseDeliveryRead('runtime:'+JSON.stringify(scope),()=>configFresh(scope));
  return {
   async routing(scope:Scope){
    try { const c=await config(scope); if(!c)return null; const routing=await deps.createRouting(c); return routing?.source===c.routingSource?routing:null; } catch { return null; }

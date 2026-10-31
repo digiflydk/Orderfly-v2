@@ -1,4 +1,5 @@
 import 'server-only';
+import {withRouteReceipts} from '../routing/receipt';
 import type {QuoteTrace} from './diagnostic-schema';
 import {readManagedDeliveryAdoption} from './adoption';
 import {createHash} from 'node:crypto';
@@ -39,20 +40,21 @@ const resolver=createConfiguredManagedDeliveryRuntimeResolver({
   return platform?platform.enabled&&platform.retentionApproved&&platform.keyConfigured&&!!platform.routingApprovalRef&&!!platform.retentionApprovalRef&&isGeoapifyQuotaNamespace(platform.quotaNamespace):geoapifyConfigured();
  },
  async createRouting(config){
-  if(config.routingSource==='google_maps')return createGoogleRoutingAdapter({apiKey:process.env.ORDERFLY_DELIVERY_GOOGLE_MAPS_API_KEY||'',fetch});
+  if(config.routingSource==='google_maps'){const key=process.env.ORDERFLY_DELIVERY_GOOGLE_MAPS_API_KEY||'';return withRouteReceipts(createGoogleRoutingAdapter({apiKey:key,fetch}),key);}
   if(config.routingSource!=='geoapify')return null;
   const platform=await getPlatformGeoapifyReadiness();
   const configured=platform?await getPlatformGeoapifyRuntime():null;
   if(platform&&!configured)return null;
   if(!platform&&(config.environment!=='sandbox'||!geoapifyConfigured()))return null;
   const budget=createGeoapifyBudget({quotaNamespace:configured?.quotaNamespace??process.env.ORDERFLY_DELIVERY_GEOAPIFY_QUOTA_NAMESPACE!});
-  return createGeoapifyRoutingAdapter({apiKey:configured?.apiKey??process.env.ORDERFLY_DELIVERY_GEOAPIFY_API_KEY!,fetch,
-   reserveQuote:budget.reserveQuote,reserveRequest:budget.reserveRequest});
+  const key=configured?.apiKey??process.env.ORDERFLY_DELIVERY_GEOAPIFY_API_KEY!;
+  return withRouteReceipts(createGeoapifyRoutingAdapter({apiKey:key,fetch,
+   reserveQuote:budget.reserveQuote,reserveRequest:budget.reserveRequest}),key);
  },
  async createQuoteProvider(config,draft){
   // The native guest authority validates the persisted draft again before any private provider operation.
   const {createCustomerWoltQuoteProvider}=await import('../integrations/wolt-customer-quote');
-  return createCustomerWoltQuoteProvider(draft,config.environment);
+  return createCustomerWoltQuoteProvider(draft,config.environment,config);
  },
 });
 /** Configuration only: no provider, geocoding or paid routing calls. */

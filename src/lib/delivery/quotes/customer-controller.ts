@@ -16,8 +16,9 @@ import {normalizeDanishDeliveryAddress} from './address';
 import {checkoutKeyHash,issueCustomerQuote,type AuthoritativeDraft} from './customer-boundary';
 import {persistCustomerQuoteClaim,reserveCustomerQuoteRate,saveAuthoritativeCustomerDraft,loadCurrentCustomerDraft} from './customer-store';
 import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from './runtime';
+import {restaurantFingerprint} from './restaurant-snapshot';
 import { measureQuoteStep } from './performance';
-export type NativeManagedPricing={brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
+export type NativeManagedPricing={routeReceipt?:string;brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
  // Independent scoped reads after the controller's pre-persistence gate.
@@ -44,7 +45,8 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
    customer:{name:customer.name,email:customer.email.trim().toLowerCase(),phone:normalizeDeliveryPhone(customer.phone),deliveryInstructions:customer.deliveryInstructions||'',subscribeToNewsletter:customer.subscribeToNewsletter,subscribeToClub:!!customer.subscribeToClub},selection:input.deliverySelection,freeDeliveryCampaignIds:input.freeDeliveryCampaignIds})));
  const binding={brandId:brand.id,locationId:location.id,checkoutReference:key,providerId:result.settings.providerId,
   normalizedAddress:quoteAddressBinding(pickup,dropoff),cartDigest,fulfillmentAt:readyAt,brandRevision:result.brandRevision,locationRevision:result.revision};
- const draft={checkoutKeyHash:key,binding,requestDigest:quoteContentDigest({binding}),itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0)};
+ const restaurant=restaurantFingerprint(brand,location);
+ const draft={restaurantFingerprint:restaurant,checkoutKeyHash:key,binding,requestDigest:quoteContentDigest({binding,restaurant}),itemSubtotalAfterDiscountMinor:ore(input.subtotalAfterDiscount),bagFeeMinor:ore(input.payment.bagFee||0),adminFeeMinor:ore(input.payment.adminFee||0)};
  const settings=structuredClone(result.settings);
 
  return {draft,settings,pickup,dropoff,preparationMinutes,runtimeEnvironment};
@@ -63,7 +65,7 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
  // Global aggregate budget is deliberately conservative until trusted edge identity is configured; never trust client IP headers.
  return issueCustomerQuote(draft,{reserveRate:()=>reserveCustomerQuoteRate(draft.checkoutKeyHash,quoteContentDigest({scope:'managed-delivery-global'})),now:()=>Date.now(),commitIfCurrent:async claim=>{boundaryStage='claim';trace('claim');return measureQuoteStep('claim',()=>persistCustomerQuoteClaim(claim));},onFailure:error=>trace(boundaryStage,error),createQuote:async()=>{
   trace('quote');
-  const result=await quoteDelivery({...(input.freeDeliveryCampaignIds.length&&native.settings.pricingRules?{appliedCampaign:{kind:'native_free_delivery' as const,campaignIds:input.freeDeliveryCampaignIds,maxDistanceMeters:Math.min(native.settings.maxDistanceMeters,native.settings.pricingRules.maxDistanceMeters)}}:{}),settings:native.settings,binding:draft.binding,quoteRef:randomBytes(16).toString('hex'),itemSubtotalAfterDiscountMinor:draft.itemSubtotalAfterDiscountMinor,
+  const result=await quoteDelivery({routeReceipt:input.routeReceipt,...(input.freeDeliveryCampaignIds.length&&native.settings.pricingRules?{appliedCampaign:{kind:'native_free_delivery' as const,campaignIds:input.freeDeliveryCampaignIds,maxDistanceMeters:Math.min(native.settings.maxDistanceMeters,native.settings.pricingRules.maxDistanceMeters)}}:{}),settings:native.settings,binding:draft.binding,quoteRef:randomBytes(16).toString('hex'),itemSubtotalAfterDiscountMinor:draft.itemSubtotalAfterDiscountMinor,
    freshnessMs:300000,maxRouteAgeMs:60000,routeProfile:'car',fulfillment:{version:1,scope:{brandId:input.brand.id,locationId:input.location.id},checkoutRef:draft.binding.checkoutReference,providerId:draft.binding.providerId,
     pickup:native.pickup,dropoff:native.dropoff,pickupContact:runtime.pickupContact,dropoffContact:{name:input.customer.name,phone:normalizeDeliveryPhone(input.customer.phone)},instructions:input.customer.deliveryInstructions||'',readyAt:draft.binding.fulfillmentAt,
     ...(input.deliverySelection&&input.deliverySelection!=='asap'?{preparationMinutes:native.preparationMinutes}:{}),
