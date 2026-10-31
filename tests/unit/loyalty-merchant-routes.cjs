@@ -47,18 +47,22 @@ test('invalid bodies are 400; business rejections keep their code; unknown failu
 
 test('the worker heartbeat runs stamp-card work and isolates its failure from the other workers',async()=>{
   const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='y'.repeat(32);
-  const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
+  let dullyCalls=0;
+  const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{dullyCalls++;return {accepted:2};}},'@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
     '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
     '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>({})},
     '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:worker}});
   const call=route=>route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+'y'.repeat(32)}}));
   try{
-    let response=await call(load(async()=>({expiry:{cards:2,rewards:1},mail:{accepted:1}})));
+    const normal=load(async()=>({expiry:{cards:2,rewards:1},mail:{accepted:1}}));
+    const denied=await normal.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer wrong'}}));
+    assert.equal(denied.status,401);assert.equal(dullyCalls,0);
+    let response=await call(normal);
     assert.equal(response.status,200);assert.deepEqual((await response.json()).loyalty,{expiry:{cards:2,rewards:1},mail:{accepted:1}});
     response=await call(load(async()=>{throw new Error('private');}));
     const body=await response.json();
     assert.equal(response.status,200);assert.deepEqual(body.loyalty,{failed:true});assert.deepEqual(body.feedback,{sent:1});
-    assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});
+    assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});assert.deepEqual(body.dully,{accepted:2});assert.equal(dullyCalls,2);
     assert.doesNotMatch(JSON.stringify(body),/private/);
   }finally{if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });
