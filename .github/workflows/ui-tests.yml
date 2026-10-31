@@ -286,6 +286,9 @@ jobs:
       - name: Esmeralda homepage Club promotion browser regressions
         run: node --test tests/unit/club-homepage-browser.cjs
 
+      - name: Orderfly marketing landing browser regressions
+        run: node --test tests/unit/orderfly-landing-browser.cjs tests/unit/root-order-entry.cjs
+
       - name: Personal discount card service and browser regressions
         run: node --test --test-concurrency=1 tests/unit/discount-card-*.cjs
 

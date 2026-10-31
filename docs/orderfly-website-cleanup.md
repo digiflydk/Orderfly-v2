@@ -8,7 +8,7 @@ The native brand layout no longer reads `settings/general` or sends it to client
 
 - `/superadmin/website` and its old subpaths require platform-superuser authorization before redirecting to `/superadmin/settings`.
 - `/superadmin/website/settings/cookie-texts` redirects to `/superadmin/settings/cookie-texts`. The canonical editor is listed under System → Cookies and remains restricted to platform superusers.
-- `/features`, `/pricing` and `/contact` redirect to `/`, the existing standard takeaway entry point. The old contact form only logged its values and displayed success without sending a message; it is removed.
+- `/features`, `/pricing` and `/contact` redirect to `/`, which since #814 is Orderfly's marketing landing ([orderfly-landing.md](orderfly-landing.md)). The old contact form only logged its values and displayed success without sending a message; it is removed.
 - `orderfly.website` permissions remain because native storefront overview and games still use them.
 - `platform_settings`, cookie texts/consent, payment configuration and native customer/order records are preserved. Deprecated global marketing documents are excluded from the debug-all payload.
 
