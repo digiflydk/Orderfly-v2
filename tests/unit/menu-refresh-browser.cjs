@@ -7,6 +7,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin;
 const pizzaSources=require('../fixtures/esmeralda-pizza-images.json');
+const catalogSources=require('../fixtures/esmeralda-catalog-images.json');
 const brand={id:'b',slug:'esmeralda',name:'Esmeralda Pizza',bagFee:4,adminFee:0,vatPercentage:25,logoUrl:'/image.svg'};
 const location={id:'l',brandId:'b',slug:'amager',name:'Esmeralda Pizza Amager',street:'Albaniensgade 6',zipCode:'2300',city:'København S',imageUrl:'/image.svg',isActive:true,minOrder:100,deliveryFee:39,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'00:00',close:'23:59'}]))};
 const names=['Pizza','Pasta','Burgere','Sandwich','A la Carte','Salat','Forretter','Tilbehør','Dyppelse','Desserter','Børnemenu','Vand','Sodavand','Italiensk sodavand'];
@@ -17,6 +18,7 @@ before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'menu-refresh-browser-'));
  const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';import{CartProvider}from'@/context/cart-context';import{StorefrontV2Provider}from'@/context/storefront-v2-context';import{MenuHeader}from'@/components/layout/menu-header';import{DeliveryPriceProvider}from'@/context/delivery-price-context';import{MenuClient}from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
  const brand=${JSON.stringify(brand)},location=${JSON.stringify(location)},products=${JSON.stringify(products)};const q=new URLSearchParams(window.location.search);if(q.has('other'))brand.slug='other';if(q.has('pickupOnly'))location.deliveryTypes=['pickup'];const mode=q.get('deliveryMethod')==='delivery'?'delivery':'pickup';
+ if(q.has('catalogCutouts')){const sources=${JSON.stringify(catalogSources)};brand.id=sources[0].brandId;location.brandId=brand.id;products.forEach(p=>p.brandId=brand.id);products.push(...sources.map(source=>({...products[3],...source,displayCategoryId:'c1',price:50,priceDelivery:50})));}
  const combos=[];if(q.has('pizzaCutouts')){const source=${JSON.stringify(pizzaSources[0])};Object.assign(products[0],source,{productName:'Margherita',displayCategoryId:'c0'});brand.id=source.brandId;location.brandId=source.brandId;products.forEach(p=>p.brandId=source.brandId);combos.push({id:'cutout-menu',imageUrl:'/image.svg',brandId:source.brandId,locationIds:['l'],isActive:true,comboName:'Pizza og drik',pickupPrice:99,deliveryPrice:99,upgradeProductIds:[source.id],orderTypes:['pickup','delivery'],productGroups:[{id:'main',groupName:'Pizza',productIds:[source.id],minSelection:1,maxSelection:1},{id:'drink',groupName:'Drik',productIds:[products[3].id],minSelection:1,maxSelection:1}]});}
  createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={q.has('v2')}><div data-commerce-root data-brand-slug={brand.slug} data-storefront-version={q.has('v2')?'2':undefined}><CartProvider><DeliveryPriceProvider managed={q.has('managed')}><MenuHeader brand={brand} initialLocation={location} initialNow={Date.now()}/><main><MenuClient brand={brand} location={location} initialDeliveryType={mode} initialCategories={${JSON.stringify(categories)}} initialProducts={products} initialActiveCombos={combos} initialActiveStandardDiscounts={[]}/></main></DeliveryPriceProvider></CartProvider></div></StorefrontV2Provider>);`);
  const aliases={
@@ -35,7 +37,7 @@ before(async()=>{
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname.endsWith('.js')){const p=path.join(dir,path.basename(url.pathname));if(fs.existsSync(p)){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(fs.readFileSync(p));}}
-  if(url.pathname.startsWith('/images/esmeralda-v2/menu/pizza-')&&fs.existsSync('public'+url.pathname)){res.setHeader('Content-Type','image/webp');return res.end(fs.readFileSync('public'+url.pathname));}
+  if(url.pathname.startsWith('/images/esmeralda-v2/menu/')&&fs.existsSync('public'+url.pathname)){res.setHeader('Content-Type','image/webp');return res.end(fs.readFileSync('public'+url.pathname));}
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
   if(url.pathname==='/fonts/inter/inter-latin-wght-normal.woff2'){res.setHeader('Content-Type','font/woff2');return res.end(fs.readFileSync('public'+url.pathname));}
   if(url.pathname==='/image.svg'){res.setHeader('Content-Type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400"><defs><linearGradient id="g"><stop stop-color="#665137"/><stop offset="1" stop-color="#28241b"/></linearGradient></defs><rect width="1000" height="400" fill="url(#g)"/><circle cx="740" cy="180" r="130" fill="#bd8c4b"/><circle cx="740" cy="180" r="110" fill="#a1442d"/></svg>');}
@@ -216,6 +218,7 @@ for(const width of [390,1280])test(`source-aware pizza image is contained in men
  await productCard.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
  let dialog=page.getByRole('dialog');
  await assertCutout(dialog.locator('.v2-product-hero img[data-pizza-cutout]'));
+ assert.equal(await dialog.locator('.v2-product-hero').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)','product hero has a true black background behind transparent images');
  await page.screenshot({path:path.join(dir,`pizza-cutout-product-${width}.png`),fullPage:false});
  await dialog.getByRole('button',{name:/Læg i pose/}).click();await dialog.waitFor({state:'hidden'});
  if(width<1024){await page.locator('[data-v2-cart-bar]').click();dialog=page.getByRole('dialog');await assertCutout(dialog.locator('[data-cart-line] img[data-pizza-cutout]'));await dialog.getByRole('button',{name:'Tilføj flere retter',exact:true}).click();await dialog.waitFor({state:'hidden'});}
@@ -225,4 +228,23 @@ for(const width of [390,1280])test(`source-aware pizza image is contained in men
  const combo=page.getByRole('dialog');await combo.locator('[data-pizza-cutout]').first().waitFor();
  for(const image of await combo.locator('img[data-pizza-cutout]').all())await assertCutout(image);
  await page.screenshot({path:path.join(dir,`pizza-cutout-menu-upgrade-${width}.png`),fullPage:false});
+});
+
+for(const width of [390,1280])test(`catalog cutouts display with black product background (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2&catalogCutouts');
+ for(const product of catalogSources){
+  const card=page.locator('[data-v2-product-card]').filter({has:page.getByRole('button',{name:`Se ${product.productName}`,exact:true})});
+  const image=card.locator('img[data-product-cutout]');
+  assert.equal(await image.getAttribute('src'),product.asset);
+  assert.equal(await image.evaluate(e=>getComputedStyle(e).objectFit),'contain');
+  await image.evaluate(e=>e.decode());
+  await card.getByRole('button',{name:`Se ${product.productName}`,exact:true}).click();
+  const dialog=page.getByRole('dialog');
+  await dialog.locator('.v2-product-hero').waitFor();
+  assert.equal(await dialog.locator('.v2-product-hero').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)');
+  assert.equal(await dialog.locator('img[data-product-cutout]').first().getAttribute('src'),product.asset);
+  assert.equal(await dialog.locator('img[data-pizza-cutout]').count(),0,'catalog cutouts are not mislabelled as pizza');
+  await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ }
+ await page.screenshot({path:path.join(dir,`catalog-cutouts-${width}.png`),fullPage:true});
 });

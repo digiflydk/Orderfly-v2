@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const {loadTs}=require('../helpers/load-ts.cjs');
-const {esmeraldaMenuImage,esmeraldaPizzaImage,ESMERALDA_MENU_IMAGE_PATHS}=loadTs('src/lib/esmeralda-menu-images.ts');
+const {esmeraldaMenuImage,esmeraldaPizzaImage,esmeraldaProductImage,ESMERALDA_MENU_IMAGE_PATHS}=loadTs('src/lib/esmeralda-menu-images.ts');
 const pizzas=require('../fixtures/esmeralda-pizza-images.json');
 const brand='oeypKaMyYcQjIwaa1PtV', combo='esmeralda-v2-pizzamenu-20261030', soda='f10a57a7-ecfa-4f70-86b0-b0b435120440';
 test('menu cutouts remain scoped to V2, brand and approved combo',()=>{
@@ -66,5 +66,47 @@ test('missing dip photos have existing clearly marked illustration assets',()=>{
  for(const name of ['chili','dressing','pesto']){
   const asset=esmeraldaMenuImage(true,brand,combo,`esmeralda-v2-combo-dip-${name}-20261030`);
   assert.equal(asset.illustration,true);assert.ok(fs.existsSync(`public${asset.src}`));
+ }
+});
+
+const catalog=require('../fixtures/esmeralda-catalog-images.json');
+test('catalog cutouts require their exact product, category, brand and original photo',()=>{
+ assert.equal(catalog.length,34,'all approved photographed catalog products are covered');
+ assert.equal(new Set(catalog.map(p=>p.id)).size,34,'no duplicate product mappings');
+ assert.deepEqual(catalog.reduce((counts,p)=>(counts[p.categoryId]=(counts[p.categoryId]||0)+1,counts),{}),{"RbHTbJlcCXQiQ3dgSQyw":2,"0wJG1wPIDV4zGkjueiwd":1,"3wEoIQkuOWSWiWXHwsGO":5,"9tAvGBLwUSkpPlwyI2P9":4,"7V66KNtkiLBCpEyyaKW3":2,"yVIPNyszPTt8qCnvZNsF":7,"hmzUpI5ZWzq2eeLYSL2p":12,"JWphgCCdogmHoNu9efSU":1},'approved category inventory is complete');
+ for(const product of catalog){
+  const before=JSON.stringify(product);
+  const image=esmeraldaProductImage(true,product);
+  assert.equal(image?.src,product.asset,product.productName);
+  assert.equal(image.kind,'catalog');
+  assert.ok(ESMERALDA_MENU_IMAGE_PATHS.includes(image.src));
+  assert.ok(fs.existsSync(`public${image.src}`));
+  assert.deepEqual(esmeraldaProductImage(true,{...product,imageUrl:product.imageUrl+'?alt=media&token=rotated'}),image);
+  for(const changed of [
+   {...product,id:'other'}, {...product,brandId:'other'}, {...product,categoryId:'other'},
+   {...product,imageUrl:product.imageUrl.replace('firebasestorage.googleapis.com','example.com')},
+   {...product,imageUrl:product.imageUrl+'-replacement'}, {...product,imageUrl:'/custom.webp'},
+   {...product,imageUrl:undefined}, {...product,imageUrl:null}, {...product,imageUrl:''},
+  ])assert.equal(esmeraldaProductImage(true,changed),undefined);
+  assert.equal(esmeraldaProductImage(false,product),undefined);
+  assert.equal(JSON.stringify(product),before);
+ }
+ for(const product of pizzas)assert.equal(esmeraldaProductImage(true,product)?.src,esmeraldaPizzaImage(true,product)?.src);
+});
+test('catalog assets preserve alpha and a clear border on the common canvas',async()=>{
+ const sharp=require('sharp');
+ for(const asset of new Set(catalog.map(p=>p.asset))){
+  const image=sharp(`public${asset}`),metadata=await image.metadata();
+  assert.equal(metadata.format,'webp');assert.equal(metadata.hasAlpha,true);
+  assert.equal(metadata.width,960);assert.equal(metadata.height,960);
+  const {data,info}=await image.ensureAlpha().raw().toBuffer({resolveWithObject:true});
+  let transparent=0,opaque=0;
+  for(let y=0;y<info.height;y++)for(let x=0;x<info.width;x++){
+   const a=data[(y*info.width+x)*info.channels+3];
+   if(a===0)transparent++;if(a>=250)opaque++;
+   if(x===0||y===0||x===info.width-1||y===info.height-1)assert.equal(a,0,'uncropped subject border');
+  }
+  assert.ok(transparent>info.width*info.height*.1);
+  assert.ok(opaque>info.width*info.height*.03,'visible product is preserved');
  }
 });
