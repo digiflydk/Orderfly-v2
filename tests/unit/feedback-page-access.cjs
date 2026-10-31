@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const ts=require('typescript');
-function fixture({invitation=null,customer='customer',status='Completed',brandId='brand',locationId='location'}={}){
+function fixture({invitation=null,customer='customer',status='Completed',brandId='brand',locationId='location',dully=null}={}){
  const jsx=(type,props)=>({type,props});
  const order={id:'order',brandId:'brand',locationId:'location',brandName:'Restaurant',customerDetails:{id:customer,email:'private@example.test'},deliveryType:'Pickup',status};
  const mocks={
@@ -15,6 +15,7 @@ function fixture({invitation=null,customer='customer',status='Completed',brandId
   './form-client':{FeedbackFormClient:'FeedbackForm'},
   '@/lib/integrations/esmeralda-feedback-integration':{resolveBookingFeedbackInvitationToken:async()=>null},
   '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({data:()=>({logoUrl:'https://example.test/logo.png',privateKey:'private'})})})})})},
+  '@/lib/feedback/dully-source':{resolveDullyInvitation:async()=>dully},
   '@/lib/feedback/order-invitations':{resolveOrderFeedbackInvitation:async()=>invitation&&({...invitation,brandId,locationId}),completedFeedbackOrder:o=>o.status==='Completed'},
  };
  const code=ts.transpileModule(fs.readFileSync('src/app/feedback/page.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
@@ -34,4 +35,12 @@ test('guest feedback rejects mismatched customers, incomplete orders and invalid
  const invitation={sourceId:'order',customerId:'customer',status:'pending'};
  for(const options of [{brandId:'foreign'},{locationId:'foreign'}])await assert.rejects(fixture({invitation,...options})({searchParams:{orderToken:'valid'}}),/not-found/);
  const page=await fixture({invitation})({searchParams:{orderToken:'valid'}});assert.equal(page.props.context.invitationToken,'valid');
+});
+
+test('Dully guest page uses verified external source and excludes private recipient data',async()=>{
+ const source={id:'external',customerId:'source-identity',brandId:'brand',locationId:'location',brandName:'Esmeralda',brandLogoUrl:null,experienceType:'delivery',orderNumber:'123',language:'da',invitationStatus:'active',email:'private@example.test',isTest:false};
+ const page=await fixture({dully:source})({searchParams:{dullyToken:'signed'}});
+ assert.equal(page.props.context.sourceType,'dully_order');assert.equal(page.props.context.invitationToken,'signed');assert.equal(page.props.context.displayReference,'123');assert.equal(JSON.stringify(page.props.context).includes('private'),false);
+ await assert.rejects(fixture()({searchParams:{dullyToken:'invalid'}}),/not-found/);
+ await assert.rejects(fixture({dully:{...source,invitationStatus:'submitted'}})({searchParams:{dullyToken:'signed'}}),/redirect/);
 });

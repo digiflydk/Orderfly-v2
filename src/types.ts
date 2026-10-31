@@ -829,7 +829,7 @@ export type CodeReview = {
  */
 export type Feedback = {
   id: string;
-  sourceType?: 'commerce_order' | 'booking' | 'dine_in';
+  sourceType?: 'commerce_order' | 'booking' | 'dine_in' | 'dully_order';
   sourceId?: string;
   orderId: string;
   customerId: string;

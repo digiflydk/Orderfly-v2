@@ -8,6 +8,8 @@ import { readActiveQuestions, readActiveQuestionsForBrand } from '@/lib/feedback
 import { createExternalReviewReceipt, setExternalReviewReceipt } from '@/lib/feedback/external-review-receipt';
 import { eligibleExternalReviewLinks } from '@/lib/feedback/external-review-settings';
 import { feedbackMetrics } from '@/lib/feedback/metrics';
+import { resolveDullyInvitation } from '@/lib/feedback/dully-source';
+import { dullyEligible } from '@/lib/feedback/dully-contract';
 import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
 import { feedbackThankYouHref } from '@/lib/feedback/presentation';
@@ -49,7 +51,7 @@ export async function getActiveFeedbackQuestionsForBrand(
 }
 
 const feedbackSubmissionSchema = z.object({
-  sourceType: z.enum(['commerce_order', 'booking']),
+  sourceType: z.enum(['commerce_order', 'booking', 'dully_order']),
   sourceId: z.string().trim().min(1).max(200),
   customerId: z.string().trim().min(1).max(200),
   questionVersionId: z.string().trim().min(1).max(200),
@@ -66,12 +68,19 @@ type AuthoritativeSource = {
   brandId: string;
   experienceType: FeedbackExperienceType;
   invitationId?: string;
-  invitationCollection?: 'feedbackInvitations' | 'integrationFeedbackInvitations';
+  invitationCollection?: 'feedbackInvitations' | 'integrationFeedbackInvitations' | 'dullyFeedbackSources';
+  isTest?: boolean;
 };
 
 async function resolveAuthoritativeSource(
   parsed: z.infer<typeof feedbackSubmissionSchema>,
 ): Promise<AuthoritativeSource | null> {
+  if (parsed.sourceType === 'dully_order') {
+    const source = parsed.invitationToken ? await resolveDullyInvitation(parsed.invitationToken) : null;
+    if (!source || source.id !== parsed.sourceId || source.customerId !== parsed.customerId || source.language !== parsed.language) return null;
+    return { sourceType: 'dully_order', sourceId: source.id, customerId: source.customerId, brandId: source.brandId,
+      locationId: source.locationId, experienceType: source.experienceType, invitationId: source.id, invitationCollection: 'dullyFeedbackSources', isTest: source.isTest };
+  }
   if (parsed.sourceType === 'commerce_order') {
     const order = await getOrderById(parsed.sourceId);
     if (!order || order.customerDetails.id !== parsed.customerId || !completedFeedbackOrder(order,parsed.sourceId)) return null;
@@ -181,7 +190,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     const { rating, npsScore, comment, tags } = extractCoreResponses(validatedResponses);
 
     const feedbackId = createHash('sha256').update(JSON.stringify([source.brandId, source.sourceType, source.sourceId])).digest('hex');
-    const feedbackRef = db.collection('feedback').doc(feedbackId);
+    const feedbackRef = db.collection(source.isTest ? 'dullyFeedbackTests' : 'feedback').doc(feedbackId);
     const feedbackData: Record<string, unknown> = {
       id: feedbackRef.id,
       sourceType: source.sourceType,
@@ -200,6 +209,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       autoResponseSent: false,
       answeredVia: 'webshop',
     };
+    if (source.isTest) feedbackData.isTest = true;
     if (source.sourceType === 'commerce_order') feedbackData.orderId = source.sourceId;
     if (typeof npsScore === 'number') feedbackData.npsScore = npsScore;
     if (comment) feedbackData.comment = comment;
@@ -216,12 +226,19 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       const invitation = invitationSnapshot?.data();
       if (invitationRef) {
         if (!invitationSnapshot?.exists) throw new Error('Feedback invitation no longer exists.');
-        if (invitation?.status === 'submitted') return;
-        if (invitation?.status !== 'active') throw new Error('Feedback invitation is not active.');
+        const status = source.sourceType === 'dully_order' ? invitation?.invitationStatus : invitation?.status;
+        if (source.sourceType === 'dully_order' && (!invitation || invitation.id !== source.sourceId || invitation.brandId !== source.brandId || invitation.locationId !== source.locationId || invitation.customerId !== source.customerId || invitation.isTest !== source.isTest || invitation.expiresAt <= Date.now() || !dullyEligible(invitation))) throw new Error('Dully source is no longer eligible.');
+        if (status === 'submitted') return;
+        if (status !== 'active') throw new Error('Feedback invitation is not active.');
       }
       if (source.sourceType === 'commerce_order') {
         const current = (await transaction.get(db.collection('orders').doc(source.sourceId))).data();
         if (!current || !completedFeedbackOrder(current,source.sourceId) || current.brandId !== source.brandId || current.locationId !== source.locationId || current.customerDetails?.id !== source.customerId) throw new Error('Order is no longer eligible for feedback.');
+      }
+      if (source.sourceType === 'dully_order') {
+        const currentBrand = (await transaction.get(db.collection('brands').doc(source.brandId))).data();
+        const currentLocation = (await transaction.get(db.collection('locations').doc(source.locationId))).data();
+        if (currentBrand?.status !== 'active' || currentLocation?.brandId !== source.brandId || currentLocation?.isActive === false) throw new Error('Dully location no longer available.');
       }
       // Shares the activation lock with question administration. A concurrent
       // reassignment or edit cannot make the submitted answers use stale rules.
@@ -230,26 +247,26 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       const activeVersions = await transaction.get(db.collection('feedbackQuestionsVersion').where('isActive', '==', true));
       const currentVersion = resolveActiveQuestionVersion(activeVersions.docs.map(doc => ({ ...doc.data(), id: doc.id }) as ExperienceFeedbackQuestionsVersion), source.brandId, source.experienceType, parsed.data.language, feedbackAutomation(currentSettings.data()).questionVersionId);
       if (currentVersion?.id !== parsed.data.questionVersionId || JSON.stringify(currentVersion.questions) !== JSON.stringify(questionsData.questions)) throw new Error('Feedback form has changed.');
-      const settings = invitationRef && feedbackMailConfig(source.brandId)
+      const settings = source.sourceType !== 'dully_order' && invitationRef && feedbackMailConfig(source.brandId)
         ? feedbackAutomation(currentSettings.data()) : null;
       const thanks = settings?.emailEnabled && settings.autoReplyEnabled ? await transaction.get(thanksRef) : null;
       const previousNotification = await transaction.get(notificationRef);
       const legacyId = legacy?.docs.find(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)?.id;
       const savedId = existing.exists ? existing.id : legacyId || feedbackId;
       if (!existing.exists && !legacyId) {
-        if (eligibleExternalReviewLinks(currentSettings.data(), feedbackMetrics({ responses: validatedResponses }).rating)) {
+        if (!source.isTest && eligibleExternalReviewLinks(currentSettings.data(), feedbackMetrics({ responses: validatedResponses }).rating)) {
           feedbackData.externalReviewReceipt = { hash: reviewReceipt.hash, expiresAt: reviewReceipt.expiresAt };
         } else {
           delete feedbackData.externalReviewReceipt;
         }
         transaction.create(feedbackRef, feedbackData);
         const notifications = feedbackAdminNotifications(source.brandId, currentSettings.data());
-        if (notifications.adminNotificationsEnabled && notifications.adminNotificationEmail && !previousNotification.exists) transaction.create(notificationRef,
+        if (!source.isTest && notifications.adminNotificationsEnabled && notifications.adminNotificationEmail && !previousNotification.exists) transaction.create(notificationRef,
           pendingFeedbackAdminNotification({ feedbackId, brandId: source.brandId, locationId: source.locationId, sourceType: source.sourceType, sourceId: source.sourceId, recipientEmail: notifications.adminNotificationEmail }));
       }
-      if (invitationRef) transaction.update(invitationRef, { status: 'submitted', feedbackId: savedId, submittedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (invitationRef) transaction.update(invitationRef, { ...(source.sourceType === 'dully_order' ? { invitationStatus: 'submitted', submittedAt: Date.now(), updatedAt: Date.now() } : { status: 'submitted', submittedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() }), feedbackId: savedId });
       if (thanks && !thanks.exists && source.invitationId) {
-        transaction.create(thanksRef, pendingFeedbackMessage({ ...source, invitationId: source.invitationId, ...(source.sourceType === 'booking' && parsed.data.invitationToken ? { invitationToken: parsed.data.invitationToken } : {}) }, 'thankYou', Date.now()));
+        transaction.create(thanksRef, pendingFeedbackMessage({ ...source, sourceType: source.sourceType === 'commerce_order' ? 'commerce_order' : 'booking', invitationId: source.invitationId, ...(source.sourceType === 'booking' && parsed.data.invitationToken ? { invitationToken: parsed.data.invitationToken } : {}) }, 'thankYou', Date.now()));
       }
       return !existing.exists && !legacyId && Boolean(feedbackData.externalReviewReceipt);
     });
