@@ -228,7 +228,7 @@ for(const [width,height] of [[320,568],[390,850],[1280,850]])test(`V2 required c
  await page.locator('[data-product-options-scroll]').evaluate(el=>el.scrollTop=el.scrollHeight);
  const bounds=await submit.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=height+1,'action stays in viewport after content scroll');
  assert.equal(await submit.evaluate(el=>getComputedStyle(el).borderRadius),'6px');
- assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+ assert.equal(await submit.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(232, 191, 105)');
  assert.equal(await panel.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(17, 20, 19)');
  assert.equal(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'dialog must not overflow horizontally');
  await submit.click();
@@ -318,9 +318,10 @@ test('V2 pinned upgrade action quotes the dish surcharge and keeps the existing 
  const upgrade=page.getByRole('button',{name:'Vælg menu',exact:true});await upgrade.waitFor();
  await page.getByRole('dialog').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
  assert.equal(await upgrade.getAttribute('data-ui-variant'),'default');
- assert.equal(await page.getByRole('button',{name:/Læg i pose/}).getAttribute('data-ui-variant'),'outline');
+ assert.equal(await page.getByRole('button',{name:/Læg i pose/}).getAttribute('data-ui-variant'),'default');
  const box=await upgrade.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=568);
  assert.match(await page.locator('.commerce-inline-offers').innerText(),/40,00/);
+ assert.equal(await page.locator('.commerce-inline-offers button').count(),0,'single menu banner does not duplicate the pinned action');
  await upgrade.click();assert.equal((await page.evaluate(()=>window.upgradeDraft)).productId,'pizza');
  assert.equal(await page.evaluate(()=>window.saved),undefined);
  await page.getByRole('button',{name:'Tilbage til produkt',exact:true}).click();await upgrade.waitFor();

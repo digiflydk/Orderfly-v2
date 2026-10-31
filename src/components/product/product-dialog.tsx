@@ -312,7 +312,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                       </div>
                       <p className="text-sm">{delta>=0?`Fra +${formatPrice(delta)}`:`Spar op til ${formatPrice(-delta)}`} pr. stk. · Eventuelle ekstra tilvalg tillægges.</p>
                       {!isV2 && Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
-                      <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>{isV2 ? `Vælg ${c.comboName}` : 'Vælg menu'}</Button>
+                      {(!isV2 || availableUpgrades.length > 1) && <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>{isV2 ? `Vælg ${c.comboName}` : 'Vælg menu'}</Button>}
                     </section>;
                   })}
                 </div>
@@ -325,7 +325,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
               }}>Vælg menu</Button>}
               <div className="flex items-center gap-3">
                 {!isV2 && quantityControl}
-                <Button size="lg" variant={isV2 ? "outline" : "default"} className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
+                <Button size="lg" variant="default" className="commerce-product-submit h-auto min-h-12 min-w-0 flex-1 flex-col gap-0 rounded-lg px-2 py-1.5 font-bold"
                   onClick={handleAddToCart} disabled={!cartReady}
                   aria-label={`${!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i pose' : 'Tilføj til kurv'} · I alt ${formatPrice(totalItemPrice)}`}>
                   <span className="text-sm">{!isSelectionValid ? 'Vælg tilvalg' : initialItem ? 'Gem ændringer' : isV2 ? 'Læg i pose' : 'Tilføj til kurv'}</span>
