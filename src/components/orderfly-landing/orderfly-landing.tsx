@@ -2,7 +2,7 @@
 // no client JavaScript, no forms and no third-party requests. Styles live in
 // orderfly-landing.css and are scoped under `.ofl`.
 import {
-  BENEFITS, DEMO_MAILTO, EXAMPLE_SHOP_HREF, FAQ, FEATURES, LOGIN_HREF, LOYALTY_POINTS,
+  BENEFITS, DEMO_MAILTO, FAQ, FEATURES, LOGIN_HREF, LOYALTY_POINTS,
   NAV_LINKS, PLANS, STEPS, type IconName,
 } from './content';
 
@@ -97,7 +97,7 @@ export function OrderflyLanding() {
             <p className="ofl-lead">Orderfly giver din restaurant egen webshop, online betaling, ordreterminal, automatisk bonprint og loyalitetsprogram – i én platform, under dit eget brand.</p>
             <div className="ofl-actions">
               <a className="ofl-btn ofl-btn-primary" href={DEMO_MAILTO}>Book en gratis demo</a>
-              <a className="ofl-btn ofl-btn-secondary" href={EXAMPLE_SHOP_HREF}>Se en rigtig webshop</a>
+              <a className="ofl-btn ofl-btn-secondary" href="#funktioner">Se funktionerne</a>
             </div>
             <ul className="ofl-checks">
               <li><Check />Egen adresse: ditbrand.orderfly.dk</li>

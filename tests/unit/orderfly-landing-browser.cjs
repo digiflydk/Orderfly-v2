@@ -64,6 +64,16 @@ test('markup: static, one h1, every feature from the codebase, honest CTAs and n
   assert.doesNotMatch(markup, /\d+\s*kr\.?\/md/, 'no invented prices');
 });
 
+test('orderfly.dk is only a landing page: no links into webshops, menus, checkout or brand subdomains', () => {
+  const hrefs = [...markup.matchAll(/href="([^"]*)"/g)].map(match => match[1].replace(/&amp;/g, '&'));
+  assert.ok(hrefs.length > 10);
+  for (const href of hrefs) {
+    const allowed = href.startsWith('#') || href.startsWith('mailto:') || href === content.LOGIN_HREF;
+    assert.ok(allowed, `unexpected link ${href}`);
+  }
+  assert.doesNotMatch(markup, /orderfly\.dk\/|\/m3pizza|\/checkout|deliveryMethod/);
+});
+
 for (const width of [320, 390, 820, 1440]) {
   test(`layout at ${width}px: no horizontal scroll, correct navigation, touch targets and contrast`, { timeout: 30000 }, async t => {
     const page = await open(t, width);

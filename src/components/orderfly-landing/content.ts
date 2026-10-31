@@ -1,4 +1,6 @@
 // Copy for the Orderfly marketing landing on orderfly.dk/ (#814).
+// orderfly.dk is a pure landing page: it never links into ordering pages
+// (webshops, menus, checkout or brand subdomains).
 // Only features that exist in the codebase are listed. Prices, binding terms
 // and company details are intentionally absent until the owner provides them.
 
@@ -9,9 +11,6 @@ export const DEMO_MAILTO = `mailto:${ORDERFLY_CONTACT_EMAIL}?subject=${encodeURI
 
 /** Merchant/admin login. */
 export const LOGIN_HREF = '/admin-login';
-
-/** A real, public Orderfly webshop shown as an example. */
-export const EXAMPLE_SHOP_HREF = 'https://esmeralda.orderfly.dk';
 
 export type IconName =
   | 'globe' | 'options' | 'card' | 'terminal' | 'printer' | 'star'

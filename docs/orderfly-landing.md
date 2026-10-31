@@ -13,6 +13,7 @@ Esmeralda's ordering landing that used to render on `/` is unchanged and still s
 
 ## Content rules
 
+- `orderfly.dk/` is only a landing page (owner decision 2026-10-31). It never links to ordering pages: no webshop, menu, checkout or brand-subdomain links. Links are limited to in-page anchors, the demo `mailto:` and merchant login (`/admin-login`); a test enforces this.
 - Only features that exist in the codebase are listed. Wolt Drive is marked "Kommer snart" until it is released (#672).
 - No invented prices, figures or testimonials. Packages describe content only; the price is "Få et tilbud".
 - "Book en demo" is a `mailto:` link to `ORDERFLY_CONTACT_EMAIL`. There is no contact form: the old one was removed in #223 because it showed success without sending anything.
@@ -39,6 +40,6 @@ These are isolated browser tests, not production live QA.
 
 ## Release
 
-Normal PR gates (CI, independent review). After deployment: check that `/api/health` reports the release, then read-only on mobile and desktop: `orderfly.dk/` shows the landing, the menu opens, `orderfly.dk/m3pizza` shows Esmeralda's landing and "Bestil nu" still continues on `esmeralda.orderfly.dk`. No orders or payments.
+Normal PR gates (CI, independent review). After deployment: check that `/api/health` reports the release, then read-only on mobile and desktop: `orderfly.dk/` shows the landing, the menu opens, no link on the page leads to a webshop, and `orderfly.dk/m3pizza` still serves Esmeralda's landing for existing links. No orders or payments.
 
 Note: `StorefrontVitals` classifies `/` as a storefront landing (it is also the root of every brand subdomain). On `orderfly.dk/` web vitals are only sent for visitors who already have an Orderfly session cookie.
