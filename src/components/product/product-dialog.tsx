@@ -10,6 +10,7 @@ import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
+import { StorefrontProductImage } from './storefront-product-image';
 import { Minus, Plus, ChevronDown, ArrowLeft, SlidersHorizontal } from 'lucide-react';
 import type { CartItem, ComboMenu, Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
@@ -252,12 +253,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
               <span>ESMERALDA</span>
             </div>}
             {!isV2 && <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
-                  <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <div className="commerce-option-image"><StorefrontProductImage product={product} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>}
             <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
                 {isV2 && <div className="v2-product-overview">
-                  <div className="v2-product-hero"><Image src={safeImage(product.imageUrl)} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" /></div>
+                  <div className="v2-product-hero"><StorefrontProductImage product={product} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" /></div>
                   <DialogHeader className="v2-product-heading text-left"><DialogTitle>{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="v2-product-price">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>}
                 <div className="v2-product-body px-4 pb-3 pt-2 space-y-2">

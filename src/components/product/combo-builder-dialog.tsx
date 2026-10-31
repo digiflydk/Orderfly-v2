@@ -21,7 +21,7 @@ import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu, Topping, ToppingGroup } from '@/types';
 import { Minus, Plus, ArrowLeft } from 'lucide-react';
-import Image from 'next/image';
+import { StorefrontProductImage } from './storefront-product-image';
 import { Badge } from '../ui/badge';
 import {formatPrice} from '@/lib/storefront-format';
 import {safeImage} from '@/lib/images';
@@ -308,7 +308,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
             </div>}
             <ScrollArea className="flex-1 min-h-0">
                 <div className="commerce-option-header">
-                  <div className="commerce-option-image"><Image src={safeImage(retainedProduct ? retainedProduct.imageUrl : combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <div className="commerce-option-image"><StorefrontProductImage product={retainedProduct || combo} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{retainedProduct ? `${retainedProduct.productName}-menu` : combo.comboName}</DialogTitle><DialogDescription>{isOverview ? 'Kontrollér dine valg.' : retainedProduct ? 'Dine tilpasninger følger med.' : combo.description || 'Sammensæt din menu.'}</DialogDescription>{retainedProduct && retainedGroupId && comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id) > 0 && <p className="text-sm">+{formatPrice(comboProductAdjustment(combo.productGroups.find(g => g.id === retainedGroupId)!, retainedProduct.id))}</p>}{!isV2 && <p className="font-semibold">{formatPrice(comboPrice || 0)}</p>}</DialogHeader>
                 </div>
                 <div className="p-4 space-y-3">
@@ -337,7 +337,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                         </div>
                         {showErrors && currentSelection.length < Number(group.minSelection) && <p role="alert" className="text-sm text-destructive">{getSelectionText(group)} fra {group.groupName}.</p>}
                         {retainsDish && <div data-retained-combo-product className="flex items-center gap-3 rounded-md border p-3">
-                          <Image src={safeImage(retainedProduct.imageUrl)} alt="" width={56} height={56} className="h-14 w-14 rounded object-cover" />
+                          <StorefrontProductImage product={retainedProduct} alt="" width={56} height={56} className="h-14 w-14 rounded object-cover" />
                           <div className="min-w-0 flex-1"><p className="text-sm text-muted-foreground">Din valgte ret</p><p className="font-semibold">{retainedProduct.productName}</p><p className="text-sm text-muted-foreground">Dine tilpasninger følger med.</p></div>
                           {comboProductAdjustment(group,retainedProduct.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,retainedProduct.id))}</span>}
                         </div>}
@@ -348,7 +348,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                                 {productsInGroup.map(p => (
                                 <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row data-selected={currentSelection.includes(p.id)} className="flex items-center gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                     <RadioGroupItem value={p.id} id={`${dialogId}-${group.id}-${p.id}`} />
-                                    {(!isV2 || menuImage(p) || p.imageUrl) && <Image src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
+                                    {(!isV2 || menuImage(p) || p.imageUrl) && <StorefrontProductImage product={p} src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                                 ))}
                             {Number(group.minSelection)===0 && <label data-option-row data-selected={currentSelection.length === 0} className="flex items-center gap-3 min-h-11 px-2 cursor-pointer"><RadioGroupItem value="__none" />{isV2 && /dip/i.test(group.groupName) ? 'Ingen dip' : 'Ingen tak'}</label>}
@@ -365,7 +365,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                {(!isV2 || menuImage(p) || p.imageUrl) && <Image src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
+                                {(!isV2 || menuImage(p) || p.imageUrl) && <StorefrontProductImage product={p} src={menuImage(p)?.src || safeImage(p.imageUrl)} alt={menuImage(p)?.illustration ? `${p.productName} – illustration` : ''} width={96} height={96} data-menu-cutout={menuImage(p) ? '' : undefined} className="rounded object-cover h-9 w-9"/>}<span className="flex-1 font-normal">{p.productName}</span>{comboProductAdjustment(group,p.id)>0 && <span className="text-sm whitespace-nowrap">+{formatPrice(comboProductAdjustment(group,p.id))}</span>}
                                 </label>
                             )
                             })

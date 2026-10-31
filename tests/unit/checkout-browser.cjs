@@ -14,6 +14,7 @@ webpackModule.init();
 let dir,server,browser,origin;
 const requests=new Map();const attemptKeys=new Set();
 const root=process.cwd();
+const pizzaSources=require('../fixtures/esmeralda-pizza-images.json');
 const brand={id:'b',slug:'brand',name:'Fixture',bagFee:0,vatPercentage:25};
 const location={id:'l',slug:'location',brandId:'b',name:'Fixture',country:'DK',city:'Hellerup',minOrder:0,deliveryFee:20,isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))};
 function fixture(name,content){const file=path.join(dir,name+'.js');fs.writeFileSync(file,content);return file;}
@@ -151,6 +152,7 @@ before(async()=>{
   }
   if(url.pathname==='/stripe')return res.end('Hosted payment fixture');
   if(url.pathname==='/fonts/inter/inter-latin-wght-normal.woff2'){res.setHeader('Content-Type','font/woff2');return res.end(fs.readFileSync(path.join(root,'public/fonts/inter/inter-latin-wght-normal.woff2')));}
+  if(url.pathname.startsWith('/images/esmeralda-v2/menu/pizza-')&&fs.existsSync('public'+url.pathname)){res.setHeader('Content-Type','image/webp');return res.end(fs.readFileSync('public'+url.pathname));}
   if(url.pathname==='/image.png'){res.setHeader('Content-Type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160"><rect width="160" height="160" fill="#303532"/><circle cx="80" cy="80" r="66" fill="#c7954e"/><circle cx="80" cy="80" r="57" fill="#b1462a"/><circle cx="80" cy="80" r="51" fill="#e5bd67"/><g fill="#9b3425"><circle cx="55" cy="53" r="12"/><circle cx="101" cy="51" r="12"/><circle cx="80" cy="87" r="12"/><circle cx="49" cy="106" r="12"/><circle cx="112" cy="104" r="12"/></g></svg>');}
   res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><div id="root"></div><script src="/bundle.js"></script>');
  });
@@ -756,3 +758,23 @@ for (const mode of ['newsletter', 'club', 'club-personal']) {
   });
  }
 }
+
+for(const width of [390,1280])test(`pizza cutouts render in the checkout summary and preserve other-brand fallback (${width}px)`,async t=>{
+ const scenario='v2-pizza-cutout-'+width;
+ const page=await setup(t,scenario);
+ await page.setViewportSize({width,height:900});
+ const product=pizzaSources[0];
+ const item={...product,cartItemId:'pizza-image-fixture',itemType:'product',quantity:1,price:100,basePrice:100,toppings:[]};
+ await page.evaluate(item=>window.replaceFixtureItems([item]),item);
+ const image=page.locator('.commerce-order-summary img[data-pizza-cutout]:visible');
+ await image.waitFor();
+ assert.equal(await image.getAttribute('src'),`/images/esmeralda-v2/menu/pizza-${product.id}.webp`);
+ assert.equal(await image.evaluate(e=>getComputedStyle(e).objectFit),'contain');
+ await image.evaluate(e=>e.decode());
+ await page.evaluate(item=>window.replaceFixtureItems([{...item,brandId:'other',imageUrl:'/image.png'}]),item);
+ assert.equal(await page.locator('.commerce-order-summary img[data-pizza-cutout]').count(),0);
+ const fallback=page.locator('.commerce-order-summary img:visible');
+ assert.equal(await fallback.getAttribute('src'),'/image.png');
+ assert.equal(await fallback.evaluate(e=>getComputedStyle(e).objectFit),'cover');
+ assert.equal(requests.has(scenario),false,'image verification submits no payment');
+});

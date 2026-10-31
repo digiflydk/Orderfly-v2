@@ -30,7 +30,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import Image from "next/image";
+import { StorefrontProductImage } from '@/components/product/storefront-product-image';
 import Link from "next/link";
 import { useForm, FormProvider, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -77,7 +77,6 @@ import { storefrontCheckoutMethods, type CheckoutPaymentMethod } from '@/lib/mer
 
 import { isLockedItem } from '@/lib/cart-utils';
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
-import { safeImage } from '@/lib/images';
 import {
   Form,
   FormControl,
@@ -204,8 +203,8 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
           <div key={item.cartItemId} className="flex items-start justify-between">
             <div className="flex items-start gap-4">
               <div className="relative h-16 w-16 shrink-0">
-                <Image
-                  src={safeImage(item.imageUrl)}
+                <StorefrontProductImage
+                  product={item}
                   alt={item.productName}
                   fill
                   className="rounded-md object-cover"
