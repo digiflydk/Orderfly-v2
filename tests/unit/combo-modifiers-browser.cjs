@@ -260,7 +260,7 @@ for(const width of [320,390])test(`drink then included dip then overview keeps p
  await page.getByRole('radio',{name:'Ingen dip',exact:true}).check();
  await page.getByRole('button',{name:/Se din menu/}).click();
  const add=page.getByRole('button',{name:/Tilføj til kurv|Læg i pose/});assert.match(await add.innerText(),/200/);
- assert.equal(await add.getAttribute('data-ui-variant'),'outline');
+ assert.equal(await add.getAttribute('data-ui-variant'),'default');
  assert.match(await add.innerText(),/Læg i pose/);
  const bounds=await add.boundingBox();assert.ok(bounds.y>=0&&bounds.y+bounds.height<=828,'footer retains dark bottom inset');
  if(process.env.COMBO_QA_DIR)await page.screenshot({animations:'disabled',path:path.join(process.env.COMBO_QA_DIR,`overview-${width}.png`)});

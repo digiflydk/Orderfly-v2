@@ -428,7 +428,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                 </div>}
                 <Button
                     size="lg"
-                    variant={isV2 && isOverview ? "outline" : "default"}
+                    variant="default"
                     className={isV2 ? "w-full min-h-12 h-auto py-3 font-bold text-base px-4" : "w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"}
                     onClick={isV2 ? continueMenu : handleAddToCart}
                     disabled={!cartReady || comboPrice === undefined || !optionsReady}
