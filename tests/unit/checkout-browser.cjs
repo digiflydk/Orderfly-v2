@@ -63,7 +63,7 @@ before(async()=>{
  export const getDiscountCardCheckoutEnabledAction=async()=>scenario.startsWith('ui-card');
  export const getDiscountCardCheckoutOfferAction=async(brand,slug,location,email)=>{window.cardPreviewCalls=window.cardPreviewCalls||[];window.cardPreviewCalls.push(email);if(window.holdCardPreview)await new Promise(resolve=>{window.cardPreviewRequests=window.cardPreviewRequests||[];window.cardPreviewRequests.push({email,resolve});});return scenario.startsWith('ui-card-preview')?{name:email,percentage:25}:scenario.startsWith('ui-card')&&email==='test@example.test'?{name:'Familie',percentage:25}:null;};
  export const newsletterSyncAvailableAction=async()=>true;
- export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
+ export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:scenario.includes('consent-layout')?'Medlemskab af Fixture Club kræver tilmelding til vores nyhedsbrev. Læs mere om, hvordan vi behandler dine oplysninger, i vores privatlivspolitik (https://www.esmeraldapizza.dk/privatlivspolitik).':'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
  export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);if(window.holdQuote)await new Promise(resolve=>{window.releaseQuote=resolve;});return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:scenario==='managed-eta'?{earliest:'2026-10-30T12:40:00Z',latest:'2026-10-30T12:50:00Z'}:null,expiresAtMs:Date.now()+120000};}
  export async function validateDiscountAction(){if(scenario==='managed-discount')return {success:true,discount:{id:'code-discount',applicationType:'code',discountType:'percentage',discountValue:10,code:'TEST10',isActive:true}};throw Error('discount network failed');}
@@ -100,10 +100,11 @@ before(async()=>{
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const scenario=new URLSearchParams(window.location.search).get('case')||'';
+ const v2=scenario.startsWith('v2-')||new URLSearchParams(window.location.search).get('v2')==='1';
  const schedule=scenario.startsWith('managed-schedule-')?{...(scenario==='managed-schedule-inherited'?{}:{scheduleMode:'manual'}),enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(scenario!=='managed-schedule-valid'?3:5)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[]}:null;
  const scheduledSurface=React.createElement(DeliveryPriceProvider,{managed:scenario.startsWith('managed-'),schedule},surface);
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},scheduledSurface):scheduledSurface;
- createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')},new URLSearchParams(window.location.search).get('case')?.startsWith('v2-')?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
+ createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:v2},v2?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
  const aliases={
@@ -157,7 +158,8 @@ before(async()=>{
  browser=await chromium.launch({headless:true,...(process.env.CART_CHROMIUM_PATH?{executablePath:process.env.CART_CHROMIUM_PATH}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--no-zygote','--use-gl=angle','--use-angle=swiftshader']});
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-async function setup(t,scenario,email='test@example.test'){
+async function setup(t,scenario,email='test@example.test',options={}){
+ const v2=scenario.startsWith('v2-')||options.v2;
  const context=await browser.newContext({viewport:{width:scenario.includes('mobile')?390:1280,height:900}});t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(5000);page.setDefaultNavigationTimeout(5000);const errors=[];
  page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
@@ -165,13 +167,13 @@ async function setup(t,scenario,email='test@example.test'){
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
  if(scenario.startsWith('managed-schedule-'))await page.clock.setFixedTime(new Date('2026-10-30T08:45:00.000Z'));
  if(scenario==='managed-future')await page.clock.setFixedTime(new Date('2026-10-27T22:00:00.000Z'));
- await page.goto(origin+'/?case='+scenario);
- await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast dit navn':'John Doe',{exact:true}).waitFor().catch(async error=>{
+ await page.goto(origin+'/?case='+scenario+(options.v2?'&v2=1':''));
+ await page.getByPlaceholder(v2?'Indtast dit navn':'John Doe',{exact:true}).waitFor().catch(async error=>{
   t.diagnostic(JSON.stringify({body:await page.locator('body').innerText(),errors}));throw error;
  });
- await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast dit navn':'John Doe',{exact:true}).fill('Test Customer');
- await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast e-mail':'john@example.com',{exact:true}).fill(email);
- await page.getByPlaceholder(scenario.startsWith('v2-')?'Indtast mobilnummer':'+123456789',{exact:true}).fill('12345678');
+ await page.getByPlaceholder(v2?'Indtast dit navn':'John Doe',{exact:true}).fill('Test Customer');
+ await page.getByPlaceholder(v2?'Indtast e-mail':'john@example.com',{exact:true}).fill(email);
+ await page.getByPlaceholder(v2?'Indtast mobilnummer':'+123456789',{exact:true}).fill('12345678');
  await page.locator('.commerce-terms').getByRole('checkbox').first().check();
  return page;
 }
@@ -706,3 +708,51 @@ test('address price is visible before contact details and courier confirmation, 
  assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).routeReceipt),'server-route-receipt');
  await page.evaluate(()=>window.releaseQuote());await quoted(page);
 });
+
+// Exercise the production consent markup with real checkout CSS, including the
+// long privacy URL from the mobile report. No order or payment is submitted.
+for (const mode of ['newsletter', 'club', 'club-personal']) {
+ for (const [width, scale, v2] of [[320,1,true],[390,1,true],[320,2,true],[390,2,true],[1280,1,true],[320,1,false]]) {
+  test(`consent layout: ${mode}, ${width}px, ${scale}x text, V${v2?2:1} stays inside its card`, async t => {
+   const scenario=`ui-${mode}-consent-layout-${width}-${scale}-${v2}`;
+   const page=await setup(t,scenario,'test@example.test',{v2});
+   await page.setViewportSize({width,height:900});
+   const card=page.locator('.commerce-newsletter');
+   await card.waitFor();
+   if(mode==='club-personal') await card.getByText('Brug din personlige Club-rabat',{exact:true}).waitFor();
+   if(mode==='club') await card.getByText(/https:\/\/www.esmeraldapizza.dk\/privatlivspolitik/).waitFor();
+   if(scale!==1) await card.evaluate((node,multiplier)=>{
+    // Increase each text element from its rendered size, including the V2 label
+    // sizes expressed in px, to model accessibility text enlargement.
+    const elements=[node,...node.querySelectorAll('h3,p,label,a,span')];
+    const sizes=elements.map(element=>parseFloat(getComputedStyle(element).fontSize));
+    elements.forEach((element,i)=>element.style.fontSize=`${sizes[i]*multiplier}px`);
+   },scale);
+   const geometry=await card.evaluate(node=>{
+    const card=node.getBoundingClientRect(),style=getComputedStyle(node);
+    const left=card.left+parseFloat(style.paddingLeft),right=card.right-parseFloat(style.paddingRight);
+    const overflows=[];const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
+    while(walker.nextNode()){
+     if(!walker.currentNode.textContent.trim())continue;
+     const range=document.createRange();range.selectNodeContents(walker.currentNode);
+     for(const rect of range.getClientRects()) if(rect.width&&rect.height&&(rect.left<left-1||rect.right>right+1))overflows.push(walker.currentNode.textContent);
+    }
+    return {overflows,left:card.left,right:card.right,viewport:innerWidth,scrollWidth:node.scrollWidth,clientWidth:node.clientWidth,overflow:getComputedStyle(node).overflow};
+   });
+   assert.deepEqual(geometry.overflows,[],'all consent text, including privacy URL, wraps inside the card padding');
+   assert.ok(geometry.left>=-1&&geometry.right<=geometry.viewport+1,JSON.stringify(geometry));
+   assert.ok(geometry.scrollWidth<=geometry.clientWidth+1,'card has no horizontal overflow');
+   assert.ok(!['hidden','clip'].includes(geometry.overflow),'text remains visible rather than being clipped');
+   const checks=card.getByRole('checkbox');
+   assert.equal(await checks.count(),mode==='club'?2:1);
+   for(const checkbox of await checks.all()){
+    assert.equal(await checkbox.isChecked(),false,'consent is never preselected');
+    const box=await checkbox.boundingBox();assert.ok(box.width>=15&&box.height>=15,'checkbox does not shrink');
+    await checkbox.check();assert.equal(await checkbox.isChecked(),true);
+    await checkbox.uncheck();assert.equal(await checkbox.isChecked(),false);
+   }
+   if(mode==='club')assert.equal(await card.getByRole('link',{name:'Læs Club-vilkårene'}).getAttribute('href'),'/brand/club/vilkaar');
+   assert.equal(requests.has(scenario),false);
+  });
+ }
+}
