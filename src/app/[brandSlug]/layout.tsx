@@ -1,6 +1,4 @@
 import '@/styles/storefront-v2-checkout.css';
-import { headers } from 'next/headers';
-import { isEsmeraldaV2Host } from '@/lib/esmeralda-v2-host';
 import { StorefrontV2Provider } from '@/context/storefront-v2-context';
 
 import { notFound } from 'next/navigation';
@@ -48,8 +46,8 @@ export default async function BrandLayout({
     );
   }
 
-  const requestHeaders = await headers();
-  const v2 = brand.slug === 'esmeralda' && isEsmeraldaV2Host(requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host'));
+  // The approved V2 presentation is now Esmeralda's standard storefront.
+  const v2 = brand.slug === 'esmeralda';
 
   return (
     <StorefrontV2Provider enabled={v2}>
