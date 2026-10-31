@@ -2,6 +2,8 @@
 
 The public storefront inherits its install metadata from the server-resolved brand in `src/app/[brandSlug]/layout.tsx`. Both the restaurant chooser and location/checkout routes use the configured brand name as page title, application name and Apple home-screen title. There is no `ordering page` or Orderfly suffix.
 
+Esmeralda's restaurant chooser uses the separate static `src/app/esmeralda/page.tsx` route, including when `/` on a brand subdomain is rewritten to `/esmeralda`. That page explicitly delegates `generateMetadata` to the shared brand layout with the fixed `esmeralda` slug. Merely rendering `<BrandLayout>` from a page does not inherit its metadata export. This delegation keeps the same unknown/suspended-brand and host guards, without changing routes or platform metadata.
+
 ## Install resources
 
 - Manifest: `/api/storefront/brands/{brandSlug}/manifest.webmanifest`.
@@ -24,6 +26,6 @@ If a configured image is unavailable or unreadable, the existing renderer return
 - `node --test tests/unit/storefront-home-screen.cjs tests/unit/brand-subdomains-12.cjs`.
 - `CART_CHROMIUM_PATH=/tmp/menu-chromium node --test tests/unit/storefront-home-screen-browser.cjs` (or an installed Playwright Chromium).
 
-Tests invoke the real brand layout metadata hook, Next's actual metadata accumulator, real API handlers and image renderer against isolated brand fixtures. They cover platform/Club inheritance, normal/V2/apex paths, title and icon tags in a mobile browser, image decoding/dimensions, tenant rejection, suspension, inline uploads, size limits and external-image restrictions. They do not create orders or change production data.
+Tests invoke the real brand layout and static Esmeralda page metadata hooks, Next's actual metadata accumulator, real API handlers and image renderer against isolated brand fixtures. They cover platform/Club inheritance, restaurant-picker roots and location pages on normal/V2/apex paths, title and icon tags in a mobile browser, image decoding/dimensions, tenant rejection, suspension, inline uploads, size limits and external-image restrictions. The static-page regression reproduces `Orderfly Studio` before the page-level metadata hook is present. They do not create orders or change production data.
 
 After release, check the live brand HTML, manifest and the actual PNG content. The browser regression verifies the metadata consumed by installation but cannot perform a physical iOS Home Screen installation. Previously saved iOS shortcuts can retain their old title/icon; remove and add the shortcut again to check the new metadata. Installing on an actual device remains a separate confirmation.

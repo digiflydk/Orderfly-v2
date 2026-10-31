@@ -28,9 +28,13 @@ function fixture({ currentBrand = brand, stored, host = 'esmeralda.orderfly.dk',
     new Function('require','module','exports',code)(name => known[name] ?? {},module,module.exports);
     return module.exports;
   }
+  const brandMetadata = metadata('src/app/[brandSlug]/layout.tsx').generateMetadata;
   return {
     reads, pure, server,
-    metadata: metadata('src/app/[brandSlug]/layout.tsx').generateMetadata,
+    metadata: brandMetadata,
+    esmeraldaMetadata: metadata('src/app/esmeralda/page.tsx', {
+      '@/app/[brandSlug]/layout': { generateMetadata: brandMetadata },
+    }).generateMetadata,
     clubMetadata: metadata('src/app/[brandSlug]/club/layout.tsx', {'./data': {
       loadPortal: async () => ({program:{name:'Esmeralda Club'}}),
       portalBase: async () => host === 'orderfly.dk' ? '/esmeralda/club' : '/club',
