@@ -82,9 +82,6 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
   border-radius: 6px;
 }
 [data-v2-menu-header] .v2-menu-browse { grid-column: 1; grid-row: 1; }
-@media (max-width: 767px) {
-  [data-v2-menu-header][data-brand-slug="esmeralda"] .v2-menu-browse { display: none; }
-}
 [data-v2-menu-header] .v2-location-toggle { grid-column: 3; grid-row: 1; }
 body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-menu-header] .storefront-order-toolbar > a {
   grid-column: 2;

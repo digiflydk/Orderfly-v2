@@ -70,9 +70,6 @@ body:has([data-commerce-root]) :is(button, [data-ui-button]):not([role="checkbox
 }
 .commerce-newsletter [role="checkbox"] { margin-top: 4px; flex-shrink: 0; }
 .commerce-newsletter p { color: #4b4130; line-height: 1.5; }
-/* Consent copy must shrink beside the checkbox, including full privacy URLs. */
-form[data-commerce-root] .commerce-newsletter { min-width: 0; overflow-wrap: anywhere; }
-form[data-commerce-root] .commerce-consent-copy { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 
 body:has([data-commerce-root]) button[aria-pressed="true"],
 body:has([data-commerce-root]) button[data-state="active"] { box-shadow: inset 0 0 0 2px #111; }

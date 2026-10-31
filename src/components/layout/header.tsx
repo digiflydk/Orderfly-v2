@@ -8,7 +8,6 @@ import { useStorefrontPath } from '@/hooks/use-storefront-path';
 
 export function Header({ brand }: { brand: Brand }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const showMobileNavigation = brand.slug !== 'esmeralda';
   const href = useStorefrontPath(brand.slug)();
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
@@ -29,11 +28,11 @@ export function Header({ brand }: { brand: Brand }) {
         <nav aria-label="Bestilling" className="hidden items-center gap-6 md:flex">
           <Link href={href} className="text-sm text-foreground hover:text-primary">Bestil</Link>
         </nav>
-        {showMobileNavigation && <button type="button" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen} aria-controls="storefront-mobile-navigation" className="shrink-0 md:hidden text-sm text-foreground hover:text-primary" aria-label="Åbn menu">
+        <button type="button" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen} aria-controls="storefront-mobile-navigation" className="shrink-0 md:hidden text-sm text-foreground hover:text-primary" aria-label="Åbn menu">
           Menu
-        </button>}
+        </button>
       </div>
-      {showMobileNavigation && menuOpen && <nav id="storefront-mobile-navigation" aria-label="Mobilmenu" className="md:hidden border-t bg-background p-4 flex flex-col gap-4">
+      {menuOpen && <nav id="storefront-mobile-navigation" aria-label="Mobilmenu" className="md:hidden border-t bg-background p-4 flex flex-col gap-4">
         <Link href={href} onClick={() => setMenuOpen(false)} className="text-foreground">Bestil</Link>
       </nav>}
     </header>

@@ -6,7 +6,6 @@ import { publicLocationRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
 import { calculateTimeSlots } from '@/lib/time-slots';
 import { locationSlugError } from '@/lib/brand-subdomain';
-import { deliveryMethodLabelSchema } from '@/lib/delivery-method-labels';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -56,8 +55,6 @@ const locationSchema = z.object({
   travlhed_factor: z.enum(['normal', 'medium', 'høj']),
   manual_override: z.coerce.number().min(0).optional().default(0),
   pickupSaveTag: z.string().optional(),
-  pickupLabel: deliveryMethodLabelSchema,
-  deliveryLabel: deliveryMethodLabelSchema,
 });
 
 

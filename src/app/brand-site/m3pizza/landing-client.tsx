@@ -46,7 +46,7 @@ export default function LandingClient({brand, location, products, discounts, con
       <PromoBanner promotion={promotions[2]} onOrderClick={order} />
       <FooterCTA brandName={brand.name} onOrderClick={order} />
       <div className="md:hidden"><StickyOrderChoice onOrderClick={order} /></div>
-      {orderModalOpen && <OrderModal open onOpenChange={setOrderModalOpen} onDeliveryMethodSelected={choose} modes={location.deliveryTypes} location={location} />}
+      {orderModalOpen && <OrderModal open onOpenChange={setOrderModalOpen} onDeliveryMethodSelected={choose} modes={location.deliveryTypes} />}
     </StandardStorefront>
     <CookieConsent brandId={brand.id} isModalOpen={cookieModalOpen} setIsModalOpen={setCookieModalOpen} />
   </AnalyticsProvider>;

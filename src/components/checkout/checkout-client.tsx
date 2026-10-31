@@ -1085,7 +1085,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                             onCheckedChange={checked=>{field.onChange(checked);trackEvent('newsletter_opt_in_selected',{value:checked===true?1:0});}}
                           />
                         </FormControl>
-                        <div className="commerce-consent-copy space-y-1 leading-none">
+                        <div className="space-y-1 leading-none">
                           <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable && newsletterOffer?.applicationType === 'newsletter_signup' ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
                             {newsletterConsentText(brand?.name || 'restauranten')}
@@ -1126,11 +1126,11 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     {!!signupConfig.clubProgram.welcomeStamps && <p>Du får {signupConfig.clubProgram.welcomeStamps} {signupConfig.clubProgram.welcomeStamps === 1 ? 'velkomststempel' : 'velkomststempler'} ved tilmelding.</p>}
                     <FormField control={form.control} name="subscribeToNewsletter" render={({field}) => <FormItem className="flex items-start gap-3 space-y-0">
                       <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
-                      <div className="commerce-consent-copy"><FormLabel className="font-normal leading-relaxed whitespace-pre-line">{signupConfig.clubProgram!.consentText}</FormLabel><FormDescription className="whitespace-pre-line">{signupConfig.clubProgram!.consentHelp}</FormDescription><FormMessage /></div>
+                      <div><FormLabel className="font-normal leading-relaxed whitespace-pre-line">{signupConfig.clubProgram!.consentText}</FormLabel><FormDescription className="whitespace-pre-line">{signupConfig.clubProgram!.consentHelp}</FormDescription><FormMessage /></div>
                     </FormItem>} />
                     <FormField control={form.control} name="clubTermsAccepted" render={({field}) => <FormItem className="flex items-start gap-3 space-y-0">
                       <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
-                      <div className="commerce-consent-copy"><FormLabel className="font-normal leading-relaxed">{signupConfig.clubProgram!.termsAccept}</FormLabel> <a className="underline" href={signupConfig.clubProgram!.termsUrl} target="_blank" rel="noopener noreferrer">Læs Club-vilkårene</a><FormMessage /></div>
+                      <div><FormLabel className="font-normal leading-relaxed">{signupConfig.clubProgram!.termsAccept}</FormLabel> <a className="underline" href={signupConfig.clubProgram!.termsUrl} target="_blank" rel="noopener noreferrer">Læs Club-vilkårene</a><FormMessage /></div>
                     </FormItem>} />
                     <p role="status" aria-live="polite" className="text-sm leading-relaxed">{newsletterOffer?.applicationType === 'club_signup' && (newsletterSavingApplied
                       ? `Club-rabat: ${formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.`
@@ -1139,7 +1139,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                   </div>}
                   {personalClubOffer && <FormField control={form.control} name="useClubDiscount" render={({field}) => <FormItem className="commerce-newsletter flex items-start gap-3 space-y-0 rounded-xl border p-5" data-club-personal-offer={newsletterBenefitAvailable}>
                     <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
-                    <div className="commerce-consent-copy"><FormLabel>Brug din personlige Club-rabat</FormLabel><FormDescription>{newsletterSavingApplied ? `Club-rabat: ${formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.` : newsletterBenefitAvailable ? `Du har ${formatPrice(newsletterPreview!.amount)} i Club-rabat til denne ordre. Du skal ikke tilmelde dig igen.` : 'Din personlige rabat giver ingen ekstra besparelse på den aktuelle kurv.'}</FormDescription></div>
+                    <div><FormLabel>Brug din personlige Club-rabat</FormLabel><FormDescription>{newsletterSavingApplied ? `Club-rabat: ${formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.` : newsletterBenefitAvailable ? `Du har ${formatPrice(newsletterPreview!.amount)} i Club-rabat til denne ordre. Du skal ikke tilmelde dig igen.` : 'Din personlige rabat giver ingen ekstra besparelse på den aktuelle kurv.'}</FormDescription></div>
                   </FormItem>} />}
                 </div>
               </section>

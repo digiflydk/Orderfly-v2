@@ -10,19 +10,6 @@ import { resolveParams } from '@/lib/next/resolve-props';
 import { BrandLayoutClient } from './layout-client';
 import { isAdminReady } from '@/lib/runtime';
 import { BrandTracking } from '@/components/brand-tracking';
-import type { Metadata } from 'next';
-import { headers } from 'next/headers';
-import { storefrontInstallMetadata, storefrontInstallHostAllowed } from '@/lib/storefront-home-screen';
-
-export async function generateMetadata({ params }: { params: Promise<{ brandSlug: string }> }): Promise<Metadata> {
-  const { brandSlug } = await resolveParams(params);
-  const requestHeaders = await headers();
-  const host = requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host');
-  if (!isAdminReady() || !storefrontInstallHostAllowed(brandSlug, host)) return {};
-  const brand = await getBrandBySlug(brandSlug);
-  if (!brand || brand.slug !== brandSlug || brand.status === 'suspended') return {};
-  return storefrontInstallMetadata(brand);
-}
 
 export default async function BrandLayout({
   children,

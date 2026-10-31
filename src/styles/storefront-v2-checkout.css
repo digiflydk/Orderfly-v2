@@ -1,10 +1,10 @@
-/* Keep the opaque dock attached to the viewport, including the iOS home area.
-   The button is inset inside it rather than floated above unpainted content. */
-[data-v2-cart-dock] {
-  padding: 12px 12px max(12px, env(safe-area-inset-bottom, 0px));
-  background: hsl(var(--background));
+/* V2 only: preserve V1 layout and reserve iOS home-indicator clearance. */
+[data-v2-cart-bar="true"] {
+  height: calc(64px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  border-radius: 0;
 }
-[data-v2-cart-clearance="true"] { height: calc(66px + max(12px, env(safe-area-inset-bottom, 0px))); }
+[data-v2-cart-clearance="true"] { height: calc(80px + env(safe-area-inset-bottom, 0px)); }
 [data-storefront-version="2"] .commerce-checkout-bar {
   padding: 12px 0 env(safe-area-inset-bottom, 0px);
 }
@@ -83,10 +83,14 @@
 .v2-browse-more { border-color: hsl(var(--primary)); color: hsl(var(--primary)); min-height: 48px; }
 [data-storefront-version="2"][data-commerce-panel="cart"] > div:last-of-type button { min-height: 52px; height: 52px; border-radius: 6px; }
 [data-v2-cart-bar="true"] {
-  width: 100%;
+  left: 12px;
+  right: 12px;
+  bottom: max(10px, env(safe-area-inset-bottom, 0px));
+  width: calc(100% - 24px);
   height: 54px;
   padding: 0 16px;
   border-radius: 6px;
+  box-shadow: 0 0 0 10px hsl(var(--background));
 }
 /* Checkout keeps all validation and opt-ins, with a calmer single-column rhythm. */
 .v2-checkout-heading { margin-bottom: 22px; }

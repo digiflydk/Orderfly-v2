@@ -25,7 +25,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { countries } from '@/lib/countries';
 import { locationSlugError } from '@/lib/brand-subdomain';
-import { deliveryMethodLabel, deliveryMethodLabelSchema, DELIVERY_METHOD_LABEL_MAX_LENGTH } from '@/lib/delivery-method-labels';
 import {
   Select,
   SelectContent,
@@ -119,8 +118,7 @@ const locationSchema = z.object({
     .min(0)
     .optional()
     .default(0),
-  pickupLabel: deliveryMethodLabelSchema,
-  deliveryLabel: deliveryMethodLabelSchema,
+  pickupSaveTag: z.string().optional(),
 });
 
 type LocationFormValues = z.infer<typeof locationSchema>;
@@ -245,8 +243,7 @@ export function LocationFormPage({
           travlhed_factor:
             location.travlhed_factor ?? 'normal',
           manual_override: location.manual_override ?? 0,
-          pickupLabel: deliveryMethodLabel(location, 'pickup'),
-          deliveryLabel: deliveryMethodLabel(location, 'delivery'),
+          pickupSaveTag: location.pickupSaveTag ?? '',
         }
       : {
           brandId: '',
@@ -268,8 +265,7 @@ export function LocationFormPage({
           delivery_time: 20,
           travlhed_factor: 'normal',
           manual_override: 0,
-          pickupLabel: '',
-          deliveryLabel: '',
+          pickupSaveTag: '',
         }) as any,
   });
 
@@ -1297,25 +1293,37 @@ export function LocationFormPage({
 
                 <Separator />
 
-                <div className="space-y-4" aria-label="Labels ved valg af leveringsmetode">
-                  <div>
-                    <h3 className="font-semibold">Labels ved valg af leveringsmetode</h3>
-                    <p className="text-sm text-muted-foreground">Valgfri tekst på valget af afhentning eller levering. Teksten ændrer ikke priser eller rabatter. Lad feltet være tomt for at skjule labelen.</p>
-                  </div>
-                  {([
-                    ['pickupLabel', 'Label til afhentning', 'Spar 25%'],
-                    ['deliveryLabel', 'Label til levering', 'Gratis levering'],
-                  ] as const).map(([name, label, placeholder]) => (
-                    <FormField key={name} control={control} name={name} render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>{label}</FormLabel>
-                        <FormControl><Input {...field} value={field.value ?? ''} placeholder={placeholder} maxLength={DELIVERY_METHOD_LABEL_MAX_LENGTH} /></FormControl>
-                        <FormDescription>Højst {DELIVERY_METHOD_LABEL_MAX_LENGTH} tegn. Vises kun, når leveringsmetoden er aktiv.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
-                  ))}
-                </div>
+                <FormField
+                  control={control}
+                  name="pickupSaveTag"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Pickup Save Tag
+                      </FormLabel>
+
+                      <FormControl>
+                        <Input
+                          placeholder="e.g. 15%"
+                          {...field}
+                          value={
+                            field.value ?? ''
+                          }
+                        />
+                      </FormControl>
+
+                      <FormDescription>
+                        Optional text shown on the
+                        delivery method dialog, for
+                        example &quot;15%&quot;. It
+                        will be displayed as
+                        &quot;Save 15%&quot;.
+                      </FormDescription>
+
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </CardContent>
             </Card>
           </div>
