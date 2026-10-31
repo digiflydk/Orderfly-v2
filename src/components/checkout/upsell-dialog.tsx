@@ -3,7 +3,7 @@
 'use client';
 import { money, discountedUnit } from '@/lib/money';
 
-import Image from 'next/image';
+import { StorefrontProductImage } from '@/components/product/storefront-product-image';
 import type { Product, Upsell, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
@@ -136,7 +136,8 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                     return (
                         <div key={product.id} className="relative group flex flex-col overflow-hidden rounded-lg border">
                             <div className="aspect-video w-full relative">
-                                <Image 
+                                <StorefrontProductImage
+                                    product={product}
                                     src={safeImage(upsell.imageUrl || product.imageUrl)} 
                                     alt={product.productName || ''} 
                                     fill 
