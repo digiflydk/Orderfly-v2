@@ -5,10 +5,14 @@ const { loadTs } = require('../helpers/load-ts.cjs');
 
 const orderFlow = loadTs('src/lib/m3pizza-order-flow.ts');
 
-test('root renders the landing directly instead of redirecting to the legacy alias', () => {
+test('root renders the Orderfly marketing landing directly; the Esmeralda landing stays on /m3pizza (#814)', () => {
   const source = fs.readFileSync('src/app/page.tsx', 'utf8');
-  assert.match(source, /brand-site\/m3pizza\/page/);
+  assert.match(source, /OrderflyLanding/);
+  assert.doesNotMatch(source, /brand-site\/m3pizza/);
   assert.doesNotMatch(source, /redirect\s*\(/);
+  const middleware = fs.readFileSync('src/middleware.ts', 'utf8');
+  assert.match(middleware, /pathname === '\/m3pizza'\) \{\s*const websiteUrl = request\.nextUrl\.clone\(\);\s*websiteUrl\.pathname = '\/brand-site\/m3pizza';/);
+  assert.ok(fs.existsSync('src/app/brand-site/m3pizza/page.tsx'));
 });
 
 for (const [requested, expected] of [
