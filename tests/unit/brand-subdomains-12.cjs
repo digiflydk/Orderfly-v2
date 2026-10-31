@@ -325,6 +325,7 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
         'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
         '@/context/cart-context': { useCart: () => ({ location: null, setDeliveryType: type => types.push(type) }) },
         '@/components/ui/dialog': {}, '@/components/ui/button': {}, '@/components/storefront/OrderModal': { OrderModal: () => null },
+        '@/components/storefront/DeliveryMethodLabel': { DeliveryMethodLabel: () => null },
         'lucide-react': {}, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
       });
       mod.default();
