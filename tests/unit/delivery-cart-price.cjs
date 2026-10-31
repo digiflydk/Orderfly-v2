@@ -13,7 +13,8 @@ new Function('require','module','exports',code)(name=>{
  if(name==='@/hooks/use-menu-checkout')return {};
  if(name==='@/lib/images')return {};
  if(name==='@/components/product/inline-upsell')return {};
- if(name==='next/image')return ()=>null;
+ if(name==='@/components/product/storefront-product-image')return {StorefrontProductImage:()=>null};
+ if(name==='@/context/storefront-v2-context')return {useStorefrontV2:()=>false};
  return require(name);
 },mod,mod.exports);
 function render(m,type){managed=m;deliveryType=type;return renderToStaticMarkup(React.createElement(mod.exports.CartTotals));}

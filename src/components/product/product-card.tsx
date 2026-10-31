@@ -2,7 +2,7 @@
 'use client';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 
-import Image from 'next/image';
+import { StorefrontProductImage } from './storefront-product-image';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
 import { productPriceData } from '@/lib/product-price';
 import type { StandardDiscount, ProductForMenu } from '@/types';
@@ -18,7 +18,6 @@ import { Skeleton } from "../ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
-import { safeImage } from '@/lib/images';
 import {formatPrice} from '@/lib/storefront-format';
 import {useAnalytics} from '@/context/analytics-context';
 
@@ -115,8 +114,8 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
         onClick={handleCardClick}
       >
         <div className={cn("relative shrink-0 overflow-hidden rounded-md", compact ? "h-16 w-16" : "h-24 w-24")}>
-          <Image
-            src={safeImage(product.imageUrl)}
+          <StorefrontProductImage
+            product={product}
             alt={product.productName || 'Produktbillede'}
             fill
             sizes={compact ? "64px" : "96px"}
