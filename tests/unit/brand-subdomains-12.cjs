@@ -164,6 +164,7 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
     '@/styles/storefront-v2-checkout.css': {},
     'next/headers': { headers: async () => new Headers({ host }) },
     '@/lib/esmeralda-v2-host': loadTs('src/lib/esmeralda-v2-host.ts'),
+    '@/lib/storefront-home-screen': loadTs('src/lib/storefront-home-screen.ts'),
     '@/context/storefront-v2-context': { StorefrontV2Provider: ({ children }) => children },
     '@/context/cart-context': { CartProvider: ({ children }) => children },
     '@/context/analytics-context': { AnalyticsProvider: ({ children }) => children },
