@@ -177,7 +177,10 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
   assert.doesNotMatch(suspended, /STOREFRONT|Esmeralda/);
   assert.match(html(await render('active')), /STOREFRONT/);
   assert.match(html(await render('active', 'esmeralda2.orderfly.dk')), /data-storefront-version="2"/);
-  assert.doesNotMatch(html(await render('active')), /data-storefront-version/);
+  for (const host of ['esmeralda.orderfly.dk', 'orderfly.dk', 'localhost:3000']) {
+    assert.match(html(await render('active', host)), /data-storefront-version="2"/);
+    assert.doesNotMatch(html(await render('active', host, 'other')), /data-storefront-version/);
+  }
   assert.doesNotMatch(html(await render('active', 'esmeralda2.orderfly.dk', 'other')), /data-storefront-version/);
   assert.doesNotMatch(html(await render('suspended', 'esmeralda2.orderfly.dk')), /STOREFRONT|data-storefront-version/);
   await assert.rejects(render(null), /NOT_FOUND/);
