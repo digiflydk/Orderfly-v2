@@ -20,6 +20,23 @@ test('real brand layout supplies brand title, Apple title and only brand icon me
   assert.ok(!JSON.stringify(result.icons).includes('/icon.png'));
 });
 
+test('static Esmeralda entrypoint exports brand metadata with its fixed slug and no route params',async()=>{
+  const f=fixture();
+  const result=await resolvedMetadata(await f.esmeraldaMetadata?.());
+  assert.equal(result.title.absolute,brand.name);
+  assert.equal(result.appleWebApp.title,brand.name);
+  assert.equal(result.manifest,'/api/storefront/brands/esmeralda/manifest.webmanifest');
+  assert.equal(result.icons.apple[0].url,'/api/storefront/brands/esmeralda/icon/180');
+  assert.deepEqual(f.reads,[['slug','esmeralda']]);
+});
+
+test('static Esmeralda metadata keeps the shared suspended and cross-brand host guards',async()=>{
+  for(const options of [{currentBrand:{...brand,status:'suspended'}},{host:'another.orderfly.dk'}]) {
+    const f=fixture(options);assert.equal(typeof f.esmeraldaMetadata,'function');
+    assert.deepEqual(await f.esmeraldaMetadata(),{});
+  }
+});
+
 test('platform root keeps its existing icon and Club overrides parent install identity',async()=>{
   const platform=await resolvedMetadata();
   assert.equal(platform.title.absolute,'Orderfly Studio');

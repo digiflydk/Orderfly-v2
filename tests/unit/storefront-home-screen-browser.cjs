@@ -20,7 +20,11 @@ before(async()=>{
    if(api){const request=new Request(url,{headers:{host,'x-forwarded-host':host}});const context={params:Promise.resolve({brandSlug:api[1],size:api[3]})};response=await (api[3]?f.icon(request,context):f.manifest(request,context));}
    else {
     const context={params:Promise.resolve({brandSlug:'esmeralda'})};
-    const meta=await resolvedMetadata(await f.metadata(context),url.pathname.endsWith('/club')?await f.clubMetadata(context):undefined);
+    // /esmeralda is a static page that wraps BrandLayout as a component. It
+    // needs its own metadata hook; it does not inherit that layout's exports.
+    const isStaticEntry=url.pathname==='/'||url.pathname==='/esmeralda';
+    const routeMetadata=isStaticEntry?await f.esmeraldaMetadata?.():await f.metadata(context);
+    const meta=await resolvedMetadata(routeMetadata,url.pathname.endsWith('/club')?await f.clubMetadata(context):undefined);
     const head=renderToStaticMarkup(React.createElement(React.Fragment,null,...BasicMeta({metadata:meta}),...AppleWebAppMeta({appleWebApp:meta.appleWebApp}),...IconsMetadata({icons:meta.icons})));
     response=new Response(`<!doctype html><html lang="da"><head>${head}</head><body>Storefront metadata regression</body></html>`,{headers:{'content-type':'text/html'}});
    }
@@ -31,7 +35,7 @@ before(async()=>{
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));});
-for(const [host,path,base] of [['esmeralda.orderfly.dk','/','/'],['esmeralda.orderfly.dk','/amager','/'],['esmeralda2.orderfly.dk','/amager','/'],['orderfly.dk','/esmeralda/amager','/esmeralda']])test(`mobile browser sees brand install identity at ${host}${path}`,async t=>{
+for(const [host,path,base] of [['esmeralda.orderfly.dk','/','/'],['esmeralda.orderfly.dk','/amager','/'],['esmeralda2.orderfly.dk','/','/'],['esmeralda2.orderfly.dk','/amager','/'],['orderfly.dk','/esmeralda','/esmeralda'],['orderfly.dk','/esmeralda/amager','/esmeralda']])test(`mobile browser sees brand install identity at ${host}${path}`,async t=>{
  const context=await browser.newContext({viewport:{width:390,height:844},extraHTTPHeaders:{'x-forwarded-host':host}});t.after(()=>context.close());
  const page=await context.newPage();const response=await page.goto(origin+path);assert.equal(response.status(),200);
  assert.equal(await page.title(),brand.name);
