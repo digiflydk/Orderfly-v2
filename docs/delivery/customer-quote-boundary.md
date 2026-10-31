@@ -166,3 +166,11 @@ quote/draft writes for that test only. Never submit an order, payment or courier
 booking. Compare server time separately from test-client transport and browser
 UI time. Live results are recorded in the PR after deployment, not inferred
 from test success or the 6–9 second target.
+
+Lifecycle QA also exposed 11 identical failures on unchanged `b4b3978` and the
+performance branch: the payment fixture had no restaurant hours, while its
+lifecycle scenarios require an open pickup window. The fixture now explicitly
+uses manual all-day pickup hours; all 15 lifecycle cases pass without changing
+any production dispatch rule or weakening assertions. Restaurant cache
+initialization is lazy so dispatch workers importing validators do not initialize
+a storefront cache that they never use.
