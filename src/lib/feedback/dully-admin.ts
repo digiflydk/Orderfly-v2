@@ -9,10 +9,11 @@ import { feedbackAutomation } from './mail-config';
 import { dullyFingerprint } from './dully-source';
 export type { DullyImportRow } from './dully-contract';
 type Scope = { brandId: string; locationId: string };
+export type DullyWaitingReason = 'stale_source' | 'paused' | 'approval_required' | 'master_disabled' | 'waiting' | 'uncertain' | 'failed' | 'ineligible' | null;
 export type DullyFeedbackState = {
   configuration: null | { accountId: string; restaurantId: string; paused: boolean; approvedAt: number | null; testSourceId: string | null; approvedTestSourceId: string | null };
   test: null | { sourceId: string; experienceType: 'pickup' | 'delivery'; state: string };
-  rows: Array<{ id: string; orderNumber: string; experienceType: 'pickup' | 'delivery'; email: string; status: string; mailState: string; isTest: boolean; orderedAt: string; updatedAt: number }>;
+  rows: Array<{ id: string; orderNumber: string; experienceType: 'pickup' | 'delivery'; email: string; status: string; mailState: string; isTest: boolean; orderedAt: string; updatedAt: number; lastVerifiedAt: number; externalOrderId: string; waitingReason: DullyWaitingReason }>;
   hasMore: boolean; masterEmailEnabled: boolean;
   counts: { imported: number; eligible: number; pending: number; accepted: number; failed: number; uncertain: number }; canEdit: boolean;
 };
@@ -37,11 +38,22 @@ export async function getDullyFeedbackState(brandId: string, locationId: string)
   const currentFingerprint = config ? await dullyFingerprint(brandId, locationId, config as any).catch(() => null) : null;
   const approvalValid = Boolean(config?.approvedAt && config?.approvedFingerprint === currentFingerprint?.fingerprint && config?.approvedTestSourceId === config?.testSourceId);
   const lastTest = config?.testSourceId ? (await s.db.collection('dullyFeedbackSources').doc(config.testSourceId).get()).data() : null;
+  const waitingReason = (row: any): DullyWaitingReason => {
+    if (row.mailState === 'accepted') return null;
+    if (row.mailState === 'uncertain' || row.mailState === 'failed') return row.mailState;
+    if (!dullyEligible(row)) return 'ineligible';
+    if (row.isTest) return 'waiting';
+    if (!masterSettings.emailEnabled) return 'master_disabled';
+    if (!approvalValid) return 'approval_required';
+    if (config?.paused !== false) return 'paused';
+    if (!Number.isFinite(row.lastVerifiedAt) || Date.now() - row.lastVerifiedAt > 24 * 3600000) return 'stale_source';
+    return 'waiting';
+  };
   return {
     hasMore: docs.docs.length > 500, masterEmailEnabled: masterSettings.emailEnabled,
     configuration: config ? { accountId: config.accountId, restaurantId: config.restaurantId, paused: config.paused !== false, approvedAt: approvalValid ? config.approvedAt : null, testSourceId: config.testSourceId || null, approvedTestSourceId: config.approvedTestSourceId || null } : null,
     test: lastTest ? { sourceId: lastTest.id, experienceType: lastTest.experienceType, state: lastTest.mailState } : null,
-    rows: rows.sort((a, b) => b.updatedAt - a.updatedAt).map(r => ({ id: r.id, orderNumber: r.orderNumber, experienceType: r.experienceType, email: r.email, status: r.status, mailState: r.mailState, isTest: r.isTest === true, orderedAt: r.orderedAt, updatedAt: r.updatedAt })),
+    rows: rows.sort((a, b) => b.updatedAt - a.updatedAt).map(r => ({ id: r.id, orderNumber: r.orderNumber, experienceType: r.experienceType, email: r.email, status: r.status, mailState: r.mailState, isTest: r.isTest === true, orderedAt: r.orderedAt, updatedAt: r.updatedAt, lastVerifiedAt: Number.isFinite(r.lastVerifiedAt) ? r.lastVerifiedAt : 0, externalOrderId: typeof r.externalOrderId === 'string' ? r.externalOrderId : '', waitingReason: waitingReason(r) })),
     counts: { imported: rows.filter(r => !r.isTest).length, eligible: rows.filter(r => !r.isTest && dullyEligible(r)).length,
       pending: rows.filter(r => !r.isTest && r.mailState === 'pending').length, accepted: rows.filter(r => !r.isTest && r.mailState === 'accepted').length,
       failed: rows.filter(r => !r.isTest && r.mailState === 'failed').length, uncertain: rows.filter(r => !r.isTest && r.mailState === 'uncertain').length },
@@ -102,23 +114,38 @@ export async function sendDullyFeedbackTest(input: Scope & { experienceType: 'pi
   const configRef = s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId), config = (await configRef.get()).data();
   if (!config) throw new Error('Gem Dully-koblingen først.');
   const prepared = await dullyFingerprint(s.brandId, s.locationId, config as any), now = Date.now();
-  const id = dullyHash(['dully-test', s.scopeId, prepared.fingerprint, type]), ref = s.db.collection('dullyFeedbackSources').doc(id);
-  await s.db.runTransaction(async tx => {
-    const [current, existing] = await Promise.all([tx.get(configRef), tx.get(ref)]);
+  const seriesId = dullyHash(['dully-test', s.scopeId, prepared.fingerprint, type]);
+  const seriesRef = s.db.collection('dullyFeedbackTestSeries').doc(seriesId);
+  const sourceId = await s.db.runTransaction(async tx => {
+    const [current, series] = await Promise.all([tx.get(configRef), tx.get(seriesRef)]);
     const final = current.exists ? await dullyFingerprint(s.brandId, s.locationId, current.data() as any, tx) : null;
     if (final?.fingerprint !== prepared.fingerprint) throw new Error('Skema eller mailopsætning er ændret. Prøv igen.');
     if (current.data()?.accountId !== config.accountId || current.data()?.restaurantId !== config.restaurantId) throw new Error('Koblingen er ændret. Prøv igen.');
+    // A series pointer serializes renewal; concurrent clicks reuse the same new source.
+    // Fall back to the original deterministic identity for pre-series test records.
+    let id: string = series.data()?.sourceId || seriesId;
+    let ref = s.db.collection('dullyFeedbackSources').doc(id), existing = await tx.get(ref);
+    if (existing.data()?.mailState === 'uncertain') throw new Error('Testens afsendelse er ukendt. Kontrollér først mailtjenestens historik; testen bliver ikke sendt igen.');
+    if (existing.data()?.mailState === 'accepted' && existing.data()!.expiresAt <= now) {
+      id = dullyHash(['dully-test-renewal', id]);
+      ref = s.db.collection('dullyFeedbackSources').doc(id);
+      existing = await tx.get(ref);
+    }
     if (!existing.exists) tx.create(ref, { id, scopeId: s.scopeId, brandId: s.brandId, locationId: s.locationId, sourceType: 'dully_order', customerId: id,
       email: DULLY_TEST_EMAIL, experienceType: type, ...prepared, orderNumber: 'TEST', isTest: true, status: 'completed', paymentStatus: 'paid',
       orderedAt: new Date(now).toISOString(), completedAt: new Date(now).toISOString(), invitationStatus: 'active', expiresAt: now + 30 * 86400000,
       mailState: 'pending', eventId: randomUUID(), attempts: 0, dueAt: now, createdAt: now, updatedAt: now, lastVerifiedAt: now, historyKey: s.scopeId + ':' + now + ':' + id });
     if (existing.data()?.mailState === 'failed') tx.update(ref, { mailState: 'pending', dueAt: now, lastError: null, lease: null, updatedAt: now });
     if (existing.data()?.mailState === 'uncertain') throw new Error('Testens afsendelse er ukendt. Kontrollér først mailtjenestens historik; testen bliver ikke sendt igen.');
+    if (series.exists) tx.update(seriesRef, { sourceId: id, updatedAt: now });
+    else tx.create(seriesRef, { sourceId: id, scopeId: s.scopeId, createdAt: now, updatedAt: now });
     tx.update(configRef, { testSourceId: id, approvedAt: null, approvedFingerprint: null, approvedTestSourceId: null, paused: true, updatedAt: now });
     audit(s.db, tx, s.access.uid, s.scopeId, 'test_requested', { sourceId: id });
+    return id;
   });
-  return { ok: true as const, sourceId: id };
+  return { ok: true as const, sourceId };
 }
+
 export async function approveDullyFeedback(input: Scope & { testSourceId: string }) {
   const id = z.string().regex(/^[a-f0-9]{64}$/).parse(input.testSourceId), s = await scope(input, true), ref = s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId);
   const config = (await ref.get()).data(); if (!config) throw new Error('Dully-koblingen mangler.');

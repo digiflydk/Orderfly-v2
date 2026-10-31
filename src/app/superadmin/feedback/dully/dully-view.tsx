@@ -5,7 +5,7 @@ import Link from '@/components/superadmin/admin-link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { DullyFeedbackState } from '@/lib/feedback/dully-admin';
+import type { DullyFeedbackState, DullyWaitingReason } from '@/lib/feedback/dully-admin';
 import { approveDullyTest, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
 
 type Scope = { brandId: string; locationId: string };
@@ -18,6 +18,16 @@ const states: Record<string, string> = {
   not_queued: 'Ikke sat i kø', none: 'Ikke sat i kø', completed: 'Gennemført', cancelled: 'Annulleret',
 };
 const label = (state: string) => states[state] || state || 'Ikke sat i kø';
+const waitingReasons: Record<Exclude<DullyWaitingReason, null>, string> = {
+  stale_source: 'Ordren mangler en kontrol i Dully fra de seneste 24 timer. Indlæs en opdateret ordre.',
+  paused: 'Den daglige Dully-afsendelse er på pause.',
+  approval_required: 'Den aktuelle test og skemaopsætning skal godkendes før afsendelse.',
+  master_disabled: 'Feedbackmails til kunder er slået fra for brandet.',
+  waiting: 'Afventer den planlagte behandling i mailkøen.',
+  uncertain: 'Afsendelsesresultatet er ukendt. Kontrollér beskeden i mPanel; den sendes ikke automatisk igen.',
+  failed: 'Afsendelsen er fejlet. Kontrollér beskeden i mPanel før en ny afsendelse.',
+  ineligible: 'Ordren opfylder ikke kravene til afsendelse. Kontrollér gennemførelse, betaling og dato i Dully.',
+};
 const date = (value: number | string) => {
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen', dateStyle: 'short', timeStyle: 'short' }) : '–';
@@ -137,7 +147,7 @@ export function DullyFeedbackView({ brands, locations }: {
         <h2 className="text-lg font-semibold">4. Daglig afsendelse</h2>
         {!state.masterEmailEnabled && <p className="rounded-md bg-muted/50 p-3 text-sm">Feedbackmails til kunder er slået fra for brandet. Dully sender derfor ingen kundemails. En testmail kan stadig sendes til den faste testadresse. Aktivér kundemails særskilt under <Link href="/superadmin/feedback/settings" className="underline">Feedbackindstillinger</Link>, når testen er godkendt.</p>}
         <p className="text-sm">Hver dag kl. <strong>21.00 dansk tid</strong>, også i weekenden. Orderfly behandler de importerede ordrer, som endnu ikke har fået en invitation. Nye ordrer skal løbende indlæses fra Dully.</p>
-        <p className="text-sm text-muted-foreground">Ordrer indlæst efter dagens kørsel behandles ved en senere kørsel. Annullerede og refunderede ordrer springes over. En pause bevarer ventende ordrer.</p>
+        <p className="text-sm text-muted-foreground">Ordrer indlæst efter dagens kørsel behandles ved en senere kørsel. Annullerede og refunderede ordrer springes over. En pause bevarer ventende ordrer. Ventende ordrer skal kontrolleres i Dully og indlæses igen, hvis udtrækket er over 24 timer gammelt.</p>
         <div className="flex flex-wrap items-center gap-3"><span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">{state.configuration?.paused === false ? (state.masterEmailEnabled ? 'Aktiv' : 'Stoppet: kundemails er slået fra') : 'På pause'}</span><Button type="button" variant={state.configuration?.paused === false ? 'outline' : 'default'} disabled={!canEdit || !configured || (state.configuration?.paused !== false && (!approved || !state.masterEmailEnabled))} onClick={() => void run(() => pauseDullyFeedback({ ...scope, paused: state.configuration?.paused === false }))}>{state.configuration?.paused === false ? 'Sæt på pause' : 'Aktivér daglig afsendelse'}</Button></div>
         {!approved && <p className="text-sm text-muted-foreground">Kundemails er spærret, indtil testen er godkendt.</p>}
       </section>
@@ -147,7 +157,7 @@ export function DullyFeedbackView({ brands, locations }: {
           ['Importerede', state.counts.imported], ['Berettigede', state.counts.eligible], ['I kø', state.counts.pending], ['Accepteret', state.counts.accepted], ['Fejl', state.counts.failed], ['Kræver kontrol', state.counts.uncertain],
         ] as const).map(([name, count]) => <div className="rounded-lg border p-3" key={name}><dt className="text-xs text-muted-foreground">{name}</dt><dd className="mt-1 text-xl font-semibold">{count}</dd></div>)}</dl>
         {state.rows.length === 0 && <p className="rounded-lg border p-5 text-sm text-muted-foreground">Ingen Dully-ordrer er importeret for denne location.</p>}
-        <ul className="space-y-3">{state.rows.map(row => <li key={row.id} className="space-y-2 rounded-lg border p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{row.isTest ? 'Testmail' : 'Ordre #' + row.orderNumber} · {row.experienceType === 'delivery' ? 'Levering' : 'Afhentning'}</strong><span>{label(row.mailState)}</span></div><p className="break-all text-muted-foreground">{row.email}</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Ordredato: {date(row.orderedAt)}</span><span>Ordrestatus: {label(row.status)}</span><span>Opdateret: {date(row.updatedAt)}</span></div><p className="break-all text-xs text-muted-foreground">Kilde-ID: {row.id}</p>{row.mailState === 'uncertain' && <p className="text-sm">Kontrollér beskeden i mPanel. Den sendes ikke automatisk igen, når afsendelsesresultatet er ukendt.</p>}</li>)}</ul>
+        <ul className="space-y-3">{state.rows.map(row => <li key={row.id} className="space-y-2 rounded-lg border p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{row.isTest ? 'Testmail' : 'Ordre #' + row.orderNumber} · {row.experienceType === 'delivery' ? 'Levering' : 'Afhentning'}</strong><span>{label(row.mailState)}</span></div><p className="break-all text-muted-foreground">{row.email}</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Ordredato: {date(row.orderedAt)}</span><span>Ordrestatus: {label(row.status)}</span><span>Status opdateret: {date(row.updatedAt)}</span></div>{!row.isTest && <p className="text-xs text-muted-foreground">Sidst kontrolleret i Dully: {row.lastVerifiedAt > 0 ? date(row.lastVerifiedAt) : 'Ikke registreret'}</p>}{row.externalOrderId && <p className="break-all text-xs text-muted-foreground">Dully-ordre-ID: {row.externalOrderId}</p>}<p className="break-all text-xs text-muted-foreground">Orderfly-kilde-ID: {row.id}</p>{row.waitingReason && <p className="text-sm">{waitingReasons[row.waitingReason] || 'Afventer kontrol af afsendelsesstatus.'}</p>}</li>)}</ul>
       </section>
     </>}
     <Link href="/superadmin/feedback/settings" className="inline-block text-sm underline">Feedbackindstillinger</Link>

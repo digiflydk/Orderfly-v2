@@ -329,7 +329,29 @@ test('settings exposes a stable QR URL and admin filters distinguish QR visits',
  await page.getByRole('combobox').nth(0).click();await page.getByRole('option',{name:'Restaurantbesøg (QR)',exact:true}).click();
  await page.getByText('qr-visit',{exact:true}).waitFor();assert.equal(await page.getByText('online-order',{exact:true}).count(),0);
  await page.goto(origin+'/report?from=2026-09-09&to=2026-09-09&source=dine_in');
- await page.getByText('0 onlineordrer · 0 bookinger · 1 QR-besøg',{exact:true}).waitFor();
+ await page.getByText('0 onlineordrer · 0 bookinger · 1 QR-besøg · 0 Dully-ordrer',{exact:true}).waitFor();
+});
+
+test('admin inbox and quality report keep Dully orders separate from online orders and QR visits',async t=>{
+ const page=await setup(t,'/settings');
+ const base={brandId:'b',locationId:'l',customerId:'c',rating:4,receivedAt:new Date('2026-09-09T10:00:00Z')};
+ f.records.set('feedback/dully',{...base,sourceType:'dully_order',sourceId:'dully-source'});
+ f.records.set('feedback/online',{...base,sourceType:'commerce_order',sourceId:'online-source'});
+ f.records.set('feedback/qr',{...base,sourceType:'dine_in',sourceId:'qr-source',customerId:''});
+ await page.goto(origin+'/inbox');await page.getByText('dully-source',{exact:true}).waitFor();
+ await page.getByRole('combobox').nth(0).click();await page.getByRole('option',{name:'Dully',exact:true}).click();
+ await page.getByText('dully-source',{exact:true}).waitFor();
+ assert.equal(await page.getByText('online-source',{exact:true}).count(),0);
+ assert.equal(await page.getByText('qr-source',{exact:true}).count(),0);
+ await page.getByRole('combobox').nth(0).click();await page.getByRole('option',{name:'Online orders',exact:true}).click();
+ await page.getByText('online-source',{exact:true}).waitFor();
+ assert.equal(await page.getByText('dully-source',{exact:true}).count(),0);
+ assert.equal(await page.getByText('qr-source',{exact:true}).count(),0);
+ await page.goto(origin+'/report?from=2026-09-09&to=2026-09-09');
+ await page.getByText('1 onlineordrer · 0 bookinger · 1 QR-besøg · 1 Dully-ordrer',{exact:true}).waitFor();
+ await page.goto(origin+'/report?from=2026-09-09&to=2026-09-09&source=dully_order');
+ await page.getByText('0 onlineordrer · 0 bookinger · 0 QR-besøg · 1 Dully-ordrer',{exact:true}).waitFor();
+ assert.equal(await page.getByLabel('Oplevelse',{exact:true}).inputValue(),'dully_order');
 });
 
 for(const width of [390,1280])test(`real dine-in context, submission and external-review step (${width})`,async t=>{

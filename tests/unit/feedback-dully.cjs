@@ -142,10 +142,14 @@ test('stale evidence requires reimport and more than10 due orders drain without 
   await f.adminDully.importDullyFeedback({ ...scope, rows });
   const sources = [...f.records.values()].filter(v => v.sourceType === 'dully_order' && !v.isTest);
   sources[0].lastVerifiedAt = NOW - 25 * 3600000;
+  const staleState=await f.adminDully.getDullyFeedbackState(BRAND,'l');
+  const staleRow=staleState.rows.find(r=>r.id===sources[0].id);
+  assert.equal(staleRow.waitingReason,'stale_source');assert.equal(staleRow.externalOrderId,sources[0].externalOrderId);assert.equal(staleRow.lastVerifiedAt,NOW-25*3600000);
   const sends = []; const provider = () => ({ eligible: async () => true, send: async (...args) => sends.push(args[3].sourceId) });
   for (let i = 0; i < 3; i++) await f.worker.runDullyFeedbackWorker(provider, NOW);
   assert.equal(sends.length, 22); assert.equal(new Set(sends).size, 22);
   await f.adminDully.importDullyFeedback({ ...scope, rows });
+  assert.equal((await f.adminDully.getDullyFeedbackState(BRAND,'l')).rows.find(r=>r.id===sources[0].id).waitingReason,'waiting');
   await f.worker.runDullyFeedbackWorker(provider, NOW);
   assert.equal(sends.length, 23); assert.equal(new Set(sends).size, 23);
 });
@@ -189,4 +193,22 @@ test('master email switch suppresses customer dispatch while an explicit test is
  f.records.set('feedbackSettings/'+BRAND,{emailEnabled:false});
  await f.worker.runDullyFeedbackWorker(provider,NOW);assert.equal(sent,1);
  assert.equal((await f.adminDully.getDullyFeedbackState(BRAND,'l')).masterEmailEnabled,false);
+});
+
+test('expired accepted test can be renewed once under concurrent clicks without retrying uncertain outcomes', async t => {
+ const f=setup(t); const originalId=await approved(f);
+ const original=f.records.get('dullyFeedbackSources/'+originalId); original.invitationStatus='submitted';
+ const later=NOW+31*86400000; Date.now=()=>later;
+ const requests=await Promise.all([f.adminDully.sendDullyFeedbackTest({...scope,experienceType:'delivery'}),f.adminDully.sendDullyFeedbackTest({...scope,experienceType:'delivery'})]);
+ assert.notEqual(requests[0].sourceId,originalId);assert.equal(requests[0].sourceId,requests[1].sourceId);
+ const replacement=f.records.get('dullyFeedbackSources/'+requests[0].sourceId);
+ assert.equal(replacement.mailState,'pending');assert.equal(replacement.invitationStatus,'active');assert.ok(replacement.expiresAt>later);
+ assert.notEqual(replacement.eventId,original.eventId);assert.equal(original.mailState,'accepted');
+ await assert.rejects(f.adminDully.approveDullyFeedback({...scope,testSourceId:originalId}));
+ let sends=0;await f.worker.runDullyFeedbackWorker(()=>({eligible:async()=>true,send:async()=>{sends++;}}),later);assert.equal(sends,1);
+ await f.adminDully.approveDullyFeedback({...scope,testSourceId:replacement.id});
+ assert.equal((await f.adminDully.getDullyFeedbackState(BRAND,'l')).configuration.approvedTestSourceId,replacement.id);
+ const latest=f.records.get('dullyFeedbackSources/'+replacement.id);latest.mailState='uncertain';latest.expiresAt=later-1;
+ await assert.rejects(f.adminDully.sendDullyFeedbackTest({...scope,experienceType:'delivery'}));
+ assert.equal([...f.records.keys()].filter(k=>k.startsWith('dullyFeedbackSources/')).length,2);
 });

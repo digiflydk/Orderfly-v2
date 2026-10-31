@@ -13,6 +13,7 @@ The screen separates source setup, import, test approval and customer sending:
 - Status refresh follows mutations. A successful write remains reported successful if a follow-up read fails, with further writes disabled until status is refreshed. Transport failures preserve pasted input and never automatically retry potentially consequential mutations.
 - Switching tenant/location clears local drafts, mapping and confirmation. Request generations prevent an earlier read from populating another selection.
 - Counts cover the displayed latest500 source rows, not all historical activity. Older history is disclosed when the server returns `hasMore`. Test mail counts are excluded. Uncertain acceptance requires reconciliation instead of blind resend.
+- History separates the last verified Dully import time from worker status updates and shows the stable external Dully order ID. A closed set of safe waiting reasons explains paused, unapproved, master-disabled, stale, ineligible, pending or uncertain/failed sending without exposing raw infrastructure errors. Pending customer source records must be refreshed from Dully when their last verification is over24hours old.
 
 Dully responses use `dully_order` in the inbox, detail view and quality report. They have a separate filter and count and do not count as online sales orders. Their details do not link to an Orderfly sales record or try to resolve a fabricated commerce customer. Test responses are stored separately by the backend and do not enter report counts.
 

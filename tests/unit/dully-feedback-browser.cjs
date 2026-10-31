@@ -88,3 +88,16 @@ test('master customer-email switch blocks customer activation but leaves explici
  assert.equal(current.masterEmailEnabled,false);assert.equal(current.configuration.paused,true);
  assert.equal(await page.getByRole('button',{name:'Aktivér daglig afsendelse'}).isEnabled(),false);
 });
+test('history distinguishes Dully source verification from worker updates and explains stale waiting safely',async t=>{
+ const verified=Date.parse('2026-10-31T17:00:00+01:00'),updated=Date.parse('2026-11-02T21:05:00+01:00');
+ const page=await setup(t,390,{rows:[{id:'orderfly-source',externalOrderId:'2594108',orderNumber:'2154',experienceType:'delivery',email:'synthetic@example.test',status:'completed',mailState:'pending',isTest:false,orderedAt:'2026-10-31T16:00:00+01:00',lastVerifiedAt:verified,updatedAt:updated,waitingReason:'stale_source'}]});
+ const history=page.getByRole('region',{name:'Afsendelseshistorik'});
+ await history.getByText('Dully-ordre-ID: 2594108',{exact:true}).waitFor();
+ const format=value=>new Date(value).toLocaleString('da-DK',{timeZone:'Europe/Copenhagen',dateStyle:'short',timeStyle:'short'});
+ assert.equal(await history.getByText('Sidst kontrolleret i Dully: '+format(verified),{exact:true}).count(),1);
+ assert.equal(await history.getByText('Status opdateret: '+format(updated),{exact:true}).count(),1);
+ await history.getByText('Ordren mangler en kontrol i Dully fra de seneste 24 timer. Indlæs en opdateret ordre.',{exact:true}).waitFor();
+ assert.equal(await history.getByText('stale_source',{exact:true}).count(),0);
+ assert.equal(calls.filter(call=>call.kind!=='load').length,0);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+});
