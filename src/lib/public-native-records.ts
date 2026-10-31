@@ -1,6 +1,7 @@
 import type { Brand, Location } from '@/types';
 import { brandRecord } from './brand-record';
 import { locationPaymentMethods } from './merchant-payment-methods';
+import { deliveryMethodLabel } from './delivery-method-labels';
 
 const brandFields = ['name','slug','companyName','status','street','zipCode','city','country','currency','companyRegNo','foodCategories','locationsCount','logoUrl','supportEmail','website','termsUrl','privacyUrl','cookiesUrl','offersHeading','combosHeading','bagFee','adminFee','adminFeeType','vatPercentage','appearances','ga4MeasurementId','gtmContainerId','googleAdsConversionId','googleAdsPurchaseLabel','metaPixelId'] as const;
 const locationFields = ['name','slug','brandId','address','street','zipCode','city','country','isActive','openingHours','deliveryFee','minOrder','deliveryTypes','imageUrl','smileyUrl','allowPreOrder','prep_time','delivery_time','travlhed_factor','manual_override','pickupSaveTag'] as const;
@@ -13,5 +14,5 @@ export function publicBrandRecord(id:string,data:Record<string,unknown>):Brand {
  return brandRecord(id,{...project(data,brandFields),ownerId:''});
 }
 export function publicLocationRecord(id:string,data:Record<string,unknown>):Location {
- return {...project(data,locationFields),id,paymentMethods:locationPaymentMethods(data as Location)} as Location;
+ return {...project(data,locationFields),id,pickupLabel:deliveryMethodLabel(data,'pickup'),deliveryLabel:deliveryMethodLabel(data,'delivery'),paymentMethods:locationPaymentMethods(data as Location)} as Location;
 }

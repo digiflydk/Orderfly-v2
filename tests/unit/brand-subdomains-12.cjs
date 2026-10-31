@@ -164,6 +164,7 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
     '@/styles/storefront-v2-checkout.css': {},
     'next/headers': { headers: async () => new Headers({ host }) },
     '@/lib/esmeralda-v2-host': loadTs('src/lib/esmeralda-v2-host.ts'),
+    '@/lib/storefront-home-screen': loadTs('src/lib/storefront-home-screen.ts'),
     '@/context/storefront-v2-context': { StorefrontV2Provider: ({ children }) => children },
     '@/context/cart-context': { CartProvider: ({ children }) => children },
     '@/context/analytics-context': { AnalyticsProvider: ({ children }) => children },
@@ -325,6 +326,7 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
         'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
         '@/context/cart-context': { useCart: () => ({ location: null, setDeliveryType: type => types.push(type) }) },
         '@/components/ui/dialog': {}, '@/components/ui/button': {}, '@/components/storefront/OrderModal': { OrderModal: () => null },
+        '@/components/storefront/DeliveryMethodLabel': { DeliveryMethodLabel: () => null },
         'lucide-react': {}, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
       });
       mod.default();
