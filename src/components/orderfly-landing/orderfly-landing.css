@@ -1,0 +1,235 @@
+/* Orderfly marketing landing (#814). Mobile first: base rules target 320 px
+   and up; wider layouts are added with min-width queries only. Everything is
+   scoped under .ofl so storefront/admin styles are unaffected. */
+.ofl {
+  --ofl-ink: #10201A;
+  --ofl-ink-2: #3D5248;
+  --ofl-muted: #5A6E64;
+  --ofl-line: #E3E8E4;
+  --ofl-line-2: #C6D1CA;
+  --ofl-soft: #F3F5F2;
+  --ofl-accent: #C2410C;
+  --ofl-accent-soft: #FBE7DD;
+  --ofl-accent-on-dark: #F4A27F;
+  --ofl-green: #1F7A4D;
+  --ofl-mint: #CFEBDD;
+  --ofl-display: var(--ofl-font-display, ui-sans-serif, system-ui, sans-serif);
+  --ofl-body: var(--ofl-font-body, ui-sans-serif, system-ui, sans-serif);
+  font-family: var(--ofl-body);
+  color: var(--ofl-ink);
+  background: #FFFFFF;
+  line-height: 1.5;
+  font-size: 16px;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+.ofl *, .ofl *::before, .ofl *::after { box-sizing: border-box; }
+.ofl h1, .ofl h2, .ofl h3, .ofl p, .ofl ul, .ofl ol { margin: 0; }
+.ofl ul, .ofl ol { padding: 0; list-style: none; }
+.ofl a { color: inherit; }
+.ofl a:focus-visible, .ofl summary:focus-visible { outline: 3px solid var(--ofl-accent); outline-offset: 3px; border-radius: 6px; }
+.ofl h1, .ofl h2 { font-family: var(--ofl-display); font-weight: 800; letter-spacing: -0.03em; line-height: 1.06; text-wrap: balance; }
+.ofl h2 { font-size: clamp(28px, 7.5vw, 48px); }
+.ofl h3 { font-size: 18px; font-weight: 700; line-height: 1.3; }
+.ofl-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.ofl-skip { position: absolute; left: 16px; top: -100px; z-index: 50; background: var(--ofl-ink); color: #FFFFFF !important; padding: 12px 16px; border-radius: 8px; }
+.ofl-skip:focus { top: 12px; }
+.ofl-wrap { width: 100%; max-width: 1200px; margin: 0 auto; padding-inline: 16px; }
+.ofl-section { padding-block: 56px; }
+.ofl-section + .ofl-section { padding-top: 0; }
+.ofl-eyebrow { color: var(--ofl-accent); font-weight: 700; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+.ofl-dark .ofl-eyebrow { color: var(--ofl-accent-on-dark); }
+.ofl-lead { font-size: 17px; color: var(--ofl-ink-2); }
+.ofl-intro { display: flex; flex-direction: column; gap: 12px; max-width: 720px; margin-bottom: 32px; }
+.ofl-intro-split > p { color: var(--ofl-ink-2); }
+.ofl-intro-split > div { display: flex; flex-direction: column; gap: 12px; }
+.ofl-intro-center { margin-inline: auto; text-align: center; align-items: center; }
+
+/* Buttons: full-width, 48 px tall touch targets on phones. */
+.ofl-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 12px 22px; border-radius: 10px; font-weight: 600; font-size: 16px; text-decoration: none; text-align: center; }
+.ofl-btn-primary { background: var(--ofl-accent); color: #FFFFFF !important; }
+.ofl-btn-primary:hover { background: #A8380A; }
+.ofl-btn-secondary { background: #FFFFFF; border: 1px solid var(--ofl-line-2); color: var(--ofl-ink) !important; }
+.ofl-btn-secondary:hover { border-color: var(--ofl-ink); }
+.ofl-btn-dark { background: var(--ofl-ink); color: #FFFFFF !important; }
+.ofl-actions { display: flex; flex-direction: column; gap: 12px; }
+.ofl-badge { display: inline-block; margin-left: 8px; vertical-align: middle; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--ofl-line-2); background: #FFFFFF; color: #2B4A3C; font-family: var(--ofl-body); letter-spacing: 0; }
+.ofl-badge-accent { background: var(--ofl-accent); border-color: var(--ofl-accent); color: #FFFFFF; }
+
+/* Header + mobile menu (details/summary: works without JavaScript). */
+.ofl-header { position: sticky; top: 0; z-index: 40; background: rgba(255,255,255,.96); border-bottom: 1px solid var(--ofl-line); backdrop-filter: saturate(1.4) blur(8px); }
+.ofl-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; position: relative; }
+.ofl-logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--ofl-display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; min-height: 44px; }
+.ofl-logo-mark { width: 32px; height: 32px; border-radius: 8px; background: var(--ofl-ink); color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 19px; }
+.ofl-nav-links, .ofl-nav-actions { display: none; }
+.ofl-mobile-menu summary { list-style: none; cursor: pointer; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--ofl-line-2); }
+.ofl-mobile-menu summary::-webkit-details-marker { display: none; }
+.ofl-burger { display: flex; flex-direction: column; gap: 5px; }
+.ofl-burger span { width: 20px; height: 2px; background: var(--ofl-ink); border-radius: 2px; transition: transform .2s; }
+.ofl-mobile-menu[open] .ofl-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.ofl-mobile-menu[open] .ofl-burger span:nth-child(2) { opacity: 0; }
+.ofl-mobile-menu[open] .ofl-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.ofl-mobile-panel { position: absolute; left: 0; right: 0; top: 100%; background: #FFFFFF; border-bottom: 1px solid var(--ofl-line); padding: 8px 16px 20px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 16px 24px -16px rgba(16,32,26,.25); }
+.ofl-mobile-panel ul a { display: flex; align-items: center; min-height: 48px; font-weight: 600; font-size: 17px; text-decoration: none; border-bottom: 1px solid var(--ofl-line); }
+
+/* Hero */
+.ofl-hero { background: var(--ofl-soft); }
+.ofl-hero-grid { display: flex; flex-direction: column; gap: 40px; padding-block: 40px 56px; }
+.ofl-hero-copy { display: flex; flex-direction: column; gap: 20px; }
+.ofl-pill { align-self: flex-start; background: #FFFFFF; border: 1px solid #D5DED8; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; color: #2B4A3C; }
+.ofl-hero h1 { font-size: clamp(36px, 10.5vw, 68px); line-height: 1.02; letter-spacing: -0.035em; }
+.ofl-checks { display: flex; flex-direction: column; gap: 10px; font-size: 15px; color: var(--ofl-ink-2); }
+.ofl-checks li { display: flex; gap: 10px; align-items: flex-start; }
+.ofl-check { color: var(--ofl-green); flex: none; margin-top: 2px; }
+.ofl-hero-visual { display: flex; justify-content: center; }
+.ofl-terminal { display: none; }
+
+.ofl-phone { width: 248px; max-width: 100%; background: #FFFFFF; border: 8px solid var(--ofl-ink); border-radius: 34px; padding: 14px 12px 18px; box-shadow: 0 30px 60px -24px rgba(16,32,26,.45); display: flex; flex-direction: column; gap: 8px; }
+.ofl-phone-notch { width: 70px; height: 6px; border-radius: 6px; background: #D5DED8; margin: 0 auto 6px; }
+.ofl-phone-brand { font-family: var(--ofl-display); font-weight: 800; font-size: 17px; }
+.ofl-phone-sub { font-size: 11px; color: var(--ofl-muted); }
+.ofl-phone-tabs { display: flex; gap: 6px; font-size: 10px; font-weight: 600; }
+.ofl-phone-tabs span { background: var(--ofl-soft); padding: 4px 9px; border-radius: 999px; }
+.ofl-phone-tabs .is-active { background: var(--ofl-ink); color: #FFFFFF; }
+.ofl-phone-item { display: flex; gap: 8px; align-items: center; border: 1px solid var(--ofl-line); border-radius: 10px; padding: 7px; }
+.ofl-phone-thumb { width: 44px; height: 44px; border-radius: 8px; flex: none; }
+.ofl-phone-lines { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.ofl-phone-lines span { height: 7px; border-radius: 4px; background: #DCE3DE; width: 80%; }
+.ofl-phone-lines span + span { width: 45%; background: #ECF0ED; }
+.ofl-phone-add { width: 26px; height: 26px; border-radius: 7px; background: var(--ofl-accent); color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.ofl-phone-cta { margin-top: 4px; background: var(--ofl-ink); color: #FFFFFF; border-radius: 10px; padding: 10px 12px; font-size: 12px; font-weight: 600; display: flex; justify-content: space-between; }
+
+.ofl-terminal { width: 380px; background: var(--ofl-ink); border-radius: 18px; padding: 18px; color: #FFFFFF; box-shadow: 0 30px 60px -30px rgba(16,32,26,.5); align-self: flex-start; font-size: 11px; }
+.ofl-terminal-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 14px; }
+.ofl-terminal-online { background: var(--ofl-green); padding: 3px 10px; border-radius: 999px; font-size: 12px; }
+.ofl-terminal-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ofl-terminal-cols > div { display: flex; flex-direction: column; gap: 8px; }
+.ofl-terminal-cols small { color: #A9BDB2; font-size: 11px; }
+.ofl-ticket { display: block; background: #24382F; border-radius: 8px; padding: 9px; }
+.ofl-ticket b { display: block; font-size: 12px; }
+.ofl-ticket.is-new { background: #FFFFFF; color: var(--ofl-ink); border-top: 4px solid var(--ofl-accent); }
+.ofl-ticket.is-ready { background: var(--ofl-mint); color: var(--ofl-ink); }
+.ofl-terminal-foot { margin-top: 14px; display: flex; align-items: center; gap: 8px; color: #A9BDB2; }
+
+/* Customers */
+.ofl-customers { border-bottom: 1px solid var(--ofl-line); }
+.ofl-customers-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: center; padding-block: 24px; color: var(--ofl-muted); font-size: 14px; font-weight: 600; }
+.ofl-customers-row strong { font-family: var(--ofl-display); font-size: 20px; color: var(--ofl-ink); }
+
+/* Grids: one column on phones. */
+.ofl-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.ofl-benefit { background: var(--ofl-soft); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 8px; }
+.ofl-benefit h3 { font-family: var(--ofl-display); font-size: 21px; }
+.ofl-benefit p, .ofl-feature p { color: var(--ofl-ink-2); font-size: 15px; }
+.ofl-feature { border: 1px solid var(--ofl-line); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; gap: 10px; }
+.ofl-feature.is-soon { border-style: dashed; border-color: #B7C4BC; background: var(--ofl-soft); }
+.ofl-feature-icon { width: 44px; height: 44px; border-radius: 10px; background: var(--ofl-accent-soft); color: var(--ofl-accent); display: flex; align-items: center; justify-content: center; }
+.ofl-feature.is-soon .ofl-feature-icon { background: #FFFFFF; color: #2B4A3C; }
+
+/* How it works */
+.ofl-dark { background: var(--ofl-ink); color: #FFFFFF; }
+.ofl-steps li { border-top: 2px solid #3A5247; padding-top: 20px; display: flex; flex-direction: column; gap: 8px; }
+.ofl-steps h3 { font-size: 20px; }
+.ofl-steps p { color: #C3D2C9; }
+.ofl-step-no { font-family: var(--ofl-display); font-weight: 800; font-size: 36px; color: var(--ofl-accent-on-dark); line-height: 1; }
+
+/* Loyalty */
+.ofl-loyalty { display: flex; flex-direction: column; gap: 40px; }
+.ofl-loyalty-copy { display: flex; flex-direction: column; gap: 16px; }
+.ofl-checks-col { font-size: 16px; color: var(--ofl-ink); gap: 12px; }
+.ofl-stampcard { width: 100%; max-width: 340px; align-self: center; background: var(--ofl-soft); border-radius: 24px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.ofl-stampcard-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ofl-stampcard-head b { font-family: var(--ofl-display); font-size: 19px; }
+.ofl-stampcard-head span { font-size: 12px; color: var(--ofl-muted); }
+.ofl-stamps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.ofl-stamps span { aspect-ratio: 1; border-radius: 999px; border: 2px dashed #B7C4BC; }
+.ofl-stamps .is-filled { background: var(--ofl-accent); border: 0; }
+.ofl-stampcard p { font-weight: 600; }
+.ofl-qr { background: #FFFFFF; border-radius: 14px; padding: 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.ofl-qr span { width: 112px; height: 112px; background:
+  linear-gradient(var(--ofl-ink) 0 0) 0 0 / 32px 32px no-repeat,
+  linear-gradient(var(--ofl-ink) 0 0) 100% 0 / 32px 32px no-repeat,
+  linear-gradient(var(--ofl-ink) 0 0) 0 100% / 32px 32px no-repeat,
+  repeating-conic-gradient(var(--ofl-ink) 0 25%, #FFFFFF 0 50%) 0 0 / 16px 16px; }
+.ofl-qr small { font-size: 12px; color: var(--ofl-muted); }
+
+/* Plans */
+.ofl-soft { background: var(--ofl-soft); }
+.ofl-plan { background: #FFFFFF; border: 1px solid var(--ofl-line); border-radius: 18px; padding: 26px; display: flex; flex-direction: column; gap: 14px; }
+.ofl-plan h3 { font-size: 21px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ofl-plan p { color: var(--ofl-ink-2); flex: 1; }
+.ofl-plan.is-highlighted { background: var(--ofl-ink); color: #FFFFFF; border-color: var(--ofl-ink); }
+.ofl-plan.is-highlighted p { color: #C3D2C9; }
+
+/* FAQ */
+.ofl-faq { max-width: 860px; }
+.ofl-faq h2 { margin-bottom: 24px; }
+.ofl-faq-list { border-top: 1px solid var(--ofl-line); }
+.ofl-faq-list details { border-bottom: 1px solid var(--ofl-line); }
+.ofl-faq-list summary { cursor: pointer; min-height: 56px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 600; font-size: 17px; padding-block: 12px; list-style: none; }
+.ofl-faq-list summary::-webkit-details-marker { display: none; }
+.ofl-faq-list summary::after { content: '+'; font-size: 24px; font-weight: 400; color: var(--ofl-accent); flex: none; }
+.ofl-faq-list details[open] summary::after { content: '–'; }
+.ofl-faq-list p { color: var(--ofl-ink-2); padding-bottom: 18px; }
+
+/* CTA + footer */
+.ofl-cta-wrap { padding-bottom: 56px; }
+.ofl-cta { background: var(--ofl-accent); color: #FFFFFF; border-radius: 20px; padding: 32px 22px; display: flex; flex-direction: column; gap: 24px; }
+.ofl-cta h2 { font-size: clamp(28px, 7vw, 44px); margin-bottom: 10px; }
+.ofl-cta p { color: #FFF1EA; font-size: 17px; }
+.ofl-footer { border-top: 1px solid var(--ofl-line); font-size: 15px; color: var(--ofl-ink-2); }
+.ofl-footer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px 16px; padding-block: 40px; }
+.ofl-footer-brand { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; }
+.ofl-footer nav { display: flex; flex-direction: column; }
+.ofl-footer nav h2 { font-family: var(--ofl-body); font-size: 15px; font-weight: 700; letter-spacing: 0; color: var(--ofl-ink); margin-bottom: 4px; }
+.ofl-footer nav a { min-height: 44px; display: flex; align-items: center; text-decoration: none; }
+.ofl-footer nav a:hover { color: var(--ofl-accent); }
+
+/* ≥ 600 px: side-by-side buttons, two-column grids. */
+@media (min-width: 600px) {
+  .ofl-wrap { padding-inline: 24px; }
+  .ofl-actions { flex-direction: row; flex-wrap: wrap; }
+  .ofl-checks:not(.ofl-checks-col) { flex-direction: row; flex-wrap: wrap; gap: 10px 24px; }
+  .ofl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .ofl-cta { padding: 48px 40px; }
+  .ofl-footer-grid { grid-template-columns: 2fr 1fr 1fr; }
+  .ofl-footer-brand { grid-column: auto; }
+}
+
+/* ≥ 900 px: desktop navigation, side-by-side hero and loyalty, three columns. */
+@media (min-width: 900px) {
+  .ofl-section { padding-block: 96px; }
+  .ofl-mobile-menu { display: none; }
+  .ofl-nav { min-height: 72px; }
+  .ofl-nav-links { display: flex; gap: 24px; font-size: 15px; font-weight: 500; }
+  .ofl-nav-links a { text-decoration: none; min-height: 44px; display: inline-flex; align-items: center; }
+  .ofl-nav-links a:hover, .ofl-nav-login:hover { color: var(--ofl-accent); }
+  .ofl-nav-actions { display: flex; gap: 12px; align-items: center; }
+  .ofl-nav-login { font-weight: 600; font-size: 15px; text-decoration: none; padding-inline: 6px; min-height: 44px; display: inline-flex; align-items: center; }
+  .ofl-nav-demo { min-height: 44px; font-size: 15px; padding-inline: 18px; }
+  .ofl-hero-grid { flex-direction: row; align-items: center; gap: 56px; padding-block: 88px 96px; }
+  .ofl-hero-copy { flex: 1 1 52%; min-width: 0; gap: 24px; }
+  .ofl-hero-visual { flex: 1 1 48%; min-width: 0; align-items: flex-end; min-height: 500px; }
+  .ofl-terminal { display: block; flex: none; width: 340px; margin-top: 8px; }
+  .ofl-phone { flex: none; margin-left: -80px; position: relative; }
+  .ofl-lead { font-size: 19px; }
+  .ofl-grid-3, .ofl-features { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ofl-intro-split { max-width: none; flex-direction: row; justify-content: space-between; align-items: flex-end; gap: 32px; }
+  .ofl-intro-split > div { max-width: 640px; }
+  .ofl-intro-split > p { max-width: 360px; }
+  .ofl-intro { margin-bottom: 48px; }
+  .ofl-loyalty { flex-direction: row-reverse; align-items: center; gap: 64px; }
+  .ofl-loyalty-copy { flex: 1 1 55%; }
+  .ofl-stampcard { flex: 0 0 340px; }
+  .ofl-cta { flex-direction: row; align-items: center; justify-content: space-between; padding: 64px; }
+  .ofl-cta-wrap { padding-bottom: 96px; }
+}
+
+@media (min-width: 1100px) {
+  .ofl-terminal { width: 380px; }
+  .ofl-features { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ofl-burger span { transition: none; }
+}
