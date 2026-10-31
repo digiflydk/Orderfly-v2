@@ -4,8 +4,8 @@
 // Only features that exist in the codebase are listed. Prices, binding terms
 // and company details are intentionally absent until the owner provides them.
 
-/** Public contact address for "Book en demo". Must be confirmed by the owner before release (#814). */
-export const ORDERFLY_CONTACT_EMAIL = 'kontakt@orderfly.dk';
+/** Public contact address for "Book en demo" (confirmed by the owner 2026-10-31, #814). */
+export const ORDERFLY_CONTACT_EMAIL = 'okh@digifly.dk';
 
 export const DEMO_MAILTO = `mailto:${ORDERFLY_CONTACT_EMAIL}?subject=${encodeURIComponent('Demo af Orderfly')}`;
 

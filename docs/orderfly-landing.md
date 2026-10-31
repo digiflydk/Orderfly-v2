@@ -17,7 +17,7 @@ Esmeralda's ordering landing that used to render on `/` is unchanged and still s
 - Only features that exist in the codebase are listed. Wolt Drive is marked "Kommer snart" until it is released (#672).
 - No invented prices, figures or testimonials. Packages describe content only; the price is "Få et tilbud".
 - "Book en demo" is a `mailto:` link to `ORDERFLY_CONTACT_EMAIL`. There is no contact form: the old one was removed in #223 because it showed success without sending anything.
-- Customer references (currently Esmeralda Pizza) need the owner's consent.
+- Demo requests go to `okh@digifly.dk`. Esmeralda Pizza may be named as a customer (text only, no link); both confirmed by the owner 2026-10-31.
 
 ## Mobile first
 
