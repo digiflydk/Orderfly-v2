@@ -10,6 +10,8 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import { useAnalytics } from '@/context/analytics-context';
+import { DeliveryMethodLabel } from '@/components/storefront/DeliveryMethodLabel';
+import { deliveryMethodLabel } from '@/lib/delivery-method-labels';
 
 interface DeliveryMethodDialogProps {
   isOpen: boolean;
@@ -66,12 +68,7 @@ export function DeliveryMethodDialog({ isOpen, setIsOpen, onSelect }: DeliveryMe
                 <Store className="h-5 w-5" />
             </div>
             <span className="flex-grow font-semibold text-sm sm:text-base">Pick-up</span>
-            {location?.pickupSaveTag && (
-                <Badge variant="destructive" className="bg-red-100 text-red-700 border border-red-200 hover:bg-red-100/80">
-                    <div className="h-2 w-2 rounded-full bg-red-500 mr-2 animate-pulse"></div>
-                    Save {location.pickupSaveTag}
-                </Badge>
-            )}
+            <DeliveryMethodLabel location={location} mode="pickup" />
           </button>
 
           {/* Delivery Button */}
@@ -86,7 +83,8 @@ export function DeliveryMethodDialog({ isOpen, setIsOpen, onSelect }: DeliveryMe
                 <Truck className="h-5 w-5" />
             </div>
             <span className="flex-grow font-semibold text-sm sm:text-base">Delivery</span>
-            {freeDeliveryDiscountApplied && (
+            <DeliveryMethodLabel location={location} mode="delivery" />
+            {freeDeliveryDiscountApplied && !deliveryMethodLabel(location, 'delivery') && (
                  <Badge variant="destructive" className="bg-green-100 text-green-700 border border-green-200 hover:bg-green-100/80">
                     Free delivery
                 </Badge>

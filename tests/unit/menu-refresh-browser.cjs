@@ -155,3 +155,44 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  await page.getByRole('button',{name:'Ryd menusøgning'}).click();
  await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
 });
+
+for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom while scrolling and resizing (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2');
+ await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose|Tilføj til kurv/}).click();
+ await page.getByRole('dialog').waitFor({state:'hidden'});
+ const dock=page.locator('[data-v2-cart-dock]');await dock.waitFor();
+ // Chromium's native CSS environment override exercises the same env() values
+ // used by Safari/standalone, without replacing application styles in the fixture.
+ const cdp=await page.context().newCDPSession(page);
+ for(const safeBottom of [0,34]){
+  await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{bottom:safeBottom}});
+  for(const height of [900,670,900]){
+   await page.setViewportSize({width,height});
+   for(const scroll of [0,550,1800,Number.MAX_SAFE_INTEGER]){
+    await page.evaluate(y=>window.scrollTo(0,y),scroll);
+    await page.waitForFunction(()=>{const dock=document.querySelector('[data-v2-cart-dock]');return dock&&Math.abs(dock.getBoundingClientRect().bottom-innerHeight)<=1;});
+    const geometry=await dock.evaluate(el=>{
+     const box=el.getBoundingClientRect(),button=el.querySelector('[data-v2-cart-bar]').getBoundingClientRect(),style=getComputedStyle(el);
+     return {position:style.position,bottom:box.bottom,left:box.left,right:box.right,height:box.height,background:style.backgroundColor,paddingBottom:parseFloat(style.paddingBottom),buttonBottom:button.bottom,
+      bottomIsDock:document.elementFromPoint(innerWidth/2,innerHeight-1)===el,
+      clearance:document.querySelector('[data-v2-cart-clearance]').getBoundingClientRect().height};
+    });
+    assert.equal(geometry.position,'fixed');
+    assert.equal(geometry.left,0);assert.equal(geometry.right,width);
+    assert.ok(Math.abs(geometry.bottom-height)<=1,'dock touches the current viewport bottom');
+    assert.equal(geometry.paddingBottom,Math.max(12,safeBottom));
+    assert.ok(Math.abs(geometry.buttonBottom-(height-Math.max(12,safeBottom)))<=1,'button remains above safe area inside dock');
+    assert.equal(geometry.background,'rgb(16, 19, 18)','opaque brand surface covers under-button area');
+    assert.equal(geometry.bottomIsDock,true,'scrolling menu content cannot show through below the button');
+    assert.ok(geometry.clearance>=geometry.height,'menu reserves the full dock height');
+   }
+  }
+  const lastProduct=page.locator('[data-v2-product-card]').last();
+  assert.ok((await lastProduct.boundingBox()).y+(await lastProduct.boundingBox()).height<=(await dock.boundingBox()).y,'last product remains above dock at end of menu');
+ }
+ await page.screenshot({path:path.join(dir,`v2-cart-dock-safe-area-${width}.png`),fullPage:false});
+ await page.setViewportSize({width:1280,height:900});
+ assert.equal(await dock.isVisible(),false,'mobile dock remains hidden on desktop');
+ await page.getByRole('complementary',{name:'Din kurv'}).getByRole('heading',{name:'Margherita',exact:true}).waitFor();
+});

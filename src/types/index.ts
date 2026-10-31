@@ -200,7 +200,10 @@ export type Location = {
   delivery_time: number;
   travlhed_factor: 'normal' | 'medium' | 'høj';
   manual_override?: number;
+  /** Legacy pickup saving value; used only when pickupLabel is unset. */
   pickupSaveTag?: string;
+  pickupLabel?: string;
+  deliveryLabel?: string;
 
   // Calculated fields, added in actions
   supportsDelivery?: boolean;

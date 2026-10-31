@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),ts=require('typescript');
+const {loadTs}=require('../helpers/load-ts.cjs');
 
 test('native brand layout fetches only its brand and never forwards global marketing settings',async()=>{
  const brand={id:'brand-a',slug:'fixture',name:'Fixture'},reads=[];
@@ -9,6 +10,7 @@ test('native brand layout fetches only its brand and never forwards global marke
   '@/styles/storefront-v2-checkout.css':{},
   'next/headers':{headers:async()=>new Headers({host:'fixture.orderfly.dk'})},
   '@/lib/esmeralda-v2-host':{isEsmeraldaV2Host:()=>assert.fail('V2 host check must not run for another brand')},
+  '@/lib/storefront-home-screen':loadTs('src/lib/storefront-home-screen.ts'),
   '@/context/storefront-v2-context':{StorefrontV2Provider:'StorefrontV2'},
   'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},
   'next/navigation':{notFound:()=>{throw Error('not found');}},
