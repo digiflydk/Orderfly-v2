@@ -318,7 +318,7 @@ test('V2 pinned upgrade action quotes the dish surcharge and keeps the existing 
  const upgrade=page.getByRole('button',{name:'Vælg menu',exact:true});await upgrade.waitFor();
  await page.getByRole('dialog').evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
  assert.equal(await upgrade.getAttribute('data-ui-variant'),'default');
- assert.equal(await page.getByRole('button',{name:/Læg i pose/}).getAttribute('data-ui-variant'),'default');
+ assert.equal(await page.getByRole('button',{name:/Læg i pose/}).getAttribute('data-ui-variant'),'outline');
  const box=await upgrade.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=568);
  assert.match(await page.locator('.commerce-inline-offers').innerText(),/40,00/);
  assert.equal(await page.locator('.commerce-inline-offers button').count(),0,'single menu banner does not duplicate the pinned action');
