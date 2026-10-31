@@ -1,5 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
+import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
+import { comboPrintSelections } from './combo-print-selection';
 import type { OrderDetail } from '@/types';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
@@ -24,7 +26,7 @@ type Scope = z.infer<typeof scopeSchema>;
 const text = (max: number) => z.string().max(max).refine(s => !/[\p{Cf}\p{Cs}\u0000-\u0008\u000b-\u001f\u007f]/u.test(s));
 const money = z.number().finite().min(0).max(100_000_000);
 const quantity = z.number().int().min(1).max(999);
-const selection = z.object({ groupName: text(160), products: z.array(z.object({ id, name: text(160) })).max(100) });
+const selection = z.object({ groupName: text(160), products: z.array(z.object({ id, name: text(160), modifiers: z.array(z.object({ id, quantity: z.number().int().min(1).max(MAX_TOPPINGS_PER_ITEM) })).max(MAX_TOPPINGS_PER_ITEM).optional() })).max(100) });
 const item = z.object({ id, name: text(160), quantity, itemType: z.enum(['product', 'combo']),
   toppings: z.array(text(160)).max(50).optional(), comboSelections: z.array(selection).max(30).optional(),
   unitPrice: money.optional(), totalPrice: money.optional() });
@@ -163,10 +165,28 @@ export async function prepareKitchenPrintSnapshot(context: NativeTransactionCont
   const { lineIds, ...s } = input, snapshot = await nativeSnapshot(context, s);
   if (lineIds !== undefined) {
     if (!Array.isArray(lineIds) || !lineIds.length || lineIds.length > 100 || new Set(lineIds).size !== lineIds.length) return fail();
-    snapshot.order.productItems = lineIds.map(lineId => {
-      if (!/^line-(0|[1-9][0-9]{0,2})$/.test(lineId)) return fail();
-      return snapshot.order.productItems[Number(lineId.slice(5))] ?? fail();
+    const selected = new Set(lineIds), consumed = new Set<string>();
+    snapshot.order.productItems = snapshot.order.productItems.flatMap((item, index) => {
+      if (item.itemType !== 'combo') {
+        const key = `line-${index}`;
+        if (!selected.has(key)) return [];
+        consumed.add(key); return [item];
+      }
+      let children;
+      try { children = comboPrintSelections(item); } catch { return fail(); }
+      const included = children.filter(child => {
+        const key = `line-${index}-group-${child.groupIndex}-product-${child.productIndex}`;
+        if (!selected.has(key)) return false;
+        consumed.add(key); return true;
+      });
+      if (!included.length) return [];
+      return [{ ...item, toppings: included.flatMap(child => child.modifiers),
+        comboSelections: (item.comboSelections ?? []).flatMap((group, groupIndex) => {
+          const products = included.filter(child => child.groupIndex === groupIndex).map(child => child.product);
+          return products.length ? [{ ...group, products }] : [];
+        }) }];
     });
+    if (consumed.size !== selected.size) return fail();
   }
   const categories = await categoryNames(context, s, snapshot.order);
   return { settings: snapshot.kitchenSettings, order: projectKitchenReceipt(snapshot.order, categories, snapshot.delivery) };

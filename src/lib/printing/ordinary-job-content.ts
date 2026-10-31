@@ -15,7 +15,7 @@ const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(valu
 const invalid = (): never => { throw new Error('ordinary_content_unavailable'); };
 /** The accepted manifest hashes the server's original product selection. Re-read
  * it natively, reject changes, and freeze exactly these PNG bytes at offer time.
- * This first supervised purchase slice supports product lines, not combo menus.
+ * Menu components use scoped native routing and preserve their saved selections.
  */
 export async function prepareOrdinaryJobContent(context: NativeTransactionContext,
   job: z.infer<typeof storedQueuedPrintJobSchema>, profile: { model: 'mc-print2' | 'mc-print3'; paperWidthMm: 58 | 80 }) {
