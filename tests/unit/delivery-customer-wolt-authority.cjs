@@ -24,9 +24,9 @@ test('scope, digest/revision and active location are revalidated after factory c
  }
 });
 test('expired/missing native drafts and forged scope fail before secret/provider construction',async()=>{
- const missing=fixture();missing.rows.delete('deliveryCheckoutDrafts/'+missing.draft.checkoutKeyHash);await assert.rejects(missing.createCustomerWoltQuoteProvider(missing.draft,'sandbox'));assert.equal(missing.factories(),0);
- const expired=fixture();expired.rows.get('deliveryCheckoutDrafts/'+expired.draft.checkoutKeyHash).expiresAt=new Date(0);await assert.rejects(expired.createCustomerWoltQuoteProvider(expired.draft,'sandbox'));assert.equal(expired.factories(),0);
- const changed=fixture();await assert.rejects(changed.createCustomerWoltQuoteProvider({...changed.draft,binding:{...changed.draft.binding,brandId:'B'}},'sandbox'));assert.equal(changed.factories(),0);
+ const missing=fixture();missing.rows.delete('deliveryCheckoutDrafts/'+missing.draft.checkoutKeyHash);await assert.rejects((await missing.createCustomerWoltQuoteProvider(missing.draft,'sandbox')).quote(missing.request));assert.equal(missing.factories(),0);
+ const expired=fixture();expired.rows.get('deliveryCheckoutDrafts/'+expired.draft.checkoutKeyHash).expiresAt=new Date(0);await assert.rejects((await expired.createCustomerWoltQuoteProvider(expired.draft,'sandbox')).quote(expired.request));assert.equal(expired.factories(),0);
+ const changed=fixture();await assert.rejects((await changed.createCustomerWoltQuoteProvider({...changed.draft,binding:{...changed.draft.binding,brandId:'B'}},'sandbox')).quote(changed.request));assert.equal(changed.factories(),0);
 });
 test('quote request cannot replace native checkout identity, timing or postal address',async()=>{
  const f=fixture(),provider=await f.createCustomerWoltQuoteProvider(f.draft,'sandbox');

@@ -1,4 +1,5 @@
 import 'server-only';
+import {reuseDeliveryRead} from '../quotes/request-context';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -42,7 +43,8 @@ export async function loadGeoapifyPlatformInTransaction(tx: FirebaseFirestore.Tr
   const row = await tx.get(ref());
   return row.exists ? geoapifyPlatformRecordSchema.parse(row.data()) : null;
 }
-async function load() { return getAdminDb().runTransaction(loadGeoapifyPlatformInTransaction,{readOnly:true}); }
+async function loadFresh() { return getAdminDb().runTransaction(loadGeoapifyPlatformInTransaction,{readOnly:true}); }
+async function load(){return reuseDeliveryRead('geoapify-platform',loadFresh);}
 async function authorize(tx: FirebaseFirestore.Transaction, actor: string) {
   const row = await tx.get(getAdminDb().collection('platformAdminControl').doc('access-v1'));
   if (!row.exists || !isSuperuser(policySchema.parse(row.data()), actor)) throw new AuthorityError('forbidden');
@@ -57,7 +59,7 @@ export async function getPlatformGeoapifyRuntime() {
     const saved = await load();
     if (!saved?.enabled || !saved.retentionApproved || !saved.routingApprovalRef || !saved.retentionApprovalRef || !saved.secretRef) return null;
     const apiKey = await createDeliverySecretStore({ projectId: deliverySecretProjectId() }).read(saved.secretRef, secretScope);
-    const current = await load();
+    const current = await loadFresh();
     if (!current || JSON.stringify(current) !== JSON.stringify(saved)) return null;
     return { ...project(saved), apiKey };
   } catch { return null; }

@@ -1,5 +1,8 @@
 import {deliveryPickupWindowAllows} from '../settings/schedule';
 import 'server-only';
+import {restaurantFingerprint} from './restaurant-snapshot';
+import {invalidateQuoteRestaurant} from './restaurant-cache';
+import type {Brand,Location} from '@/types';
 import {createHash} from 'node:crypto';
 import {getAdminDb} from '@/lib/firebase-admin';
 import {loadDeliverySettingsInTransaction} from '../settings/server';
@@ -18,13 +21,16 @@ export async function loadCurrentCustomerDraft(keyHash:string):Promise<Authorita
 async function assertDraftCurrent(tx:FirebaseFirestore.Transaction,claim:CustomerQuoteClaim){
  const current=(await tx.get(draftRef(claim.checkoutKeyHash))).data();
  if(!current||current.requestDigest!==claim.requestDigest||current.draftRevision!==claim.draftRevision||current.addressRevision!==claim.addressRevision
-  ||current.binding?.brandId!==claim.quote.binding.brandId||current.binding?.locationId!==claim.quote.binding.locationId)throw Error('quote_draft_changed');
+  ||current.binding?.brandId!==claim.quote.binding.brandId||current.binding?.locationId!==claim.quote.binding.locationId||Date.now()>=(current.expiresAtMs??current.expiresAt?.toMillis?.()??current.expiresAt?.getTime?.()??0))throw Error('quote_draft_changed');
+ return current;
 }
-async function currentSettings(tx:FirebaseFirestore.Transaction,claim:CustomerQuoteClaim){
+async function currentSettings(tx:FirebaseFirestore.Transaction,claim:CustomerQuoteClaim,draft:Promise<FirebaseFirestore.DocumentData>){
  const q=claim.quote,b=q.binding,db=getAdminDb();
- const [brand,location]=await Promise.all([tx.get(db.collection('brands').doc(b.brandId)),tx.get(db.collection('locations').doc(b.locationId))]);
+ const locationRead=tx.get(db.collection('locations').doc(b.locationId));
+ const [brand,location,current,loaded]=await Promise.all([tx.get(db.collection('brands').doc(b.brandId)),locationRead,draft,loadDeliverySettingsInTransaction(tx,b.brandId,b.locationId,locationRead)]);
+ if(current.restaurantFingerprint&&restaurantFingerprint({...brand.data(),id:b.brandId} as Brand,{...location.data(),id:b.locationId} as Location)!==current.restaurantFingerprint){invalidateQuoteRestaurant();throw Error('quote_settings_changed');}
  if(!brand.exists||!location.exists||location.data()?.brandId!==b.brandId||location.data()?.isActive!==true)throw Error('quote_scope_changed');
- const {result}=await loadDeliverySettingsInTransaction(tx,b.brandId,b.locationId);
+ const {result}=loaded;
  if(!deliveryPickupWindowAllows(result.settings,q.fulfillment.readyAt,q.providerQuote.pickupInterval))throw Error('quote_settings_changed');
  if(!result.settings.enabled||result.settings.paused||result.brandRevision!==b.brandRevision||result.revision!==b.locationRevision||result.settings.providerId!==b.providerId)throw Error('quote_settings_changed');
 }
@@ -44,10 +50,9 @@ export async function persistCustomerQuoteClaim(claim:CustomerQuoteClaim):Promis
  const parsed=storedDeliveryQuoteSchema.safeParse(claim.quote);
  if(!parsed.success||!id(claim.quote.quoteRef)||!/^[a-f0-9]{64}$/.test(claim.tokenHash)||!/^[a-f0-9]{64}$/.test(claim.checkoutKeyHash)||!/^[a-f0-9]{64}$/.test(claim.requestDigest))return false;
  const db=getAdminDb();return db.runTransaction(async tx=>{
-  await currentSettings(tx,claim);
-  await assertDraftCurrent(tx,claim);
+  const validation=currentSettings(tx,claim,assertDraftCurrent(tx,claim));
   const ref=db.collection('deliveryQuotes').doc(claim.quote.quoteRef),meta=ref.collection('customerClaims').doc('current');
-  const [q,m]=await Promise.all([tx.get(ref),tx.get(meta)]);
+  const [q,m]=await Promise.all([tx.get(ref),tx.get(meta),validation]);
   if(q.exists||m.exists||Date.now()<claim.quote.createdAtMs||Date.now()>=claim.quote.expiresAtMs)return false;
   const {quote,...metadata}=claim;
   tx.create(ref,quote);tx.create(meta,{...metadata,consumedByOrderId:null,expiresAt:new Date(quote.expiresAtMs)});return true;
@@ -62,7 +67,6 @@ export async function prepareCustomerQuoteConsumption(tx:FirebaseFirestore.Trans
  const quote=storedDeliveryQuoteSchema.parse(q.data()),metadata=m.data()!;
  const claim={...metadata,quote} as CustomerQuoteClaim;
  if(!verifyCustomerQuoteClaim(claim,proof,current,Date.now())||metadata.consumedByOrderId!==null)throw Error('quote_claim_changed');
- await currentSettings(tx,claim);
- await assertDraftCurrent(tx,claim);
+ await currentSettings(tx,claim,assertDraftCurrent(tx,claim));
  return {quote,apply(){if(Date.now()>=quote.expiresAtMs)throw Error('quote_expired');tx.update(meta,{consumedByOrderId:orderId,consumedAt:new Date()});}};
 }

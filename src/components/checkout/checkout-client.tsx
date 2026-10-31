@@ -659,7 +659,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
     normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country});
   } catch { quoteReady=false; }
   const pricePreview=useDeliveryPricePreview(managedActive,{brandId:brand?.id||'',locationId:location.id,street:quoteForm.street||'',zipCode:quoteForm.zipCode||'',city:quoteForm.city||''});
-  const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput,requestQuote:requestManagedDeliveryQuoteAction,autoRequestReady:quoteReady&&pricePreview.done,locked:isFormLocked});
+  const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput?{...quoteInput,routeReceipt:pricePreview.preview?.routeReceipt}:null,requestQuote:requestManagedDeliveryQuoteAction,autoRequestReady:quoteReady&&pricePreview.done,locked:isFormLocked});
   const managedQuote=managed.state.kind==='ready'&&managed.paymentProof?managed.state.quote:null;
   const preview=pricePreview.preview;
   const previewFee=preview?(freeDeliveryDiscountApplied||preview.freeMinimumMinor!==null&&Math.round((subtotal-(itemDiscount||0)-((voucherDiscount??cartDiscount)?.amount||0))*100)>=preview.freeMinimumMinor?0:preview.baseFeeMinor):null;

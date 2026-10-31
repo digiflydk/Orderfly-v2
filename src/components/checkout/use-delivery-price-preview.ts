@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {normalizeDanishDeliveryAddress} from '@/lib/delivery/quotes/address';
 type Input={brandId:string;locationId:string;street:string;zipCode:string;city:string};
-type Preview={baseFeeMinor:number;currency:string;minimumMinor:number;freeMinimumMinor:number|null;routingSource:string};
+type Preview={routeReceipt?:string;baseFeeMinor:number;currency:string;minimumMinor:number;freeMinimumMinor:number|null;routingSource:string};
 export function useDeliveryPricePreview(enabled:boolean,input:Input){
  const identity=JSON.stringify(input);const [stored,setStored]=useState<{identity:string;preview:Preview|null;done:boolean}|null>(null);
  let valid=false;try{normalizeDanishDeliveryAddress({street:input.street,postcode:input.zipCode,city:input.city,country:'DK'});valid=true;}catch{}

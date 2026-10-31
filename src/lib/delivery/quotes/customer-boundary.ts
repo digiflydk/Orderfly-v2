@@ -6,7 +6,7 @@ import type {CustomerQuoteFailure} from './customer-failure';
 export type {CustomerQuoteFailure} from './customer-failure';
 
 export type CustomerQuoteDto = {ok:true;quoteId:string;quoteToken:string;checkoutFingerprint:string;customerFeeMinor:number;currency:string;checkoutTotalMinor:number;deliveryInterval:{earliest:string;latest:string}|null;expiresAtMs:number;routingSource?:string};
-export type AuthoritativeDraft = {checkoutKeyHash:string;binding:QuoteBindingInput;requestDigest:string;itemSubtotalAfterDiscountMinor:number;bagFeeMinor:number;adminFeeMinor:number;draftRevision:number;addressRevision:number};
+export type AuthoritativeDraft = {restaurantFingerprint?:string;checkoutKeyHash:string;binding:QuoteBindingInput;requestDigest:string;itemSubtotalAfterDiscountMinor:number;bagFeeMinor:number;adminFeeMinor:number;draftRevision:number;addressRevision:number};
 export type CustomerQuoteProof = {quoteId:string;quoteToken:string;checkoutFingerprint:string;acceptedFeeMinor:number};
 export type CustomerQuoteClaim = {quote:StoredDeliveryQuote;tokenHash:string;checkoutKeyHash:string;requestDigest:string;draftRevision:number;addressRevision:number};
 const digest=(v:string)=>createHash('sha256').update(v).digest('hex');

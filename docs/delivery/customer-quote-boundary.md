@@ -76,3 +76,101 @@ The personal discount-card preview clears the previous contact's offer immediate
 `POST /api/delivery/price-preview` accepts only scoped address fields, with a same-origin JSON boundary and a 4 KB limit. It resolves the approved routing adapter without constructing Wolt or creating a customer draft. The response exposes the configured distance tariff, minimum and free-delivery threshold, never a quote token or payment capability. This lets checkout display distance pricing before contact details or courier confirmation. Existing full pricing, supplier/subsidy checks, immutable quote and payment validation remain authoritative. Any supplier-driven fee change is explicitly announced before payment.
 
 The browser binds preview results to the exact scope/address, drops stale responses, debounces typing and times out preview requests. Contact/cart changes reuse the route preview but invalidate final quote authority. Wolt confirmation starts after preview completion; failure of preview falls back to the existing quote flow. Route evidence is reused for up to 30 seconds in bounded process memory (256 entries), keyed by tenant, location, approved source and both exact addresses. Runtime approval and current settings are still loaded for each request; the cache does not grant authorization or extend evidence freshness. No external route response is accepted from the browser. Customer pricing visibility and payment readiness are separate states.
+
+## Confirmation performance after tariff preview (2026-10-31)
+
+The measured baseline on `af848f4372d557262702f814a27bc089b30ff7dc` is
+19,484 / 19,772 ms server time. It includes seven repeated Wolt authority
+transactions (9,143 / 9,309 ms), whereas shipment-promises HTTP takes only
+467 / 584 ms. These nested totals must not be added to server time.
+
+The customer facade now mints a server-only WeakMap capability and constructs
+its storage immediately before the single provider quote, after routing.
+Storage performs one native preflight transaction and reuses its immutable
+binding for scope/binding/secret resolution within that invocation, bounded to
+30 seconds. No browser flag or deserialized capability can select this mode.
+The facade is single-use and removes its capability on success or failure.
+Operator, dispatch, cancellation and reconciliation authority is unchanged.
+Secret payloads are not cached.
+
+The final private-quote write still freshly validates native enrollment, draft
+contents/revisions/expiry, tenant/location activity, unchanged runtime configuration and managed adoption,
+effective delivery settings,
+pickup schedule and exact Wolt binding/merchant registry. The complete binding
+must match the preflight snapshot, including the secret version. Transaction
+retries repeat these fresh reads. Independent reads execute concurrently;
+restaurant schedule resolution reuses only a location snapshot from that same
+transaction. Claim persistence and payment consumption retain fresh restaurant,
+settings, draft, expiry and proof checks. Pricing/subsidy/campaign rules are
+unchanged. No actual courier dispatch is added.
+
+### Restaurant data
+
+The public brand and location DTOs used for initial pricing are cached with
+Next's existing cache infrastructure: key `delivery-restaurant-v1` plus both
+native IDs, 60-second revalidation, tag `storefront`, cloned returns. Native
+brand/location administration already invalidates that tag after a commit.
+A server-computed fingerprint of the same allow-listed public records is saved
+in new drafts and included in their request digest. Fresh preflight, quote-save
+and claim/payment checks reject changed records and invalidate the tag. Thus an
+instance which has not observed invalidation cannot accept a stale quote.
+Final payment preparation still loads current restaurant data. Customer data,
+checkout approvals, provider bindings and secrets never enter this shared cache.
+Effective delivery settings/revisions remain freshly read in final transactions.
+
+Runtime approval/config and Geoapify readiness reads can be reused inside the
+same AsyncLocalStorage request only. Their keys include restaurant scope where
+applicable. Geoapify's post-secret check remains fresh. Final transaction
+validators bypass this request cache entirely.
+
+### Route reuse
+
+The original 256-entry/30-second Map is module/process local. An isolated-module
+regression reproduces a miss for identical scope, source, addresses and profile.
+The historical two misses did not log process identity, so they cannot be
+attributed conclusively to instance separation versus expiry. No retrospective
+claim that their exact cause was proven is made.
+
+Preview now also returns a route-only receipt. The active routing adapter uses
+a domain-separated HMAC derived server-side from its active routing credential;
+no credential is sent to the client. The authenticated payload binds both
+restaurant IDs, provider source, both complete normalized postal addresses,
+profile, immutable coordinates/route evidence and issuance time. It expires
+at 30 seconds, never slides on read, and has an 8 KiB input bound. Credential
+rotation invalidates existing receipts. It contains no contact/cart data and
+is not a quote/payment capability. It creates no new database retention or
+secret-provisioning requirement. The confirmation resolves its authorized
+runtime and verifies the receipt before using it across instances. Missing,
+invalid, foreign or expired receipts fall back to server geocoding/routing and
+its existing budget controls. All price/coverage/availability checks still run.
+
+Metrics distinguish `route_receipt_hit`, `route_cache_hit` and
+`route_cache_miss`; only one is expected per route resolution. The `routing`
+span includes verification or fallback. `wolt_authority` now measures the one
+preflight, while final fresh authorization is included in `wolt_store`.
+Browser timing diagnostics are JSON strings with numbers only.
+
+### Validation and release
+
+Internal regression covers native pricing/payment, old quote revocation,
+changed restaurant/cart/address/time/settings/binding during Wolt I/O,
+deactivation, expired drafts, provider failure/timeout, isolated-instance
+route receipt reuse, forged/foreign/expired receipts and restaurant cache
+invalidation. The customer factory itself no longer performs database I/O;
+missing/expired/foreign drafts still fail before provider construction or
+secret/HTTP I/O when its one-shot `quote` is invoked.
+
+Release requires current-head checks/review, merge, health SHA verification and
+fresh preview-then-confirmation measurements. PM authorized controlled temporary
+quote/draft writes for that test only. Never submit an order, payment or courier
+booking. Compare server time separately from test-client transport and browser
+UI time. Live results are recorded in the PR after deployment, not inferred
+from test success or the 6–9 second target.
+
+Lifecycle QA also exposed 11 identical failures on unchanged `b4b3978` and the
+performance branch: the payment fixture had no restaurant hours, while its
+lifecycle scenarios require an open pickup window. The fixture now explicitly
+uses manual all-day pickup hours; all 15 lifecycle cases pass without changing
+any production dispatch rule or weakening assertions. Restaurant cache
+initialization is lazy so dispatch workers importing validators do not initialize
+a storefront cache that they never use.

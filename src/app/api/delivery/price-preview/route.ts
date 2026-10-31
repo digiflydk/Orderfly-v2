@@ -1,3 +1,4 @@
+import {withDeliveryRequest} from '@/lib/delivery/quotes/request-context';
 import {z} from 'zod';
 import {getOrigin} from '@/lib/url';
 import {getAdminDb} from '@/lib/firebase-admin';
@@ -10,7 +11,8 @@ export const runtime='nodejs';
 const id=z.string().min(1).max(160).regex(/^[^/\\?#]+$/);
 const schema=z.object({brandId:id,locationId:id,street:z.string().min(1).max(250),zipCode:z.string().min(1).max(20),city:z.string().min(1).max(200)}).strict();
 const reply=(body:object,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
-export async function POST(request:Request){
+export async function POST(request:Request){return withDeliveryRequest(()=>preview(request));}
+async function preview(request:Request){
  const started=performance.now();
  if(request.headers.get('origin')!==await getOrigin()||request.headers.get('sec-fetch-site')==='cross-site'||request.headers.get('content-type')?.split(';')[0]!=='application/json')return reply({ok:false},403);
  try{
@@ -30,6 +32,6 @@ export async function POST(request:Request){
   const result=await resolveDeliveryRoute({pickup:postal(pickup),dropoff:postal(dropoff),profile:'car'},{adapter:routing,now:()=>new Date(),scope});
   if(!result.ok||result.route.meters>settings.maxDistanceMeters)return reply({ok:false});
   const preview=deliveryTariffPreview(settings.pricingRules,result.route.meters);
-  return reply(preview?{ok:true,...preview,routingSource:routing.source,serverMs:Math.round(performance.now()-started)}:{ok:false});
+  return reply(preview?{ok:true,...preview,...(result.receipt?{routeReceipt:result.receipt}:{}),routingSource:routing.source,serverMs:Math.round(performance.now()-started)}:{ok:false});
  }catch{return reply({ok:false});}
 }

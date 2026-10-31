@@ -39,7 +39,7 @@ export function useManagedDeliveryQuote<T>({enabled,requestIdentity,input,reques
     const elapsed=clientDuration??performance.now()-started;
     if(Number.isFinite(elapsed)&&elapsed>=0){
      const parsed=quoteTimingsSchema.safeParse(timings);
-     console.info('delivery_quote_timing',{clientMs:Math.round(elapsed),...(parsed.success?{serverMs:parsed.data.serverMs,stages:parsed.data.stages}:{})});
+     console.info('delivery_quote_timing',JSON.stringify({clientMs:Math.round(elapsed),...(parsed.success?{serverMs:parsed.data.serverMs,stages:parsed.data.stages}:{})}));
     }
    } catch { /* Console availability is not checkout authority. */ }
    pending.current=false;if(mounted.current)setWake(value=>value+1);
