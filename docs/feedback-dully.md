@@ -39,3 +39,7 @@ No production data/email is written by tests. Follow AGENTS.md for local typeche
 The public form uses order wording for Dully and commerce orders, including food, pickup/delivery and website experience. Booking and dine-in introductions retain visit wording. The thank-you page uses neutral wording suitable for both experiences. If a Dully questionnaire is unavailable, the message follows the verified source language instead of the generic not-found page.
 
 Question labels and answer options come from the active questionnaire, not automatic translation. Maintain Danish pickup and delivery versions with Danish labels/options and a website-experience question. Updating either active version changes the Dully approval fingerprint, invalidates the previous approval and creates a new test series on the next explicit test request. Customer sending stays paused until the new test is approved and sending is explicitly enabled.
+
+## Google and Trustpilot step after Dully replies
+
+A real Dully reply uses the same optional Google/Trustpilot step as other feedback sources: after a successful first commit, if the brand's `externalReviewsEnabled` is on and the server-computed overall star rating is strictly above `externalReviewsMinRating`, the thank-you page receives the short-lived HttpOnly receipt and shows the configured links. Duplicate submissions, ratings at or below the threshold and test replies (`dullyFeedbackTests`) never receive a receipt. `tests/unit/feedback-dully.cjs` covers these cases.
