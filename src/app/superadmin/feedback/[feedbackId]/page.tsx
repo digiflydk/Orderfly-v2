@@ -8,6 +8,7 @@ import { FeedbackDetailClient } from './client-page';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Customer, OrderDetail } from '@/types';
 import { requireFeedbackAccess, canEditFeedbackBrand } from '@/lib/feedback/access';
+import { getDullyOrderDetails } from '@/lib/feedback/dully-details';
 
 async function getCustomerName(customerId: string, brandId: string): Promise<string> {
     const snap = await getAdminDb().collection('customers').doc(customerId).get();
@@ -28,11 +29,14 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
         notFound();
     }
 
-    const [brand, location, customerName] = await Promise.all([
+    const dullySourceId = feedback.sourceType === 'dully_order' ? String((feedback as any).sourceId || feedback.customerId || '') : '';
+    const [brand, location, customerName, dullyDetails] = await Promise.all([
         getBrandById(feedback.brandId),
         getLocationById(feedback.locationId),
         feedback.sourceType === 'dully_order' ? Promise.resolve('Dully-kunde') : feedback.sourceType === 'dine_in' ? Promise.resolve('Anonym gæst') : getCustomerName(feedback.customerId, feedback.brandId),
+        dullySourceId ? getDullyOrderDetails([dullySourceId], feedback.brandId) : Promise.resolve(new Map()),
     ]);
+    const dullyOrder = dullyDetails.get(dullySourceId) ?? null;
 
     const fullFeedback = {
         ...feedback,
@@ -40,7 +44,8 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
         locationName: location?.brandId === feedback.brandId ? location.name : 'N/A',
         showPublicly: feedback.showPublicly === true && Boolean(feedback.publication?.approvedBy),
         maskCustomerName: feedback.publication ? feedback.maskCustomerName : true,
-        customerName,
+        customerName: dullyOrder?.customerName || customerName,
+        dullyOrder,
     };
 
     return (

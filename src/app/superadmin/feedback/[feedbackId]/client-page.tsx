@@ -24,7 +24,32 @@ type FullFeedback = Feedback & {
   customerName: string;
   sourceType?: 'commerce_order' | 'booking' | 'dine_in' | 'dully_order';
   sourceId?: string;
+  dullyOrder?: DullyOrder | null;
 };
+
+type DullyOrder = {
+  customerName: string | null; email: string | null; customerPhone: string | null; orderNumber: string | null;
+  experienceType: 'pickup' | 'delivery' | null; orderedAt: string | null; completedAt: string | null;
+  orderTotal: number | null; orderLines: { name: string; quantity: number; total: number }[];
+};
+
+const dullyTime = (value: string | null) => {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen', dateStyle: 'medium', timeStyle: 'short' }).format(date) : 'Ikke registreret';
+};
+const dkk = (value: number) => new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK' }).format(value);
+
+function DullyOrderCard({ order }: { order: DullyOrder }) {
+  return <Card data-testid="dully-order"><CardHeader><CardTitle>Dully-ordre</CardTitle></CardHeader><CardContent className="space-y-4 text-sm">
+    <InfoItem icon={User} label="Kunde">{order.customerName || 'Navn ikke registreret'}</InfoItem>
+    <InfoItem icon={MessageSquare} label="Kontakt"><span className="break-all">{order.email || 'E-mail ikke registreret'}</span>{order.customerPhone ? <span className="block">{order.customerPhone}</span> : null}</InfoItem>
+    <InfoItem icon={Tag} label="Ordre">#{order.orderNumber || '–'} · {order.experienceType === 'delivery' ? 'Levering' : order.experienceType === 'pickup' ? 'Afhentning' : '–'}</InfoItem>
+    <InfoItem icon={Home} label="Bestilt">{dullyTime(order.orderedAt)}</InfoItem>
+    <InfoItem icon={CheckCircle} label="Gennemført">{dullyTime(order.completedAt)}</InfoItem>
+    <div><p className="mb-2 text-sm text-muted-foreground">Købte varer</p>{order.orderLines.length ? <ul className="space-y-1">{order.orderLines.map((line, index) => <li key={`${line.name}-${index}`} className="flex justify-between gap-3"><span>{line.quantity} × {line.name}</span><span className="shrink-0 tabular-nums">{dkk(line.total)}</span></li>)}</ul> : <p>Varer ikke registreret for denne ordre.</p>}
+      {order.orderTotal !== null && <p className="mt-2 flex justify-between border-t pt-2 font-medium"><span>I alt</span><span className="tabular-nums">{dkk(order.orderTotal)}</span></p>}</div>
+  </CardContent></Card>;
+}
 
 const RatingStars = ({ rating }: { rating: number }) => <div className="flex items-center">{[...Array(5)].map((_, i) => <Star key={i} className={`h-6 w-6 ${i < rating ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}`} />)}</div>;
 
@@ -105,6 +130,7 @@ export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { init
       </div>
 
       <div className="space-y-6">
+        {sourceType === 'dully_order' && feedback.dullyOrder ? <DullyOrderCard order={feedback.dullyOrder} /> : null}
         <Card><CardHeader><CardTitle>Offentlig anmeldelse</CardTitle></CardHeader><CardContent className="space-y-4">
           <div className="space-y-2"><Label htmlFor="publicComment">Tekst til offentlig visning</Label><Textarea id="publicComment" maxLength={2000} disabled={isPending || !canEdit} value={publicComment} onChange={e => setPublicComment(e.target.value)} /><p className="text-sm text-muted-foreground">Kontrollér teksten før godkendelse. E-mailadresser, telefonnumre og links fjernes automatisk. Det oprindelige kundesvar bevares internt.</p></div>
           {feedback.showPublicly && <Button variant="outline" disabled={isPending || !canEdit} onClick={() => toggle('showPublicly', true)}>Gem offentlig tekst</Button>}
