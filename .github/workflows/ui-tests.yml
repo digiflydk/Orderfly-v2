@@ -71,6 +71,9 @@ jobs:
       - name: Install Chromium for browser regressions
         run: npx playwright install --with-deps chromium
 
+      - name: Cart price and mobile cart bar delivery regression
+        run: node --test tests/unit/delivery-cart-price.cjs tests/unit/mobile-cart-bar-price.cjs
+
       - name: Receipt settings, online preview and editor regression
         run: node --test tests/unit/receipt-*.cjs
 
