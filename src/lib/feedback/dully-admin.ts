@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requireFeedbackAccess, assertFeedbackBrand, canEditFeedbackBrand } from './access';
 import { ESMERALDA_FEEDBACK_BRAND } from './esmeralda-booking-setup';
-import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
+import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, dullyDetails, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
 import { feedbackAutomation } from './mail-config';
 import { dullyFingerprint } from './dully-source';
 export type { DullyImportRow } from './dully-contract';
@@ -91,9 +91,11 @@ export async function importDullyFeedback(input: Scope & { rows: unknown[] }) {
       const old = snapshots[i].data(), eligible = dullyEligible(row, now), dueAt = eligible ? dullyDueAt(row.completedAt!) : DULLY_NEVER;
       if (old) {
         if (!dullySameIdentity(old, row, s.locationId) || old.scopeId !== s.scopeId || old.isTest) throw new Error('Ordreidentiteten eller modtageren er ændret. Importen er afvist.');
-        const changed = old.status !== row.status || old.paymentStatus !== row.paymentStatus || old.completedAt !== row.completedAt;
+        const details = dullyDetails(row);
+        const changed = old.status !== row.status || old.paymentStatus !== row.paymentStatus || old.completedAt !== row.completedAt
+          || Object.entries(details).some(([key, value]) => JSON.stringify(old[key]) !== JSON.stringify(value));
         if (changed) counts.updated++; else counts.unchanged++;
-        tx.update(refs[i], { status: row.status, paymentStatus: row.paymentStatus, completedAt: row.completedAt,
+        tx.update(refs[i], { ...details, status: row.status, paymentStatus: row.paymentStatus, completedAt: row.completedAt,
           dueAt: old.mailState === 'pending' ? dueAt : old.dueAt, lastVerifiedAt: now, updatedAt: now, historyKey: s.scopeId + ':' + now + ':' + refs[i].id });
       } else {
         counts.imported++;
