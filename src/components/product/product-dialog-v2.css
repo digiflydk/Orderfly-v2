@@ -33,7 +33,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #25221c;
+  background: #000;
   overflow: hidden;
 }
 [data-product-options][data-v2-product="true"] .v2-product-hero img { width: 100%; height: 100%; object-fit: cover; }
