@@ -2,6 +2,7 @@
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { useEffect, useRef, useState } from 'react';
 import { useCart } from '@/context/cart-context';
+import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
 import { ShoppingBag, Plus, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
@@ -12,7 +13,10 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     compact?: boolean;
 }) {
     const isV2 = useStorefrontV2();
-    const { itemCount, checkoutTotal, bagFee, editingItem, deliveryType, location } = useCart();
+    const { itemCount, checkoutTotal, bagFee, deliveryFee, freeDeliveryDiscountApplied, editingItem, deliveryType, location } = useCart();
+    // Managed delivery is priced at checkout; like the cart sheet, the bar must not total the location's legacy fee.
+    const managedDelivery = useManagedDeliveryPrice() && deliveryType === 'delivery';
+    const barTotal = Math.max(0, checkoutTotal - bagFee - (managedDelivery && !freeDeliveryDiscountApplied ? deliveryFee : 0));
     const [open, setOpen] = useState(false);
     const returnAfterEdit = useRef(false);
     useEffect(() => {
@@ -27,7 +31,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
       <Button data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating
         ? isV2 ? 'w-full h-[54px] text-base font-bold' : 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold'
         : 'font-bold min-h-11'}>
-        <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(Math.max(0, checkoutTotal - bagFee))}</span>}</span>
+        <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(barTotal)}</span>}</span>
       </Button>
     </SheetTrigger>;
     return <>
