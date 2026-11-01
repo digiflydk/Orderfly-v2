@@ -212,3 +212,34 @@ test('expired accepted test can be renewed once under concurrent clicks without 
  await assert.rejects(f.adminDully.sendDullyFeedbackTest({...scope,experienceType:'delivery'}));
  assert.equal([...f.records.keys()].filter(k=>k.startsWith('dullyFeedbackSources/')).length,2);
 });
+
+test('real Dully reply above threshold gets the Google/Trustpilot step once; below threshold and test replies never do', async t => {
+  const review = { emailEnabled: true, externalReviewsEnabled: true, externalReviewsMinRating: 4.7, googleReviewUrl: 'https://g.page/r/example/review', trustpilotReviewUrl: 'https://www.trustpilot.com/evaluate/example.com' };
+  const submitOnce = async (f, form) => assert.rejects(f.public.submitFeedbackAction(null, form), e => e.digest === 'NEXT_REDIRECT');
+  const prepared = async (rows) => {
+    const f = setup(t); f.records.set('feedbackSettings/' + BRAND, review);
+    const testId = await approved(f); await f.adminDully.importDullyFeedback({ ...scope, rows });
+    await f.worker.runDullyFeedbackWorker(() => ({ eligible: async () => true, send: async () => {} }), NOW);
+    const receipt = loadTs('src/lib/feedback/external-review-receipt.ts', f.mocks);
+    return { f, testId, receipt };
+  };
+  const formFor = (f, source, rating) => responseForm({ sourceType: 'dully_order', sourceId: source.id, customerId: source.id, invitationToken: f.source.signDullyInvitation(source.id, source.expiresAt), responses: JSON.stringify({ rating: { answer: rating } }) });
+
+  const { f, testId, receipt } = await prepared([row()]);
+  const source = [...f.records.values()].find(v => v.sourceType === 'dully_order' && !v.isTest);
+  await submitOnce(f, formFor(f, source, 5));
+  assert.deepEqual(await receipt.readExternalReviewReceipt(BRAND), { googleReviewUrl: review.googleReviewUrl, trustpilotReviewUrl: review.trustpilotReviewUrl });
+  const saved = [...f.records.entries()].filter(([k]) => k.startsWith('feedback/'));
+  assert.equal(saved.length, 1); assert.equal(saved[0][1].sourceType, 'dully_order'); assert.equal(saved[0][1].externalReviewReceipt.hash.length, 64);
+  await submitOnce(f, formFor(f, source, 5));
+  assert.equal(f.cookieJar.size, 0); assert.equal(await receipt.readExternalReviewReceipt(BRAND), null);
+
+  const testSource = f.records.get('dullyFeedbackSources/' + testId);
+  await submitOnce(f, formFor(f, testSource, 5));
+  assert.equal(f.cookieJar.size, 0);
+
+  const low = await prepared([row({ externalOrderId: '2594109', orderNumber: '2155' })]);
+  const lowSource = [...low.f.records.values()].find(v => v.sourceType === 'dully_order' && !v.isTest);
+  await submitOnce(low.f, formFor(low.f, lowSource, 4));
+  assert.equal(low.f.cookieJar.size, 0); assert.equal(await low.receipt.readExternalReviewReceipt(BRAND), null);
+});
