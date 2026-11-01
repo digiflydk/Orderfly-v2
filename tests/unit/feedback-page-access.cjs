@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const ts=require('typescript');
-function fixture({invitation=null,customer='customer',status='Completed',brandId='brand',locationId='location',dully=null}={}){
+function fixture({invitation=null,customer='customer',status='Completed',brandId='brand',locationId='location',dully=null,questions={id:'questions'}}={}){
  const jsx=(type,props)=>({type,props});
  const order={id:'order',brandId:'brand',locationId:'location',brandName:'Restaurant',customerDetails:{id:customer,email:'private@example.test'},deliveryType:'Pickup',status};
  const mocks={
@@ -11,7 +11,7 @@ function fixture({invitation=null,customer='customer',status='Completed',brandId
   '@/lib/next/resolve-props':{resolveSearchParams:async p=>p},
   'next/navigation':{notFound:()=>{throw Error('not-found');},redirect:()=>{throw Error('redirect');}},
   '@/app/checkout/order-actions':{getOrderById:async()=>order},
-  './actions':{getActiveFeedbackQuestionsForBrand:async()=>({id:'questions'})},
+  './actions':{getActiveFeedbackQuestionsForBrand:async()=>questions},
   './form-client':{FeedbackFormClient:'FeedbackForm'},
   '@/lib/integrations/esmeralda-feedback-integration':{resolveBookingFeedbackInvitationToken:async()=>null},
   '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({data:()=>({logoUrl:'https://example.test/logo.png',privateKey:'private'})})})})})},
@@ -43,4 +43,11 @@ test('Dully guest page uses verified external source and excludes private recipi
  assert.equal(page.props.context.sourceType,'dully_order');assert.equal(page.props.context.invitationToken,'signed');assert.equal(page.props.context.displayReference,'123');assert.equal(JSON.stringify(page.props.context).includes('private'),false);
  await assert.rejects(fixture()({searchParams:{dullyToken:'invalid'}}),/not-found/);
  await assert.rejects(fixture({dully:{...source,invitationStatus:'submitted'}})({searchParams:{dullyToken:'signed'}}),/redirect/);
+});
+
+test('Dully missing questionnaire stays in the source language',async()=>{
+ for(const language of ['da','en']) {
+  const page=await fixture({dully:{id:'external',brandId:'brand',experienceType:'pickup',language,invitationStatus:'active'},questions:null})({searchParams:{dullyToken:'signed',lang:language==='da'?'en':'da'}});
+  assert.equal(page.props.children.props.children,language==='da'?'Spørgeskemaet er ikke tilgængeligt lige nu.':'The feedback form is currently unavailable.');
+ }
 });

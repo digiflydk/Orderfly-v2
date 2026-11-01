@@ -22,7 +22,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     if (!source) notFound();
     if (source.invitationStatus === 'submitted') redirect(feedbackThankYouHref(source.brandId, source.language));
     const questionsVersion = await getActiveFeedbackQuestionsForBrand(source.brandId, source.experienceType, source.language);
-    if (!questionsVersion) notFound();
+    if (!questionsVersion) return <div className="flex items-center justify-center min-h-screen"><p>{feedbackCopy[source.language === 'en' ? 'en' : 'da'].unavailable}</p></div>;
     return <FeedbackFormClient context={{ sourceType: 'dully_order', sourceId: source.id, customerId: source.customerId,
       brandId: source.brandId, locationId: source.locationId, brandName: source.brandName, brandLogoUrl: source.brandLogoUrl,
       experienceType: source.experienceType, displayReference: source.isTest ? 'TEST' : source.orderNumber, invitationToken: dullyToken }} questionsVersion={questionsVersion} />;

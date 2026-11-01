@@ -218,7 +218,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
         <div className="mb-9 text-left">
           <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--feedback-accent)]">{questionsVersion.language === 'en' ? 'Your experience matters' : 'Din oplevelse betyder noget'}</p>
           <h1 className="heading-style-h1">{isVisit ? copy.visit : copy.order}</h1>
-          <p className="text-size-regular mt-4 max-w-xl text-[var(--feedback-muted)]">{copy.intro}</p>
+          <p className="text-size-regular mt-4 max-w-xl text-[var(--feedback-muted)]">{isVisit ? copy.intro : copy.orderIntro}</p>
           <p className="mt-4 text-xs text-[var(--feedback-accent)]">{questionsVersion.questions.length} {questionsVersion.language === 'en' ? 'questions · about 1 minute' : 'spørgsmål · cirka 1 minut'}</p>
           <p className="mt-2 text-xs text-[var(--feedback-muted)]">{context.displayReference}</p>
         </div>
