@@ -26,6 +26,7 @@ export function FeedbackSettingsView({ brands: initialBrands, locations, questio
   const canEdit = brand?.canEdit ?? defaultCanEdit;
   return <div className="max-w-2xl space-y-6">
     <h1 className="text-2xl font-bold">Feedbackindstillinger</h1>
+    <Link href="/superadmin/feedback/dully" className="inline-block text-sm underline">Dully: ordreimport, testmail og daglig afsendelse</Link>
     <div className="space-y-3"><Label htmlFor="feedback-brand">Brand</Label><select id="feedback-brand" className="h-10 w-full rounded-md border bg-background px-3" value={selected} disabled={pending} onChange={event => { setSelected(event.target.value); setMessage(null); }}>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
     {brand && <section className="space-y-3 rounded-lg border p-5" aria-label="Feedback via QR-kode">
       <h2 className="text-lg font-semibold">Feedback fra gæster i restauranten</h2>

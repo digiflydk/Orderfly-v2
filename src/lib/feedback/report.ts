@@ -16,7 +16,7 @@ const filtersSchema = z.object({
   from: calendarDate, to: calendarDate,
   brandId: z.string().regex(/^[\w-]{1,160}$/).optional(),
   locationId: z.string().regex(/^[\w-]{1,160}$/).optional(),
-  source: z.enum(['all', 'commerce_order', 'booking', 'dine_in']).default('all'),
+  source: z.enum(['all', 'commerce_order', 'booking', 'dine_in', 'dully_order']).default('all'),
 }).refine(v => v.from <= v.to && (Date.parse(v.to) - Date.parse(v.from)) / dayMs < 366, 'Vælg en periode på højst 366 dage i korrekt rækkefølge.');
 export type FeedbackReportFilters = z.infer<typeof filtersSchema>;
 export function reportFilters(input: Record<string, unknown>, now = new Date()) {
@@ -49,7 +49,7 @@ export async function getFeedbackReport(input: Record<string, unknown>) {
     const date = feedbackTime(row.receivedAt);
     return date && date >= start && date < end &&
       (!filters.locationId || row.locationId === filters.locationId) &&
-      (filters.source === 'all' || (row.sourceType === 'dine_in' ? 'dine_in' : row.sourceType === 'booking' ? 'booking' : 'commerce_order') === filters.source);
+      (filters.source === 'all' || (row.sourceType === 'dully_order' ? 'dully_order' : row.sourceType === 'dine_in' ? 'dine_in' : row.sourceType === 'booking' ? 'booking' : 'commerce_order') === filters.source);
   });
   if (rows.length > 5000) throw new Error('Perioden indeholder for mange svar. Vælg et brand eller en kortere periode.');
   const selectedLocations = options.locations.filter(l => (!filters.brandId || l.brandId === filters.brandId) && (!filters.locationId || l.id === filters.locationId));

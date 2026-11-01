@@ -39,6 +39,7 @@ export function summarizeFeedback(rows: FeedbackMetricRow[]) {
     nps: nps.length ? 100 * (promoters - detractors) / nps.length : null,
     bookings: rows.filter(r => r.sourceType === 'booking').length,
     dineIn: rows.filter(r => r.sourceType === 'dine_in').length,
-    orders: rows.filter(r => r.sourceType !== 'booking' && r.sourceType !== 'dine_in').length,
+    dully: rows.filter(r => r.sourceType === 'dully_order').length,
+    orders: rows.filter(r => r.sourceType !== 'booking' && r.sourceType !== 'dine_in' && r.sourceType !== 'dully_order').length,
   };
 }

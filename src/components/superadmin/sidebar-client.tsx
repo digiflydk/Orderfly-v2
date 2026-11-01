@@ -160,6 +160,7 @@ export function SuperAdminSidebarClient({
           children: [
             { href: '/superadmin/feedback', label: 'Inbox'},
             { href: '/superadmin/feedback/report', label: 'Kvalitetsrapport'},
+            { href: '/superadmin/feedback/dully', label: 'Dully'},
             { href: '/superadmin/feedback/questions', label: 'Questions'},
             { href: '/superadmin/feedback/settings', label: 'Settings'},
           ]

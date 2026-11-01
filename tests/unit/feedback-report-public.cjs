@@ -18,6 +18,17 @@ test('NPS uses percentage point difference over all valid NPS responses',()=>{
  const result=metrics.summarizeFeedback([0,6,7,8,9,10,10].map(npsScore=>({npsScore})));
  assert.equal(result.passives,2);assert.equal(result.npsResponses,7);assert.ok(Math.abs(result.nps-100/7)<1e-10);
 });
+test('Dully feedback has its own source filter and never counts as online orders',async()=>{
+ const f=fixture();
+ f.records.set('feedback/dully',row({sourceType:'dully_order',sourceId:'dully-source'}));
+ f.records.set('feedback/online',row({sourceType:'commerce_order',sourceId:'online-source'}));
+ const input={from:'2026-09-09',to:'2026-09-09',brandId:'b',locationId:'l'};
+ const all=await f.report.getFeedbackReport(input);
+ assert.equal(all.summary.responses,2);assert.equal(all.summary.orders,1);assert.equal(all.summary.dully,1);
+ const filtered=await f.report.getFeedbackReport({...input,source:'dully_order'});
+ assert.equal(filtered.summary.responses,1);assert.equal(filtered.summary.dully,1);assert.equal(filtered.summary.orders,0);
+ assert.equal((await f.report.getFeedbackReport({...input,source:'commerce_order'})).summary.responses,1);
+});
 test('Danish date boundaries include the complete last day and account for summer/winter time',()=>{
  const f=fixture();
  for(const [date,hours]of [['2026-03-29',23],['2026-10-25',25]]){

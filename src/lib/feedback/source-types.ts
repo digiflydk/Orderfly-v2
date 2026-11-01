@@ -1,6 +1,6 @@
 import type { FeedbackQuestion } from '@/types';
 
-export type FeedbackSourceType = 'commerce_order' | 'booking' | 'dine_in';
+export type FeedbackSourceType = 'commerce_order' | 'booking' | 'dine_in' | 'dully_order';
 export type FeedbackExperienceType = 'pickup' | 'delivery' | 'booking';
 
 export type ExperienceFeedbackQuestionsVersion = {

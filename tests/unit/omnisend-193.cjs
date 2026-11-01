@@ -108,8 +108,9 @@ test('#193 active newsletter discount is unavailable until brand integration is 
 });
 
 test('#193 existing notification heartbeat also runs the consent queue without starting campaigns',async()=>{
- let calls=0;
+ let calls=0,dullyCalls=0;
  const route=loadTs('src/app/api/internal/feedback/send/route.ts',{
+  '@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{dullyCalls++;return {accepted:1};}},
   '@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
   '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},
   '@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({})},
@@ -122,9 +123,11 @@ test('#193 existing notification heartbeat also runs the consent queue without s
  const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;
  process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='x'.repeat(32);
  try {
+  const denied=await route.POST(new Request('https://example.test',{method:'POST',headers:{authorization:'Bearer invalid'}}));
+  assert.equal(denied.status,401);assert.equal(calls,0);assert.equal(dullyCalls,0);
   const response=await route.POST(new Request('https://example.test',{method:'POST',headers:{authorization:`Bearer ${'x'.repeat(32)}`}}));
   assert.equal(response.status,200);assert.equal(calls,1);
   const body=await response.json();
-  assert.equal(body.contacts.processed,1);assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});
+  assert.equal(body.contacts.processed,1);assert.equal(dullyCalls,1);assert.deepEqual(body.dully,{accepted:1});assert.deepEqual(body.qr,{state:'completed'});assert.deepEqual(body.delivery,{state:'idle'});
  } finally {if(previous===undefined)delete process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;else process.env.ORDERFLY_FEEDBACK_WORKER_SECRET=previous;}
 });

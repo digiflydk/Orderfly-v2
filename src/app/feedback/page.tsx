@@ -6,6 +6,7 @@ import { getActiveFeedbackQuestionsForBrand } from './actions';
 import { FeedbackFormClient } from './form-client';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { resolveDullyInvitation } from '@/lib/feedback/dully-source';
 import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import { feedbackThankYouHref, feedbackVisitDate, feedbackCopy } from '@/lib/feedback/presentation';
 import type { FeedbackSourceContext } from '@/lib/feedback/source-types';
@@ -15,6 +16,17 @@ export const revalidate = 0;
 export default async function Page({ searchParams }: AsyncPageProps) {
   const query = await resolveSearchParams(searchParams);
   const language = typeof query.lang === 'string' && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(query.lang) ? query.lang : 'da';
+  const dullyToken = typeof query.dullyToken === 'string' ? query.dullyToken : undefined;
+  if (dullyToken) {
+    const source = await resolveDullyInvitation(dullyToken);
+    if (!source) notFound();
+    if (source.invitationStatus === 'submitted') redirect(feedbackThankYouHref(source.brandId, source.language));
+    const questionsVersion = await getActiveFeedbackQuestionsForBrand(source.brandId, source.experienceType, source.language);
+    if (!questionsVersion) notFound();
+    return <FeedbackFormClient context={{ sourceType: 'dully_order', sourceId: source.id, customerId: source.customerId,
+      brandId: source.brandId, locationId: source.locationId, brandName: source.brandName, brandLogoUrl: source.brandLogoUrl,
+      experienceType: source.experienceType, displayReference: source.isTest ? 'TEST' : source.orderNumber, invitationToken: dullyToken }} questionsVersion={questionsVersion} />;
+  }
   const token = typeof query.token === 'string' ? query.token : undefined;
 
   if (token) {

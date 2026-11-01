@@ -27,7 +27,7 @@ export function feedbackAdminNotifications(brandId: string, data: unknown) {
 }
 export type FeedbackAdminNotificationSource = {
   feedbackId: string; brandId: string; locationId: string;
-  sourceType: 'commerce_order' | 'booking'; sourceId: string; recipientEmail: string;
+  sourceType: 'commerce_order' | 'booking' | 'dully_order'; sourceId: string; recipientEmail: string;
 };
 export function pendingFeedbackAdminNotification(source: FeedbackAdminNotificationSource) {
   const now = Date.now();
