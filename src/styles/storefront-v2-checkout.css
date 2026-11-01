@@ -10,7 +10,8 @@
 }
 @media (max-width: 1023px) {
   form[data-storefront-version="2"] > .grid {
-    padding-bottom: calc(230px + env(safe-area-inset-bottom, 0px));
+    /* --checkout-bar-height is measured from the fixed CTA bar (it already includes the safe area). */
+    padding-bottom: calc(var(--checkout-bar-height, calc(140px + env(safe-area-inset-bottom, 0px))) + 16px);
   }
 }
 [data-storefront-version="2"][data-commerce-panel="cart"] {
@@ -40,6 +41,11 @@
   letter-spacing: .25em;
   font-size: 14px;
   color: hsl(var(--primary));
+}
+.v2-cart-brandbar > .v2-cart-logo {
+  width: 168px; /* Same logo slot as the V2 menu header. */
+  height: 44px;
+  letter-spacing: normal;
 }
 [data-storefront-version="2"][data-commerce-panel="cart"] > button {
   display: none; /* The labelled back button closes this full-page cart. */

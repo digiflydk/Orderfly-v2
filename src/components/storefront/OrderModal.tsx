@@ -1,6 +1,7 @@
 'use client';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useRef } from "react";
 import { ShoppingBag, Truck } from "lucide-react";
 import type { Location } from "@/types";
 import { DeliveryMethodLabel } from "./DeliveryMethodLabel";
@@ -11,9 +12,15 @@ interface OrderModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeliveryMethodSelected: (method: 'takeaway' | 'delivery') => void;
+  /** Highlighted and focused when the sheet opens, if that mode is available. */
+  preferredMode?: 'pickup' | 'delivery';
 }
 
-export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes = ['pickup', 'delivery'], location }: OrderModalProps) {
+export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes = ['pickup', 'delivery'], location, preferredMode }: OrderModalProps) {
+  const preferred = preferredMode && modes.includes(preferredMode) ? preferredMode : undefined;
+  const deliveryRef = useRef<HTMLButtonElement>(null);
+  const pickupRef = useRef<HTMLButtonElement>(null);
+  const highlight = ' ring-2 ring-[#e8bf69]';
 
   const handlePickup = () => {
     onDeliveryMethodSelected('takeaway');
@@ -36,8 +43,10 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
       <div className="grid grid-cols-1 gap-4 px-6 pb-6">
         <button
           disabled={!modes.includes('delivery')}
+          ref={deliveryRef}
+          data-preferred={preferred === 'delivery' || undefined}
           onClick={handleDelivery}
-          className="disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
+          className={`disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'delivery' ? highlight : ''}`}
         >
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
@@ -52,8 +61,10 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
         </button>
         <button
           disabled={!modes.includes('pickup')}
+          ref={pickupRef}
+          data-preferred={preferred === 'pickup' || undefined}
           onClick={handlePickup}
-          className="disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
+          className={`disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'pickup' ? highlight : ''}`}
         >
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
@@ -72,7 +83,7 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-commerce-panel="delivery" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onOpenChange(false); } }} className="max-h-[90dvh] overflow-y-auto p-0 border-none bg-m3-cream left-0 right-0 bottom-0 top-auto translate-x-0 translate-y-0 max-w-none rounded-t-lg sm:left-1/2 sm:right-auto sm:bottom-auto sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-sm sm:rounded-lg">
+      <DialogContent data-commerce-panel="delivery" onOpenAutoFocus={event => { const target = preferred === 'pickup' ? pickupRef.current : preferred === 'delivery' ? deliveryRef.current : null; if (target) { event.preventDefault(); target.focus({ preventScroll: true }); } }} onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onOpenChange(false); } }} className="max-h-[90dvh] overflow-y-auto p-0 border-none bg-m3-cream left-0 right-0 bottom-0 top-auto translate-x-0 translate-y-0 max-w-none rounded-t-lg sm:left-1/2 sm:right-auto sm:bottom-auto sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-sm sm:rounded-lg">
         {content}
       </DialogContent>
     </Dialog>

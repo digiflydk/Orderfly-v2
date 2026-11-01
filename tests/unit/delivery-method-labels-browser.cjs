@@ -86,3 +86,15 @@ test('disabled delivery hides its promotional label and remains disabled',async 
   assert.equal(await page.locator('[data-delivery-method-label="delivery"]').count(),0);assert.equal(await page.getByRole('button',{name:/Leverer til mig/}).isDisabled(),true);
   assert.equal(await page.locator('[data-delivery-method-label="pickup"]').innerText(),'Spar 25%');
 });
+test('Esmeralda sheet highlights and focuses "Jeg tager med" by default',async t=>{
+  const page=await pageFor(t,390,{});await page.goto(origin+'/store');await page.getByRole('dialog').waitFor();
+  const pickup=page.getByRole('button',{name:/Jeg tager med/}),delivery=page.getByRole('button',{name:/Leverer til mig/});
+  assert.equal(await pickup.getAttribute('data-preferred'),'true');assert.equal(await delivery.getAttribute('data-preferred'),null);
+  await page.waitForFunction(()=>document.activeElement?.hasAttribute('data-preferred'));
+  assert.notEqual(await pickup.evaluate(el=>getComputedStyle(el).boxShadow),'none');
+  await delivery.click();assert.equal(await page.evaluate(()=>window.selectedMode),'delivery');
+});
+test('a disabled pickup is never highlighted',async t=>{
+  const page=await pageFor(t,390,{deliveryTypes:['delivery']});await page.goto(origin+'/store');await page.getByRole('dialog').waitFor();
+  assert.equal(await page.locator('[data-preferred]').count(),0);assert.equal(await page.getByRole('button',{name:/Jeg tager med/}).isDisabled(),true);
+});
