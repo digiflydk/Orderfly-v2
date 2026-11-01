@@ -10,7 +10,7 @@ PO feedback on the live Esmeralda V2 storefront. Presentation only. Prices, cons
 | 4 | Checkout logo centred, no location name | In V2 checkout, `MenuHeader` centres the logo and omits the location name. V1 checkout keeps the logo left and the name right. |
 | 5 | One checkbox for terms and newsletter | **Not implemented.** The Club specification (`docs/stempelkort/`) requires two separate, unticked checkboxes for newsletter consent and Club terms. This awaits a PO decision. |
 | 6 | "Ændre tidspunkt" | Button text in checkout and the time selector. |
-| 7 | Space between "I alt" and the CTA | The V2 mobile checkout reserved a fixed 230px below the summary. It now measures the fixed CTA bar with a `ResizeObserver` and reserves `--checkout-bar-height + 16px`. The fallback before measurement is 140px plus the safe area. |
+| 7 | Space between "I alt" and the CTA | The V2 mobile checkout reserved a fixed 230px below the summary. A first fix (#831) reserved the measured CTA height, but the container padding and footer are already hidden behind the bar, so about 90px of blank space remained live. The form now reserves only the overlap: CTA height minus the page content after the form (`--checkout-bar-overlap`), plus 16px. Bar and body are watched with a `ResizeObserver`. The fallback before measurement is 140px plus the safe area. |
 
 ## Verification
 
@@ -23,6 +23,6 @@ node --test tests/unit/mobile-cart-bar-price.cjs tests/unit/delivery-cart-price.
 New regressions:
 
 - The sheet marks and focuses pickup, and a disabled pickup is never highlighted.
-- The V2 mobile checkout padding follows the measured CTA height, and "I alt" sits just above the CTA.
+- In the V2 mobile checkout, the last summary row sits at most 40px above the CTA when scrolled to the bottom. It was 65px in the fixture before this fix, and about 90px live.
 
 Both fail on the previous `main`. `tests/unit/location-header-browser.cjs` already fails on `main` (a `server-only` import in its fixture). It is not run in CI and is not affected by this change.
