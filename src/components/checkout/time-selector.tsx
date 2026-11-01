@@ -101,7 +101,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: Time
                             <span className="text-sm font-semibold">{localizeTime(displayTime)}</span>
                         </div>
                         <Button variant="link" size="sm" className="min-h-11 h-auto px-2 ml-2 text-xs shrink-0" onClick={() => setIsTimeDialogOpen(true)}>
-                            Ændr tidspunkt
+                            Ændre tidspunkt
                         </Button>
                     </>
                  )}

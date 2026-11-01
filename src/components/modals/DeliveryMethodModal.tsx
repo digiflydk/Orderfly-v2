@@ -31,7 +31,7 @@ export default function DeliveryMethodModal() {
   }
   const close = (value: boolean) => {if (!value) setPayload(null);};
   if (payload && ORDER_SHEET_BRANDS.has(payload.brandSlug)) {
-    return <OrderModal open onOpenChange={close} modes={activeLocation?.deliveryTypes ?? []} location={activeLocation ?? undefined}
+    return <OrderModal open onOpenChange={close} modes={activeLocation?.deliveryTypes ?? []} location={activeLocation ?? undefined} preferredMode="pickup"
       onDeliveryMethodSelected={method => choose(method === 'delivery' ? 'delivery' : 'pickup')} />;
   }
   return <Dialog open={!!payload} onOpenChange={close}>

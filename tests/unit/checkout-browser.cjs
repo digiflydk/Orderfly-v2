@@ -241,7 +241,7 @@ for (const [surface,index] of [['desktop',0],['mobile',1]]) test(`presentation: 
  assert.equal(await page.getByRole('link',{name:'Continue to payment',exact:true}).count(),0);
  assert.equal(await page.getByPlaceholder('John Doe',{exact:true}).isDisabled(),true);
  assert.equal(await page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).first().isDisabled(),true);
- assert.equal(await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).isDisabled(),true);
+ assert.equal(await page.getByRole('button',{name:'Ændre tidspunkt',exact:true}).isDisabled(),true);
  for(const row of await page.getByText('Pose',{exact:true}).filter({visible:true}).all())assert.equal(await row.locator('..').getByRole('button').isDisabled(),true);
  await page.unroute('**/stripe?*');
  await page.getByRole('button',{name:/Gå til betaling/}).first().click();
@@ -590,6 +590,16 @@ test('V2 mobile checkout has no payment selector and hands online payment to hos
  assert.equal(requests.get('v2-success-mobile').length,1);
  assert.equal(requests.get('v2-success-mobile')[0][1].paymentMethod,'online');
 });
+test('V2 mobile checkout reserves only the fixed CTA height below the total',async t=>{
+ const page=await setup(t,'v2-success-mobile');
+ const bar=page.locator('.commerce-checkout-bar');await expect(bar).toBeVisible();
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('form[data-storefront-version="2"]')).getPropertyValue('--checkout-bar-height').trim()!=='');
+ const {padding,barHeight}=await page.evaluate(()=>({padding:parseFloat(getComputedStyle(document.querySelector('form[data-storefront-version="2"] > .grid')).paddingBottom),barHeight:document.querySelector('.commerce-checkout-bar').getBoundingClientRect().height}));
+ assert.ok(Math.abs(padding-(Math.ceil(barHeight)+16))<=1,`padding ${padding} follows bar ${barHeight}`);
+ await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+ const total=page.getByText('I alt',{exact:true}).filter({visible:true}).last();const totalBox=await total.boundingBox(),barBox=await bar.boundingBox();
+ const gap=barBox.y-(totalBox.y+totalBox.height);assert.ok(gap>=0&&gap<=120,`total sits just above the CTA (gap ${gap}px)`);
+});
 test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
  const page=await setup(t,'v2-invalid-mobile');
  await page.getByPlaceholder('Indtast e-mail').fill('invalid');await pay(page);
@@ -629,7 +639,7 @@ test('managed Friday closure blocks a saved Friday choice and the actual picker 
  await expect(page.getByRole('alert')).toContainText('Det valgte tidspunkt er ikke tilgængeligt for levering');
  await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
  await page.waitForTimeout(900);assert.equal(await page.evaluate(()=>window.quoteInputs?.length||0),0);
- await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).click();
+ await page.getByRole('button',{name:'Ændre tidspunkt',exact:true}).click();
  const dialog=page.getByRole('dialog');await expect(dialog.getByRole('button',{name:'Gem tidspunkt'})).toBeDisabled();
  await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
  const old=page.getByRole('option',{name:'fre. 30. okt. 11:50 (ikke længere ledigt)',exact:true});await expect(old).toBeDisabled();
@@ -641,7 +651,7 @@ test('before opening actual picker changes valid Friday 11:50 to 12:05 and autom
  await expect(page.getByText('Forventet levering ca. fre. 30. okt. 11:50',{exact:true})).toBeVisible();
  await fillDeliveryAddress(page);await quoted(page);
  assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime),'2026-10-30T10:50:00.000Z');
- await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).click();
+ await page.getByRole('button',{name:'Ændre tidspunkt',exact:true}).click();
  await page.evaluate(()=>{window.holdQuote=true;});
  const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
  await page.getByRole('option',{name:'fre. 30. okt. 12:05',exact:true}).click();

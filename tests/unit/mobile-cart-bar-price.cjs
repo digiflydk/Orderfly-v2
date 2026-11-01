@@ -8,13 +8,15 @@ const mod={exports:{}};
 const code=ts.transpileModule(fs.readFileSync('src/components/cart/mobile-floating-cart.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const pass=({children})=>React.createElement(React.Fragment,null,children);
 new Function('require','module','exports',code)(name=>{
- if(name==='@/context/cart-context')return {useCart:()=>({itemCount:1,checkoutTotal:deliveryType==='delivery'?(freeDelivery?99:148):99,bagFee:4,deliveryFee:49,freeDeliveryDiscountApplied:freeDelivery,editingItem:null,deliveryType,location:{name:'Esmeralda Pizza Amager'}})};
+ if(name==='@/context/cart-context')return {useCart:()=>({brand:{name:'Esmeralda Pizza',logoUrl:'/logo.png'},itemCount:1,checkoutTotal:deliveryType==='delivery'?(freeDelivery?99:148):99,bagFee:4,deliveryFee:49,freeDeliveryDiscountApplied:freeDelivery,editingItem:null,deliveryType,location:{name:'Esmeralda Pizza Amager'}})};
  if(name==='@/context/delivery-price-context')return {useManagedDeliveryPrice:()=>managed};
  if(name==='@/context/storefront-v2-context')return {useStorefrontV2:()=>true};
  if(name==='@/lib/storefront-format')return {formatPrice:n=>`${n.toFixed(2)} DKK`,itemCountLabel:n=>`${n}`};
  if(name==='@/components/ui/button')return {Button:({asChild,...props})=>React.createElement('button',props)};
  if(name==='@/components/ui/sheet')return {Sheet:pass,SheetTrigger:pass,SheetContent:()=>null,SheetHeader:pass,SheetTitle:pass,SheetDescription:pass};
  if(name==='./cart-contents')return {CartContents:()=>null,CartTotals:()=>null,CartCheckoutButton:()=>null};
+ if(name==='next/image')return {default:props=>React.createElement('img',{src:props.src,alt:props.alt})};
+ if(name==='@/lib/images')return {safeImage:s=>s};
  if(name==='lucide-react')return {ShoppingBag:()=>null,Plus:()=>null,ArrowLeft:()=>null};
  return require(name);
 },mod,mod.exports);

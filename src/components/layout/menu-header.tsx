@@ -56,15 +56,15 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   const showDelivery = !refreshedMenu || (cartReady && cartLocation?.id === location?.id && deliveryType === 'delivery');
   const details = location ? locationHeaderDetails(location, now || new Date(0)) : null;
   const logo = brand.logoUrl
-    ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="144px" priority className="object-contain object-left" />
+    ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="168px" priority className={checkout && isV2 ? "object-contain object-center" : "object-contain object-left"} />
     : <span className="text-xl font-bold">{brand.name}</span>;
 
   return <>
     <header ref={headerRef} data-menu-refresh={refreshedMenu || undefined} data-storefront-header data-v2-menu-header={isV2 || undefined} data-brand-slug={brand.slug} className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
-      <div className={refreshedMenu ? "storefront-frame storefront-order-toolbar" : "mx-auto flex h-full max-w-[1140px] items-center justify-between gap-4 px-4"}>
+      <div className={refreshedMenu ? "storefront-frame storefront-order-toolbar" : `mx-auto flex h-full max-w-[1140px] items-center ${checkout && isV2 ? 'justify-center' : 'justify-between'} gap-4 px-4`}>
         {isV2 && !checkout && <button type="button" className="v2-menu-browse" aria-label="Gå til menukategorier" onClick={() => document.querySelector('[data-storefront-categories]')?.scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'})}><Menu className="h-5 w-5" /></button>}
         {checkout
-          ? <div className="relative flex h-10 w-36 shrink-0 items-center">{logo}</div>
+          ? <div data-v2-checkout-logo={isV2 || undefined} className={isV2 ? "relative flex h-11 w-[168px] shrink-0 items-center" : "relative flex h-10 w-36 shrink-0 items-center"}>{logo}</div>
           : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>}
         {isV2 && !checkout && <button type="button" className="v2-location-toggle" aria-label="Restaurantoplysninger" aria-expanded={showLocation} aria-controls="v2-location-details" onClick={() => setShowLocation(value => !value)}><Info className="h-5 w-5" /></button>}
         {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}
@@ -72,7 +72,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
           {(managed || Number.isFinite(location.deliveryFee)) && <p>{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
           {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p>Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
         </div>}
-        {checkout && <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>}
+        {checkout && !isV2 && <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>}
       </div>
     </header>
     {isV2 && !checkout && location && <h1 className="sr-only">{location.name} · Menukort</h1>}

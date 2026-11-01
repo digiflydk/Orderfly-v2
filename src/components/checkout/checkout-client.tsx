@@ -592,6 +592,18 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
   const checkoutTracked = useRef('');
+  // The mobile CTA bar is fixed; reserve exactly its height below the summary instead of a guessed constant.
+  const checkoutFormRef = useRef<HTMLFormElement>(null);
+  const checkoutBarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const form = checkoutFormRef.current, bar = checkoutBarRef.current;
+    if (!form || !bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => form.style.setProperty('--checkout-bar-height', `${Math.ceil(bar.getBoundingClientRect().height)}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => { observer.disconnect(); form.style.removeProperty('--checkout-bar-height'); };
+  }, [cartItems.length === 0]); // The form only mounts once the cart has items.
   useEffect(() => {
     const key = `${brand?.id}/${location?.id}/${measurementKey}`;
     if (!itemCount || checkoutTracked.current === key) return;
@@ -918,7 +930,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
         {isV2 && <h1>Checkout</h1>}
       </div>
       <FormProvider {...form}>
-        <form data-storefront-version={isV2 ? '2' : undefined} data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
+        <form ref={checkoutFormRef} data-storefront-version={isV2 ? '2' : undefined} data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
@@ -973,7 +985,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                       onClick={() => setIsTimeDialogOpen(true)}
                       disabled={isLoadingTimes}
                     >
-                      Ændr tidspunkt
+                      Ændre tidspunkt
                     </Button>
                   </div>
                 </div>
@@ -1230,7 +1242,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
             </div>
           </div>
 
-          <div className="commerce-checkout-bar fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
+          <div ref={checkoutBarRef} className="commerce-checkout-bar fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
             {acceptTermsAndCompleteOrder(true)}
           </div>
         </form>

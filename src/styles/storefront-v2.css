@@ -90,8 +90,8 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
   grid-column: 2;
   grid-row: 1;
   justify-self: center;
-  width: 152px;
-  height: 40px;
+  width: 168px; /* 10% larger than the original 152x40 logo slot. */
+  height: 44px;
 }
 [data-v2-menu-header] .storefront-order-toolbar > a img { object-position: center; }
 [data-v2-menu-header] .storefront-order-controls { grid-column: 1 / -1; grid-row: 2; }
