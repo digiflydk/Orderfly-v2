@@ -87,7 +87,7 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     const now=admin.firestore.FieldValue.serverTimestamp();
     tx.update(gameRef,input.test?{testPlayedCount:played+1,testWinnerCounts:counters}:{playedCount:played+1,winnerCounts:counters});
     tx.set(limiterRef,{brandId:input.brandId,day,count:(limit.data()?.count||0)+1,updatedAt:now});
-    const board=won?drawWinBoard(prize!.name,game.cardsPerPlay,roll,game.prizes):drawNoWinBoard(game.cardsPerPlay,game.revealText,game.prizes);
+    const board=won?drawWinBoard(prize!.name,game.cardsPerPlay,roll,game.prizes):drawNoWinBoard(game.cardsPerPlay,game.revealText,game.prizes,'',roll);
     const newsletter=!input.test&&input.newsletter===true;
     tx.create(playRef,{brandId:input.brandId,campaignId,name,email,phone,newsletter,newsletterText:newsletter?game.newsletterText:null,consentAt:newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,eventId,createdAt:now});
     if(!input.test)tx.create(db.collection('gameEvents').doc(eventId),{brandId:input.brandId,campaignId,playId:playRef.id,event:'game_start',createdAt:now});

@@ -58,7 +58,8 @@ test('switching steps preserves settings and saves the complete draft', async ()
   try {
     await page.goto(origin);
     await page.getByLabel('Overskrift').fill('Vind en pizza');
-    await page.getByLabel('Lodder pr. spil').selectOption('9');
+    await page.getByLabel('Felter på loddet').selectOption('9');
+    assert.deepEqual(await page.getByLabel('Felter på loddet').locator('option').allTextContents(), ['1 lod · 3 felter', '1 lod · 6 felter', '1 lod · 9 felter']);
     assert.deepEqual(await page.locator('nav button').allTextContents(), ['1. Spillet', '2. Præmier', '3. Udseende', '4. Test og udgiv']);
     await page.locator('nav button').nth(1).click();
     await page.getByLabel('Vinderchance %').fill('25');
@@ -101,6 +102,7 @@ test('scratch field reveals by gesture without a visible reveal button', async()
     assert.equal(await field.getByRole('button',{name:/Afslør kort/}).count(),0);
     const canvas=field.locator('canvas'),box=await canvas.boundingBox();
     assert.ok(box);
+    assert.match(await canvas.evaluate(node=>getComputedStyle(node).cursor),/^url\("data:image\/svg\+xml/);
     await page.mouse.move(box.x+15,box.y+20);
     await page.mouse.down();
     for(const y of [20,52,84,116]){

@@ -11,7 +11,7 @@ import { copenhagenInstant, copenhagenLocal } from '@/lib/games/dates';
 type Prize = ScratchCardDraft['prizes'][number];
 type Step = 'game' | 'prizes' | 'design' | 'publish';
 const steps: { id: Step; title: string; description: string }[] = [
-  { id: 'game', title: '1. Spillet', description: 'Tekster, lodder og tilmelding' },
+  { id: 'game', title: '1. Spillet', description: 'Tekster, lod og tilmelding' },
   { id: 'prizes', title: '2. Præmier', description: 'Gevinster og vinderchancer' },
   { id: 'design', title: '3. Udseende', description: 'Logo, billeder og farver' },
   { id: 'publish', title: '4. Test og udgiv', description: 'Placering, koder og status' },
@@ -98,10 +98,10 @@ export function ScratchCardEditor({ brands, products = [], brandId, campaignId, 
           <label className="block text-sm font-medium">Instruktion til gæsten<input name="instruction" value={game.instruction} onChange={event => update('instruction', event.target.value)} className={input} /></label>
           <label className="block text-sm font-medium">Tekst ved ingen gevinst<input name="revealText" value={game.revealText} onChange={event => update('revealText', event.target.value)} className={input} /></label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block text-sm font-medium">Lodder pr. spil<select name="cardsPerPlay" value={game.cardsPerPlay} onChange={event => { setManualTickets(true); update('cardsPerPlay', Number(event.target.value)); }} className={input}>{![3, 6, 9].includes(game.cardsPerPlay) && <option value={game.cardsPerPlay}>{game.cardsPerPlay} felter (gammel opsætning)</option>}<option value={3}>1 lod · 3 felter</option><option value={6}>2 lodder · 6 felter</option><option value={9}>3 lodder · 9 felter</option></select></label>
+            <label className="block text-sm font-medium">Felter på loddet<select name="cardsPerPlay" value={game.cardsPerPlay} onChange={event => { setManualTickets(true); update('cardsPerPlay', Number(event.target.value)); }} className={input}>{![3, 6, 9].includes(game.cardsPerPlay) && <option value={game.cardsPerPlay}>{game.cardsPerPlay} felter (gammel opsætning)</option>}<option value={3}>1 lod · 3 felter</option><option value={6}>1 lod · 6 felter</option><option value={9}>1 lod · 9 felter</option></select></label>
             <label className="block text-sm font-medium">Maksimalt antal deltagelser<input type="number" min={1} name="totalCardLimit" value={game.totalCardLimit} onChange={event => update('totalCardLimit', Number(event.target.value))} className={input} /></label>
           </div>
-          <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700">Hvert lod har 3 felter. Tre ens symboler på ét lod giver én præmie. Vi foreslår {recommendedFields(game.prizes.length) / 3} {recommendedFields(game.prizes.length) === 3 ? 'lod' : 'lodder'} til {game.prizes.length} {game.prizes.length === 1 ? 'præmie' : 'præmier'}. Én deltagelse giver højst én gevinst.</p>
+          <p className="rounded-lg bg-gray-50 p-3 text-sm text-gray-700">Spillet har ét lod. Tre ens symboler på loddet giver én præmie. Vi foreslår {recommendedFields(game.prizes.length)} felter til {game.prizes.length} {game.prizes.length === 1 ? 'præmie' : 'præmier'}. Én deltagelse giver højst én gevinst.</p>
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="collectPhone" checked={game.collectPhone} onChange={event => update('collectPhone', event.target.checked)} />Vis valgfrit telefonfelt</label>
           <label className="block text-sm font-medium">Tekst til frivilligt nyhedsbrev<input name="newsletterText" value={game.newsletterText} onChange={event => update('newsletterText', event.target.value)} className={input} /></label>
           <label className="block text-sm font-medium">Emne på gevinstmail<input name="emailSubject" value={game.emailSubject} onChange={event => update('emailSubject', event.target.value)} className={input} /></label>

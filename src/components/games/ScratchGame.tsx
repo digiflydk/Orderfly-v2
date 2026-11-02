@@ -79,13 +79,10 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
       <button disabled={pending} className="w-full rounded-md px-4 py-3 font-semibold text-black disabled:opacity-50" style={{backgroundColor:game.primaryColor}}>{pending?'Starter…':'Start spillet'}</button>
       {error&&<p role="alert" className="text-sm text-red-200">{error}</p>}
     </form>:<div className="mt-6">
-      <div className="space-y-4">
-        {Array.from({length:Math.ceil(board.length/3)},(_,ticket)=><div key={ticket} className="rounded-xl border border-white/30 p-2 sm:p-3">
-          {board.length>3&&<p className="mb-2 text-sm font-semibold">Lod {ticket+1}</p>}
-          <div className={`grid gap-2 ${board.slice(ticket*3,ticket*3+3).length===1?'grid-cols-1':'grid-cols-3'}`}>
-            {board.slice(ticket*3,ticket*3+3).map((label,slot)=>{const index=ticket*3+slot;return <ScratchSurface key={index} index={index} round={0} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>;})}
-          </div>
-        </div>)}
+      <div className="rounded-xl border border-white/30 p-2 sm:p-3">
+        <div className={`grid gap-2 ${board.length===1?'grid-cols-1':board.length===2?'grid-cols-2':'grid-cols-3'}`}>
+          {board.map((label,index)=><ScratchSurface key={index} index={index} round={0} compact={board.length>3} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
+        </div>
       </div>
       {finished&&<div role="status" className="mt-5 rounded-xl border border-white/30 p-4 text-center">
         <p className="text-lg font-bold">{won?`Du vandt ${prize}!`:game.revealText}</p>
@@ -101,7 +98,7 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
         {won&&prizeImage&&<img src={prizeImage} alt={prize||'Præmie'} className="mx-auto mt-5 h-32 w-32 rounded-2xl bg-white object-contain p-2"/>}
         <h3 id="game-result-title" ref={resultTitle} tabIndex={-1} className="mt-5 text-3xl font-bold leading-tight outline-none">{won?`Du vandt ${prize}!`:game.revealText}</h3>
         <p className="mt-4 text-base text-white/85">{resultMessage}</p>
-        <button type="button" onClick={()=>setResultDismissed(true)} className="mt-7 w-full rounded-lg px-5 py-3 font-bold text-black" style={{backgroundColor:game.primaryColor}}>Se mine lodder</button>
+        <button type="button" onClick={()=>setResultDismissed(true)} className="mt-7 w-full rounded-lg px-5 py-3 font-bold text-black" style={{backgroundColor:game.primaryColor}}>Se mit lod</button>
       </div>
     </div>}
   </section>;
