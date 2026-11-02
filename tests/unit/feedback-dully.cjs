@@ -291,3 +291,10 @@ test('Dully customer import is superadmin-only, uses the stored Dully binding an
   f.rights.brandIds = [BRAND]; await assert.rejects(f.adminDully.importDullyCustomers({ ...scope, rows: [purchase] }), /superadmin/);
   f.rights.brandIds = null; f.rights.edit = false; await assert.rejects(f.adminDully.importDullyCustomers({ ...scope, rows: [purchase] }));
 });
+test('held Dully customer purchases are listed to superadmins only, without contact data', async t => {
+  const f = setup(t); await configure(f);
+  f.records.set('dullyCustomerImportConflicts/x', { brandId: BRAND, locationId: 'l', purchaseId: 'p', externalOrderId: '777', code: 'customer_identity_conflict', status: 'open', updatedAt: 5 });
+  f.records.set('dullyCustomerImportConflicts/y', { brandId: BRAND, locationId: 'other', purchaseId: 'q', externalOrderId: '888', code: 'customer_identity_conflict', status: 'open', updatedAt: 6 });
+  assert.deepEqual(await f.adminDully.listDullyCustomerConflicts(scope), [{ externalOrderId: '777', code: 'customer_identity_conflict', updatedAt: 5 }]);
+  f.rights.brandIds = [BRAND]; await assert.rejects(f.adminDully.listDullyCustomerConflicts(scope), /superadmin/);
+});

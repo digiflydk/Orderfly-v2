@@ -27,8 +27,13 @@ Superadmin → Feedback → Dully → "Kunder og køb til kundeanalyse" accepts 
 
 Backfill: every order from day 1 is exported from admin.dully.io in batches of 100 and imported here; reimport is idempotent. Daily delta: the existing daily run before 21:00 also imports the day's orders into this section. Marketing subscribers are marked with `marketingSubscriber: true` from Dully's subscriber list.
 
+## Display (PR C)
+
+- Customer list: customer type "Dully-kunde (webshop)" and a source badge "Dully · N køb". The no-orders segment still counts only Orderfly orders.
+- Customer detail: the badge "Dully-webshop" and the card "Dully-køb (webshop)" with completed purchases, amount, first and latest purchase, days since the latest purchase, average days between purchases, and every order with time (Copenhagen), type, items, total and refund. The lookup runs only after `getCustomerDetails` has authorized the record, and is constrained to the record's brand. Only primitive fields reach the client.
+- Dully page: "Vis køb der afventer afklaring" lists held purchases by Dully order ID and reason, for platform superadmins only and without contact data. They are resolved by correcting the contact details on the right customer and importing again; nothing is merged automatically.
+
 ## Next PRs
 
-- C: customer detail and directory filter.
 - D: retention report.
 - E: three-year deletion.

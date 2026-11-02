@@ -11,6 +11,8 @@ import { asDate } from '@/lib/loyalty/model';
 import { getCustomerDetails } from '../actions';
 import { CustomerRecordActions } from './record-actions';
 import { CustomerHistory } from './customer-history';
+import { DullyPurchases } from './dully-purchases';
+import { getDullyPurchases } from '@/lib/customers/dully-purchases-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +29,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { entries } = await customerDirectory();
   const activity = entries.find(entry => entry.sources.some(source => source.kind === 'customer' && source.id === customer.id && source.brandId === customer.brandId));
   const history = await customerHistory(activity, customer, allOrders, feedbackEntries, feedbackAccess);
+  // Authorized above by getCustomerDetails; the lookup is constrained to this record and brand.
+  const dully = await getDullyPurchases(customer.id, customer.brandId);
   const extendedCustomer = customer as typeof customer & {
     emailAliases?: unknown;
     phoneAliases?: unknown;
@@ -37,6 +41,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const integrationSources = extendedCustomer.integrationSources && typeof extendedCustomer.integrationSources === 'object' ? extendedCustomer.integrationSources as Record<string, unknown> : {};
   const hasBookingSource = Boolean(integrationSources.esmeralda);
   const hasOmnisendSource = Boolean(integrationSources.omnisend);
+  const hasDullySource = Boolean(integrationSources.dully);
   const address = customer.street ? `${customer.street}, ${customer.zipCode || ''} ${customer.city || ''}, ${customer.country || ''}` : 'No address on file';
   const since = asDate(customer.createdAt);
   const consentDate = asDate(customer.cookie_consent?.timestamp);
@@ -61,7 +66,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
       <Card><CardHeader><CardTitle>Contact Information</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
         <Badge variant={customer.status === 'active' ? 'default' : 'secondary'}>{customer.status}</Badge>
-        <div className="flex flex-wrap gap-1">{hasBookingSource && <Badge variant="outline">Bordbooking</Badge>}{hasOmnisendSource && <Badge variant="outline">Omnisend-kontakt</Badge>}{!hasBookingSource && !hasOmnisendSource && <Badge variant="outline">Orderfly</Badge>}</div>
+        <div className="flex flex-wrap gap-1">{hasBookingSource && <Badge variant="outline">Bordbooking</Badge>}{hasOmnisendSource && <Badge variant="outline">Omnisend-kontakt</Badge>}{hasDullySource && <Badge variant="outline">Dully-webshop</Badge>}{!hasBookingSource && !hasOmnisendSource && !hasDullySource && <Badge variant="outline">Orderfly</Badge>}</div>
         <p className="flex items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0 text-muted-foreground" /><a href={`mailto:${customer.email}`} className="text-primary hover:underline">{customer.email}</a></p>
         {emailAliases.map(email => <p key={email} className="ml-6 break-all text-xs text-muted-foreground"><a href={`mailto:${email}`} className="hover:text-primary hover:underline">{email}</a> · additional email</p>)}
         <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><a href={`tel:${customer.phone}`} className="text-primary hover:underline">{customer.phone}</a></p>
@@ -80,6 +85,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       </CardContent></Card>
       <Card><CardHeader><CardTitle>Newsletter Status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{history.newsletters.map(row => <div key={`${row.brandId}:${row.email}`}><p className="font-medium">{row.merchant}</p>{row.email&&<p className="break-all text-xs text-muted-foreground">{row.email}</p>}<Badge variant={row.status === 'subscribed' ? 'default' : 'secondary'}>{row.status === 'subscribed' ? 'Subscribed' : row.status === 'pending' ? 'Pending confirmation' : row.status === 'not_subscribed' ? 'Not subscribed' : 'Unknown'}</Badge><p className="mt-1 text-xs text-muted-foreground">{row.note}</p></div>)}</CardContent></Card>
     </div>
+
+    <DullyPurchases {...dully} />
 
     <CustomerHistory {...history} />
   </div>;

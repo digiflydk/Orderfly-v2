@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { DullyFeedbackState, DullyWaitingReason } from '@/lib/feedback/dully-admin';
-import { approveDullyTest, importDullyCustomerPurchases, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
+import { approveDullyTest, importDullyCustomerPurchases, loadDullyCustomerConflicts, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
 
 type Scope = { brandId: string; locationId: string };
 type Result = { ok: boolean; message?: string; state?: DullyFeedbackState | null };
@@ -28,6 +28,12 @@ const waitingReasons: Record<Exclude<DullyWaitingReason, null>, string> = {
   failed: 'Afsendelsen er fejlet. Kontrollér beskeden i mPanel før en ny afsendelse.',
   ineligible: 'Ordren opfylder ikke kravene til afsendelse. Kontrollér gennemførelse, betaling og dato i Dully.',
 };
+const conflictText: Record<string, string> = {
+  customer_identity_conflict: 'E-mail og telefon tilhører to forskellige kunder',
+  ambiguous_email_identity: 'Flere kunder har samme e-mail',
+  ambiguous_phone_identity: 'Flere kunder har samme telefonnummer',
+  identity_index_conflict: 'Identitetsreservationen passer ikke til kunden',
+};
 const date = (value: number | string) => {
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen', dateStyle: 'short', timeStyle: 'short' }) : '–';
@@ -47,6 +53,7 @@ export function DullyFeedbackView({ brands, locations }: {
   const [restaurantId, setRestaurantId] = useState('');
   const [json, setJson] = useState('');
   const [customerJson, setCustomerJson] = useState('');
+  const [conflicts, setConflicts] = useState<null | { ok: boolean; message?: string; conflicts?: { externalOrderId: string; code: string; updatedAt: number }[] }>(null);
   const customerCount = (() => { try { const v = JSON.parse(customerJson); return Array.isArray(v) ? v.length : 0; } catch { return 0; } })();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [experienceType, setExperienceType] = useState<'pickup' | 'delivery'>('pickup');
@@ -143,6 +150,10 @@ export function DullyFeedbackView({ brands, locations }: {
         <details className="text-sm"><summary className="cursor-pointer font-medium underline">Se importformat</summary><div className="mt-3 space-y-2 text-muted-foreground"><p>En JSON-liste med højst 100 ordrer med felterne:</p><p className="break-words font-mono text-xs">externalOrderId, orderNumber, externalRestaurantId, experienceType, orderedAt, completedAt, status, paymentStatus, orderTotal, orderLines</p><p>Mindst ét af <code>email</code> og <code>phone</code>. Valgfrit: <code>externalCustomerId</code>, <code>customerName</code>, <code>address</code> (<code>street</code>, <code>postalCode</code>, <code>city</code>), <code>refundedAmount</code> og <code>marketingSubscriber</code>, som kun gemmes som oplysning fra Dully.</p></div></details>
         <div className="space-y-2"><Label htmlFor="dully-customers-json">Kunde- og købsudtræk (JSON)</Label><textarea id="dully-customers-json" className="min-h-32 w-full min-w-0 rounded-md border bg-background p-3 font-mono text-xs" value={customerJson} maxLength={1000000} spellCheck={false} disabled={!canEdit || !configured} onChange={event => setCustomerJson(event.target.value)} /></div>
         <Button type="button" disabled={!canEdit || !configured || !customerCount} onClick={() => void run(() => importDullyCustomerPurchases({ ...scope, json: customerJson }))}>Importér {customerCount ? customerCount + ' kundekøb' : 'kundekøb'}</Button>
+        <div className="space-y-2 border-t pt-4"><Button type="button" variant="outline" disabled={!configured || busy} onClick={() => void loadDullyCustomerConflicts(scope).then(setConflicts)}>Vis køb der afventer afklaring</Button>
+          {conflicts && !conflicts.ok && <p role="alert" className="text-sm">{conflicts.message}</p>}
+          {conflicts?.ok && (conflicts.conflicts?.length ? <><p className="text-sm text-muted-foreground">{conflicts.conflicts.length} køb er ikke koblet til en kunde, fordi identiteten er tvetydig. Find ordren i Dully, og ret kontaktoplysningerne på den rigtige kunde, før de importeres igen. Der samles aldrig automatisk.</p><ul className="space-y-1 text-sm">{conflicts.conflicts.map(c => <li key={c.externalOrderId} className="break-words">Dully-ordre-ID {c.externalOrderId} · {conflictText[c.code] || 'Identiteten kan ikke afgøres'} · {date(c.updatedAt)}</li>)}</ul></> : <p className="text-sm text-muted-foreground">Ingen køb afventer afklaring.</p>)}
+        </div>
       </section>
       <section className="space-y-4 rounded-lg border p-5" aria-label="Test og godkendelse">
         <div><h2 className="text-lg font-semibold">3. Test og godkend</h2><p className="mt-1 text-sm text-muted-foreground">Testmailen bruger samme afsender, skabelon og takeaway-skema som kundemails. Modtageren er fast: <span className="break-all font-medium">ok@esmeraldapizza.dk</span>.</p></div>

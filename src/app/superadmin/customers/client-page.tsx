@@ -81,7 +81,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
       && (statusFilter === 'all' || customer.status === statusFilter)
       && (loyaltyFilter === 'all' || customer.loyaltyClassification === loyaltyFilter)
       && matchesDateRange(customer.createdAt, createdFrom, createdTo)
-      && matchesCustomerType(customerTypeFilter, [{kind: 'customer', totalOrders: customer.totalOrders, hasBookingSource: customer.hasBookingSource, hasOmnisendSource: customer.hasOmnisendSource}])
+      && matchesCustomerType(customerTypeFilter, [{kind: 'customer', totalOrders: customer.totalOrders, hasBookingSource: customer.hasBookingSource, hasOmnisendSource: customer.hasOmnisendSource, hasDullySource: customer.hasDullySource}])
   ), [initialCustomers, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter]);
 
   const gameOnlyContacts = useMemo(() => entries.filter(entry => {
@@ -191,6 +191,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                 <SelectItem value="returning">Returning customer (2+ paid orders)</SelectItem>
                 <SelectItem value="booking">Table booking guest</SelectItem>
                 <SelectItem value="omnisend">Omnisend contact</SelectItem>
+                <SelectItem value="dully">Dully-kunde (webshop)</SelectItem>
                 <SelectItem value="game-only">Games signup only</SelectItem>
               </SelectContent>
             </Select>
@@ -230,7 +231,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
             {isFiltered && <Button variant="ghost" onClick={clearFilters} className="justify-start" aria-label="Clear all filters"><X className="mr-2 h-4 w-4" />Clear filters</Button>}
         </div>
         {invalidDateRange && <p role="alert" className="text-sm text-destructive">Created from date must be on or before created to date.</p>}
-        <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {filteredCustomers.filter(customer => customer.hasBookingSource).length} table booking profiles · {filteredCustomers.filter(customer => customer.hasOmnisendSource).length} Omnisend contacts · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
+        <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {filteredCustomers.filter(customer => customer.hasBookingSource).length} table booking profiles · {filteredCustomers.filter(customer => customer.hasOmnisendSource).length} Omnisend contacts · {filteredCustomers.filter(customer => customer.hasDullySource).length} Dully-kunder · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
 
         <Card>
             <CardContent className="overflow-x-auto pt-6">
@@ -257,6 +258,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                   const sourceLabels = [
                     ...(customer.hasBookingSource ? ['Table booking'] : []),
                     ...(customer.hasOmnisendSource ? ['Omnisend'] : []),
+                    ...(customer.hasDullySource ? [`Dully · ${customer.dullyPurchases} køb`] : []),
                   ];
                   return (
                     <TableRow key={customer.id} onClick={() => handleRowClick(customer.id)} className="cursor-pointer">

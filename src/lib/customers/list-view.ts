@@ -8,6 +8,8 @@ export type CustomerListRow = Pick<Customer, 'id' | 'brandId' | 'fullName' | 'em
   phoneAliases: string[];
   hasBookingSource: boolean;
   hasOmnisendSource: boolean;
+  hasDullySource: boolean;
+  dullyPurchases: number;
   createdAt: string;
   lastOrderDate?: string;
   locationIds: string[];
@@ -38,6 +40,8 @@ export function customerListView(customer: Customer, brandNames: Map<string, str
   const integrations = record(extended.integrationSources);
   const bookingSource = record(integrations.esmeralda);
   const omnisendSource = record(integrations.omnisend);
+  const dullySource = record(integrations.dully);
+  const dullyStats = record(record((extended as { externalPurchaseStats?: unknown }).externalPurchaseStats).dully);
   const createdAt = asDate(customer.createdAt);
   const lastOrderDate = asDate(customer.lastOrderDate);
   const locationIds = Array.isArray(customer.locationIds) ? customer.locationIds : [];
@@ -52,6 +56,8 @@ export function customerListView(customer: Customer, brandNames: Map<string, str
     phoneAliases: stringValues(extended.phoneAliases),
     hasBookingSource: Object.keys(bookingSource).length > 0,
     hasOmnisendSource: Object.keys(omnisendSource).length > 0,
+    hasDullySource: Object.keys(dullySource).length > 0,
+    dullyPurchases: Number.isFinite(dullyStats.count) ? Number(dullyStats.count) : 0,
     status: customer.status === 'active' ? 'active' : 'inactive',
     loyaltyScore: Number.isFinite(customer.loyaltyScore) ? customer.loyaltyScore : 0,
     totalOrders: Number.isFinite(customer.totalOrders) ? customer.totalOrders : 0,
