@@ -10,8 +10,8 @@
 }
 @media (max-width: 1023px) {
   form[data-storefront-version="2"] > .grid {
-    /* --checkout-bar-height is measured from the fixed CTA bar (it already includes the safe area). */
-    padding-bottom: calc(var(--checkout-bar-height, calc(140px + env(safe-area-inset-bottom, 0px))) + 16px);
+    /* --checkout-bar-overlap: the fixed CTA height not already covered by the page's padding and footer. */
+    padding-bottom: calc(var(--checkout-bar-overlap, calc(140px + env(safe-area-inset-bottom, 0px))) + 16px);
   }
 }
 [data-storefront-version="2"][data-commerce-panel="cart"] {
