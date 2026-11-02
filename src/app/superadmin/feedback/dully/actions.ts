@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import {
-  getDullyFeedbackState, configureDullyFeedback, importDullyFeedback,
+  getDullyFeedbackState, configureDullyFeedback, importDullyFeedback, importDullyCustomers,
   sendDullyFeedbackTest, approveDullyFeedback, setDullyFeedbackPaused,
 } from '@/lib/feedback/dully-admin';
 
@@ -39,6 +39,15 @@ export async function importDullyOrders(input: Scope & { json: string }) {
   if (!Array.isArray(rows) || !rows.length || rows.length > 100) return { ok: false as const, message: 'Importen skal indeholde mellem 1 og 100 ordrer.' };
   return changed(input, () => importDullyFeedback({ brandId: input.brandId, locationId: input.locationId, rows }), result =>
     `Import behandlet: ${result.imported} nye, ${result.updated} opdaterede og ${result.unchanged} uændrede ordrer. ${result.skipped} ordrer opfylder ikke kravene til afsendelse.`);
+}
+
+export async function importDullyCustomerPurchases(input: Scope & { json: string }) {
+  if (typeof input.json !== 'string' || input.json.length > 1000000) return { ok: false as const, message: 'Importen er for stor. Brug højst 100 ordrer ad gangen.' };
+  let rows: unknown;
+  try { rows = JSON.parse(input.json); } catch { return { ok: false as const, message: 'Indsæt gyldig JSON med en liste af ordrer.' }; }
+  if (!Array.isArray(rows) || !rows.length || rows.length > 100) return { ok: false as const, message: 'Importen skal indeholde mellem 1 og 100 ordrer.' };
+  return changed(input, () => importDullyCustomers({ brandId: input.brandId, locationId: input.locationId, rows }), r =>
+    `Kundeimport behandlet: ${r.customersCreated} nye kunder, ${r.customersMatched} køb koblet til eksisterende kunder, ${r.purchasesCreated} nye, ${r.purchasesUpdated} opdaterede og ${r.purchasesUnchanged} uændrede køb. ${r.conflicts} køb afventer manuel afklaring.`);
 }
 
 export async function sendDullyTest(input: Scope & { experienceType: 'pickup' | 'delivery' }) {

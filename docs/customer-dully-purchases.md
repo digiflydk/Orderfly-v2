@@ -21,9 +21,14 @@ Dully purchases are never written to `orders`. They do not change `totalOrders`,
 
 `retainUntil` is the order time plus three years. Deletion runs in PR E (a daily job), which also removes Dully-only profiles with no purchase inside the retention period.
 
+## Import (PR B)
+
+Superadmin → Feedback → Dully → "Kunder og køb til kundeanalyse" accepts up to 100 orders per import (JSON, format in the UI). The server action requires `feedback:edit` **and** platform-wide access (no brand-limited users). It uses the Dully account and restaurant already bound to the location, so a row from another restaurant is rejected. The audit (`dullyFeedbackAudit`, action `customers_imported`) stores counts only.
+
+Backfill: every order from day 1 is exported from admin.dully.io in batches of 100 and imported here; reimport is idempotent. Daily delta: the existing daily run before 21:00 also imports the day's orders into this section. Marketing subscribers are marked with `marketingSubscriber: true` from Dully's subscriber list.
+
 ## Next PRs
 
-- B: authenticated backfill from day 1, plus a daily delta in the existing 20:23 run.
 - C: customer detail and directory filter.
 - D: retention report.
 - E: three-year deletion.

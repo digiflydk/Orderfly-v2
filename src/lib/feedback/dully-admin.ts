@@ -7,6 +7,7 @@ import { ESMERALDA_FEEDBACK_BRAND } from './esmeralda-booking-setup';
 import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, dullyDetails, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
 import { feedbackAutomation } from './mail-config';
 import { dullyFingerprint } from './dully-source';
+import { importDullyCustomerPurchases } from '@/lib/customers/dully-customers';
 export type { DullyImportRow } from './dully-contract';
 type Scope = { brandId: string; locationId: string };
 export type DullyWaitingReason = 'stale_source' | 'paused' | 'approval_required' | 'master_disabled' | 'waiting' | 'uncertain' | 'failed' | 'ineligible' | null;
@@ -175,4 +176,16 @@ export async function setDullyFeedbackPaused(input: Scope & { paused: boolean })
     audit(s.db, tx, s.access.uid, s.scopeId, paused ? 'paused' : 'resumed');
   });
   return { ok: true as const };
+}
+
+// Customer/retention import (#834). Platform-wide access only: it links people across the brand's customer base.
+export async function importDullyCustomers(input: Scope & { rows: unknown[] }) {
+  const s = await scope(input, true);
+  if (s.access.brandIds !== null) throw new Error('Kun superadmin kan importere Dully-kunder.');
+  const config = (await s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId).get()).data();
+  if (!config) throw new Error('Gem Dully-koblingen først.');
+  const result = await importDullyCustomerPurchases({ brandId: s.brandId, locationId: s.locationId, accountId: config.accountId, restaurantId: config.restaurantId, rows: input.rows });
+  // Counts only: the audit never holds contact data.
+  await s.db.collection('dullyFeedbackAudit').doc().create({ actorId: s.access.uid, scopeId: s.scopeId, action: 'customers_imported', ...result, createdAt: Date.now() });
+  return result;
 }
