@@ -9,3 +9,15 @@ export function locationHeaderDetails(location: Location, now: Date) {
   const delivery = location.deliveryTypes?.includes('delivery') || location.supportsDelivery === true;
   return { address, opening, delivery };
 }
+
+const WEEK: [string, string][] = [['monday','Mandag'],['tuesday','Tirsdag'],['wednesday','Onsdag'],['thursday','Torsdag'],['friday','Fredag'],['saturday','Lørdag'],['sunday','Søndag']];
+
+/** Monday–Sunday opening hours for the storefront info popup. Days without data are omitted. */
+export function weeklyOpeningHours(location: Location): { day: string; label: string; text: string }[] {
+  return WEEK.flatMap(([day, label]) => {
+    const hours = location.openingHours?.[day];
+    if (!hours) return [];
+    const text = !hours.isOpen ? 'Lukket' : hours.open && hours.close ? `${hours.open}–${hours.close}` : null;
+    return text ? [{ day, label, text }] : [];
+  });
+}

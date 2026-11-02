@@ -56,6 +56,8 @@ const locationSchema = z.object({
   travlhed_factor: z.enum(['normal', 'medium', 'høj']),
   manual_override: z.coerce.number().min(0).optional().default(0),
   pickupSaveTag: z.string().optional(),
+  contactPhone: z.string().trim().max(30, { message: 'Telefonnummeret må højst være 30 tegn.' }).regex(/^[+0-9 ()-]*$/, { message: 'Telefonnummeret må kun indeholde tal, mellemrum, +, - og parenteser.' }).optional().or(z.literal('')),
+  contactEmail: z.string().trim().max(200).email({ message: 'Indtast en gyldig e-mailadresse.' }).optional().or(z.literal('')),
   pickupLabel: deliveryMethodLabelSchema,
   deliveryLabel: deliveryMethodLabelSchema,
 });
