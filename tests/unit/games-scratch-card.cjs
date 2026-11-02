@@ -106,3 +106,8 @@ test('five prize products fill three tickets while exactly one ticket wins',()=>
   assert.equal(winningTickets.length,1);
   for(const start of [0,3,6])assert.equal(new Set(lost.slice(start,start+3)).size,3);
 });
+test('admin preview test plays are allowed on draft, test, scheduled, live and paused campaigns but not ended ones',()=>{
+  const schedule=pathToFileURL(path.resolve('src/lib/games/schedule.ts')).href;
+  const script=`import(${JSON.stringify(schedule)}).then(m=>{const now=Date.parse('2026-10-02T12:00:00Z'),open={startsAt:null,endsAt:null},future={startsAt:'2026-10-03T00:00:00Z',endsAt:null},past={startsAt:null,endsAt:'2026-10-01T00:00:00Z'};process.stdout.write(JSON.stringify({draft:m.testPlayAllowed('draft',open,now),test:m.testPlayAllowed('test',open,now),live:m.testPlayAllowed('live',open,now),scheduled:m.testPlayAllowed('live',future,now),paused:m.testPlayAllowed('paused',open,now),ended:m.testPlayAllowed('ended',open,now),expired:m.testPlayAllowed('live',past,now)}))})`;
+  assert.deepEqual(JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'})),{draft:true,test:true,live:true,scheduled:true,paused:true,ended:false,expired:false});
+});

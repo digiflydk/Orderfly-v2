@@ -1,6 +1,6 @@
 import type { Firestore, QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import { scratchCardDraftSchema, type ScratchCardDraft } from './scratch-card';
-export { campaignStatus, overlaps } from './schedule';
+export { campaignStatus, overlaps, testPlayAllowed } from './schedule';
 import { campaignStatus } from './schedule';
 export async function brandCampaigns(db:Firestore,brandId:string) {
   const rows=await db.collection('gameScratchDrafts').where('brandId','==',brandId).get();
