@@ -33,7 +33,18 @@ Backfill: every order from day 1 is exported from admin.dully.io in batches of 1
 - Customer detail: the badge "Dully-webshop" and the card "Dully-køb (webshop)" with completed purchases, amount, first and latest purchase, days since the latest purchase, average days between purchases, and every order with time (Copenhagen), type, items, total and refund. The lookup runs only after `getCustomerDetails` has authorized the record, and is constrained to the record's brand. Only primitive fields reach the client.
 - Dully page: "Vis køb der afventer afklaring" lists held purchases by Dully order ID and reason, for platform superadmins only and without contact data. They are resolved by correcting the contact details on the right customer and importing again; nothing is merged automatically.
 
+## Retention report (PR D)
+
+Superadmin → Customers → "Retention og genkøb" (`/superadmin/customers/retention?brand=`) shows one brand at a time. Brands are offered only when the session has a company-wide `orderfly.customers:view` grant for the brand, and only that brand's customer records are included. Purchases are paid Orderfly orders (`paidSaleAmount > 0`, matched by `customerDetails.id`) and counted Dully purchases (completed, paid, not fully refunded; net of refunds).
+
+The page shows:
+- Customers with purchases, the repeat rate (share with 2+ purchases), purchases per customer, and the median number of days between purchases.
+- Customers active in the last 30/60/90 days, and customers with no purchase for 90+ days.
+- A source split: Orderfly only, Dully only, or both.
+- Monthly cohorts by first-purchase month (Copenhagen time), with the share who bought again 1–6 calendar months later. Future months are left empty.
+
+The maths is pure and unit-tested (`src/lib/customers/retention.ts`). The report reads every purchase in the brand per request, which is fine at the current volume (~1,000 purchases). A pre-aggregated projection is needed before it grows by orders of magnitude.
+
 ## Next PRs
 
-- D: retention report.
 - E: three-year deletion.

@@ -160,6 +160,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                 Search customers and filter by type, brand, creation date, loyalty, or status.
             </p>
             </div>
+            <Link href="/superadmin/customers/retention" className="text-sm font-medium underline">Retention og genkøb</Link>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
