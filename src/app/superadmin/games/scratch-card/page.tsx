@@ -24,9 +24,10 @@ export default async function ScratchCardPage({searchParams}:{searchParams:Promi
         const [counts,paid,mails]=await Promise.all([
           Promise.all((['game_impression','game_open','game_start','game_complete','prize_issued'] as const).map(event=>db.collection('gameEvents').where('campaignId','==',campaignId).where('event','==',event).count().get())),
           db.collection('gameConversions').where('campaignId','==',campaignId).where('status','==','paid').aggregate({orders:AggregateField.count(),revenue:AggregateField.sum('amount')}).get(),
-          db.collection('gameMailOutbox').where('campaignId','==',campaignId).where('state','==','accepted').count().get(),
+          // Admin preview test plays share the outbox; count live prize mails only.
+          db.collection('gameMailOutbox').where('campaignId','==',campaignId).where('state','==','accepted').select('mode').get(),
         ]);
-        metrics={impressions:counts[0].data().count,opens:counts[1].data().count,starts:counts[2].data().count,completes:counts[3].data().count,prizes:counts[4].data().count,mailsAccepted:mails.data().count,orders:Number(paid.data().orders||0),revenue:Number(paid.data().revenue||0)};
+        metrics={impressions:counts[0].data().count,opens:counts[1].data().count,starts:counts[2].data().count,completes:counts[3].data().count,prizes:counts[4].data().count,mailsAccepted:mails.docs.filter(doc=>doc.data().mode!=='test').length,orders:Number(paid.data().orders||0),revenue:Number(paid.data().revenue||0)};
       }else{
         // Original records predate campaignId and need to remain visible.
         const [events,conversions,mails]=await Promise.all([
@@ -38,7 +39,7 @@ export default async function ScratchCardPage({searchParams}:{searchParams:Promi
         const rows=events.docs.filter(doc=>belongs(doc.data()));
         const count=(event:string)=>rows.filter(doc=>doc.data().event===event).length;
         const paid=conversions.docs.filter(doc=>belongs(doc.data())&&doc.data().status==='paid');
-        metrics={impressions:count('game_impression'),opens:count('game_open'),starts:count('game_start'),completes:count('game_complete'),prizes:count('prize_issued'),mailsAccepted:mails.docs.filter(doc=>belongs(doc.data())&&doc.data().state==='accepted').length,orders:paid.length,revenue:paid.reduce((total,doc)=>total+Number(doc.data().amount||0),0)};
+        metrics={impressions:count('game_impression'),opens:count('game_open'),starts:count('game_start'),completes:count('game_complete'),prizes:count('prize_issued'),mailsAccepted:mails.docs.filter(doc=>belongs(doc.data())&&doc.data().state==='accepted'&&doc.data().mode!=='test').length,orders:paid.length,revenue:paid.reduce((total,doc)=>total+Number(doc.data().amount||0),0)};
       }
     }catch(error){
       const failure=error as {code?:unknown;message?:unknown};
