@@ -590,15 +590,14 @@ test('V2 mobile checkout has no payment selector and hands online payment to hos
  assert.equal(requests.get('v2-success-mobile').length,1);
  assert.equal(requests.get('v2-success-mobile')[0][1].paymentMethod,'online');
 });
-test('V2 mobile checkout reserves only the fixed CTA height below the total',async t=>{
+test('V2 mobile checkout keeps the total just above the fixed CTA',async t=>{
  const page=await setup(t,'v2-success-mobile');
  const bar=page.locator('.commerce-checkout-bar');await expect(bar).toBeVisible();
- await page.waitForFunction(()=>getComputedStyle(document.querySelector('form[data-storefront-version="2"]')).getPropertyValue('--checkout-bar-height').trim()!=='');
- const {padding,barHeight}=await page.evaluate(()=>({padding:parseFloat(getComputedStyle(document.querySelector('form[data-storefront-version="2"] > .grid')).paddingBottom),barHeight:document.querySelector('.commerce-checkout-bar').getBoundingClientRect().height}));
- assert.ok(Math.abs(padding-(Math.ceil(barHeight)+16))<=1,`padding ${padding} follows bar ${barHeight}`);
- await page.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
- const total=page.getByText('I alt',{exact:true}).filter({visible:true}).last();const totalBox=await total.boundingBox(),barBox=await bar.boundingBox();
- const gap=barBox.y-(totalBox.y+totalBox.height);assert.ok(gap>=0&&gap<=120,`total sits just above the CTA (gap ${gap}px)`);
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('form[data-storefront-version="2"]')).getPropertyValue('--checkout-bar-overlap').trim()!=='');
+ await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+ const lastRow=page.getByText(/Moms inkluderet/).filter({visible:true}).last();await expect(lastRow).toBeVisible();
+ const rowBox=await lastRow.boundingBox(),barBox=await bar.boundingBox();
+ const gap=barBox.y-(rowBox.y+rowBox.height);assert.ok(gap>=0&&gap<=40,`summary sits just above the CTA (gap ${gap}px)`);
 });
 test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
  const page=await setup(t,'v2-invalid-mobile');

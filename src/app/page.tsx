@@ -1,13 +1,14 @@
 // orderfly.dk/ — Orderfly's own marketing landing (#814). Esmeralda's ordering
 // landing that used to render here remains available on /m3pizza.
 import type { Metadata } from 'next';
-import { Bricolage_Grotesque, Inter } from 'next/font/google';
+import localFont from 'next/font/local';
 import { OrderflyLanding } from '@/components/orderfly-landing/orderfly-landing';
 import '@/components/orderfly-landing/orderfly-landing.css';
 
-// next/font self-hosts the files at build time: the browser never calls Google.
-const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['700', '800'], variable: '--ofl-font-display', display: 'swap' });
-const body = Inter({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--ofl-font-body', display: 'swap' });
+// Fonts are committed (OFL, see ./fonts/LICENSE-OFL.txt), so neither the browser nor the build calls Google.
+// next/font/google fetched them during `next build`, and a bad Google response failed App Hosting builds.
+const display = localFont({ src: './fonts/bricolage-grotesque-latin-wght-normal.woff2', weight: '200 800', variable: '--ofl-font-display', display: 'swap' });
+const body = localFont({ src: './fonts/inter-latin-wght-normal.woff2', weight: '100 900', variable: '--ofl-font-body', display: 'swap' });
 
 export const metadata: Metadata = {
   title: 'Orderfly – online take away til restauranter',

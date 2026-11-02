@@ -592,17 +592,24 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
   const checkoutTracked = useRef('');
-  // The mobile CTA bar is fixed; reserve exactly its height below the summary instead of a guessed constant.
+  // The mobile CTA bar is fixed. Reserve only the part of it that the content after the form
+  // (container padding, footer) does not already cover, so "I alt" sits just above the CTA.
   const checkoutFormRef = useRef<HTMLFormElement>(null);
   const checkoutBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const form = checkoutFormRef.current, bar = checkoutBarRef.current;
-    if (!form || !bar || typeof ResizeObserver === 'undefined') return;
-    const measure = () => form.style.setProperty('--checkout-bar-height', `${Math.ceil(bar.getBoundingClientRect().height)}px`);
+    const grid = form?.querySelector<HTMLElement>(':scope > .grid');
+    if (!form || !bar || !grid || typeof ResizeObserver === 'undefined') return;
+    const measure = () => {
+      const trailing = document.documentElement.scrollHeight - (grid.getBoundingClientRect().bottom + window.scrollY);
+      const overlap = Math.max(0, Math.ceil(bar.getBoundingClientRect().height - trailing));
+      form.style.setProperty('--checkout-bar-overlap', `${overlap}px`);
+    };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(bar);
-    return () => { observer.disconnect(); form.style.removeProperty('--checkout-bar-height'); };
+    observer.observe(document.body);
+    return () => { observer.disconnect(); form.style.removeProperty('--checkout-bar-overlap'); };
   }, [cartItems.length === 0]); // The form only mounts once the cart has items.
   useEffect(() => {
     const key = `${brand?.id}/${location?.id}/${measurementKey}`;
