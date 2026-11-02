@@ -19,7 +19,7 @@ test('renders a legacy customer without locations or consent timestamp', () => {
   expect(view.createdAt).toBe('2023-11-14');
   expect(view.emailAliases).toEqual([]);
   expect(view.phoneAliases).toEqual([]);
-  expect([view.hasBookingSource, view.hasOmnisendSource]).toEqual([false, false]);
+  expect([view.hasBookingSource, view.hasOmnisendSource, view.hasDullySource, view.dullyPurchases]).toEqual([false, false, false, 0]);
   expect(view).not.toHaveProperty('cookie_consent');
 });
 
@@ -45,7 +45,7 @@ test('preserves valid locations, loyalty data and mixed timestamp formats', () =
   expect(view).not.toHaveProperty('cookie_consent');
   expect(view).not.toHaveProperty('integrationSources');
   expect(Object.keys(view).sort()).toEqual([
-    'brandId', 'brandName', 'createdAt', 'email', 'emailAliases', 'fullName', 'hasBookingSource', 'hasOmnisendSource', 'id', 'lastOrderDate',
+    'brandId', 'brandName', 'createdAt', 'dullyPurchases', 'email', 'emailAliases', 'fullName', 'hasBookingSource', 'hasDullySource', 'hasOmnisendSource', 'id', 'lastOrderDate',
     'locationIds', 'locationNames', 'loyaltyClassification', 'loyaltyScore', 'phone', 'phoneAliases', 'status',
     'totalOrders', 'totalSpend',
   ]);

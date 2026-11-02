@@ -75,3 +75,15 @@ test('a second order in the same batch with only the phone joins the customer cr
   assert.equal(c.externalPurchaseStats.dully.count, 2); assert.equal(c.externalPurchaseStats.dully.amount, 349);
   assert.equal(c.externalPurchaseStats.dully.lastPurchaseAt, '2026-11-01T12:00:00+01:00');
 });
+
+test('customer detail reads only this brand\'s Dully purchases and summarizes retention', async () => {
+  const f = setup();
+  await f.lib.importDullyCustomerPurchases({ ...scope, rows: [row(), row({ externalOrderId: '1009', orderNumber: '2400', orderedAt: '2026-11-01T12:00:00+01:00', completedAt: '2026-11-01T12:20:00+01:00', orderTotal: 100 })] });
+  const [c] = docs(f, 'customers').filter(c => c.brandId === BRAND);
+  f.records.set('dullyCustomerPurchases/foreign', { id: 'foreign', brandId: 'other', customerId: c.id, orderedAt: '2026-10-01T12:00:00+02:00', status: 'completed', paymentStatus: 'paid', orderTotal: 999 });
+  const view = loadTs('src/lib/customers/dully-purchases-server.ts', f.mocks);
+  const { purchases, summary } = await view.getDullyPurchases(c.id, BRAND, Date.parse('2026-11-04T12:00:00+01:00'));
+  assert.deepEqual(purchases.map(p => p.orderNumber), ['2400', '2154']);
+  assert.equal(summary.count, 2); assert.equal(summary.amount, 349); assert.equal(summary.daysSinceLast, 3); assert.equal(summary.averageDaysBetween, 1);
+  assert.ok(purchases.every(p => !('email' in p) && !('customerId' in p)));
+});

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import {
-  getDullyFeedbackState, configureDullyFeedback, importDullyFeedback, importDullyCustomers,
+  getDullyFeedbackState, configureDullyFeedback, importDullyFeedback, importDullyCustomers, listDullyCustomerConflicts,
   sendDullyFeedbackTest, approveDullyFeedback, setDullyFeedbackPaused,
 } from '@/lib/feedback/dully-admin';
 
@@ -61,4 +61,9 @@ export async function approveDullyTest(input: Scope & { testSourceId: string; co
 
 export async function pauseDullyFeedback(input: Scope & { paused: boolean }) {
   return changed(input, () => setDullyFeedbackPaused(input), input.paused ? 'Dully-afsendelse er sat på pause.' : 'Daglig Dully-afsendelse er aktiveret.');
+}
+
+export async function loadDullyCustomerConflicts(scope: Scope) {
+  try { return { ok: true as const, conflicts: await listDullyCustomerConflicts(scope) }; }
+  catch { return { ok: false as const, message: 'Kunne ikke hente køb, der afventer afklaring. Kontrollér din adgang.' }; }
 }

@@ -1,10 +1,11 @@
-export type CustomerTypeFilter = 'all' | 'no-orders' | 'first-order' | 'returning' | 'booking' | 'omnisend' | 'game-only';
+export type CustomerTypeFilter = 'all' | 'no-orders' | 'first-order' | 'returning' | 'booking' | 'omnisend' | 'dully' | 'game-only';
 
 export type FilterableCustomerSource = {
   kind: 'customer' | 'game';
   totalOrders?: number;
   hasBookingSource?: boolean;
   hasOmnisendSource?: boolean;
+  hasDullySource?: boolean;
 };
 
 function dateOnly(value: string | null | undefined): string | null {
@@ -42,6 +43,7 @@ export function matchesCustomerType(type: CustomerTypeFilter, sources: Filterabl
   if (type === 'game-only') return customers.length === 0 && sources.some(source => source.kind === 'game');
   if (type === 'booking') return customers.some(source => source.hasBookingSource === true);
   if (type === 'omnisend') return customers.some(source => source.hasOmnisendSource === true);
+  if (type === 'dully') return customers.some(source => source.hasDullySource === true);
   if (!customers.length) return false;
   if (type === 'no-orders') return customers.some(source => (source.totalOrders || 0) === 0);
   if (type === 'first-order') return customers.some(source => source.totalOrders === 1);

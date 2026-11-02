@@ -189,3 +189,13 @@ export async function importDullyCustomers(input: Scope & { rows: unknown[] }) {
   await s.db.collection('dullyFeedbackAudit').doc().create({ actorId: s.access.uid, scopeId: s.scopeId, action: 'customers_imported', ...result, createdAt: Date.now() });
   return result;
 }
+
+// Held Dully purchases (#834). Holds no contact data: staff look the order up in Dully by its ID.
+export async function listDullyCustomerConflicts(input: Scope) {
+  const s = await scope(input);
+  if (s.access.brandIds !== null) throw new Error('Kun superadmin kan se Dully-kundekonflikter.');
+  const docs = await s.db.collection('dullyCustomerImportConflicts').where('brandId', '==', s.brandId).get();
+  return docs.docs.map(d => d.data()).filter(c => c.locationId === s.locationId && c.status === 'open')
+    .map(c => ({ externalOrderId: String(c.externalOrderId || ''), code: String(c.code || ''), updatedAt: Number(c.updatedAt) || 0 }))
+    .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 200);
+}
