@@ -243,3 +243,58 @@ test('real Dully reply above threshold gets the Google/Trustpilot step once; bel
   await submitOnce(low.f, formFor(low.f, lowSource, 4));
   assert.equal(low.f.cookieJar.size, 0); assert.equal(await low.receipt.readExternalReviewReceipt(BRAND), null);
 });
+
+test('import stores optional follow-up details, updates them on reimport and keeps identity rules', async t => {
+  const f = setup(t); await configure(f);
+  const details = { customerName: 'QA Kunde', customerPhone: '+45 12 34 56 78', orderTotal: 160.95, orderLines: [{ name: 'Frokost pizza combo', quantity: 2, total: 150 }] };
+  const first = await f.adminDully.importDullyFeedback({ ...scope, rows: [row({ ...details, externalRestaurantId: 'restaurant1' })] });
+  assert.equal(first.imported, 1);
+  const source = [...f.records.values()].find(v => v.sourceType === 'dully_order' && !v.isTest);
+  assert.equal(source.customerName, 'QA Kunde'); assert.equal(source.orderLines[0].quantity, 2); assert.equal(source.orderTotal, 160.95);
+  const same = await f.adminDully.importDullyFeedback({ ...scope, rows: [row({ ...details })] });
+  assert.equal(same.unchanged, 1); assert.equal(same.updated, 0);
+  const changed = await f.adminDully.importDullyFeedback({ ...scope, rows: [row({ ...details, orderLines: [{ name: 'Frokost pizza combo', quantity: 3, total: 225 }] })] });
+  assert.equal(changed.updated, 1); assert.equal(f.records.get('dullyFeedbackSources/' + source.id).orderLines[0].total, 225);
+  const legacy = await f.adminDully.importDullyFeedback({ ...scope, rows: [row()] });
+  assert.equal(legacy.unchanged, 1); assert.equal(f.records.get('dullyFeedbackSources/' + source.id).customerName, 'QA Kunde');
+  await assert.rejects(f.adminDully.importDullyFeedback({ ...scope, rows: [row({ orderLines: [{ name: 'X', quantity: 0, total: 1 }] })] }));
+  await assert.rejects(f.adminDully.importDullyFeedback({ ...scope, rows: [row({ email: 'other@example.test', customerName: 'QA Kunde' })] }), /identiteten/);
+  const audits = [...f.records.entries()].filter(([k]) => k.startsWith('dullyFeedbackAudit/')).map(([, v]) => JSON.stringify(v));
+  assert.equal(audits.some(a => a.includes('QA Kunde') || a.includes('+45')), false);
+});
+
+test('Dully order details are only returned for real sources in the expected brand', async t => {
+  const f = setup(t); await configure(f);
+  await f.adminDully.importDullyFeedback({ ...scope, rows: [row({ customerName: 'QA Kunde', orderLines: [{ name: 'Pizza', quantity: 1, total: 99 }] })] });
+  const source = [...f.records.values()].find(v => v.sourceType === 'dully_order' && !v.isTest);
+  const helper = loadTs('src/lib/feedback/dully-details.ts', f.mocks);
+  const found = await helper.getDullyOrderDetails([source.id, 'missing', '../bad'], BRAND);
+  assert.equal(found.size, 1); const d = found.get(source.id);
+  assert.equal(d.customerName, 'QA Kunde'); assert.equal(d.orderNumber, '2154'); assert.equal(d.experienceType, 'delivery'); assert.deepEqual(d.orderLines, [{ name: 'Pizza', quantity: 1, total: 99 }]);
+  assert.equal((await helper.getDullyOrderDetails([source.id], 'other-brand')).size, 0);
+  f.records.get('dullyFeedbackSources/' + source.id).isTest = true;
+  assert.equal((await helper.getDullyOrderDetails([source.id], BRAND)).size, 0);
+});
+test('Dully customer import is superadmin-only, uses the stored Dully binding and audits counts without contact data', async t => {
+  const f = setup(t); await configure(f);
+  const purchase = { externalOrderId: '2594108', orderNumber: '2154', externalRestaurantId: 'restaurant1', email: 'guest@example.test', phone: '+4512345678',
+    experienceType: 'delivery', orderedAt: '2026-10-31T19:00:00+01:00', completedAt: '2026-10-31T20:00:00+01:00', status: 'completed', paymentStatus: 'paid',
+    orderTotal: 249, orderLines: [{ name: 'Margherita', quantity: 1, total: 249 }] };
+  const result = await f.adminDully.importDullyCustomers({ ...scope, rows: [purchase] });
+  assert.equal(result.customersCreated, 1); assert.equal(result.purchasesCreated, 1);
+  const [stored] = [...f.records.entries()].filter(([k]) => k.startsWith('dullyCustomerPurchases/')).map(([, v]) => v);
+  assert.equal(stored.accountId, 'account1'); assert.equal(stored.brandId, BRAND);
+  const auditRows = [...f.records.entries()].filter(([k, v]) => k.startsWith('dullyFeedbackAudit/') && v.action === 'customers_imported').map(([, v]) => v);
+  assert.equal(auditRows.length, 1); assert.ok(!JSON.stringify(auditRows).includes('example.test'));
+  assert.equal([...f.records.keys()].filter(k => k.startsWith('feedbackMailJobs/')).length, 0);
+  await assert.rejects(f.adminDully.importDullyCustomers({ ...scope, rows: [{ ...purchase, externalOrderId: 'x2', externalRestaurantId: 'wrong' }] }));
+  f.rights.brandIds = [BRAND]; await assert.rejects(f.adminDully.importDullyCustomers({ ...scope, rows: [purchase] }), /superadmin/);
+  f.rights.brandIds = null; f.rights.edit = false; await assert.rejects(f.adminDully.importDullyCustomers({ ...scope, rows: [purchase] }));
+});
+test('held Dully customer purchases are listed to superadmins only, without contact data', async t => {
+  const f = setup(t); await configure(f);
+  f.records.set('dullyCustomerImportConflicts/x', { brandId: BRAND, locationId: 'l', purchaseId: 'p', externalOrderId: '777', code: 'customer_identity_conflict', status: 'open', updatedAt: 5 });
+  f.records.set('dullyCustomerImportConflicts/y', { brandId: BRAND, locationId: 'other', purchaseId: 'q', externalOrderId: '888', code: 'customer_identity_conflict', status: 'open', updatedAt: 6 });
+  assert.deepEqual(await f.adminDully.listDullyCustomerConflicts(scope), [{ externalOrderId: '777', code: 'customer_identity_conflict', updatedAt: 5 }]);
+  f.rights.brandIds = [BRAND]; await assert.rejects(f.adminDully.listDullyCustomerConflicts(scope), /superadmin/);
+});

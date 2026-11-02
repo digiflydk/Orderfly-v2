@@ -34,3 +34,9 @@ test('customer search is case-insensitive and ignores surrounding query whitespa
   expect(matchesCustomerSearch('9988', ['Anna Jensen', 'anna@example.com', '12345678'])).toBe(false);
   expect(matchesCustomerSearch('', [])).toBe(true);
 });
+
+test('Dully segment matches only customer records with a Dully source', () => {
+  expect(matchesCustomerType('dully', [{ kind: 'customer', totalOrders: 0, hasDullySource: true }])).toBe(true);
+  expect(matchesCustomerType('dully', [{ kind: 'customer', totalOrders: 2, hasOmnisendSource: true }])).toBe(false);
+  expect(matchesCustomerType('dully', [{ kind: 'game' }])).toBe(false);
+});

@@ -5,6 +5,7 @@ import { requireFeedbackAccess } from '@/lib/feedback/access';
 import { feedbackScopeOptions } from '@/lib/feedback/admin-data';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { readQuestionVersions } from '@/lib/feedback/question-store';
+import { getDullyOrderDetails } from '@/lib/feedback/dully-details';
 import Link from '@/components/superadmin/admin-link';
 import { FeedbackClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
@@ -20,13 +21,16 @@ async function FeedbackPageContent() {
     const customerIds = [...new Set(feedback.filter(f => f.sourceType !== 'dully_order').map(f => f.customerId).filter(id => typeof id === 'string' && /^[\w-]{1,160}$/.test(id)))];
     const customers = await Promise.all(customerIds.map(id => getAdminDb().collection('customers').doc(id).get()));
     const customerMap = new Map(customers.map(c => [c.id, c.data()]));
+    const dullyFeedback = feedback.filter(f => f.sourceType === 'dully_order');
+    const dullyBrand = new Map(dullyFeedback.map(f => [String((f as any).sourceId || f.customerId), f.brandId]));
+    const dullyDetails = await getDullyOrderDetails([...dullyBrand.keys()], id => dullyBrand.get(id) || '');
     const versionMap = new Map(versions.map(v => [v.id, v.versionLabel]));
 
     const feedbackWithDetails = feedback.map(f => ({
         ...f,
         brandName: brandMap.get(f.brandId) || 'N/A',
         locationName: locationMap.get(f.locationId)?.brandId === f.brandId ? locationMap.get(f.locationId)!.name : 'N/A',
-        customerName: f.sourceType === 'dully_order' ? 'Dully-kunde' : f.sourceType === 'dine_in' ? 'Anonym gæst' : customerMap.get(f.customerId)?.brandId === f.brandId ? String(customerMap.get(f.customerId)?.fullName || 'Unknown Customer') : 'Unknown Customer',
+        customerName: f.sourceType === 'dully_order' ? dullyDetails.get(String((f as any).sourceId || f.customerId))?.customerName || 'Dully-kunde' : f.sourceType === 'dine_in' ? 'Anonym gæst' : customerMap.get(f.customerId)?.brandId === f.brandId ? String(customerMap.get(f.customerId)?.fullName || 'Unknown Customer') : 'Unknown Customer',
         showPublicly: f.showPublicly === true && Boolean(f.publication?.approvedBy),
         questionVersionLabel: versionMap.get(f.questionVersionId) || 'N/A',
     }));

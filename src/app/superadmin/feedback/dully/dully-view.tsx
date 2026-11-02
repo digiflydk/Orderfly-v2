@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { DullyFeedbackState, DullyWaitingReason } from '@/lib/feedback/dully-admin';
-import { approveDullyTest, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
+import { approveDullyTest, importDullyCustomerPurchases, loadDullyCustomerConflicts, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
 
 type Scope = { brandId: string; locationId: string };
 type Result = { ok: boolean; message?: string; state?: DullyFeedbackState | null };
@@ -28,6 +28,12 @@ const waitingReasons: Record<Exclude<DullyWaitingReason, null>, string> = {
   failed: 'Afsendelsen er fejlet. Kontrollér beskeden i mPanel før en ny afsendelse.',
   ineligible: 'Ordren opfylder ikke kravene til afsendelse. Kontrollér gennemførelse, betaling og dato i Dully.',
 };
+const conflictText: Record<string, string> = {
+  customer_identity_conflict: 'E-mail og telefon tilhører to forskellige kunder',
+  ambiguous_email_identity: 'Flere kunder har samme e-mail',
+  ambiguous_phone_identity: 'Flere kunder har samme telefonnummer',
+  identity_index_conflict: 'Identitetsreservationen passer ikke til kunden',
+};
 const date = (value: number | string) => {
   const parsed = new Date(value);
   return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen', dateStyle: 'short', timeStyle: 'short' }) : '–';
@@ -46,6 +52,9 @@ export function DullyFeedbackView({ brands, locations }: {
   const [accountId, setAccountId] = useState('');
   const [restaurantId, setRestaurantId] = useState('');
   const [json, setJson] = useState('');
+  const [customerJson, setCustomerJson] = useState('');
+  const [conflicts, setConflicts] = useState<null | { ok: boolean; message?: string; conflicts?: { externalOrderId: string; code: string; updatedAt: number }[] }>(null);
+  const customerCount = (() => { try { const v = JSON.parse(customerJson); return Array.isArray(v) ? v.length : 0; } catch { return 0; } })();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [experienceType, setExperienceType] = useState<'pickup' | 'delivery'>('pickup');
   const [confirmed, setConfirmed] = useState(false);
@@ -130,11 +139,21 @@ export function DullyFeedbackView({ brands, locations }: {
       </section>
       <section className="space-y-4 rounded-lg border p-5" aria-label="Importér Dully-ordrer">
         <div><h2 className="text-lg font-semibold">2. Indlæs ordrer</h2><p className="mt-1 text-sm text-muted-foreground">Forhåndsvis udtrækket før import. Kun gennemførte og betalte ordrer fra 31. oktober 2026 eller senere kan inviteres. Identiske ordrer importeres ikke igen.</p></div>
-        <details className="text-sm"><summary className="cursor-pointer font-medium underline">Se importformat</summary><div className="mt-3 space-y-2 text-muted-foreground"><p>En JSON-liste med højst 100 ordrer. Hver ordre skal have disse felter:</p><p className="break-words font-mono text-xs">externalOrderId, orderNumber, externalRestaurantId, email, experienceType, orderedAt, completedAt, status, paymentStatus</p><p>experienceType: pickup eller delivery. status: completed, pending eller cancelled. paymentStatus: paid, unpaid eller refunded. Datoer skal være ISO-datoer med tidszone. completedAt er null, indtil ordren er afsluttet. Brug Dullys stabile interne ordre-ID, ikke kun det viste ordrenummer.</p></div></details>
+        <details className="text-sm"><summary className="cursor-pointer font-medium underline">Se importformat</summary><div className="mt-3 space-y-2 text-muted-foreground"><p>En JSON-liste med højst 100 ordrer. Hver ordre skal have disse felter:</p><p className="break-words font-mono text-xs">externalOrderId, orderNumber, externalRestaurantId, email, experienceType, orderedAt, completedAt, status, paymentStatus</p><p>experienceType: pickup eller delivery. status: completed, pending eller cancelled. paymentStatus: paid, unpaid eller refunded. Datoer skal være ISO-datoer med tidszone. completedAt er null, indtil ordren er afsluttet. Brug Dullys stabile interne ordre-ID, ikke kun det viste ordrenummer.</p><p>Valgfrie opfølgningsfelter: <code>customerName</code>, <code>customerPhone</code>, <code>orderTotal</code> og <code>orderLines</code> (liste med <code>name</code>, <code>quantity</code>, <code>total</code>). De vises kun for brugere med feedbackadgang og ændrer ikke ordreidentiteten.</p></div></details>
         <div className="space-y-2"><Label htmlFor="dully-json">Ordreudtræk (JSON)</Label><textarea id="dully-json" className="min-h-40 w-full min-w-0 rounded-md border bg-background p-3 font-mono text-xs" value={json} maxLength={500000} spellCheck={false} disabled={!canEdit || !configured} onChange={event => { setJson(event.target.value); setPreview(null); }} aria-describedby="dully-import-note" /></div>
         <p id="dully-import-note" className="text-sm text-muted-foreground">Import opretter feedbackgrundlag. Den opretter ingen salgsordrer og sender ikke mails med det samme.</p>
         <div className="flex flex-wrap gap-3"><Button type="button" variant="outline" disabled={!canEdit || !configured || !json.trim()} onClick={makePreview}>Forhåndsvis import</Button><Button type="button" disabled={!canEdit || !configured || !preview} onClick={() => void run(() => importDullyOrders({ ...scope, json }))}>Importér {preview ? preview.count + ' ordrer' : 'ordrer'}</Button></div>
         {preview && <div className="space-y-2 rounded-md bg-muted/40 p-3"><p className="text-sm font-medium">{preview.count} ordrer i udtrækket. Felter, restaurant og status kontrolleres på serveren ved import.</p><ul className="space-y-2 text-sm">{preview.rows.slice(0, 5).map((row, index) => <li key={index} className="break-words">#{String(row.orderNumber || 'Mangler ordrenummer')} · {row.experienceType === 'delivery' ? 'Levering' : row.experienceType === 'pickup' ? 'Afhentning' : 'Ukendt type'} · {label(String(row.status || 'Ukendt status'))}</li>)}</ul>{preview.count > 5 && <p className="text-xs text-muted-foreground">Viser de første 5 af {preview.count} ordrer.</p>}</div>}
+      </section>
+      <section className="space-y-4 rounded-lg border p-5" aria-label="Importér Dully-kunder og køb">
+        <div><h2 className="text-lg font-semibold">Kunder og køb til kundeanalyse</h2><p className="mt-1 text-sm text-muted-foreground">Kun superadmin. Køb kobles til eksisterende kunder på e-mail eller telefon. Køb indgår kun i kunde- og retentionanalyse: ingen salgsordrer, loyalitet, samtykke eller mails. Konflikter samles ikke automatisk.</p></div>
+        <details className="text-sm"><summary className="cursor-pointer font-medium underline">Se importformat</summary><div className="mt-3 space-y-2 text-muted-foreground"><p>En JSON-liste med højst 100 ordrer med felterne:</p><p className="break-words font-mono text-xs">externalOrderId, orderNumber, externalRestaurantId, experienceType, orderedAt, completedAt, status, paymentStatus, orderTotal, orderLines</p><p>Mindst ét af <code>email</code> og <code>phone</code>. Valgfrit: <code>externalCustomerId</code>, <code>customerName</code>, <code>address</code> (<code>street</code>, <code>postalCode</code>, <code>city</code>), <code>refundedAmount</code> og <code>marketingSubscriber</code>, som kun gemmes som oplysning fra Dully.</p></div></details>
+        <div className="space-y-2"><Label htmlFor="dully-customers-json">Kunde- og købsudtræk (JSON)</Label><textarea id="dully-customers-json" className="min-h-32 w-full min-w-0 rounded-md border bg-background p-3 font-mono text-xs" value={customerJson} maxLength={1000000} spellCheck={false} disabled={!canEdit || !configured} onChange={event => setCustomerJson(event.target.value)} /></div>
+        <Button type="button" disabled={!canEdit || !configured || !customerCount} onClick={() => void run(() => importDullyCustomerPurchases({ ...scope, json: customerJson }))}>Importér {customerCount ? customerCount + ' kundekøb' : 'kundekøb'}</Button>
+        <div className="space-y-2 border-t pt-4"><Button type="button" variant="outline" disabled={!configured || busy} onClick={() => void loadDullyCustomerConflicts(scope).then(setConflicts)}>Vis køb der afventer afklaring</Button>
+          {conflicts && !conflicts.ok && <p role="alert" className="text-sm">{conflicts.message}</p>}
+          {conflicts?.ok && (conflicts.conflicts?.length ? <><p className="text-sm text-muted-foreground">{conflicts.conflicts.length} køb er ikke koblet til en kunde, fordi identiteten er tvetydig. Find ordren i Dully, og ret kontaktoplysningerne på den rigtige kunde, før de importeres igen. Der samles aldrig automatisk.</p><ul className="space-y-1 text-sm">{conflicts.conflicts.map(c => <li key={c.externalOrderId} className="break-words">Dully-ordre-ID {c.externalOrderId} · {conflictText[c.code] || 'Identiteten kan ikke afgøres'} · {date(c.updatedAt)}</li>)}</ul></> : <p className="text-sm text-muted-foreground">Ingen køb afventer afklaring.</p>)}
+        </div>
       </section>
       <section className="space-y-4 rounded-lg border p-5" aria-label="Test og godkendelse">
         <div><h2 className="text-lg font-semibold">3. Test og godkend</h2><p className="mt-1 text-sm text-muted-foreground">Testmailen bruger samme afsender, skabelon og takeaway-skema som kundemails. Modtageren er fast: <span className="break-all font-medium">ok@esmeraldapizza.dk</span>.</p></div>

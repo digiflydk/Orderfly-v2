@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requireFeedbackAccess, assertFeedbackBrand, canEditFeedbackBrand } from './access';
 import { ESMERALDA_FEEDBACK_BRAND } from './esmeralda-booking-setup';
-import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
+import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, dullyDetails, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
 import { feedbackAutomation } from './mail-config';
 import { dullyFingerprint } from './dully-source';
+import { importDullyCustomerPurchases } from '@/lib/customers/dully-customers';
 export type { DullyImportRow } from './dully-contract';
 type Scope = { brandId: string; locationId: string };
 export type DullyWaitingReason = 'stale_source' | 'paused' | 'approval_required' | 'master_disabled' | 'waiting' | 'uncertain' | 'failed' | 'ineligible' | null;
@@ -91,9 +92,11 @@ export async function importDullyFeedback(input: Scope & { rows: unknown[] }) {
       const old = snapshots[i].data(), eligible = dullyEligible(row, now), dueAt = eligible ? dullyDueAt(row.completedAt!) : DULLY_NEVER;
       if (old) {
         if (!dullySameIdentity(old, row, s.locationId) || old.scopeId !== s.scopeId || old.isTest) throw new Error('Ordreidentiteten eller modtageren er ændret. Importen er afvist.');
-        const changed = old.status !== row.status || old.paymentStatus !== row.paymentStatus || old.completedAt !== row.completedAt;
+        const details = dullyDetails(row);
+        const changed = old.status !== row.status || old.paymentStatus !== row.paymentStatus || old.completedAt !== row.completedAt
+          || Object.entries(details).some(([key, value]) => JSON.stringify(old[key]) !== JSON.stringify(value));
         if (changed) counts.updated++; else counts.unchanged++;
-        tx.update(refs[i], { status: row.status, paymentStatus: row.paymentStatus, completedAt: row.completedAt,
+        tx.update(refs[i], { ...details, status: row.status, paymentStatus: row.paymentStatus, completedAt: row.completedAt,
           dueAt: old.mailState === 'pending' ? dueAt : old.dueAt, lastVerifiedAt: now, updatedAt: now, historyKey: s.scopeId + ':' + now + ':' + refs[i].id });
       } else {
         counts.imported++;
@@ -173,4 +176,26 @@ export async function setDullyFeedbackPaused(input: Scope & { paused: boolean })
     audit(s.db, tx, s.access.uid, s.scopeId, paused ? 'paused' : 'resumed');
   });
   return { ok: true as const };
+}
+
+// Customer/retention import (#834). Platform-wide access only: it links people across the brand's customer base.
+export async function importDullyCustomers(input: Scope & { rows: unknown[] }) {
+  const s = await scope(input, true);
+  if (s.access.brandIds !== null) throw new Error('Kun superadmin kan importere Dully-kunder.');
+  const config = (await s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId).get()).data();
+  if (!config) throw new Error('Gem Dully-koblingen først.');
+  const result = await importDullyCustomerPurchases({ brandId: s.brandId, locationId: s.locationId, accountId: config.accountId, restaurantId: config.restaurantId, rows: input.rows });
+  // Counts only: the audit never holds contact data.
+  await s.db.collection('dullyFeedbackAudit').doc().create({ actorId: s.access.uid, scopeId: s.scopeId, action: 'customers_imported', ...result, createdAt: Date.now() });
+  return result;
+}
+
+// Held Dully purchases (#834). Holds no contact data: staff look the order up in Dully by its ID.
+export async function listDullyCustomerConflicts(input: Scope) {
+  const s = await scope(input);
+  if (s.access.brandIds !== null) throw new Error('Kun superadmin kan se Dully-kundekonflikter.');
+  const docs = await s.db.collection('dullyCustomerImportConflicts').where('brandId', '==', s.brandId).get();
+  return docs.docs.map(d => d.data()).filter(c => c.locationId === s.locationId && c.status === 'open')
+    .map(c => ({ externalOrderId: String(c.externalOrderId || ''), code: String(c.code || ''), updatedAt: Number(c.updatedAt) || 0 }))
+    .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 200);
 }

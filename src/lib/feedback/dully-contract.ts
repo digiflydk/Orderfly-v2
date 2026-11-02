@@ -12,8 +12,16 @@ export const dullyImportRowSchema = z.object({
   experienceType: z.enum(['pickup', 'delivery']), orderedAt: z.string().datetime({ offset: true }),
   completedAt: z.string().datetime({ offset: true }).nullable(),
   status: z.enum(['completed', 'pending', 'cancelled']), paymentStatus: z.enum(['paid', 'unpaid', 'refunded']),
+  // Optional follow-up details shown only to feedback admins; never part of the order identity.
+  customerName: z.string().trim().min(1).max(160).optional(), customerPhone: z.string().trim().min(4).max(40).optional(),
+  orderTotal: z.number().finite().min(0).max(1000000).optional(),
+  orderLines: z.array(z.object({ name: z.string().trim().min(1).max(160), quantity: z.number().int().min(1).max(999), total: z.number().finite().min(0).max(1000000) }).strict()).max(100).optional(),
 }).strict().refine(r => r.status !== 'completed' || (r.completedAt !== null && Date.parse(r.completedAt) >= Date.parse(r.orderedAt)), 'Gennemførte ordrer skal have et gyldigt afslutningstidspunkt.');
 export type DullyImportRow = z.infer<typeof dullyImportRowSchema>;
+export const DULLY_DETAIL_FIELDS = ['customerName', 'customerPhone', 'orderTotal', 'orderLines'] as const;
+export function dullyDetails(row: DullyImportRow) {
+  return Object.fromEntries(DULLY_DETAIL_FIELDS.filter(key => row[key] !== undefined).map(key => [key, row[key]]));
+}
 export const dullyConfigureSchema = dullyScopeSchema.extend({ accountId: externalId, restaurantId: externalId }).strict();
 export function dullyHash(value: unknown) { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
 export function dullyScopeId(brandId: string, locationId: string) { return dullyHash(['dully', brandId, locationId]); }
