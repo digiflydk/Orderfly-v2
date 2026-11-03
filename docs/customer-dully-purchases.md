@@ -1,6 +1,6 @@
-# Dully customers and purchases (#834, PR A)
+# Dully customers and purchases (#834)
 
-Dully orders from esmeralda.dully.io are a separate customer and retention source. The PM approved the processing basis (customer consent) on 2026-11-01. Retention is three years.
+Dully orders from esmeralda.dully.io are a separate customer and retention source. The PM approved the processing basis (customer consent) on 2026-11-01. The agreed retention period is three years; it is not enforced automatically (see Deletion).
 
 ## What is stored
 
@@ -19,7 +19,7 @@ Dully purchases are never written to `orders`. They do not change `totalOrders`,
 
 ## Deletion
 
-`retainUntil` is the order time plus three years. Deletion runs in PR E (a daily job), which also removes Dully-only profiles with no purchase inside the retention period.
+`retainUntil` is the order time plus three years. The PM decided on 2026-11-02 not to build automatic deletion. Nothing enforces `retainUntil` today; it is kept so a later deletion job can use it. Access and deletion requests for individual customers follow the existing customer deletion.
 
 ## Import (PR B)
 
@@ -44,7 +44,3 @@ The page shows:
 - Monthly cohorts by first-purchase month (Copenhagen time), with the share who bought again 1–6 calendar months later. Future months are left empty.
 
 The maths is pure and unit-tested (`src/lib/customers/retention.ts`). The report reads every purchase in the brand per request, which is fine at the current volume (~1,000 purchases). A pre-aggregated projection is needed before it grows by orders of magnitude.
-
-## Next PRs
-
-- E: three-year deletion.

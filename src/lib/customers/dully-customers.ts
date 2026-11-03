@@ -104,7 +104,7 @@ export async function importDullyCustomerPurchases(input: DullyCustomerImportInp
           const { email: _e, phone: _p, marketingSubscriber: _m, ...fields } = row;
           tx.create(purchaseRef, { ...fields, id: purchaseId, source: 'dully', brandId: s.brandId, locationId: s.locationId, accountId: s.accountId,
             customerId: customerRef.id, createdAt: now, updatedAt: now, lastVerifiedAt: now,
-            // Deletion job (PR E) removes purchases three years after the order.
+            // Retention marker (order + 3 years). No job enforces it; automatic deletion was not built (PM, 2026-11-02).
             retainUntil: Date.parse(row.orderedAt) + DULLY_PURCHASE_RETENTION_MS });
         }
         if (created) {
