@@ -85,26 +85,30 @@ test('no win never displays a matching prize when winner cap is exhausted',()=>{
   const [three,one]=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
   assert.equal(new Set(three).size,3);assert.deepEqual(one,['Intet']);
 });
-test('tickets never use decorative heart or star symbols',()=>{
+test('boards use prize names or plain no-win text, never decorative heart or star symbols',()=>{
   const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
   const script=`import(${JSON.stringify(board)}).then(m=>process.stdout.write(JSON.stringify(m.drawWinBoard('Pommes frites',9,.33,['Pizza','Tiramisu','Pommes frites'].map(name=>({name}))))))`;
   const symbols=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
-  assert.ok(symbols.every(s=>['Pizza','Tiramisu','Pommes frites'].includes(s)));
+  const allowed=new Set(['Pizza','Tiramisu','Pommes frites','Prøv igen','Ingen gevinst','Næste gang','Tæt på','Ærgerligt']);
+  assert.ok(symbols.every(s=>allowed.has(s)));
+  assert.ok(symbols.every(s=>!/[♥♡★☆♦◆]/.test(s)));
 });
 
-test('five prize products fill three tickets while exactly one ticket wins',()=>{
+test('one ticket of 3, 6 or 9 fields wins with exactly three matching symbols and never shows a second match',()=>{
   const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
-  const script=`import(${JSON.stringify(board)}).then(m=>{const prizes=['Pizza','Tiramisu','Pommes frites','Burger','Pasta'].map(name=>({name}));process.stdout.write(JSON.stringify({won:m.drawWinBoard('Pizza',9,.42,prizes),lost:m.drawNoWinBoard(9,'Intet',prizes)}))})`;
-  const {won,lost}=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
-  assert.equal(won.length,9);
-  assert.equal(won.filter(symbol=>symbol==='Pizza').length,3);
-  assert.equal(lost.length,9);
-  const products=new Set(['Pizza','Tiramisu','Pommes frites','Burger','Pasta']);
-  assert.ok(won.every(symbol=>products.has(symbol)));
-  assert.ok(lost.every(symbol=>products.has(symbol)));
-  const winningTickets=[0,3,6].filter(start=>new Set(won.slice(start,start+3)).size===1);
-  assert.equal(winningTickets.length,1);
-  for(const start of [0,3,6])assert.equal(new Set(lost.slice(start,start+3)).size,3);
+  const script=`import(${JSON.stringify(board)}).then(m=>{const sets=[['Pizza'],['Pizza','Tiramisu','Pommes frites'],['Pizza','Tiramisu','Pommes frites','Burger','Pasta']].map(names=>names.map(name=>({name})));const out=[];for(const prizes of sets)for(const count of [3,6,9])for(const roll of [0,.13,.42,.77,.9999])out.push({count,won:m.drawWinBoard(prizes[0].name,count,roll,prizes),lost:m.drawNoWinBoard(count,'Intet',prizes,'',roll),winner:prizes[0].name});process.stdout.write(JSON.stringify(out))})`;
+  const rows=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  const counts=b=>b.reduce((o,s)=>(o[s]=(o[s]||0)+1,o),{});
+  for(const {count,won,lost,winner} of rows){
+    assert.equal(won.length,count);assert.equal(lost.length,count);
+    const w=counts(won),l=counts(lost);
+    assert.equal(w[winner],3);
+    assert.ok(Object.entries(w).every(([symbol,n])=>symbol===winner||n<=2));
+    assert.ok(Object.values(l).every(n=>n<=2));
+    if(count===3)assert.equal(new Set(lost).size,3);
+  }
+  const placements=new Set(rows.filter(r=>r.count===9).map(r=>r.won.map((s,i)=>s===r.winner?i:'').join('')));
+  assert.ok(placements.size>1,'winning symbols are not always in the same positions');
 });
 test('admin preview test plays are allowed on draft, test, scheduled, live and paused campaigns but not ended ones',()=>{
   const schedule=pathToFileURL(path.resolve('src/lib/games/schedule.ts')).href;
