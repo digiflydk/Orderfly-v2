@@ -32,9 +32,11 @@ export type BonusSummary = { enabled: boolean; activeNow: boolean; stamps: numbe
 export type ClubSuppressedReason = 'program_missing' | 'program_inactive' | 'texts_not_ready' | 'brand_unavailable';
 export type ClubAdminSummary = {
   brandId: string; brandName: string;
+  // Customer-visible facts, shown for every brand the administrator may open.
+  checkoutMode: CheckoutSignupMode; campaignSaved: boolean; live: boolean; createdAt: number | null; programName: string;
   permissions: Record<ClubAdminPermission, boolean>;
   // null means the administrator lacks the permission for that card.
-  campaign: { checkoutMode: CheckoutSignupMode; clubSuppressed: ClubSuppressedReason | null; saved: boolean; invalid: boolean;
+  campaign: { version: number; checkoutMode: CheckoutSignupMode; clubSuppressed: ClubSuppressedReason | null; saved: boolean; invalid: boolean;
     welcome: BonusSummary; profile: BonusSummary & { requiredFields: CampaignSettings['profile']['requiredFields'] } } | null;
   discounts: SignupDiscountSummary[] | null;
   texts: { programExists: boolean; programActive: boolean; ready: boolean; missingPlaceholders: string[]; invalidFields: string[] } | null;
@@ -49,7 +51,8 @@ export function omnisendStatus(brandId: string): OmnisendStatus {
   return 'not_configured';
 }
 
-async function grants(db: Firestore, actor: AdminActor) {
+export type ClubAdminGrants = Awaited<ReturnType<typeof loadClubAdminGrants>>;
+export async function loadClubAdminGrants(db: Firestore, actor: AdminActor) {
   const [settings, discountsView, discountsEdit, discountsCreate] = await Promise.all([
     adminBrands(db, actor, CLUB_ADMIN_PERMISSIONS.settings),
     adminBrands(db, actor, CLUB_ADMIN_PERMISSIONS.discountsView),
@@ -61,7 +64,11 @@ async function grants(db: Firestore, actor: AdminActor) {
 
 // Brands where the administrator holds the stamp-card settings or a discount permission the page uses.
 export async function clubAdminBrands(db: Firestore, actor: AdminActor) {
-  const all = await grants(db, actor);
+  const all = await loadClubAdminGrants(db, actor);
+  return grantedBrands(all);
+}
+
+export function grantedBrands(all: ClubAdminGrants) {
   const byId = new Map([...all.settings, ...all.discountsView, ...all.discountsEdit].map(brand => [brand.brandId, brand]));
   return [...byId.values()].sort((a, b) => a.brandName.localeCompare(b.brandName, 'da'));
 }
@@ -95,8 +102,29 @@ function inactiveReason(applicationType: SignupDiscountSummary['applicationType'
 // Read-only overview. Each card is loaded only when the administrator holds its
 // permission for the whole brand; the brand itself must be covered by at least one.
 export async function readClubAdminSummary(db: Firestore, actor: AdminActor, brandId: string, options: { superuser: boolean; now: number }): Promise<ClubAdminSummary> {
+  return summaryForBrand(db, await loadClubAdminGrants(db, actor), brandId, options);
+}
+
+// A saved campaign with no checkout offer and both bonuses off is empty: that is
+// what deleting writes. The current campaign was created by the first saved,
+// non-empty version after the latest empty one, so a deleted campaign that is set
+// up again starts over, and a delete itself is never shown as a creation.
+export function campaignStartedAt(rows: Array<Record<string, unknown>>): number | null {
+  const sorted = rows.filter(row => Number.isSafeInteger(row.version)).sort((a, b) => Number(a.version) - Number(b.version));
+  const empty = (row: Record<string, unknown>) => row.checkoutMode === 'none' && row.welcomeEnabled === false && row.profileEnabled === false;
+  let start: Record<string, unknown> | null = null;
+  for (const row of sorted) start = empty(row) ? null : start ?? row;
+  return typeof start?.at === 'number' && Number.isFinite(start.at) ? start.at : null;
+}
+
+async function campaignCreatedAt(db: Firestore, brandId: string): Promise<number | null> {
+  // Config-only rows; a brand has few saves. Sorted here to avoid a composite index.
+  const rows = await db.collection('loyaltyCampaignAudit').where('brandId', '==', brandId).get();
+  return campaignStartedAt(rows.docs.map(doc => doc.data()));
+}
+
+export async function summaryForBrand(db: Firestore, all: ClubAdminGrants, brandId: string, options: { superuser: boolean; now: number }): Promise<ClubAdminSummary> {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(brandId)) throw new LoyaltyError('invalid_request', 400);
-  const all = await grants(db, actor);
   const has = (list: typeof all.settings) => list.find(brand => brand.brandId === brandId);
   const brand = has(all.settings) ?? has(all.discountsEdit) ?? has(all.discountsView);
   if (!brand) throw new LoyaltyError('forbidden', 403);
@@ -106,11 +134,12 @@ export async function readClubAdminSummary(db: Firestore, actor: AdminActor, bra
   const showCampaign = permissions.settings && permissions.discountsEdit;
 
   // The checkout mode is what customers see; it is not secret configuration.
-  const [savedCampaign, brandSnap, programSnap, ctx] = await Promise.all([
+  const [savedCampaign, brandSnap, programSnap, ctx, createdAt] = await Promise.all([
     db.collection(CAMPAIGN_COLLECTION).doc(brandId).get(),
     db.collection('brands').doc(brandId).get(),
     db.collection(COLLECTIONS.programs).doc(brandId).get(),
     loadTextContext(db, brandId),
+    campaignCreatedAt(db, brandId),
   ]);
   const mode = checkoutSignupMode(savedCampaign.exists ? savedCampaign.data() : undefined, brandId);
   const program = readProgram(brandId, programSnap.data()), rendered = renderForProgram(program.settings, program.texts, ctx);
@@ -123,7 +152,7 @@ export async function readClubAdminSummary(db: Firestore, actor: AdminActor, bra
 
   const campaign = showCampaign ? (() => {
     const parsed = readCampaign(brandId, savedCampaign.data()), s = parsed.settings;
-    return { checkoutMode: mode, clubSuppressed: mode === 'club' ? clubSuppressed : null, saved: savedCampaign.exists,
+    return { version: parsed.version, checkoutMode: mode, clubSuppressed: mode === 'club' ? clubSuppressed : null, saved: savedCampaign.exists,
       invalid: savedCampaign.exists && parsed.version === 0, welcome: bonus(s.welcome, programLive, now),
       profile: { ...bonus(s.profile, programLive, now), requiredFields: s.profile.requiredFields } };
   })() : null;
@@ -143,6 +172,16 @@ export async function readClubAdminSummary(db: Firestore, actor: AdminActor, bra
   const texts = permissions.settings ? { programExists: programSnap.exists, programActive: program.settings.active, ready: textsReady,
     missingPlaceholders: rendered.missing.map(row => row.placeholder), invalidFields: rendered.invalid } : null;
 
-  return { brandId, brandName: brand.brandName, permissions, campaign, discounts, texts,
+  // Live means customers see the signup in checkout. A newsletter is shown even while
+  // the newsletter service is pending; checkout then explains the delay itself.
+  const live = mode === 'newsletter' || (mode === 'club' && clubSuppressed === null);
+  return { brandId, brandName: brand.brandName, checkoutMode: mode, campaignSaved: savedCampaign.exists, live, createdAt,
+    programName: program.settings.name, permissions, campaign, discounts, texts,
     omnisend: options.superuser ? omnisendStatus(brandId) : null };
+}
+
+// One summary per brand the administrator may open, for the campaign overview.
+export async function listClubAdminSummaries(db: Firestore, actor: AdminActor, options: { superuser: boolean; now: number }) {
+  const all = await loadClubAdminGrants(db, actor);
+  return Promise.all(grantedBrands(all).map(brand => summaryForBrand(db, all, brand.brandId, options)));
 }

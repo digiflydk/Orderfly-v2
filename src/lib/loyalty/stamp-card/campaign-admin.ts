@@ -6,7 +6,7 @@ import { principalKey } from '@/lib/access/authority';
 import { adminBrands, ADMIN_PERMISSION, type AdminActor } from './admin';
 import { LoyaltyError } from './counter';
 import { CAMPAIGN_COLLECTION, stageCampaignSettings } from './campaigns';
-import { campaignSettingsSchema, readCampaign } from './campaign-rules';
+import { campaignSettingsSchema, defaultCampaignSettings, readCampaign } from './campaign-rules';
 
 const DISCOUNT_EDIT = 'orderfly.discounts:edit';
 const brandIdSchema = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -50,4 +50,14 @@ export async function saveClubCampaign(db: Firestore, actor: AdminActor, input: 
       checkoutMode: settings.checkoutMode, welcomeEnabled: settings.welcome.enabled, profileEnabled: settings.profile.enabled });
     return staged.campaign;
   });
+}
+
+// "Delete" a brand's campaign: save it as no checkout signup with bonus stamps
+// back at their defaults, so it starts over. The document is kept on purpose,
+// because a missing document means the legacy newsletter checkout. Members,
+// stamp cards, consents and discounts already granted are not touched.
+export async function deleteClubCampaign(db: Firestore, actor: AdminActor, input: unknown, now: number) {
+  const parsed = z.object({ brandId: brandIdSchema, version: z.number().int().min(0) }).strict().safeParse(input);
+  if (!parsed.success) throw new LoyaltyError('invalid_request', 400);
+  return saveClubCampaign(db, actor, { ...parsed.data, settings: defaultCampaignSettings() }, now);
 }

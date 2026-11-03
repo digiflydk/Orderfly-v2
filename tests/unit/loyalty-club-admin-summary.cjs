@@ -113,3 +113,37 @@ test('a saved Club mode is flagged when checkout suppresses it, and stamps are n
  assert.equal(result.texts.ready,true);assert.equal(result.campaign.clubSuppressed,null);assert.equal(result.campaign.welcome.activeNow,true);
  saveMode('newsletter');assert.equal((await read('all')).campaign.clubSuppressed,null);
 });
+test('creation date comes from the first saved campaign version in the audit, and live follows what checkout shows',async()=>{
+ setup();
+ let result=await read('all');assert.equal(result.createdAt,null);assert.equal(result.campaignSaved,false);
+ // No saved campaign: checkout keeps the legacy newsletter, which customers see.
+ assert.equal(result.checkoutMode,'newsletter');assert.equal(result.live,true);assert.equal(result.campaign.version,0);
+ db.rows.set('loyaltyCampaignAudit/a2',{brandId:'brand',version:2,at:NOW});
+ db.rows.set('loyaltyCampaignAudit/a1',{brandId:'brand',version:1,at:NOW-86400000});
+ db.rows.set('loyaltyCampaignAudit/foreign',{brandId:'otherbrand',version:1,at:NOW-1});
+ saveMode('none');result=await read('all');
+ assert.equal(result.createdAt,NOW-86400000);assert.equal(result.live,false);assert.equal(result.campaign.version,2);
+ saveMode('club');assert.equal((await read('all')).live,false,'club without an active programme is not shown');
+ db.rows.set('brands/brand',{name:'Esmeralda',slug:'esmeralda'});db.rows.set('loyaltyPrograms/brand',programme);
+ result=await read('all');assert.equal(result.live,true);assert.equal(result.programName,programme.settings.name);
+ // Customer-visible facts are shown to discount viewers too; campaign settings are not.
+ const viewer=await read('viewer');assert.equal(viewer.live,true);assert.equal(viewer.checkoutMode,'club');assert.equal(viewer.campaign,null);
+});
+test('the overview lists one summary per granted brand only',async()=>{
+ setup();
+ assert.deepEqual((await summary.listClubAdminSummaries(db,who('all'),{superuser:false,now:NOW})).map(row=>row.brandId),['brand']);
+ assert.deepEqual(await summary.listClubAdminSummaries(db,who('overview'),{superuser:false,now:NOW}),[]);
+ assert.deepEqual((await summary.listClubAdminSummaries(db,who('foreign'),{superuser:false,now:NOW})).map(row=>row.brandId),['otherbrand']);
+});
+test('a deleted campaign is not shown as created, and setting it up again starts a new creation date',()=>{
+ const row=(version,at,mode,welcome=false,profile=false)=>({brandId:'brand',version,at,checkoutMode:mode,welcomeEnabled:welcome,profileEnabled:profile});
+ assert.equal(summary.campaignStartedAt([]),null);
+ assert.equal(summary.campaignStartedAt([row(2,20,'club'),row(1,10,'newsletter')]),10,'first non-empty version, regardless of read order');
+ // Deleting a legacy newsletter brand writes an empty first version: no creation date.
+ assert.equal(summary.campaignStartedAt([row(1,10,'none')]),null);
+ assert.equal(summary.campaignStartedAt([row(1,10,'club'),row(2,20,'none')]),null,'deleted');
+ assert.equal(summary.campaignStartedAt([row(1,10,'club'),row(2,20,'none'),row(3,30,'newsletter'),row(4,40,'club')]),30,'starts over after delete');
+ // Stamps without a checkout offer are still a campaign.
+ assert.equal(summary.campaignStartedAt([row(1,10,'none',true)]),10);
+ assert.equal(summary.campaignStartedAt([{brandId:'brand',version:'x',at:5},row(1,10,'club')]),10,'malformed rows are ignored');
+});
