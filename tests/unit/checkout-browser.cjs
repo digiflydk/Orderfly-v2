@@ -508,10 +508,11 @@ test('personal discount card has same-origin login entry and clears benefit when
  assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
 });
 test('a signed-in Club browser is told it is signed in instead of being asked to log in',async t=>{
- const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
- const page=await context.newPage();await page.addInitScript(()=>{window.fixtureClubSignedIn=true;});
- await page.goto(origin+'/?case=ui-card-contact');await page.locator('[data-discount-card-offer]').waitFor();
+ const page=await setup(t,'ui-card-contact');await page.locator('[data-discount-card-offer]').waitFor();
  await page.getByPlaceholder('john@example.com').fill('other@example.test');
+ await page.getByRole('link',{name:'Log ind i Club',exact:true}).waitFor();
+ // The session check reruns when the tab regains focus, e.g. after logging in to Club in another tab.
+ await page.evaluate(()=>{window.fixtureClubSignedIn=true;window.dispatchEvent(new Event('focus'));});
  await page.getByText(/Du er logget ind i/).waitFor();
  assert.equal(await page.getByRole('link',{name:'Log ind i Club',exact:true}).count(),0);
 });
