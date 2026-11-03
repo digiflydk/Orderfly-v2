@@ -17,16 +17,18 @@ export function storefrontInstallAssets(slug: string) {
   return { manifest: `${base}/manifest.webmanifest`, icon: (size: number) => `${base}/icon/${size}` };
 }
 
-export function storefrontInstallMetadata(brand: Pick<StorefrontHomeScreen, 'slug' | 'name'>): Metadata {
+export function storefrontInstallMetadata(brand: Pick<StorefrontHomeScreen, 'slug' | 'name'> & { faviconUrl?: string; browserTitle?: string }): Metadata {
   const assets = storefrontInstallAssets(brand.slug);
+  const favicon = brand.faviconUrl?.trim();
   return {
-    title: { absolute: brand.name },
+    title: { absolute: brand.browserTitle?.trim() || brand.name },
     applicationName: brand.name,
     description: `Bestil mad hos ${brand.name}.`,
     manifest: assets.manifest,
     icons: {
-      icon: [{ url: assets.icon(192), sizes: '192x192', type: 'image/png' }],
-      shortcut: assets.icon(192),
+      // A brand favicon (superadmin) takes the browser tab; home-screen icons stay generated from the logo.
+      icon: favicon ? [{ url: favicon }] : [{ url: assets.icon(192), sizes: '192x192', type: 'image/png' }],
+      shortcut: favicon || assets.icon(192),
       apple: [{ url: assets.icon(180), sizes: '180x180', type: 'image/png' }],
     },
     appleWebApp: { capable: true, title: brand.name, statusBarStyle: 'default' },

@@ -91,7 +91,7 @@ before(async () => {
     });
   `);
   const aliases = {
-    '@/context/cart-context': cart, '@/app/checkout/actions': checkoutActions, '@/app/merchant/orders/actions': orderActions,
+    '@/context/cart-context': cart, '@/app/checkout/actions': checkoutActions, '@/app/club-session-actions': fixture('club-session', 'export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'), '@/app/merchant/orders/actions': orderActions,
     '@/app/superadmin/sales/orders/actions': fixture('statuses', `import {call} from ${JSON.stringify(transport)};export const updateOrderStatus=(...args)=>call('status',args);`),
     [path.join(root, 'src/app/merchant/payments/actions')]: fixture('payment-settings-actions', `import {call} from ${JSON.stringify(transport)};export const savePaymentMethods=(...args)=>call('settings',args);`),
     '@/app/superadmin/brands/actions': fixture('brands', 'export const getBrandBySlug=async()=>null;'),

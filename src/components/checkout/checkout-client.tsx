@@ -36,6 +36,7 @@ import { useForm, FormProvider, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useClubSignedIn } from '@/hooks/use-club-session';
 import { getDiscountCardCheckoutEnabledAction, getDiscountCardCheckoutOfferAction, getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer, CheckoutSignupConfig } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
@@ -353,6 +354,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const cardHost = React.useSyncExternalStore(() => () => {}, () => window.location.hostname, () => null);
   const cardNeedsCanonicalHost = !!cardHost && !['localhost','127.0.0.1'].includes(cardHost) && brandSlugFromHost(cardHost) !== params.brandSlug;
   const canonicalCardOrderUrl = `${brandSubdomainUrl(params.brandSlug as string)}${brandStorefrontPath(params.brandSlug as string,true,params.locationSlug as string)}`;
+  const clubSignedIn = useClubSignedIn(brand?.slug);
   const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
@@ -595,6 +597,20 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   // The mobile CTA bar is fixed. Reserve only the part of it that the content after the form
   // (container padding, footer) does not already cover, so "I alt" sits just above the CTA.
   const checkoutFormRef = useRef<HTMLFormElement>(null);
+  // Desktop: the sticky summary starts below the page heading, so a full-viewport height would push
+  // the pay button below the fold. Fit the column to the space actually left in the viewport.
+  const desktopSummaryRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const column = desktopSummaryRef.current;
+    if (!column) return;
+    let frame = 0;
+    const fit = () => { frame = 0; const top = Math.max(24, column.getBoundingClientRect().top); column.style.maxHeight = `${Math.max(320, window.innerHeight - top - 24)}px`; };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(fit); };
+    fit();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule); column.style.removeProperty('max-height'); };
+  }, [cartItems.length === 0]);
   const checkoutBarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const form = checkoutFormRef.current, bar = checkoutBarRef.current;
@@ -1133,7 +1149,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     <a className="underline" href={canonicalCardOrderUrl} target="_blank" rel="noopener noreferrer">Åbn brandets bestillingsside</a>
                   </p>}
                   {discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
-                    Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.
+                    {clubSignedIn
+                      ? <>Du er logget ind i {signupConfig.clubProgram?.name || `${brand?.name ?? ''} Club`.trim()}. Har du et personligt rabatkort, så brug kortets e-mail i kassen.</>
+                      : <>Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.</>}
                   </p>}
                   {discountCardOffer && <div role="status" className="rounded-xl border p-4" data-discount-card-offer>
                     <p className="font-semibold">{discountCardOffer.name} · {discountCardOffer.percentage}% rabat</p>
@@ -1230,19 +1248,20 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
             {/* Right column (desktop) */}
             <div className="hidden lg:block">
-              <div className="flex flex-col sticky top-6 h-[calc(100vh-3rem)]">
-                <Card className="flex flex-col flex-1">
+              {/* Terms and the pay button stay in view; only the order lines scroll (see desktopSummaryRef). */}
+              <div ref={desktopSummaryRef} data-checkout-summary-column className="flex flex-col sticky top-6 max-h-[calc(100vh-3rem)]">
+                <Card className="flex min-h-0 flex-col">
                   <CardHeader>
                     <CardTitle>Ordreoversigt</CardTitle>
                     <CardDescription>Kontrollér varerne i din kurv.</CardDescription>
                   </CardHeader>
-                  <CardContent className="flex-1 overflow-y-auto pr-4">
+                  <CardContent className="min-h-0 flex-1 overflow-y-auto pr-4">
                     <fieldset className="min-w-0" disabled={isFormLocked}>
                       <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={displayManagedPrice} />
                     </fieldset>
                   </CardContent>
                 </Card>
-                <div className="p-4 bg-background border border-t-0 rounded-b-lg">
+                <div className="shrink-0 p-4 bg-background border border-t-0 rounded-b-lg">
                   {acceptTermsAndCompleteOrder()}
                 </div>
               </div>

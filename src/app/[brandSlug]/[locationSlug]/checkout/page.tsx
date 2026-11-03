@@ -25,7 +25,7 @@ export default async function CheckoutPage({
   const managedDeliveryEnabled = await managedDeliveryRequired({ brandId: brand.id, locationId: location.id });
 
   return (
-    <div className="bg-[var(--storefront-menu-background,#FFF8F0)] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
+    <div data-checkout-page className="bg-[var(--storefront-menu-background,#FFF8F0)] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
       <CheckoutClient brand={brand} location={location} managedDeliveryEnabled={managedDeliveryEnabled} />
     </div>
   );

@@ -63,6 +63,8 @@ const brandSchema = z.object({
   
   logoUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   supportEmail: z.string().email({ message: "Please enter a valid email." }).optional().or(z.literal('')),
+  faviconUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  browserTitle: z.string().trim().max(70, { message: 'Højst 70 tegn.' }).optional().or(z.literal('')),
   website: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   termsUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   privacyUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
@@ -109,6 +111,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
         foodCategories: brand.foodCategories || [],
         logoUrl: brand.logoUrl || '',
         supportEmail: brand.supportEmail || '',
+        faviconUrl: brand.faviconUrl || '',
+        browserTitle: brand.browserTitle || '',
         website: brand.website || '',
         termsUrl: brand.termsUrl || '',
         privacyUrl: brand.privacyUrl || '',
@@ -133,6 +137,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
       locationsCount: 1,
       logoUrl: '',
       supportEmail: '',
+      faviconUrl: '',
+      browserTitle: '',
       website: '',
       termsUrl: '',
       privacyUrl: '',
@@ -156,6 +162,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
   
   const brandName = form.watch('name');
   const logoUrl = form.watch('logoUrl');
+  const faviconUrl = form.watch('faviconUrl');
   const currencyList = [...new Set(countries.map(c => c.currency))].sort();
 
   useEffect(() => {
@@ -175,6 +182,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
             foodCategories: brand.foodCategories || [],
             logoUrl: brand.logoUrl || '',
             supportEmail: brand.supportEmail || '',
+            faviconUrl: brand.faviconUrl || '',
+            browserTitle: brand.browserTitle || '',
             website: brand.website || '',
             termsUrl: brand.termsUrl || '',
             privacyUrl: brand.privacyUrl || '',
@@ -522,6 +531,23 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
                                             <FormMessage />
                                         </FormItem>
                                         )} />
+                                    <FormField control={form.control} name="faviconUrl" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Favicon URL</FormLabel>
+                                            <FormControl><Input placeholder="https://example.com/favicon.png" {...field} /></FormControl>
+                                            <FormDescription>Ikonet i browserfanen på bestillingssiden. Brug et kvadratisk PNG-, ICO- eller SVG-billede (fx 64×64). Tomt felt bruger et ikon lavet ud fra logoet.</FormDescription>
+                                            {faviconUrl && <img src={faviconUrl} alt="Favicon preview" className="mt-2 h-8 w-8 rounded border object-contain" />}
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="browserTitle" render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Titel i browserfanen</FormLabel>
+                                            <FormControl><Input placeholder="Esmeralda Pizza – Bestil online" maxLength={70} {...field} /></FormControl>
+                                            <FormDescription>Teksten i browserfanen og i søgeresultater. Højst 70 tegn. Tomt felt bruger brandnavnet.</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />
                                     <FormField control={form.control} name="supportEmail" render={({ field }) => (
                                         <FormItem><FormLabel>Support Email</FormLabel><FormControl><Input type="email" placeholder="support@brand.com" {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />

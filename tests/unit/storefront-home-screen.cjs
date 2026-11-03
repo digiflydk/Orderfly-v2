@@ -20,6 +20,16 @@ test('real brand layout supplies brand title, Apple title and only brand icon me
   assert.ok(!JSON.stringify(result.icons).includes('/icon.png'));
 });
 
+test('brand favicon and browser-tab title override the tab only; Apple and install identity keep the brand',async()=>{
+  const f=fixture({currentBrand:{...brand,faviconUrl:'https://cdn.example.test/favicon.png',browserTitle:'  Esmeralda Pizza – Bestil online  '}});
+  const result=await resolvedMetadata(await f.metadata(context()));
+  assert.equal(result.title.absolute,'Esmeralda Pizza – Bestil online');
+  assert.equal(result.appleWebApp.title,brand.name);
+  assert.equal(result.applicationName,brand.name);
+  assert.deepEqual(result.icons.icon.map(icon=>icon.url),['https://cdn.example.test/favicon.png']);
+  for(const icon of result.icons.apple) assert.match(icon.url,/^\/api\/storefront\/brands\/esmeralda\/icon\//);
+});
+
 test('static Esmeralda entrypoint exports brand metadata with its fixed slug and no route params',async()=>{
   const f=fixture();
   const result=await resolvedMetadata(await f.esmeraldaMetadata?.());

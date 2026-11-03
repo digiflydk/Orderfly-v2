@@ -62,6 +62,8 @@ const brandSchema = z.object({
   // New optional fields
   logoUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
   supportEmail: z.string().email().optional().or(z.literal('')),
+  faviconUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  browserTitle: z.string().trim().max(70, { message: 'Højst 70 tegn.' }).optional().or(z.literal('')),
   website: z.string().url().optional().or(z.literal('')),
   termsUrl: z.string().url().optional().or(z.literal('')),
   privacyUrl: z.string().url().optional().or(z.literal('')),

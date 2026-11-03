@@ -112,6 +112,7 @@ before(async()=>{
   '@':path.join(root,'src'),
   '@/context/cart-context':cart,
   '@/app/checkout/actions':actions,
+  '@/app/club-session-actions':fixture('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/superadmin/upsells/actions':upsells,
   '@/app/superadmin/brands/actions':fixture('brands','export const getBrandBySlug=async()=>null;'),
   '@/app/superadmin/settings/actions':fixture('settings','export const getActiveStripeKey=async()=>"pk_test_fixture";'),
@@ -506,6 +507,15 @@ test('personal discount card has same-origin login entry and clears benefit when
  assert.equal(await page.locator('[data-discount-card-offer]').count(),0);
  assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
 });
+test('a signed-in Club browser is told it is signed in instead of being asked to log in',async t=>{
+ const page=await setup(t,'ui-card-contact');await page.locator('[data-discount-card-offer]').waitFor();
+ await page.getByPlaceholder('john@example.com').fill('other@example.test');
+ await page.getByRole('link',{name:'Log ind i Club',exact:true}).waitFor();
+ // The session check reruns when the tab regains focus, e.g. after logging in to Club in another tab.
+ await page.evaluate(()=>{window.fixtureClubSignedIn=true;window.dispatchEvent(new Event('focus'));});
+ await page.getByText(/Du er logget ind i/).waitFor();
+ assert.equal(await page.getByRole('link',{name:'Log ind i Club',exact:true}).count(),0);
+});
 for(const host of ['orderfly.dk','brand.orderfly.dk'])test('personal card login respects browser origin '+host,async t=>{
  const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
  await page.route('http://'+host+'/**',async route=>{
@@ -598,6 +608,19 @@ test('V2 mobile checkout keeps the total just above the fixed CTA',async t=>{
  const lastRow=page.getByText(/Moms inkluderet/).filter({visible:true}).last();await expect(lastRow).toBeVisible();
  const rowBox=await lastRow.boundingBox(),barBox=await bar.boundingBox();
  const gap=barBox.y-(rowBox.y+rowBox.height);assert.ok(gap>=0&&gap<=40,`summary sits just above the CTA (gap ${gap}px)`);
+});
+for(const lines of [1,14])test(`V2 desktop keeps terms and the pay button in view; only the order lines scroll (${lines} line${lines>1?'s':''})`,async t=>{
+ const page=await setup(t,'v2-success-desktop');
+ await page.evaluate(n=>window.replaceFixtureItems(Array.from({length:n},(_,i)=>({id:'pizza',cartItemId:'line-'+i,productName:'Pizza '+(i+1),price:79,basePrice:79,itemTotal:79,quantity:1,toppings:[],itemType:'product'}))),lines);
+ const column=page.locator('[data-checkout-summary-column]'),pay=column.getByRole('button',{name:/Gå til betaling/});await expect(pay).toBeVisible();
+ for(const y of [0,400,99999]){
+  await page.evaluate(top=>window.scrollTo(0,top),y);await page.waitForTimeout(120);
+  const box=await pay.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=900,`pay button in view at scroll ${y} (${box.y})`);
+  await expect(column.getByRole('checkbox')).toBeVisible();
+ }
+ const content=column.locator('.overflow-y-auto');
+ const scrollable=await content.evaluate(el=>el.scrollHeight>el.clientHeight+1);
+ assert.equal(scrollable,lines>1,'only a long order list scrolls inside the summary');
 });
 test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
  const page=await setup(t,'v2-invalid-mobile');

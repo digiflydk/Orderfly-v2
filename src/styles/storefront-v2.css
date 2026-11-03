@@ -217,3 +217,15 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
 
 [data-v2-location-banner] { display: none; height: 168px; margin-top: 8px; margin-bottom: 12px; overflow: hidden; border: 1px solid #373b38; border-radius: 8px; background: #000; }
 [data-v2-location-banner] img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Desktop page width (PO 2026-11-03): 1300px frame for the V2 menu, header and checkout. */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .storefront-frame,
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-storefront-header][data-menu-refresh] > .storefront-frame,
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-checkout-page] { max-width: 1300px; }
+/* Desktop: the search field lines up with, and is as wide as, the cart column of the menu grid. */
+@media (min-width: 1024px) {
+  /* Mirrors [data-menu-grid] (commerce-ui.css): minmax(0, 1fr) 340px with a 32px gap. */
+  body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-menu-navigation] { display: grid; grid-template-columns: minmax(0, 1fr) 340px; column-gap: 32px; }
+  [data-v2-menu-navigation] > nav { grid-column: 1; grid-row: 1; }
+  [data-v2-menu-navigation] > div { grid-column: 2; grid-row: 1; width: auto; }
+}

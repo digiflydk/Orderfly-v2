@@ -24,6 +24,7 @@ before(async()=>{
  const aliases={
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'fixture'});`),
   '@/components/feedback/public-reviews-link':file('reviews','export const PublicReviewsLink=()=>null;'),
+  '@/app/club-session-actions':file('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/cart-actions':file('restore',`export const restoreCartAction=async input=>fetch('/restore',{method:'POST',body:JSON.stringify(input)}).then(r=>r.json());`),
   '@/hooks/use-toast':file('toast','export const useToast=()=>({toast:()=>{}});'),
   'next/navigation':file('navigation',`import{useMemo}from'react';export const useSearchParams=()=>useMemo(()=>new URLSearchParams(window.location.search),[]);export const usePathname=()=>window.location.pathname;export const useRouter=()=>({push:href=>location.assign(href)});`),
@@ -164,7 +165,7 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
 });
 
-for(const width of [390,1280])test(`V2 header: one row on desktop, no burger or menu time picker, login and banner (${width}px)`,async t=>{
+for(const width of [390,1280,1600])test(`V2 header: one row on desktop, no burger or menu time picker, login and banner (${width}px)`,async t=>{
  const page=await setup(t,width,'&v2');
  const header=page.locator('[data-v2-menu-header]');
  assert.equal(await page.getByRole('button',{name:'Gå til menukategorier'}).count(),0,'no burger menu');
@@ -180,13 +181,25 @@ for(const width of [390,1280])test(`V2 header: one row on desktop, no burger or 
   assert.ok(Math.abs(mid(pickup)-mid(logo))<12&&Math.abs(mid(info)-mid(logo))<12,'toggle, logo and actions share one row');
   assert.ok(pickup.x<logo.x&&info.x>logo.x+logo.width,'toggle left, actions right');
   assert.equal(await banner.isVisible(),true);assert.equal(Math.round((await banner.boundingBox()).height),168);
+  assert.ok((await banner.boundingBox()).width<=1300.5,'desktop frame is at most 1300px');
   const search=await page.getByRole('searchbox',{name:'Søg i menuen'}).boundingBox(),nav=await page.getByRole('navigation',{name:'Menukategorier'}).boundingBox();
   assert.ok(search.x>nav.x,'search sits right of the categories');
+  const cart=await page.locator('[data-menu-grid] > div').last().boundingBox();
+  assert.ok(Math.abs(search.x-cart.x)<=1&&Math.abs(search.width-cart.width)<=1,`search matches the cart column (${search.x}/${search.width} vs ${cart.x}/${cart.width})`);
  } else {
   assert.ok(pickup.y>logo.y+logo.height-1,'mobile switch sits below the logo row');
   assert.ok(logo.x<=pickup.x+1&&info.x>logo.x+logo.width,'mobile logo sits left, actions right');
   assert.equal(await banner.isVisible(),false);
  }
+});
+
+test('V2 header says Min Club and links to the portal when the browser is signed in',async t=>{
+ const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
+ const page=await context.newPage();await page.addInitScript(()=>{window.fixtureClubSignedIn=true;});
+ await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup&v2');
+ const link=page.locator('[data-v2-menu-header]').getByRole('link',{name:'Min Club'});await link.waitFor();
+ assert.match(await link.getAttribute('href'),/\/club$/);
+ assert.equal(await page.locator('[data-v2-menu-header]').getByRole('link',{name:'Log ind'}).count(),0);
 });
 
 for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom while scrolling and resizing (${width}px)`,async t=>{

@@ -1139,3 +1139,4 @@ export async function waitForOrderBySessionId(sessionId: string, receiptToken?: 
     // Retained compatibility entry, with the same proof and minimal projection.
     return readGuestReceipt({ sessionId, receiptToken });
 }
+
