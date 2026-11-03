@@ -24,8 +24,9 @@ function dateValue(value: string) {
   return Number.isFinite(instant) && dateInput(instant) === value ? instant : Number.NaN;
 }
 
-export function ClubCampaignPanel({ brands }: { brands: Array<{ id: string; name: string }> }) {
-  const [brandId, setBrandId] = useState(''), [campaign, setCampaign] = useState<CampaignDoc | null>(null);
+// With `fixedBrandId` the surrounding page owns the brand choice; the panel loads it and hides its own selector.
+export function ClubCampaignPanel({ brands, fixedBrandId }: { brands: Array<{ id: string; name: string }>; fixedBrandId?: string }) {
+  const [brandId, setBrandId] = useState(fixedBrandId ?? ''), [campaign, setCampaign] = useState<CampaignDoc | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const request = useRef(0);
   async function load(id: string) {
@@ -54,10 +55,10 @@ export function ClubCampaignPanel({ brands }: { brands: Array<{ id: string; name
   }
   return <section aria-labelledby="club-campaign-admin" className="space-y-4 rounded-lg border p-4 sm:p-6">
     <div><h2 id="club-campaign-admin" className="text-xl font-semibold">Club-kampagner</h2>
-      <p className="text-sm text-muted-foreground">Vælg tilbuddet i checkout og belønninger for Club-medlemmer. Rabatprocenten oprettes som en Club-tilmeldingsrabat i rabatlisten.</p></div>
-    <label className="block max-w-md space-y-1"><span>Brand for Club-kampagner</span><select className={inputClass} value={brandId} disabled={busy} onChange={event => setBrandId(event.target.value)}>
+      <p className="text-sm text-muted-foreground">Vælg tilbuddet i checkout og belønninger for Club-medlemmer. Selve tilmeldingsrabatten oprettes under Promotions → Discounts.</p></div>
+    {!fixedBrandId && <label className="block max-w-md space-y-1"><span>Brand for Club-kampagner</span><select className={inputClass} value={brandId} disabled={busy} onChange={event => setBrandId(event.target.value)}>
       <option value="">Vælg brand</option>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
-    </select></label>
+    </select></label>}
     {busy && <p role="status">Henter eller gemmer kampagne…</p>}
     {message && <p role={message.error ? 'alert' : 'status'} className={message.error ? 'text-destructive' : ''}>{message.text}</p>}
     {campaign && <form aria-label="Indstillinger for Club-kampagner" onSubmit={save} className="space-y-5">

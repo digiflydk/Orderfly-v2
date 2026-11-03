@@ -48,6 +48,7 @@ import {
   ScanLine,
   Printer,
   QrCode,
+  Mail,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -144,6 +145,7 @@ export function SuperAdminSidebarClient({
       items: [
         { href: '/superadmin/loyalty', label: 'Oversigt', icon: BarChart3 },
         { href: '/superadmin/loyalty/stamp-card', label: 'Stempelkort', icon: Stamp },
+        { href: '/superadmin/loyalty/club', label: 'Club & nyhedsbrev', icon: Mail },
         { href: '/superadmin/loyalty/discount-card', label: 'Rabatkort', icon: Percent },
         { href: '/superadmin/loyalty/score', label: 'Kundescore', icon: Trophy },
         { href: '/merchant/stamp-card', label: 'Kassevisning', icon: ScanLine },

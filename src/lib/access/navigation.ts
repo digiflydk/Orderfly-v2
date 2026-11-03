@@ -56,6 +56,9 @@ export function canNavigate(href: string, access?: NavigationAccess | null): boo
   if (href === '/superadmin/loyalty/stamp-card' || href.startsWith('/superadmin/loyalty/stamp-card/'))
     return ['settings', 'members', 'log'].some(action => access.permissions.includes(`orderfly.stamp_cards:${action}`));
   if (href === '/superadmin/loyalty') return access.permissions.includes('orderfly.stamp_cards:overview');
+  // Club & newsletter: any one of the page's full-brand permissions; each card rechecks its own.
+  if (href === '/superadmin/loyalty/club' || href.startsWith('/superadmin/loyalty/club/'))
+    return ['orderfly.stamp_cards:settings', 'orderfly.discounts:view', 'orderfly.discounts:edit'].some(permission => access.permissions.includes(permission));
   if (href === '/superadmin') return access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));
   const route = routes.find(([path]) => href === path || href.startsWith(path + '/'));
   return !!route && access.permissions.includes(route[1]);
