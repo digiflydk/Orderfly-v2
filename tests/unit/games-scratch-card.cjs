@@ -112,6 +112,22 @@ test('a win is exactly one line of three (row, column or diagonal) and a no-win 
   const six=rows.filter(r=>r.count===6);
   assert.ok(six.every(r=>[[0,1,2],[3,4,5]].some(line=>line.every(i=>r.won[i]===r.winner))),'6 fields win only on a row');
 });
+test('boards are balanced: the won prize only in its line and no identical neighbours with three or more prizes',()=>{
+  const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
+  const script=`import(${JSON.stringify(board)}).then(m=>{const out=[];for(const names of [['Pizza','Tiramisu','Pommes frites'],['Pizza','Tiramisu','Pommes frites','Burger','Pasta']]){const prizes=names.map(name=>({name}));for(const count of [6,9])for(let k=0;k<60;k++){const roll=k/60;const won=m.drawWinBoard('Pizza',count,roll,prizes,'x');out.push({prizes:names.length,count,won,line:m.winningLine(won),lost:m.drawNoWinBoard(count,'x',prizes,roll)})}}process.stdout.write(JSON.stringify(out))})`;
+  const rows=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  const touching=(b,skip=[])=>{let n=0;for(let a=0;a<b.length;a++)for(let c=a+1;c<b.length;c++){const dr=Math.floor(c/3)-Math.floor(a/3),dc=c%3-a%3;if((dr===0&&dc===1||dr===1&&dc===0)&&b[a]===b[c]&&!(skip.includes(a)&&skip.includes(c)))n++;}return n;};
+  const winBoards=new Set();
+  for(const {prizes,count,won,line,lost} of rows){
+    assert.equal(won.filter(symbol=>symbol==='Pizza').length,3,JSON.stringify(won));
+    assert.equal(touching(won,line),0,JSON.stringify(won));
+    assert.equal(touching(lost),0,JSON.stringify(lost));
+    const others={};won.forEach((symbol,index)=>{if(!line.includes(index))others[symbol]=(others[symbol]||0)+1;});
+    assert.ok(Math.max(...Object.values(others))<=(prizes===3?3:2),JSON.stringify(won));
+    if(prizes===3&&count===9)winBoards.add(won.join());
+  }
+  assert.ok(winBoards.size>4,'balanced boards still vary between plays');
+});
 test('admin preview test plays are allowed on draft, test, scheduled, live and paused campaigns but not ended ones',()=>{
   const schedule=pathToFileURL(path.resolve('src/lib/games/schedule.ts')).href;
   const script=`import(${JSON.stringify(schedule)}).then(m=>{const now=Date.parse('2026-10-02T12:00:00Z'),open={startsAt:null,endsAt:null},future={startsAt:'2026-10-03T00:00:00Z',endsAt:null},past={startsAt:null,endsAt:'2026-10-01T00:00:00Z'};process.stdout.write(JSON.stringify({draft:m.testPlayAllowed('draft',open,now),test:m.testPlayAllowed('test',open,now),live:m.testPlayAllowed('live',open,now),scheduled:m.testPlayAllowed('live',future,now),paused:m.testPlayAllowed('paused',open,now),ended:m.testPlayAllowed('ended',open,now),expired:m.testPlayAllowed('live',past,now)}))})`;

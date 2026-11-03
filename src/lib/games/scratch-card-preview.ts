@@ -5,6 +5,8 @@ type Prize = ScratchCardDraft['prizes'][number];
 // three identical prize symbols in a line: a row, a column or a diagonal. Every
 // field shows a prize symbol; a winning board has exactly one such line and a
 // nonwinning board has none. Three identical symbols outside a line never win.
+// Among valid boards the most even one is chosen: the won prize appears only in
+// its line, other prizes are spread evenly and identical symbols avoid touching.
 const GRID_LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
 
 /** The lines that exist on a board of `count` fields in rows of three. */
@@ -53,17 +55,71 @@ function symbolsFor(prizes:Prize[],fallback:string):string[] {
   if(names.length>=2)return names;
   return [...new Set([...names,fallback||'Ingen gevinst','Ingen gevinst','Næste gang'])].slice(0,2);
 }
+// Orthogonal and diagonal neighbours on the three-column grid.
+function neighbours(count:number):Array<[number,number,number]> {
+  const pairs:Array<[number,number,number]>=[];
+  for(let a=0;a<count;a++)for(let b=a+1;b<count;b++){
+    const dr=Math.floor(b/3)-Math.floor(a/3),dc=b%3-a%3;
+    if(dr===0&&dc===1||dr===1&&dc===0)pairs.push([a,b,10]);
+    else if(dr===1&&Math.abs(dc)===1)pairs.push([a,b,3]);
+  }
+  return pairs;
+}
+// Lower is better: the won prize only in its line, no identical neighbours,
+// and the other prizes spread as evenly as possible.
+function score(board:string[],win?:{line:number[];symbol:string}):number {
+  let total=0;
+  if(win)board.forEach((symbol,index)=>{if(symbol===win.symbol&&!win.line.includes(index))total+=1000;});
+  for(const [a,b,weight] of neighbours(board.length))
+    if(board[a]===board[b]&&!(win&&win.line.includes(a)&&win.line.includes(b)))total+=weight;
+  const counts=new Map<string,number>();
+  board.forEach((symbol,index)=>{if(!win||!win.line.includes(index))counts.set(symbol,(counts.get(symbol)||0)+1);});
+  for(const n of counts.values())total+=n*n;
+  return total;
+}
+const CANDIDATES=300,EXHAUSTIVE_LIMIT=20000;
+// Every valid board for a small search space (at most EXHAUSTIVE_LIMIT fillings).
+function all(count:number,symbols:string[],win?:{line:number[];symbol:string}):string[][] {
+  const board:string[]=Array(count).fill(''),lines=boardLines(count),result:string[][]=[];
+  if(win)for(const index of win.line)board[index]=win.symbol;
+  const open=board.map((value,index)=>value?-1:index).filter(index=>index>=0);
+  const valid=(index:number)=>lines.filter(line=>line.includes(index)&&line!==win?.line).every(line=>
+    line.some(cell=>!board[cell])||!line.every(cell=>board[cell]===board[line[0]]));
+  const place=(position:number)=>{
+    if(position===open.length){result.push([...board]);return;}
+    for(const symbol of symbols){board[open[position]]=symbol;if(valid(open[position]))place(position+1);}
+    board[open[position]]='';
+  };
+  place(0);
+  return result;
+}
+// Choose the best-scoring valid board. Small games are searched exhaustively and
+// the seed picks among the equally good boards; larger games sample candidates.
+function best(count:number,symbols:string[],seed:number,win?:{line:number[];symbol:string}):string[] {
+  const next=random(seed),others=win?symbols.filter(symbol=>symbol!==win.symbol):symbols;
+  const pools=win&&others.length>=2?[others,symbols]:[symbols];
+  const open=count-(win?win.line.length:0);
+  for(const pool of pools){
+    const boards=pool.length**open<=EXHAUSTIVE_LIMIT?all(count,pool,win):
+      Array.from({length:CANDIDATES},()=>fill(count,pool,next(),win)).filter((board):board is string[]=>!!board);
+    if(!boards.length)continue;
+    const scores=boards.map(board=>score(board,win)),lowest=Math.min(...scores);
+    const top=boards.filter((_,index)=>scores[index]===lowest);
+    return top[Math.floor(next()*top.length)];
+  }
+  return fill(count,symbols,seed,win)!;
+}
 export function drawNoWinBoard(count:number,noWinText:string,prizes:Prize[]=[],seed=0):string[] {
   if(count===1)return [noWinText];
   const symbols=symbolsFor(prizes,noWinText);
   if(count===2)return shuffled(symbols,random(seed)).slice(0,2);
-  return fill(count,symbols,seed)!;
+  return best(count,symbols,seed);
 }
 export function drawWinBoard(prizeName:string,count:number,roll:number,prizes:Prize[]=[],noWinText=''):string[] {
   if(count<3)return Array(count).fill(prizeName);
   const lines=boardLines(count),line=lines[Math.floor(roll*lines.length)%lines.length];
   const symbols=symbolsFor(prizes.some(prize=>prize.name===prizeName)?prizes:[...prizes,{name:prizeName} as Prize],noWinText);
-  return fill(count,symbols,roll,{line,symbol:prizeName})!;
+  return best(count,symbols,roll,{line,symbol:prizeName});
 }
 // Preview samples one outcome per play. The public server uses the same
 // boundaries with a cryptographic roll and enforces winner caps in a transaction.
