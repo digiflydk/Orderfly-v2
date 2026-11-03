@@ -19,7 +19,9 @@ before(async()=>{
  }`);
  const entry=write('entry.js',`import React from 'react';import{createRoot}from'react-dom/client';
  import{ClubCampaignPanel}from ${JSON.stringify(path.join(root,'src/app/superadmin/loyalty/club/club-campaign-panel'))};
- createRoot(document.getElementById('root')).render(React.createElement(ClubCampaignPanel,{brands:[{id:'brand',name:'Esmeralda'},{id:'denied',name:'Adgang afvist'}]}));`);
+ const brandId=new URLSearchParams(location.search).get('brand')||'brand';
+ createRoot(document.getElementById('root')).render(React.createElement(ClubCampaignPanel,{brandId,preview:{programName:'Esmeralda Club',newsletterText:'Ja tak til nyhedsbrev fra Esmeralda.'}},
+  React.createElement('section',{id:'rabat','aria-label':'Rabatsektion'},'Rabatsektion')));`);
  const loader=write('loader.js',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:{'./club-campaign-actions$':actions,'@':path.join(root,'src'),'react$':require.resolve('next/dist/compiled/react'),'react/jsx-runtime$':require.resolve('next/dist/compiled/react/jsx-runtime'),'react-dom$':require.resolve('next/dist/compiled/react-dom'),'react-dom/client$':require.resolve('next/dist/compiled/react-dom/client')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/club-admin-.*[\\/](entry|actions)\.js$/,use:[loader]}]}}).run((error,stats)=>error?reject(error):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  execFileSync(path.join(root,'node_modules/.bin/tailwindcss'),['-c',path.join(root,'tailwind.config.ts'),'-i',path.join(root,'src/app/globals.css'),'-o',path.join(dir,'styles.css'),'--minify'],{stdio:'pipe'});
@@ -32,55 +34,65 @@ before(async()=>{
  browser=await chromium.launch({executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox']});
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-for(const width of [390,1440])test(`campaign panel selects one mode and saves only explicitly at ${width}px`,async()=>{
+const form=page=>page.getByRole('form',{name:'Indstillinger for Club-kampagner'});
+const mode=(page,name)=>page.getByRole('radio',{name:new RegExp('^'+name)});
+const switchOn=async(page,name)=>(await page.getByRole('switch',{name}).getAttribute('aria-checked'))==='true';
+for(const width of [390,1440])test(`campaign editor selects one mode with a live preview and saves only explicitly at ${width}px`,async()=>{
  const page=await browser.newPage({viewport:{width,height:1100}});
  page.setDefaultTimeout(5000); page.on('pageerror', error=>console.error('PANEL ERROR',error.message));
  try{
-  await page.goto(origin);await page.getByLabel('Brand for Club-kampagner').selectOption('brand');
-  await page.getByRole('form',{name:'Indstillinger for Club-kampagner'}).waitFor();
-  assert.equal(await page.getByLabel('Tilmeldingstilbud i checkout').inputValue(),'newsletter');
-  assert.equal(await page.getByLabel('Aktivér velkomststempler').isChecked(),false);
-  assert.equal(await page.getByLabel('Aktivér profilbonus').isChecked(),false);
+  await page.goto(origin);await form(page).waitFor();
+  assert.equal(await mode(page,'Nyhedsbrev').isChecked(),true);
+  assert.match(await page.getByRole('group',{name:'Forhåndsvisning af checkout'}).innerText(),/Ja tak til nyhedsbrev fra Esmeralda/);
+  assert.equal(await switchOn(page,'Aktivér velkomststempler'),false);assert.equal(await switchOn(page,'Aktivér profilbonus'),false);
   assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
-  await page.getByLabel('Tilmeldingstilbud i checkout').selectOption('club');
-  await page.getByLabel('Aktivér velkomststempler').check();
-  await page.getByLabel('Aktivér profilbonus').check();
+  // The page's discount step sits between the checkout and stamp steps.
+  assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('section')].map(s=>s.id)),['checkout','rabat','stempler']);
+  await mode(page,'Club').check();
+  await page.getByRole('switch',{name:'Aktivér velkomststempler'}).click();
+  await page.getByLabel('Antal velkomststempler').fill('2');
+  const preview=await page.getByRole('group',{name:'Forhåndsvisning af checkout'}).innerText();
+  assert.match(preview,/Bliv medlem af Esmeralda Club/);assert.match(preview,/Du får 2 velkomststempler ved tilmelding/);
+  await page.getByRole('switch',{name:'Aktivér profilbonus'}).click();
   await page.getByLabel('Antal profilstempler').fill('2');
-  await page.getByRole('button',{name:'Gem Club-kampagner'}).click();
-  await page.getByRole('status').filter({hasText:'Club-kampagner er gemt.'}).waitFor();
-  const calls=await page.evaluate(()=>window.__calls);assert.equal(calls.length,1);assert.equal(calls[0].settings.checkoutMode,'club');assert.equal(calls[0].settings.welcome.enabled,true);assert.equal(calls[0].settings.profile.stamps,2);
+  await page.getByRole('button',{name:'Gem ændringer'}).click();
+  await page.getByRole('status').filter({hasText:'Kampagnen er gemt.'}).waitFor();
+  const calls=await page.evaluate(()=>window.__calls);assert.equal(calls.length,1);assert.equal(calls[0].brandId,'brand');
+  assert.equal(calls[0].settings.checkoutMode,'club');assert.equal(calls[0].settings.welcome.enabled,true);assert.equal(calls[0].settings.welcome.stamps,2);assert.equal(calls[0].settings.profile.stamps,2);
+  await mode(page,'Ingen').check();
+  assert.match(await page.getByRole('group',{name:'Forhåndsvisning af checkout'}).innerText(),/Checkout viser ingen tilmelding/);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  }finally{await page.close();}
 });
-test('profile requires at least one field and conflict preserves unsaved choices until explicit reload',async()=>{
+test('profile requires at least one field and conflict preserves unsaved choices until explicitly cancelled',async()=>{
  const page=await browser.newPage();page.setDefaultTimeout(5000); page.on('pageerror', error=>console.error('PANEL ERROR',error.message));
  try{
-  await page.goto(origin+'/?conflict');await page.getByLabel('Brand for Club-kampagner').selectOption('brand');await page.getByRole('form').waitFor();
+  await page.goto(origin+'/?conflict');await form(page).waitFor();
   for(const label of ['Telefonnummer','Fødselsdato','Køn'])await page.getByLabel(label,{exact:true}).uncheck();
-  await page.getByRole('button',{name:'Gem Club-kampagner'}).click();await page.getByRole('alert').filter({hasText:'Kontrollér'}).waitFor();assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
-  await page.getByLabel('Telefonnummer',{exact:true}).check();await page.getByLabel('Tilmeldingstilbud i checkout').selectOption('club');
-  await page.getByRole('button',{name:'Gem Club-kampagner'}).click();await page.getByRole('alert').filter({hasText:'ændret af en anden'}).waitFor();
-  assert.equal(await page.getByLabel('Tilmeldingstilbud i checkout').inputValue(),'club');
-  await page.getByRole('button',{name:'Genindlæs'}).click();await page.getByRole('form').waitFor();assert.equal(await page.getByLabel('Tilmeldingstilbud i checkout').inputValue(),'newsletter');
+  await page.getByRole('button',{name:'Gem ændringer'}).click();await page.getByRole('alert').filter({hasText:'Kontrollér'}).waitFor();assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
+  await page.getByLabel('Telefonnummer',{exact:true}).check();await mode(page,'Club').check();
+  await page.getByRole('button',{name:'Gem ændringer'}).click();await page.getByRole('alert').filter({hasText:'ændret af en anden'}).waitFor();
+  assert.equal(await mode(page,'Club').isChecked(),true);
+  await page.getByRole('button',{name:'Annullér ændringer'}).click();await form(page).waitFor();assert.equal(await mode(page,'Nyhedsbrev').isChecked(),true);
  }finally{await page.close();}
 });
 test('denied brand reveals no campaign form or save control',async()=>{
  const page=await browser.newPage();page.setDefaultTimeout(5000); page.on('pageerror', error=>console.error('PANEL ERROR',error.message));
  try{
-  await page.goto(origin);await page.getByLabel('Brand for Club-kampagner').selectOption('denied');await page.getByRole('alert').filter({hasText:'ikke adgang'}).waitFor();
-  assert.equal(await page.getByRole('form').count(),0);assert.equal(await page.getByRole('button',{name:'Gem Club-kampagner'}).count(),0);
+  await page.goto(origin+'/?brand=denied');await page.getByRole('alert').filter({hasText:'ikke adgang'}).waitFor();
+  assert.equal(await page.getByRole('form').count(),0);assert.equal(await page.getByRole('button',{name:'Gem ændringer'}).count(),0);
  }finally{await page.close();}
 });
 
 for(const timezoneId of ['UTC','America/Los_Angeles']) test(`campaign times render and save Danish wall clock in ${timezoneId}`,async()=>{
  const page=await browser.newPage({timezoneId});page.setDefaultTimeout(5000);
  try{
-  await page.goto(origin+'/?stored');await page.getByLabel('Brand for Club-kampagner').selectOption('brand');await page.getByRole('form').waitFor();
+  await page.goto(origin+'/?stored');await form(page).waitFor();
   const start=page.getByLabel('Start på velkomstkampagne');
   assert.equal(await start.inputValue(),'2026-10-22T10:30');
   await page.getByText('Alle tider er dansk tid.',{exact:false}).waitFor();
-  await start.fill('2026-10-22T11:45');await page.getByRole('button',{name:'Gem Club-kampagner'}).click();
-  await page.getByRole('status').filter({hasText:'Club-kampagner er gemt.'}).waitFor();
+  await start.fill('2026-10-22T11:45');await page.getByRole('button',{name:'Gem ændringer'}).click();
+  await page.getByRole('status').filter({hasText:'Kampagnen er gemt.'}).waitFor();
   assert.equal(await page.evaluate(()=>window.__calls[0].settings.welcome.startsAt),Date.parse('2026-10-22T09:45:00.000Z'));
   assert.equal(await start.inputValue(),'2026-10-22T11:45');
  }finally{await page.close();}
@@ -88,9 +100,9 @@ for(const timezoneId of ['UTC','America/Los_Angeles']) test(`campaign times rend
 test('nonexistent Danish spring DST time is rejected instead of shifted',async()=>{
  const page=await browser.newPage({timezoneId:'America/Los_Angeles'});page.setDefaultTimeout(5000);
  try{
-  await page.goto(origin);await page.getByLabel('Brand for Club-kampagner').selectOption('brand');await page.getByRole('form').waitFor();
+  await page.goto(origin);await form(page).waitFor();
   await page.getByLabel('Start på velkomstkampagne').fill('2026-03-29T02:30');
-  await page.getByRole('button',{name:'Gem Club-kampagner'}).click();
+  await page.getByRole('button',{name:'Gem ændringer'}).click();
   await page.getByRole('alert').filter({hasText:'Kontrollér'}).waitFor();
   assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
  }finally{await page.close();}

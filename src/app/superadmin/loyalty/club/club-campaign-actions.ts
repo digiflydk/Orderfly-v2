@@ -5,7 +5,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { AuthorityError } from '@/lib/access/authority';
 import { LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
-import { readClubCampaign, saveClubCampaign } from '@/lib/loyalty/stamp-card/campaign-admin';
+import { deleteClubCampaign, readClubCampaign, saveClubCampaign } from '@/lib/loyalty/stamp-card/campaign-admin';
 import type { CampaignDoc } from '@/lib/loyalty/stamp-card/campaign-rules';
 
 export type ClubCampaignResult = { ok: true; campaign: CampaignDoc } | { ok: false; error: string };
@@ -22,7 +22,14 @@ export async function loadClubCampaignAction(brandId: string): Promise<ClubCampa
 export async function saveClubCampaignAction(input: unknown): Promise<ClubCampaignResult> {
   try {
     const campaign = await saveClubCampaign(getAdminDb(), await actor(), input, Date.now());
-    revalidatePath('/superadmin/loyalty/club');
+    revalidatePath('/superadmin/loyalty/club', 'layout');
+    return { ok: true, campaign };
+  } catch (error) { return failure(error); }
+}
+export async function deleteClubCampaignAction(input: unknown): Promise<ClubCampaignResult> {
+  try {
+    const campaign = await deleteClubCampaign(getAdminDb(), await actor(), input, Date.now());
+    revalidatePath('/superadmin/loyalty/club', 'layout');
     return { ok: true, campaign };
   } catch (error) { return failure(error); }
 }

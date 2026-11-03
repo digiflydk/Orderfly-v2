@@ -61,3 +61,25 @@ test('invalid settings and malformed stored data fail without resetting configur
  assert.equal((await admin.readClubCampaign(db,who('both'),'brand')).settings.checkoutMode,'none');
  await rejects(admin.saveClubCampaign(db,who('both'),input(),NOW),'campaign_invalid');
 });
+test('deleting a campaign keeps the document as no signup with default stamps, so it starts over',async()=>{
+ setup();
+ const saved=await admin.saveClubCampaign(db,who('both'),input({settings:{...defaultCampaignSettings(),checkoutMode:'club',welcome:{enabled:true,stamps:3,startsAt:NOW,endsAt:null}}}),NOW);
+ db.rows.set('loyaltyMembers/m1',{brandId:'brand',status:'active'});db.rows.set('loyaltyPrograms/brand',{brandId:'brand',version:4});
+ const deleted=await admin.deleteClubCampaign(db,who('both'),{brandId:'brand',version:saved.version},NOW+1);
+ assert.equal(deleted.version,saved.version+1);assert.deepEqual(deleted.settings,defaultCampaignSettings());
+ assert.equal(db.rows.get('loyaltyCampaigns/brand').settings.checkoutMode,'none','the document is kept, never removed');
+ assert.deepEqual(db.rows.get('loyaltyMembers/m1'),{brandId:'brand',status:'active'});assert.deepEqual(db.rows.get('loyaltyPrograms/brand'),{brandId:'brand',version:4});
+ const audit=[...db.rows].filter(([key])=>key.startsWith('loyaltyCampaignAudit/')).map(([,row])=>row);
+ assert.equal(audit.length,2);assert.equal(audit.find(row=>row.version===deleted.version).checkoutMode,'none');
+ // Without a saved campaign checkout shows the legacy newsletter; deleting turns it off explicitly.
+ setup();assert.equal((await admin.deleteClubCampaign(db,who('both'),{brandId:'brand',version:0},NOW)).settings.checkoutMode,'none');
+ assert.equal(db.rows.has('loyaltyCampaigns/brand'),true);
+});
+test('deleting requires both full-brand permissions, the current version and a strict request',async()=>{
+ setup();const saved=await admin.saveClubCampaign(db,who('both'),input(),NOW);
+ for(const actor of ['discount','loyalty','local','foreign'])await rejects(admin.deleteClubCampaign(db,who(actor),{brandId:'brand',version:saved.version},NOW),'forbidden');
+ await rejects(admin.deleteClubCampaign(db,who('both'),{brandId:'brand',version:saved.version-1},NOW),'campaign_changed');
+ await rejects(admin.deleteClubCampaign(db,who('both'),{brandId:'brand',version:saved.version,settings:{checkoutMode:'club'}},NOW),'invalid_request');
+ await rejects(admin.deleteClubCampaign(db,who('both'),{brandId:'../x',version:1},NOW),'invalid_request');
+ assert.equal(db.rows.get('loyaltyCampaigns/brand').settings.checkoutMode,'club');
+});
