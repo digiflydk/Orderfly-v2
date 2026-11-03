@@ -7,7 +7,7 @@ type Prize = ScratchCardDraft['prizes'][number];
 // A drawn coin replaces the pointer over unscratched fields; the hotspot is its centre.
 const COIN_SVG=`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><defs><radialGradient id="g" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#fff3b0"/><stop offset=".55" stop-color="#f5c542"/><stop offset="1" stop-color="#b8860b"/></radialGradient></defs><circle cx="18" cy="18" r="16" fill="url(#g)" stroke="#8a6508" stroke-width="2"/><circle cx="18" cy="18" r="11.5" fill="none" stroke="#a87b0a" stroke-width="1.5" stroke-dasharray="2 2"/><text x="18" y="23" text-anchor="middle" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#8a6508">kr</text></svg>`;
 export const COIN_CURSOR=`url("data:image/svg+xml,${encodeURIComponent(COIN_SVG)}") 18 18, crosshair`;
-export function ScratchSurface({label,index,round,imageUrl='',color='#ffbd02',compact=false,onReveal}:{label:string;index:number;round:number;imageUrl?:string;color?:string;compact?:boolean;onReveal?:()=>void}) {
+export function ScratchSurface({label,index,round,imageUrl='',color='#ffbd02',compact=false,highlight=false,onReveal}:{label:string;index:number;round:number;imageUrl?:string;color?:string;compact?:boolean;highlight?:boolean;onReveal?:()=>void}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const [revealed,setRevealed] = useState(false);
@@ -57,7 +57,7 @@ export function ScratchSurface({label,index,round,imageUrl='',color='#ffbd02',co
     if(total&&clear/total>=.4)reveal();
   }
   return <div className="min-w-0">
-    <div className={`relative flex items-center justify-center overflow-hidden rounded-xl border-2 bg-white text-center font-bold text-black select-none ${compact?'h-24 p-1.5 text-sm sm:h-32 sm:text-base':'h-36 p-3 text-base sm:h-44 sm:text-lg'}`}>
+    <div data-winning={highlight||undefined} style={highlight?{borderColor:color,boxShadow:`0 0 0 3px ${color}`}:undefined} className={`relative flex items-center justify-center overflow-hidden rounded-xl border-2 bg-white text-center font-bold text-black select-none ${compact?'h-24 p-1.5 text-sm sm:h-32 sm:text-base':'h-36 p-3 text-base sm:h-44 sm:text-lg'}`}>
       <span aria-live="polite">{revealed&&imageUrl?<img src={imageUrl} alt={label} className={`mx-auto object-contain ${compact?'max-h-14':'max-h-20'}`}/>:revealed?label:'Skrab feltet'}</span>
       {!revealed&&<canvas ref={canvas} role="button" tabIndex={0} style={{cursor:COIN_CURSOR}} className="absolute inset-0 h-full w-full touch-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-yellow-400" aria-label={`Skrab felt ${index+1}. Brug finger eller mus, eller tryk Enter for tilgængelig afsløring.`} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();reveal();}}} onPointerDown={event=>{drawing.current=true;event.currentTarget.setPointerCapture(event.pointerId);erase(event);}} onPointerMove={erase} onPointerUp={finish} onPointerCancel={finish}/>}
     </div>

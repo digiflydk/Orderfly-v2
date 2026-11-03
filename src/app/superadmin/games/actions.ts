@@ -73,6 +73,8 @@ export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;
   });
   if (!parsed.success) return {ok:false,message:parsed.error.issues.map(i=>i.message).join(' ')};
   const input = parsed.data;
+  // Fields show prize symbols only; a board without a winning line needs two different prizes.
+  if(input.cardsPerPlay>1&&input.prizes.length<2)return {ok:false,message:'Tilføj mindst 2 præmier, så felterne kun viser præmier.'};
   const campaignId=String(form.get('campaignId')||input.brandId);
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(campaignId))return {ok:false,message:'Ugyldig kampagne.'};
   try {
