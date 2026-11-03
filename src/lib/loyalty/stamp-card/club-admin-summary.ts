@@ -105,11 +105,22 @@ export async function readClubAdminSummary(db: Firestore, actor: AdminActor, bra
   return summaryForBrand(db, await loadClubAdminGrants(db, actor), brandId, options);
 }
 
-// The campaign's creation is its first saved version in the configuration audit.
+// A saved campaign with no checkout offer and both bonuses off is empty: that is
+// what deleting writes. The current campaign was created by the first saved,
+// non-empty version after the latest empty one, so a deleted campaign that is set
+// up again starts over, and a delete itself is never shown as a creation.
+export function campaignStartedAt(rows: Array<Record<string, unknown>>): number | null {
+  const sorted = rows.filter(row => Number.isSafeInteger(row.version)).sort((a, b) => Number(a.version) - Number(b.version));
+  const empty = (row: Record<string, unknown>) => row.checkoutMode === 'none' && row.welcomeEnabled === false && row.profileEnabled === false;
+  let start: Record<string, unknown> | null = null;
+  for (const row of sorted) start = empty(row) ? null : start ?? row;
+  return typeof start?.at === 'number' && Number.isFinite(start.at) ? start.at : null;
+}
+
 async function campaignCreatedAt(db: Firestore, brandId: string): Promise<number | null> {
-  const rows = await db.collection('loyaltyCampaignAudit').where('brandId', '==', brandId).where('version', '==', 1).limit(1).get();
-  const at = rows.docs[0]?.data().at;
-  return typeof at === 'number' && Number.isFinite(at) ? at : null;
+  // Config-only rows; a brand has few saves. Sorted here to avoid a composite index.
+  const rows = await db.collection('loyaltyCampaignAudit').where('brandId', '==', brandId).get();
+  return campaignStartedAt(rows.docs.map(doc => doc.data()));
 }
 
 export async function summaryForBrand(db: Firestore, all: ClubAdminGrants, brandId: string, options: { superuser: boolean; now: number }): Promise<ClubAdminSummary> {

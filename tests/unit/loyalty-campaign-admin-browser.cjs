@@ -10,6 +10,7 @@ before(async()=>{
  import {defaultCampaignSettings} from ${JSON.stringify(path.join(root,'src/lib/loyalty/stamp-card/campaign-rules'))};
  export async function loadClubCampaignAction(brandId){
   await new Promise(resolve=>setTimeout(resolve,30));
+  if(brandId==='offline')throw new Error('network');
   if(brandId==='denied')return {ok:false,error:'forbidden'};
   return {ok:true,campaign:{brandId,version:0,updatedAt:null,settings:{...defaultCampaignSettings(),checkoutMode:'newsletter',welcome:{...defaultCampaignSettings().welcome,startsAt:new URLSearchParams(location.search).has('stored')?Date.parse('2026-10-22T08:30:00.000Z'):null}}}};
  }
@@ -105,5 +106,12 @@ test('nonexistent Danish spring DST time is rejected instead of shifted',async()
   await page.getByRole('button',{name:'Gem ændringer'}).click();
   await page.getByRole('alert').filter({hasText:'Kontrollér'}).waitFor();
   assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
+ }finally{await page.close();}
+});
+test('a failed load request ends in an explanation instead of a stuck spinner',async()=>{
+ const page=await browser.newPage();page.setDefaultTimeout(5000);
+ try{
+  await page.goto(origin+'/?brand=offline');await page.getByRole('alert').filter({hasText:'kunne ikke hentes'}).waitFor();
+  assert.equal(await page.getByRole('status').filter({hasText:'Henter kampagne'}).count(),0);assert.equal(await page.getByRole('form').count(),0);
  }finally{await page.close();}
 });

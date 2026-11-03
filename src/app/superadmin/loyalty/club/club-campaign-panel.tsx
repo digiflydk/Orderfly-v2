@@ -42,10 +42,11 @@ export function ClubCampaignPanel({ brandId, preview, children }: { brandId: str
   async function load() {
     const current = ++request.current;
     setCampaign(null); setMessage(null); setBusy(true);
-    const result = await loadClubCampaignAction(brandId);
+    const result = await loadClubCampaignAction(brandId).catch(() => ({ ok: false as const, error: 'unavailable' }));
     if (current !== request.current) return;
     setBusy(false);
-    if (result.ok) setCampaign(result.campaign); else setMessage({ error: true, text: errorText(result.error) });
+    if (result.ok) setCampaign(result.campaign);
+    else setMessage({ error: true, text: result.error === 'unavailable' ? 'Kampagnen kunne ikke hentes. Prøv igen.' : errorText(result.error) });
   }
   useEffect(() => { void load(); }, [brandId]); // eslint-disable-line react-hooks/exhaustive-deps
   function update(settings: CampaignSettings) { setCampaign(value => value ? { ...value, settings } : value); setMessage(null); }
@@ -55,7 +56,8 @@ export function ClubCampaignPanel({ brandId, preview, children }: { brandId: str
     if (!campaignSettingsSchema.safeParse(campaign.settings).success) { setMessage({ error: true, text: errorText('invalid_request') }); return; }
     setBusy(true); setMessage(null);
     const current = request.current;
-    const result = await saveClubCampaignAction({ brandId, version: campaign.version, settings: campaign.settings });
+    const result = await saveClubCampaignAction({ brandId, version: campaign.version, settings: campaign.settings })
+      .catch(() => ({ ok: false as const, error: 'unavailable' }));
     if (current !== request.current) return;
     setBusy(false);
     if (result.ok) { setCampaign(result.campaign); setMessage({ error: false, text: 'Kampagnen er gemt.' }); }

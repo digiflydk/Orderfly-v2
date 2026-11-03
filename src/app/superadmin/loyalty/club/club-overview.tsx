@@ -46,7 +46,9 @@ export function ClubOverview({ rows, showOmnisend }: { rows: ClubOverviewRow[]; 
   async function confirmDelete() {
     if (!target || busy) return;
     setBusy(true); setError('');
-    const result = await deleteClubCampaignAction({ brandId: target.brandId, version: target.version });
+    // A failed request (network, redeploy) must not leave the dialog stuck.
+    const result = await deleteClubCampaignAction({ brandId: target.brandId, version: target.version })
+      .catch(() => ({ ok: false as const, error: 'unavailable' }));
     setBusy(false);
     if (!result.ok) { setError(deleteError(result.error)); return; }
     setMessage(`Kampagnen for ${target.brandName} er slettet.`);

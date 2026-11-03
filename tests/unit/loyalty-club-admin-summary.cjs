@@ -135,3 +135,15 @@ test('the overview lists one summary per granted brand only',async()=>{
  assert.deepEqual(await summary.listClubAdminSummaries(db,who('overview'),{superuser:false,now:NOW}),[]);
  assert.deepEqual((await summary.listClubAdminSummaries(db,who('foreign'),{superuser:false,now:NOW})).map(row=>row.brandId),['otherbrand']);
 });
+test('a deleted campaign is not shown as created, and setting it up again starts a new creation date',()=>{
+ const row=(version,at,mode,welcome=false,profile=false)=>({brandId:'brand',version,at,checkoutMode:mode,welcomeEnabled:welcome,profileEnabled:profile});
+ assert.equal(summary.campaignStartedAt([]),null);
+ assert.equal(summary.campaignStartedAt([row(2,20,'club'),row(1,10,'newsletter')]),10,'first non-empty version, regardless of read order');
+ // Deleting a legacy newsletter brand writes an empty first version: no creation date.
+ assert.equal(summary.campaignStartedAt([row(1,10,'none')]),null);
+ assert.equal(summary.campaignStartedAt([row(1,10,'club'),row(2,20,'none')]),null,'deleted');
+ assert.equal(summary.campaignStartedAt([row(1,10,'club'),row(2,20,'none'),row(3,30,'newsletter'),row(4,40,'club')]),30,'starts over after delete');
+ // Stamps without a checkout offer are still a campaign.
+ assert.equal(summary.campaignStartedAt([row(1,10,'none',true)]),10);
+ assert.equal(summary.campaignStartedAt([{brandId:'brand',version:'x',at:5},row(1,10,'club')]),10,'malformed rows are ignored');
+});

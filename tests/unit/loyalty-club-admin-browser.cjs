@@ -10,6 +10,7 @@ before(async()=>{
  const actions=write('actions.js',`
  export async function deleteClubCampaignAction(value){window.__deletes=(window.__deletes||[]).concat([value]);
   await new Promise(resolve=>setTimeout(resolve,20));
+  if(new URLSearchParams(location.search).has('throw'))throw new Error('network');
   if(new URLSearchParams(location.search).has('conflict'))return {ok:false,error:'campaign_changed'};
   return {ok:true,campaign:{brandId:value.brandId,version:value.version+1,updatedAt:1,settings:{}}};}
  export async function loadClubCampaignAction(){return {ok:false,error:'unavailable'};}
@@ -125,5 +126,16 @@ for(const width of [390,1440])test(`merchant view shows steps, plain-language wa
   assert.match(await page.locator('#rabat').innerText(),/Bruges ikke: checkout tilbyder Club/);
   assert.equal(await page.getByRole('link',{name:'Opret tilmeldingsrabat'}).count(),0);assert.equal(await page.locator('#omnisend').count(),0);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ }finally{await page.close();}
+});
+test('a failed delete request leaves the dialog usable with an explanation',async()=>{
+ const page=await open(1440,'/?throw');
+ try{
+  await page.getByRole('button',{name:'Slet kampagnen for Esmeralda Pizza'}).click();
+  const dialog=page.getByRole('alertdialog');await dialog.getByRole('button',{name:'Slet kampagne'}).click();
+  await dialog.getByRole('alert').filter({hasText:'kunne ikke slettes'}).waitFor();
+  assert.equal(await dialog.getByRole('button',{name:'Slet kampagne'}).isEnabled(),true);
+  await dialog.getByRole('button',{name:'Annullér'}).click();await dialog.waitFor({state:'hidden'});
+  assert.equal(await page.evaluate(()=>window.__refreshes||0),0);
  }finally{await page.close();}
 });
