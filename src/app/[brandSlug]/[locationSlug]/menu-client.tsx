@@ -155,7 +155,7 @@ export function MenuClient({
 
   return (
     <StorefrontCatalog products={initialProducts} combos={activeCombos}>
-      {toolbarSlots && createPortal(<TimeSelector timeSlots={timeSlots} compact />, toolbarSlots.controls)}
+      {toolbarSlots && createPortal(<TimeSelector timeSlots={timeSlots} compact modeOnly={isV2} />, toolbarSlots.controls)}
       {toolbarSlots && createPortal(<MobileFloatingCart floating={false} compact />, toolbarSlots.cart)}
       <div data-commerce-root className="bg-[var(--storefront-menu-background,#FFF8F0)]">
       <div className={brand.slug === 'esmeralda' ? "storefront-frame" : "container mx-auto max-w-[1140px] px-4"}>

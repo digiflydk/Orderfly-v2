@@ -227,6 +227,9 @@ export type Location = {
   /** Legacy pickup saving value; used only when pickupLabel is unset. */
   pickupSaveTag?: string;
   pickupLabel?: string;
+  /** Public contact details shown in the storefront info popup. */
+  contactPhone?: string;
+  contactEmail?: string;
   deliveryLabel?: string;
   paymentMethods?: { online: boolean; payAtPickup: boolean };
 

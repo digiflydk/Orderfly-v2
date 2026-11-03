@@ -32,10 +32,12 @@ function TimeSlotSkeleton() {
 interface TimeSelectorProps {
     timeSlots: TimeSlotResponse | null;
     compact?: boolean;
+    /** Only the pickup/delivery choice; the time is chosen in checkout (Esmeralda V2 menu). */
+    modeOnly?: boolean;
 }
 
 
-export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: TimeSelectorProps) {
+export function TimeSelector({ timeSlots: timeSlotsProp, compact = false, modeOnly = false }: TimeSelectorProps) {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const schedule = useManagedDeliverySchedule();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
@@ -91,7 +93,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: Time
                     <span>Levering</span>
                 </Button>
             </div>
-            <div className="storefront-time-control flex min-w-0 items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
+            {!modeOnly && <div className="storefront-time-control flex min-w-0 items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
                  {!timeSlots ? (
                     <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><Skeleton className="h-5 w-24" /></div>
                  ) : (
@@ -105,7 +107,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp, compact = false }: Time
                         </Button>
                     </>
                  )}
-            </div>
+            </div>}
 
              {isTimeDialogOpen && <TimeSlotDialog
                 isOpen={isTimeDialogOpen}

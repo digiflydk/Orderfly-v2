@@ -14,7 +14,8 @@ import { PublicReviewsLink } from '@/components/feedback/public-reviews-link';
 import { storefrontSegments } from '@/lib/brand-subdomain';
 import { useStorefrontPath } from '@/hooks/use-storefront-path';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
-import { Menu, Info } from 'lucide-react';
+import { Info, User } from 'lucide-react';
+import { LocationInfoDialog } from '@/components/storefront/location-info-dialog';
 
 export function MenuHeader({ brand, initialLocation, initialNow }: {
   brand: Brand;
@@ -22,7 +23,6 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   initialNow?: number;
 }) {
   const isV2 = useStorefrontV2();
-  const [showLocation, setShowLocation] = useState(false);
   const { location: cartLocation, deliveryType, cartReady } = useCart();
   const managed = useManagedDeliveryPrice();
   // The route owns the location; a restored cart may still belong to another branch.
@@ -62,11 +62,13 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   return <>
     <header ref={headerRef} data-menu-refresh={refreshedMenu || undefined} data-storefront-header data-v2-menu-header={isV2 || undefined} data-brand-slug={brand.slug} className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
       <div className={refreshedMenu ? "storefront-frame storefront-order-toolbar" : `mx-auto flex h-full max-w-[1140px] items-center ${checkout && isV2 ? 'justify-center' : 'justify-between'} gap-4 px-4`}>
-        {isV2 && !checkout && <button type="button" className="v2-menu-browse" aria-label="Gå til menukategorier" onClick={() => document.querySelector('[data-storefront-categories]')?.scrollIntoView({behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'})}><Menu className="h-5 w-5" /></button>}
         {checkout
           ? <div data-v2-checkout-logo={isV2 || undefined} className={isV2 ? "relative flex h-11 w-[168px] shrink-0 items-center" : "relative flex h-10 w-36 shrink-0 items-center"}>{logo}</div>
           : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>}
-        {isV2 && !checkout && <button type="button" className="v2-location-toggle" aria-label="Restaurantoplysninger" aria-expanded={showLocation} aria-controls="v2-location-details" onClick={() => setShowLocation(value => !value)}><Info className="h-5 w-5" /></button>}
+        {isV2 && !checkout && <div className="v2-header-actions">
+          <Link href={storefront('club', 'login')} aria-label="Log ind" className="v2-header-login"><User aria-hidden="true" className="h-4 w-4" /><span>Log ind</span></Link>
+          {location ? <LocationInfoDialog brand={brand} location={location} /> : <span className="v2-location-toggle" aria-hidden="true"><Info className="h-5 w-5" /></span>}
+        </div>}
         {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}
         {isV2 && refreshedMenu && showDelivery && details?.delivery && location && <div className="v2-delivery-summary text-xs text-muted-foreground">
           {(managed || Number.isFinite(location.deliveryFee)) && <p>{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
@@ -76,7 +78,9 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
       </div>
     </header>
     {isV2 && !checkout && location && <h1 className="sr-only">{location.name} · Menukort</h1>}
-    {!checkout && location && details && (!isV2 || showLocation) && <section id={isV2 ? 'v2-location-details' : undefined} data-storefront-location data-brand-slug={brand.slug} data-menu-hero={!isV2 && refreshedMenu || undefined} data-v2-location-details={isV2 || undefined} aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
+    {/* V2: an image-only banner on desktop (CSS hides it on mobile); details live in the "i" popup. */}
+    {isV2 && !checkout && location?.imageUrl && <div data-v2-location-banner className="storefront-frame" aria-hidden="true"><img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" /></div>}
+    {!checkout && location && details && !isV2 && <section data-storefront-location data-brand-slug={brand.slug} data-menu-hero={!isV2 && refreshedMenu || undefined} data-v2-location-details={isV2 || undefined} aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
         {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
         <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />

@@ -9,7 +9,7 @@ const root=process.cwd();let dir,server,browser,origin;
 const pizzaSources=require('../fixtures/esmeralda-pizza-images.json');
 const catalogSources=require('../fixtures/esmeralda-catalog-images.json');
 const brand={id:'b',slug:'esmeralda',name:'Esmeralda Pizza',bagFee:4,adminFee:0,vatPercentage:25,logoUrl:'/image.svg'};
-const location={id:'l',brandId:'b',slug:'amager',name:'Esmeralda Pizza Amager',street:'Albaniensgade 6',zipCode:'2300',city:'København S',imageUrl:'/image.svg',isActive:true,minOrder:100,deliveryFee:39,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'00:00',close:'23:59'}]))};
+const location={id:'l',brandId:'b',slug:'amager',name:'Esmeralda Pizza Amager',street:'Albaniensgade 6',zipCode:'2300',city:'København S',imageUrl:'/image.svg',contactPhone:'+45 12 34 56 78',contactEmail:'amager@example.test',isActive:true,minOrder:100,deliveryFee:39,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'00:00',close:'23:59'}]))};
 const names=['Pizza','Pasta','Burgere','Sandwich','A la Carte','Salat','Forretter','Tilbehør','Dyppelse','Desserter','Børnemenu','Vand','Sodavand','Italiensk sodavand'];
 const categories=names.map((categoryName,i)=>({id:'c'+i,brandId:'b',categoryName,sortOrder:i,isActive:true}));
 const products=categories.flatMap((c,i)=>Array.from({length:3},(_,j)=>({id:'p'+i+'-'+j,brandId:'b',locationIds:['l'],isActive:true,productName:i===0?['Margherita','Pepperoni','Hawaii'][j]:c.categoryName+' '+(j+1),description:'Tomatsauce, mozzarella og friske råvarer.',categoryId:c.id,price:79,priceDelivery:89,imageUrl:'/image.svg',toppingGroupIds:[]})));
@@ -146,9 +146,12 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  const page=await setup(t,390,'&v2&managed');
  const info=page.getByRole('button',{name:'Restaurantoplysninger',exact:true});
  await info.click();
- assert.equal(await info.getAttribute('aria-expanded'),'true');
- await page.getByRole('region',{name:'Lokationsoplysninger'}).getByRole('link',{name:/Albaniensgade 6/}).waitFor();
- await info.click();
+ const popup=page.getByRole('dialog',{name:'Esmeralda Pizza Amager'});await popup.waitFor();
+ await popup.getByRole('link',{name:/Albaniensgade 6/}).waitFor();
+ assert.equal(await popup.getByText('Mandag',{exact:true}).count(),1);assert.equal(await popup.getByText('Søndag',{exact:true}).count(),1);
+ assert.equal(await popup.getByRole('link',{name:'+45 12 34 56 78'}).getAttribute('href'),'tel:+4512345678');
+ assert.equal(await popup.getByRole('link',{name:'amager@example.test'}).getAttribute('href'),'mailto:amager@example.test');
+ await page.keyboard.press('Escape');await popup.waitFor({state:'hidden'});
  assert.equal(await page.getByRole('region',{name:'Lokationsoplysninger'}).count(),0);
  await page.getByRole('button',{name:'Levering',exact:true}).click();
  await page.getByText('Leveringspris beregnes i kassen',{exact:true}).waitFor();
@@ -159,6 +162,31 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  await page.getByRole('status').filter({hasText:'Ingen varer matcher'}).waitFor();
  await page.getByRole('button',{name:'Ryd menusøgning'}).click();
  await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
+});
+
+for(const width of [390,1280])test(`V2 header: one row on desktop, no burger or menu time picker, login and banner (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2');
+ const header=page.locator('[data-v2-menu-header]');
+ assert.equal(await page.getByRole('button',{name:'Gå til menukategorier'}).count(),0,'no burger menu');
+ assert.equal(await page.getByRole('button',{name:/Ændre? tidspunkt/}).count(),0,'time is chosen in checkout');
+ const login=header.getByRole('link',{name:/Log ind/});assert.match(await login.getAttribute('href'),/club\/login$/);
+ const pickup=await header.getByRole('button',{name:'Afhentning',exact:true}).boundingBox();
+ const logo=await header.locator('.storefront-order-toolbar > a').boundingBox(),info=await header.getByRole('button',{name:'Restaurantoplysninger'}).boundingBox();
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'no horizontal overflow');
+ assert.ok(info.x+info.width<=width,'info stays in view');
+ const banner=page.locator('[data-v2-location-banner]');
+ if(width>=768){
+  const mid=b=>b.y+b.height/2;
+  assert.ok(Math.abs(mid(pickup)-mid(logo))<12&&Math.abs(mid(info)-mid(logo))<12,'toggle, logo and actions share one row');
+  assert.ok(pickup.x<logo.x&&info.x>logo.x+logo.width,'toggle left, actions right');
+  assert.equal(await banner.isVisible(),true);assert.equal(Math.round((await banner.boundingBox()).height),168);
+  const search=await page.getByRole('searchbox',{name:'Søg i menuen'}).boundingBox(),nav=await page.getByRole('navigation',{name:'Menukategorier'}).boundingBox();
+  assert.ok(search.x>nav.x,'search sits right of the categories');
+ } else {
+  assert.ok(pickup.y>logo.y+logo.height-1,'mobile switch sits below the logo row');
+  assert.ok(logo.x<=pickup.x+1&&info.x>logo.x+logo.width,'mobile logo sits left, actions right');
+  assert.equal(await banner.isVisible(),false);
+ }
 });
 
 for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom while scrolling and resizing (${width}px)`,async t=>{

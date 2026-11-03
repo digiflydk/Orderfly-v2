@@ -1,7 +1,7 @@
 # Esmeralda V2 product presentation (#780)
 
 The server-derived V2 context opts the product sheet into a full-width catalogue
-photo and product description in its scrolling content. A compact Esmeralda/back bar sits above the landscape image. The rectangular
+photo and product description in its scrolling content. The landscape image starts at the very top of the sheet. Since 2026-11-02 there is no Esmeralda brand bar above it. A white pill back button (`.v2-product-back`, "Tilbage til menu") overlays the image's top-left corner and stays in place while the content scrolls. The combo step flow keeps its own step bar. The rectangular
 quantity control sits below customization and allergen disclosure, while the
 full-width **Læg i kurv · total** action stays in the bottom footer, including the
 device safe area. Mobile uses the full viewport, with only its content scrolling. Required modifier groups remain visible and use the existing min/max,
