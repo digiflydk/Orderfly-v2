@@ -164,7 +164,7 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
 });
 
-for(const width of [390,1280])test(`V2 header: one row on desktop, no burger or menu time picker, login and banner (${width}px)`,async t=>{
+for(const width of [390,1280,1600])test(`V2 header: one row on desktop, no burger or menu time picker, login and banner (${width}px)`,async t=>{
  const page=await setup(t,width,'&v2');
  const header=page.locator('[data-v2-menu-header]');
  assert.equal(await page.getByRole('button',{name:'Gå til menukategorier'}).count(),0,'no burger menu');
@@ -180,8 +180,11 @@ for(const width of [390,1280])test(`V2 header: one row on desktop, no burger or 
   assert.ok(Math.abs(mid(pickup)-mid(logo))<12&&Math.abs(mid(info)-mid(logo))<12,'toggle, logo and actions share one row');
   assert.ok(pickup.x<logo.x&&info.x>logo.x+logo.width,'toggle left, actions right');
   assert.equal(await banner.isVisible(),true);assert.equal(Math.round((await banner.boundingBox()).height),168);
+  assert.ok((await banner.boundingBox()).width<=1300.5,'desktop frame is at most 1300px');
   const search=await page.getByRole('searchbox',{name:'Søg i menuen'}).boundingBox(),nav=await page.getByRole('navigation',{name:'Menukategorier'}).boundingBox();
   assert.ok(search.x>nav.x,'search sits right of the categories');
+  const cart=await page.locator('[data-menu-grid] > div').last().boundingBox();
+  assert.ok(Math.abs(search.x-cart.x)<=1&&Math.abs(search.width-cart.width)<=1,`search matches the cart column (${search.x}/${search.width} vs ${cart.x}/${cart.width})`);
  } else {
   assert.ok(pickup.y>logo.y+logo.height-1,'mobile switch sits below the logo row');
   assert.ok(logo.x<=pickup.x+1&&info.x>logo.x+logo.width,'mobile logo sits left, actions right');

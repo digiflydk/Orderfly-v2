@@ -37,6 +37,10 @@ export type Brand = {
   locationsCount: number;
   logoUrl?: string;
   supportEmail?: string;
+  /** Storefront browser-tab icon. Falls back to the generated logo icon. */
+  faviconUrl?: string;
+  /** Storefront browser-tab title. Falls back to the brand name. */
+  browserTitle?: string;
   website?: string;
   termsUrl?: string;
   privacyUrl?: string;

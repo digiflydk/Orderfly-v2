@@ -599,6 +599,19 @@ test('V2 mobile checkout keeps the total just above the fixed CTA',async t=>{
  const rowBox=await lastRow.boundingBox(),barBox=await bar.boundingBox();
  const gap=barBox.y-(rowBox.y+rowBox.height);assert.ok(gap>=0&&gap<=40,`summary sits just above the CTA (gap ${gap}px)`);
 });
+for(const lines of [1,14])test(`V2 desktop keeps terms and the pay button in view; only the order lines scroll (${lines} line${lines>1?'s':''})`,async t=>{
+ const page=await setup(t,'v2-success-desktop');
+ await page.evaluate(n=>window.replaceFixtureItems(Array.from({length:n},(_,i)=>({id:'pizza',cartItemId:'line-'+i,productName:'Pizza '+(i+1),price:79,basePrice:79,itemTotal:79,quantity:1,toppings:[],itemType:'product'}))),lines);
+ const column=page.locator('[data-checkout-summary-column]'),pay=column.getByRole('button',{name:/Gå til betaling/});await expect(pay).toBeVisible();
+ for(const y of [0,400,99999]){
+  await page.evaluate(top=>window.scrollTo(0,top),y);await page.waitForTimeout(120);
+  const box=await pay.boundingBox();assert.ok(box.y>=0&&box.y+box.height<=900,`pay button in view at scroll ${y} (${box.y})`);
+  await expect(column.getByRole('checkbox')).toBeVisible();
+ }
+ const content=column.locator('.overflow-y-auto');
+ const scrollable=await content.evaluate(el=>el.scrollHeight>el.clientHeight+1);
+ assert.equal(scrollable,lines>1,'only a long order list scrolls inside the summary');
+});
 test('V2 rejects invalid contact details before contacting hosted payment',async t=>{
  const page=await setup(t,'v2-invalid-mobile');
  await page.getByPlaceholder('Indtast e-mail').fill('invalid');await pay(page);
