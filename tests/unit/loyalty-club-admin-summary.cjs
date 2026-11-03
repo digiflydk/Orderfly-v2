@@ -9,8 +9,8 @@ const {defaultProgramSettings}=loadTs('src/lib/loyalty/stamp-card/rules.ts');
 const {principalKey}=loadTs('src/lib/access/authority.ts',mocks);
 const who=name=>({identity:{provider:'firebase',subject:name},name});
 const NOW=Date.parse('2026-11-03T12:00:00Z');
-const ROLES={all:['orderfly.discounts:edit','orderfly.stamp_cards:settings'],loyalty:['orderfly.stamp_cards:settings'],viewer:['orderfly.discounts:view'],
- editor:['orderfly.discounts:edit'],overview:['orderfly.stamp_cards:overview'],local:['orderfly.discounts:edit','orderfly.stamp_cards:settings'],foreign:['orderfly.discounts:edit','orderfly.stamp_cards:settings']};
+const ROLES={all:['orderfly.discounts:edit','orderfly.discounts:view','orderfly.stamp_cards:settings'],loyalty:['orderfly.stamp_cards:settings'],viewer:['orderfly.discounts:view'],
+ editor:['orderfly.discounts:edit'],creator:['orderfly.discounts:view','orderfly.discounts:create'],overview:['orderfly.stamp_cards:overview'],local:['orderfly.discounts:edit','orderfly.stamp_cards:settings'],foreign:['orderfly.discounts:edit','orderfly.stamp_cards:settings']};
 function setup(){
  db=memoryDb();const key=name=>principalKey(who(name).identity),names=Object.keys(ROLES);
  db.rows.set('platformAdminControl/access-v1',{
@@ -26,6 +26,8 @@ function setup(){
  db.rows.set('discounts/news-expired',discount({applicationType:'newsletter_signup',endDate:'2026-10-01T00:00:00Z'}));
  db.rows.set('discounts/club',discount({applicationType:'club_signup',discountType:'fixed_amount',discountValue:50}));
  db.rows.set('discounts/code',discount({code:'SUMMER'}));
+ db.rows.set('discounts/news-nowhere',discount({applicationType:'newsletter_signup',locationIds:[]}));
+ db.rows.set('discounts/news-baddate',discount({applicationType:'newsletter_signup',endDate:'not a date'}));
  db.rows.set('discounts/foreign',discount({brandId:'otherbrand',applicationType:'newsletter_signup'}));
 }
 const read=(name,brandId='brand',superuser=false)=>summary.readClubAdminSummary(db,who(name),brandId,{superuser,now:NOW});
@@ -39,7 +41,7 @@ test('missing campaign shows the legacy newsletter checkout and disabled stamps 
 test('saved campaign reports mode and stamp periods; a corrupt document fails closed',async()=>{
  setup();const settings={...defaultCampaignSettings(),checkoutMode:'club',welcome:{enabled:true,stamps:2,startsAt:NOW-1000,endsAt:NOW+1000}};
  db.rows.set('loyaltyCampaigns/brand',{brandId:'brand',version:3,updatedAt:NOW,settings});
- let result=await read('all');assert.equal(result.campaign.checkoutMode,'club');assert.equal(result.campaign.welcome.activeNow,true);assert.equal(result.campaign.welcome.stamps,2);
+ let result=await read('all');assert.equal(result.campaign.checkoutMode,'club');assert.equal(result.campaign.welcome.enabled,true);assert.equal(result.campaign.welcome.startsAt,NOW-1000);assert.equal(result.campaign.welcome.stamps,2);
  db.rows.set('loyaltyCampaigns/brand',{brandId:'brand',version:3,settings:{checkoutMode:'club'}});
  // Shows the mode checkout actually applies, and flags that the panel cannot load the document.
  result=await read('all');assert.equal(result.campaign.checkoutMode,'club');assert.equal(result.campaign.invalid,true);assert.equal(result.campaign.welcome.enabled,false);
@@ -51,9 +53,11 @@ test('only active, unassigned signup discounts of the selected brand are listed'
 test('each card requires its own full-brand permission and names what is missing',async()=>{
  setup();
  const loyalty=await read('loyalty');assert.equal(loyalty.campaign,null);assert.equal(loyalty.discounts,null);assert.ok(loyalty.texts);
- assert.deepEqual(loyalty.permissions,{settings:true,discountsEdit:false,discountsView:false});
+ assert.deepEqual(loyalty.permissions,{settings:true,discountsView:false,discountsEdit:false,discountsCreate:false});
  const viewer=await read('viewer');assert.equal(viewer.campaign,null);assert.equal(viewer.texts,null);assert.equal(viewer.discounts.length,2);
- const editor=await read('editor');assert.equal(editor.permissions.discountsView,true);assert.equal(editor.campaign,null);
+ // Edit does not imply view: the central policy evaluates each permission on its own.
+ const editor=await read('editor');assert.equal(editor.permissions.discountsView,false);assert.equal(editor.discounts,null);assert.equal(editor.campaign,null);
+ assert.equal(viewer.permissions.discountsCreate,false);assert.equal((await read('creator')).permissions.discountsCreate,true);
  for(const name of ['overview','local','foreign'])await assert.rejects(read(name),error=>error.code==='forbidden',name);
  await assert.rejects(read('all','otherbrand'),error=>error.code==='forbidden');
  assert.deepEqual((await summary.clubAdminBrands(db,who('viewer'))).map(b=>b.brandId),['brand']);
@@ -76,4 +80,36 @@ test('Omnisend status is only loaded for superusers and never exposes configurat
   process.env.ORDERFLY_OMNISEND_BRANDS='not json';assert.equal(summary.omnisendStatus('brand'),'invalid');
   delete process.env.ORDERFLY_OMNISEND_BRANDS;assert.equal(summary.omnisendStatus('brand'),'not_configured');
  }finally{if(previous===undefined)delete process.env.ORDERFLY_OMNISEND_BRANDS;else process.env.ORDERFLY_OMNISEND_BRANDS=previous;}
+});
+
+const programme={brandId:'brand',version:1,settings:{...defaultProgramSettings('Esmeralda'),active:true,reward:{type:'free_product',productIds:['pizza'],categoryIds:[]},rewardDescription:'Gratis pizza',terms:'Vilkår',consentText:'Ja tak til nyhedsbrev på e-mail. Du kan altid afmelde dig.'}};
+const saveMode=(checkoutMode,changes={})=>db.rows.set('loyaltyCampaigns/brand',{brandId:'brand',version:2,updatedAt:NOW,settings:{...defaultCampaignSettings(),checkoutMode,...changes}});
+test('discount rows say whether checkout uses them, with the same mode rule as checkout',async()=>{
+ setup();const previous=process.env.ORDERFLY_OMNISEND_BRANDS;
+ try{
+  delete process.env.ORDERFLY_OMNISEND_BRANDS;
+  db.rows.set('brands/brand',{name:'Esmeralda',slug:'esmeralda'});db.rows.set('loyaltyPrograms/brand',programme);
+  saveMode('club');let rows=Object.fromEntries((await read('viewer')).discounts.map(d=>[d.id,d]));
+  assert.equal(rows.news.inactiveReason,'mode_club');assert.equal(rows.news.usedInCheckout,false);
+  assert.equal((await read('all')).texts.ready,true);assert.equal(rows.club.usedInCheckout,true);assert.equal(rows.club.inactiveReason,null);
+  saveMode('newsletter');rows=Object.fromEntries((await read('viewer')).discounts.map(d=>[d.id,d]));
+  assert.equal(rows.club.inactiveReason,'mode_newsletter');assert.equal(rows.news.inactiveReason,'newsletter_service_pending');
+  process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([{brandId:'brand',omnisendBrandId:'om',apiKey:'secret-key-123',enabled:true,consentMode:'single_opt_in'}]);
+  rows=Object.fromEntries((await read('viewer')).discounts.map(d=>[d.id,d]));assert.equal(rows.news.usedInCheckout,true);assert.equal(rows.news.inactiveReason,null);
+  saveMode('none');rows=Object.fromEntries((await read('viewer')).discounts.map(d=>[d.id,d]));
+  assert.equal(rows.news.inactiveReason,'mode_none');assert.equal(rows.club.inactiveReason,'mode_none');
+ }finally{if(previous===undefined)delete process.env.ORDERFLY_OMNISEND_BRANDS;else process.env.ORDERFLY_OMNISEND_BRANDS=previous;}
+});
+test('a saved Club mode is flagged when checkout suppresses it, and stamps are not granted without an active programme',async()=>{
+ setup();saveMode('club',{welcome:{enabled:true,stamps:1,startsAt:null,endsAt:null}});
+ let result=await read('all');assert.equal(result.campaign.checkoutMode,'club');assert.equal(result.campaign.clubSuppressed,'brand_unavailable');
+ assert.equal(result.campaign.welcome.activeNow,false);
+ db.rows.set('brands/brand',{name:'Esmeralda',slug:'esmeralda'});
+ result=await read('all');assert.equal(result.campaign.clubSuppressed,'program_missing');
+ db.rows.set('loyaltyPrograms/brand',{...programme,settings:{...programme.settings,active:false}});
+ result=await read('all');assert.equal(result.campaign.clubSuppressed,'program_inactive');
+ db.rows.set('loyaltyPrograms/brand',programme);
+ result=await read('all');
+ assert.equal(result.texts.ready,true);assert.equal(result.campaign.clubSuppressed,null);assert.equal(result.campaign.welcome.activeNow,true);
+ saveMode('newsletter');assert.equal((await read('all')).campaign.clubSuppressed,null);
 });

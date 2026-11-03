@@ -17,14 +17,15 @@ before(async()=>{
  import{ClubSummary}from ${JSON.stringify(path.join(root,'src/app/superadmin/loyalty/club/club-summary'))};
  import{ClubCampaignPanel}from ${JSON.stringify(path.join(root,'src/app/superadmin/loyalty/club/club-campaign-panel'))};
  const bonus={enabled:true,activeNow:true,stamps:2,startsAt:Date.parse('2026-11-01T08:00:00Z'),endsAt:null};
- const full={brandId:'brand',brandName:'Esmeralda',permissions:{settings:true,discountsView:true,discountsEdit:true},
-  campaign:{checkoutMode:'club',saved:true,invalid:false,welcome:bonus,profile:{...bonus,enabled:false,requiredFields:['phone']}},
-  discounts:[{id:'club',applicationType:'club_signup',description:'Velkomstrabat',discountType:'percentage',discountValue:15,endsAt:null}],
+ const full={brandId:'brand',brandName:'Esmeralda',permissions:{settings:true,discountsView:true,discountsEdit:true,discountsCreate:true},
+  campaign:{checkoutMode:'club',clubSuppressed:null,saved:true,invalid:false,welcome:bonus,profile:{...bonus,enabled:false,requiredFields:['phone']}},
+  discounts:[{id:'club',applicationType:'club_signup',description:'Velkomstrabat',discountType:'percentage',discountValue:15,endsAt:null,usedInCheckout:true,inactiveReason:null},{id:'news',applicationType:'newsletter_signup',description:'',discountType:'fixed_amount',discountValue:25,endsAt:null,usedInCheckout:false,inactiveReason:'mode_club'}],
   texts:{programExists:true,programActive:true,ready:false,missingPlaceholders:['supportEmail'],invalidFields:[]},omnisend:'connected'};
- const limited={...full,permissions:{settings:true,discountsView:false,discountsEdit:false},campaign:null,discounts:null,omnisend:null};
+ const limited={...full,permissions:{settings:true,discountsView:false,discountsEdit:false,discountsCreate:false},campaign:null,discounts:null,omnisend:null};
+ const suppressed={...full,campaign:{...full.campaign,clubSuppressed:'program_inactive'}};
  const mode=new URLSearchParams(location.search).get('mode');
  createRoot(document.getElementById('root')).render(React.createElement('div',null,
-  React.createElement(ClubSummary,{summary:mode==='limited'?limited:full}),
+  React.createElement(ClubSummary,{summary:mode==='limited'?limited:mode==='suppressed'?suppressed:full}),
   mode==='limited'?null:React.createElement(ClubCampaignPanel,{brands:[{id:'brand',name:'Esmeralda'}],fixedBrandId:'brand'})));`);
  const loader=write('loader.js',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:{'./club-campaign-actions$':actions,'@/components/superadmin/admin-link$':link,'@':path.join(root,'src'),'react$':require.resolve('next/dist/compiled/react'),'react/jsx-runtime$':require.resolve('next/dist/compiled/react/jsx-runtime'),'react-dom$':require.resolve('next/dist/compiled/react-dom'),'react-dom/client$':require.resolve('next/dist/compiled/react-dom/client')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/club-overview-.*[\\/](entry|actions|link)\.js$/,use:[loader]}]}}).run((error,stats)=>error?reject(error):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
@@ -47,7 +48,9 @@ for(const width of [390,1440])test(`overview shows every card with edit links an
   for(const name of ['Tilbud i checkout','Tilmeldingsrabat','Velkomststempel','Stempel for udfyldt profil','Club-tekster','Omnisend'])
    await region(page).getByRole('region',{name}).waitFor();
   assert.match(await region(page).getByRole('region',{name:'Tilbud i checkout'}).innerText(),/Club/);
-  assert.match(await region(page).getByRole('region',{name:'Tilmeldingsrabat'}).innerText(),/15 %/);
+  const discounts=await region(page).getByRole('region',{name:'Tilmeldingsrabat'}).innerText();
+  assert.match(discounts,/15 %[\s\S]*Bruges i checkout/);assert.match(discounts,/25 kr\.[\s\S]*Bruges ikke: checkout tilbyder Club/);
+  assert.equal(await region(page).getByRole('region',{name:'Tilbud i checkout'}).getByRole('alert').count(),0);
   assert.equal(await page.getByRole('link',{name:'Rediger stempelkort og tekster'}).getAttribute('href'),'/superadmin/loyalty/stamp-card?tab=settings&edit=brand');
   assert.equal(await page.getByRole('link',{name:'Opret tilmeldingsrabat'}).getAttribute('href'),'/superadmin/discounts/new');
   assert.equal(await page.getByRole('link',{name:/Omnisend/}).getAttribute('href'),'/superadmin/marketing');
@@ -74,5 +77,12 @@ for(const width of [390,1440])test(`missing permissions are named per card and O
   assert.equal(await region(page).getByRole('region',{name:'Omnisend'}).count(),0);
   assert.equal(await page.getByRole('link',{name:'Opret tilmeldingsrabat'}).count(),0);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ }finally{await page.close();}
+});
+test('a suppressed Club offer is flagged on the checkout card',async()=>{
+ const page=await browser.newPage();page.setDefaultTimeout(5000);
+ try{
+  await page.goto(origin+'/?mode=suppressed');
+  assert.match(await region(page).getByRole('region',{name:'Tilbud i checkout'}).getByRole('alert').innerText(),/Vises ikke i checkout: stempelkortet er ikke aktivt/);
  }finally{await page.close();}
 });

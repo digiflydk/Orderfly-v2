@@ -1,9 +1,17 @@
 import { formatInTimeZone } from 'date-fns-tz';
 import Link from '@/components/superadmin/admin-link';
-import type { BonusSummary, ClubAdminPermission, ClubAdminSummary, OmnisendStatus } from '@/lib/loyalty/stamp-card/club-admin-summary';
+import type { BonusSummary, ClubAdminPermission, ClubAdminSummary, ClubSuppressedReason, DiscountInactiveReason, OmnisendStatus } from '@/lib/loyalty/stamp-card/club-admin-summary';
 
 const PERMISSION_LABELS: Record<ClubAdminPermission, string> = {
-  settings: 'Stempelkort-indstillinger', discountsView: 'Se rabatter', discountsEdit: 'Rediger rabatter',
+  settings: 'Stempelkort-indstillinger', discountsView: 'Se rabatter', discountsEdit: 'Rediger rabatter', discountsCreate: 'Opret rabatter',
+};
+const SUPPRESSED_LABELS: Record<ClubSuppressedReason, string> = {
+  program_missing: 'stempelkortet er ikke oprettet', program_inactive: 'stempelkortet er ikke aktivt',
+  texts_not_ready: 'Club-teksterne mangler oplysninger', brand_unavailable: 'brandet har ingen aktiv webadresse',
+};
+const INACTIVE_LABELS: Record<DiscountInactiveReason, string> = {
+  mode_none: 'Bruges ikke: ingen tilmelding vises i checkout', mode_newsletter: 'Bruges ikke: checkout tilbyder nyhedsbrev',
+  mode_club: 'Bruges ikke: checkout tilbyder Club', newsletter_service_pending: 'Bruges ikke: afventer opsætning af nyhedsbrevstjenesten',
 };
 const MODE_LABELS = { none: 'Ingen tilmeldingskampagne', newsletter: 'Nyhedsbrev', club: 'Club' } as const;
 const OMNISEND_LABELS: Record<OmnisendStatus, string> = {
@@ -33,7 +41,7 @@ function bonusText(value: BonusSummary, unit: [string, string]) {
   const amount = `${value.stamps} ${value.stamps === 1 ? unit[0] : unit[1]}`;
   const period = value.startsAt || value.endsAt
     ? ` · ${value.startsAt ? `fra ${date(value.startsAt)}` : ''}${value.startsAt && value.endsAt ? ' ' : ''}${value.endsAt ? `til ${date(value.endsAt)}` : ''}` : '';
-  return `${value.activeNow ? 'Aktiv' : 'Ikke aktiv nu'} · ${amount}${period}`;
+  return `${value.activeNow ? 'Gives nu' : 'Gives ikke nu'} · ${amount}${period}`;
 }
 
 export function ClubSummary({ summary }: { summary: ClubAdminSummary }) {
@@ -44,6 +52,7 @@ export function ClubSummary({ summary }: { summary: ClubAdminSummary }) {
     <SummaryCard title="Tilbud i checkout">
       {campaign ? <>
         <p className="text-lg font-semibold">{MODE_LABELS[campaign.checkoutMode]}</p>
+        {campaign.clubSuppressed && <p role="alert" className="text-destructive">Vises ikke i checkout: {SUPPRESSED_LABELS[campaign.clubSuppressed]}.</p>}
         {campaign.invalid && <p role="alert" className="text-destructive">Den gemte kampagne kan ikke læses. Kontakt en administrator.</p>}
         {!campaign.saved && <p className="text-muted-foreground">Ikke gemt endnu. Checkout bruger nyhedsbrev som standard.</p>}
       </> : <Missing permissions={campaignMissing} />}
@@ -51,12 +60,13 @@ export function ClubSummary({ summary }: { summary: ClubAdminSummary }) {
 
     <SummaryCard title="Tilmeldingsrabat" action={permissions.discountsView && <div className="flex flex-wrap gap-x-4 gap-y-1">
       <Link href="/superadmin/discounts" className={linkClass}>Se rabatter</Link>
-      {permissions.discountsEdit && <Link href="/superadmin/discounts/new" className={linkClass}>Opret tilmeldingsrabat</Link>}
+      {permissions.discountsCreate && <Link href="/superadmin/discounts/new" className={linkClass}>Opret tilmeldingsrabat</Link>}
     </div>}>
       {discounts ? discounts.length ? <ul className="space-y-1">{discounts.map(discount => <li key={discount.id}>
         <span className="font-medium">{discount.applicationType === 'club_signup' ? 'Club' : 'Nyhedsbrev'}</span>
         {' · '}{discount.discountType === 'percentage' ? `${discount.discountValue} %` : `${discount.discountValue} kr.`}
         {discount.description ? ` · ${discount.description}` : ''}{discount.endsAt ? ` · til ${date(discount.endsAt)}` : ''}
+        <span className={`block text-xs ${discount.usedInCheckout ? 'text-muted-foreground' : 'text-destructive'}`}>{discount.inactiveReason ? INACTIVE_LABELS[discount.inactiveReason] : 'Bruges i checkout'}</span>
       </li>)}</ul> : <p>Ingen aktiv rabat</p> : <Missing permissions={['discountsView']} />}
     </SummaryCard>
 
