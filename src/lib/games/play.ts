@@ -4,7 +4,7 @@ import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { scratchCardDraftSchema, scratchCardOnPage, prizeChannels } from './scratch-card';
 import { drawNoWinBoard, drawWinBoard } from './scratch-card-preview';
 import { gameMailConfig } from './mail-config';
-import { liveCampaign, campaignStatus } from './campaign';
+import { liveCampaign, campaignStatus, testPlayAllowed } from './campaign';
 import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 
 const hash = (value:string) => createHash('sha256').update(value).digest('hex');
@@ -26,12 +26,12 @@ export async function playScratchCard(input:PlayInput, ip:string) {
   const game=parsed.data, status=gameDoc.data()?.status;
   if(input.test){
     await requireOrderflyAccess(input.brandId,null,'orderfly.website:view');
-    if(status!=='test'&&status!=='draft')throw new GameError(403,'Testspillet er ikke aktivt.');
+    if(!testPlayAllowed(status,game))throw new GameError(403,'Testspillet er ikke aktivt.');
   }else if(campaignStatus(status,game)!=='live'||!(input.pathname==='/games'||scratchCardOnPage(game,input.pathname)))throw new GameError(404,'Spillet er ikke aktivt på denne side.');
   const mailReady=!!gameMailConfig(input.brandId);
   if(!input.test&&!mailReady)throw new GameError(503,'E-mail er ikke konfigureret for dette brand.');
   const campaignId=gameRef.id;
-  const day=new Date().toISOString().slice(0,10), ipKey=hash(`${campaignId}\n${day}\n${ip}`);
+  const day=new Date().toISOString().slice(0,10), ipKey=hash(input.test?`${campaignId}\ntest\n${day}\n${ip}`:`${campaignId}\n${day}\n${ip}`);
   const leadKey=hash(`${campaignId}\n${input.test?'test':'live'}\n${email}`);
   const playRef=db.collection('gamePlays').doc(leadKey), limiterRef=db.collection('gamePlayLimits').doc(ipKey);
   const code=randomCode(), codeId=hash(`${input.brandId}\n${code}`), voucherRef=db.collection('gameVouchers').doc(codeId);
@@ -45,7 +45,7 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     if(prior.exists)throw new GameError(409,'Denne e-mail har allerede spillet kampagnen.');
     if((limit.data()?.count||0)>=20)throw new GameError(429,'For mange forsøg. Prøv igen senere.');
     const fresh=scratchCardDraftSchema.safeParse(current.data());
-    if(!fresh.success||current.data()?.status!==status || (!input.test&&(campaignStatus(current.data()?.status,fresh.data)!=='live'||!(input.pathname==='/games'||scratchCardOnPage(fresh.data,input.pathname)))))throw new GameError(409,'Kampagnen blev ændret. Prøv igen.');
+    if(!fresh.success||current.data()?.status!==status || (input.test&&!testPlayAllowed(current.data()?.status,fresh.data)) || (!input.test&&(campaignStatus(current.data()?.status,fresh.data)!=='live'||!(input.pathname==='/games'||scratchCardOnPage(fresh.data,input.pathname)))))throw new GameError(409,'Kampagnen blev ændret. Prøv igen.');
     const played=(input.test?current.data()?.testPlayedCount:current.data()?.playedCount)||0;
     const previousCounts=(input.test?current.data()?.testWinnerCounts:current.data()?.winnerCounts)||[];
     if(played>=game.totalCardLimit)throw new GameError(409,'Alle spil i kampagnen er brugt.');

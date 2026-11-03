@@ -274,7 +274,11 @@ for (const [width,height] of [[320,568],[390,850],[1280,850]]) test(`V2 mockup s
  if(width<640)assert.ok(box.y<1&&Math.abs(box.height-height)<2,'mobile sheet fills viewport');
  assert.ok(Math.abs(hero.width-box.width)<3,'photo spans the product sheet');
  assert.ok(Math.abs(hero.width/hero.height-16/9)<0.05,'photo uses the mockup landscape proportion');
- assert.ok(hero.y>=(await page.locator('.v2-product-topbar').boundingBox()).height,'brand bar sits above the photo');
+ assert.ok(hero.y-box.y>=0&&hero.y-box.y<=1.5,`photo starts at the top of the sheet (${hero.y} vs ${box.y})`);
+ assert.equal(await page.locator('.v2-product-topbar').count(),0);
+ const back=page.getByRole('button',{name:'Tilbage til menu',exact:true}),backBox=await back.boundingBox();
+ assert.ok(backBox.y>=hero.y&&backBox.y+backBox.height<=hero.y+hero.height&&backBox.x>=hero.x,'back pill overlays the photo');
+ assert.equal(await back.evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(255, 255, 255)');
  const heading=await page.getByRole('heading',{name:'Testpizza',exact:true}).boundingBox();assert.ok(heading.y>=hero.y+hero.height,'product title follows the hero');
  const customize=page.getByRole('button',{name:'Tilpas ingredienser',exact:true});
  assert.equal(await customize.evaluate(el=>getComputedStyle(el).borderTopWidth),'1px');
