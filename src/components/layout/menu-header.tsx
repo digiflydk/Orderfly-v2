@@ -16,6 +16,7 @@ import { useStorefrontPath } from '@/hooks/use-storefront-path';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { Info, User } from 'lucide-react';
 import { LocationInfoDialog } from '@/components/storefront/location-info-dialog';
+import { useClubSignedIn } from '@/hooks/use-club-session';
 
 export function MenuHeader({ brand, initialLocation, initialNow }: {
   brand: Brand;
@@ -45,6 +46,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
     return () => { observer.disconnect(); frame.style.removeProperty('--storefront-header-height'); };
   }, [refreshedMenu]);
   const storefront = useStorefrontPath(brand.slug);
+  const clubSignedIn = useClubSignedIn(isV2 && !checkout ? brand.slug : null);
   const href = location ? storefront(location.slug) : storefront();
   const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));
   useEffect(() => {
@@ -66,7 +68,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
           ? <div data-v2-checkout-logo={isV2 || undefined} className={isV2 ? "relative flex h-11 w-[168px] shrink-0 items-center" : "relative flex h-10 w-36 shrink-0 items-center"}>{logo}</div>
           : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>}
         {isV2 && !checkout && <div className="v2-header-actions">
-          <Link href={storefront('club', 'login')} aria-label="Log ind" className="v2-header-login"><User aria-hidden="true" className="h-4 w-4" /><span>Log ind</span></Link>
+          <Link href={clubSignedIn ? storefront('club') : storefront('club', 'login')} aria-label={clubSignedIn ? 'Min Club' : 'Log ind'} data-signed-in={clubSignedIn || undefined} className="v2-header-login"><User aria-hidden="true" className="h-4 w-4" /><span>{clubSignedIn ? 'Min Club' : 'Log ind'}</span></Link>
           {location ? <LocationInfoDialog brand={brand} location={location} /> : <span className="v2-location-toggle" aria-hidden="true"><Info className="h-5 w-5" /></span>}
         </div>}
         {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}

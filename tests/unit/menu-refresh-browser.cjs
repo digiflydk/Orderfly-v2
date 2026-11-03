@@ -24,6 +24,7 @@ before(async()=>{
  const aliases={
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'fixture'});`),
   '@/components/feedback/public-reviews-link':file('reviews','export const PublicReviewsLink=()=>null;'),
+  '@/app/club-session-actions':file('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/cart-actions':file('restore',`export const restoreCartAction=async input=>fetch('/restore',{method:'POST',body:JSON.stringify(input)}).then(r=>r.json());`),
   '@/hooks/use-toast':file('toast','export const useToast=()=>({toast:()=>{}});'),
   'next/navigation':file('navigation',`import{useMemo}from'react';export const useSearchParams=()=>useMemo(()=>new URLSearchParams(window.location.search),[]);export const usePathname=()=>window.location.pathname;export const useRouter=()=>({push:href=>location.assign(href)});`),
@@ -190,6 +191,15 @@ for(const width of [390,1280,1600])test(`V2 header: one row on desktop, no burge
   assert.ok(logo.x<=pickup.x+1&&info.x>logo.x+logo.width,'mobile logo sits left, actions right');
   assert.equal(await banner.isVisible(),false);
  }
+});
+
+test('V2 header says Min Club and links to the portal when the browser is signed in',async t=>{
+ const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
+ const page=await context.newPage();await page.addInitScript(()=>{window.fixtureClubSignedIn=true;});
+ await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup&v2');
+ const link=page.locator('[data-v2-menu-header]').getByRole('link',{name:'Min Club'});await link.waitFor();
+ assert.match(await link.getAttribute('href'),/\/club$/);
+ assert.equal(await page.locator('[data-v2-menu-header]').getByRole('link',{name:'Log ind'}).count(),0);
 });
 
 for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom while scrolling and resizing (${width}px)`,async t=>{

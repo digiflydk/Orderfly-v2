@@ -26,3 +26,14 @@ New tests:
 - With 1 and with 14 order lines, the checkbox and pay button stay inside a 1280×900 viewport at every scroll position, and only a long order list scrolls.
 
 The checkout tests fail on the previous `main`.
+
+## Club login state (follow-up to item 5)
+The PO's desktop browser had an active Club session with a personal discount card. The checkout then correctly hid "Bliv medlem", but the storefront still said "Log ind", which was confusing.
+
+`getClubSessionStatusAction` (in `src/app/club-session-actions.ts`) is a read-only server action. It validates the host-only `__Host-orderfly-loyalty` cookie with `readSession` and returns only `{ signedIn }`. The `useClubSignedIn` hook calls it on mount and again when the tab regains focus. With a valid session:
+- the V2 header shows **Min Club**, linking to `/club` instead of `/club/login`,
+- the checkout replaces "Har du et personligt rabatkort? Log ind i Club …" with "Du er logget ind i {Club}. Har du et personligt rabatkort, så brug kortets e-mail i kassen."
+
+No member data reaches the storefront. Logout stays in the Club portal.
+
+The browser fixtures mock `@/app/club-session-actions` through `window.fixtureClubSignedIn`. `menu-refresh-browser` and `checkout-browser` cover the signed-in header and checkout text.

@@ -36,6 +36,7 @@ import { useForm, FormProvider, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { useClubSignedIn } from '@/hooks/use-club-session';
 import { getDiscountCardCheckoutEnabledAction, getDiscountCardCheckoutOfferAction, getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer, CheckoutSignupConfig } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
@@ -353,6 +354,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const cardHost = React.useSyncExternalStore(() => () => {}, () => window.location.hostname, () => null);
   const cardNeedsCanonicalHost = !!cardHost && !['localhost','127.0.0.1'].includes(cardHost) && brandSlugFromHost(cardHost) !== params.brandSlug;
   const canonicalCardOrderUrl = `${brandSubdomainUrl(params.brandSlug as string)}${brandStorefrontPath(params.brandSlug as string,true,params.locationSlug as string)}`;
+  const clubSignedIn = useClubSignedIn(brand?.slug);
   const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
@@ -1147,7 +1149,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     <a className="underline" href={canonicalCardOrderUrl} target="_blank" rel="noopener noreferrer">Åbn brandets bestillingsside</a>
                   </p>}
                   {discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
-                    Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.
+                    {clubSignedIn
+                      ? <>Du er logget ind i {signupConfig.clubProgram?.name || `${brand?.name ?? ''} Club`.trim()}. Har du et personligt rabatkort, så brug kortets e-mail i kassen.</>
+                      : <>Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.</>}
                   </p>}
                   {discountCardOffer && <div role="status" className="rounded-xl border p-4" data-discount-card-offer>
                     <p className="font-semibold">{discountCardOffer.name} · {discountCardOffer.percentage}% rabat</p>

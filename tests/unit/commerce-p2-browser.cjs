@@ -61,6 +61,7 @@ before(async()=>{
  const aliases={
   '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
   '@/components/superadmin/FiltersBar':fixture('filter-bar','export const FiltersBar=()=>null;'),
+  '@/app/club-session-actions':fixture('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
   '@/app/superadmin/brands/actions':fixture('brand-action','export const getBrandBySlug=async()=>null;'),
   '@/app/superadmin/upsells/actions':fixture('upsells','export const getActiveUpsellForCart=async()=>null;export const incrementUpsellConversion=async()=>{};'),
