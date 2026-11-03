@@ -26,7 +26,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { deleteDiscount } from './actions';
-import { ClubCampaignPanel } from './club-campaign-panel';
 import { promotionEligibilityText, type PromotionEligibilityIssue } from '@/lib/promotion-eligibility';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -104,7 +103,9 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
         </Button></div>
       </div>
 
-      <ClubCampaignPanel brands={brands} />
+      <p role="note" className="rounded-md border bg-muted/40 p-3 text-sm">
+        Club-kampagner og tilbud i checkout er flyttet til <Link href="/superadmin/loyalty/club" className="font-medium underline underline-offset-4">Loyalitet → Club &amp; nyhedsbrev</Link>.
+      </p>
 
        <Card>
             <CardContent className="p-4 flex items-center gap-4">

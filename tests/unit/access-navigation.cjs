@@ -49,6 +49,13 @@ test('stamp-card administration and customer score are separate destinations',()
  // Counter-only staff get no administration menu entry.
  assert.equal(canNavigate('/superadmin/loyalty/stamp-card',{superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem']}),false);
 });
+test('Club & newsletter page is reachable with any one of its full-brand permissions',()=>{
+ for(const permission of ['orderfly.stamp_cards:settings','orderfly.discounts:view','orderfly.discounts:edit'])
+  assert.equal(canNavigate('/superadmin/loyalty/club',{superuser:false,permissions:[permission]}),true,permission);
+ for(const permissions of [['orderfly.stamp_cards:overview'],['orderfly.stamp_cards:log'],['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem'],['orderfly.customer_score:view']])
+  assert.equal(canNavigate('/superadmin/loyalty/club',{superuser:false,permissions}),false,permissions.join());
+ assert.equal(canNavigate('/superadmin/loyalty/club',{superuser:true,permissions:[]}),true);
+});
 test('counter staff reach only the counter view; leaders and superusers keep both',()=>{
  const staff={superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem','opsfly.own_time:view']};
  assert.equal(counterOnly(staff),true);assert.equal(canNavigate('/merchant/stamp-card',staff),true);assert.equal(canNavigate('/merchant',staff),true);

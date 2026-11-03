@@ -22,7 +22,7 @@ export async function loadClubCampaignAction(brandId: string): Promise<ClubCampa
 export async function saveClubCampaignAction(input: unknown): Promise<ClubCampaignResult> {
   try {
     const campaign = await saveClubCampaign(getAdminDb(), await actor(), input, Date.now());
-    revalidatePath('/superadmin/discounts');
+    revalidatePath('/superadmin/loyalty/club');
     return { ok: true, campaign };
   } catch (error) { return failure(error); }
 }

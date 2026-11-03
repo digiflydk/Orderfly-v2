@@ -10,7 +10,7 @@ No production campaign is activated by adding this support. The campaign mode an
 
 ## Promotion administration
 
-Promotion's discount form supports “Automatic on Club signup” with the reserved marker `CLUB_SIGNUP`, the existing schedule/location/order-type/minimum settings and optional item stacking. Manual codes cannot use either signup campaign's reserved marker. The campaign panel is the sole writer of the brand's checkout acquisition mode; saving a discount does not switch the active signup option or activate a production campaign implicitly.
+Promotion's discount form supports “Automatic on Club signup” with the reserved marker `CLUB_SIGNUP`, the existing schedule/location/order-type/minimum settings and optional item stacking. Manual codes cannot use either signup campaign's reserved marker. The campaign panel under Loyalitet → Club & nyhedsbrev (see `docs/stempelkort/club-campaign-admin.md`) is the sole writer of the brand's checkout acquisition mode; saving a discount does not switch the active signup option or activate a production campaign implicitly.
 
 ## Checkout consent and verification
 

@@ -18,7 +18,7 @@ before(async()=>{
   return {ok:true,campaign:{brandId:value.brandId,version:value.version+1,updatedAt:1,settings:value.settings}};
  }`);
  const entry=write('entry.js',`import React from 'react';import{createRoot}from'react-dom/client';
- import{ClubCampaignPanel}from ${JSON.stringify(path.join(root,'src/app/superadmin/discounts/club-campaign-panel'))};
+ import{ClubCampaignPanel}from ${JSON.stringify(path.join(root,'src/app/superadmin/loyalty/club/club-campaign-panel'))};
  createRoot(document.getElementById('root')).render(React.createElement(ClubCampaignPanel,{brands:[{id:'brand',name:'Esmeralda'},{id:'denied',name:'Adgang afvist'}]}));`);
  const loader=write('loader.js',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:{'./club-campaign-actions$':actions,'@':path.join(root,'src'),'react$':require.resolve('next/dist/compiled/react'),'react/jsx-runtime$':require.resolve('next/dist/compiled/react/jsx-runtime'),'react-dom$':require.resolve('next/dist/compiled/react-dom'),'react-dom/client$':require.resolve('next/dist/compiled/react-dom/client')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/club-admin-.*[\\/](entry|actions)\.js$/,use:[loader]}]}}).run((error,stats)=>error?reject(error):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
