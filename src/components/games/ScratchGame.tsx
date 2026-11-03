@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PublicScratchGame } from '@/lib/games/scratch-card';
 import { ScratchSurface } from './ScratchCard';
+import { winningLine } from '@/lib/games/scratch-card-preview';
 
 type Props={game:PublicScratchGame;brandName:string;test?:boolean;pathname:string;embedOrigin?:string};
 export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Props){
@@ -53,6 +54,7 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
   }
   const [playEventId,setPlayEventId]=useState<string|null>(null);
   const finished=!!board&&revealed===board.length;
+  const line=board?winningLine(board):null;
   useEffect(()=>{
     if(!finished)return;
     if(playEventId)track('game_complete',playEventId);
@@ -81,7 +83,7 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
     </form>:<div className="mt-6">
       <div className="rounded-xl border border-white/30 p-2 sm:p-3">
         <div className={`grid gap-2 ${board.length===1?'grid-cols-1':board.length===2?'grid-cols-2':'grid-cols-3'}`}>
-          {board.map((label,index)=><ScratchSurface key={index} index={index} round={0} compact={board.length>3} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
+          {board.map((label,index)=><ScratchSurface key={index} highlight={finished&&won&&!!line?.includes(index)} index={index} round={0} compact={board.length>3} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
         </div>
       </div>
       {finished&&<div role="status" className="mt-5 rounded-xl border border-white/30 p-4 text-center">

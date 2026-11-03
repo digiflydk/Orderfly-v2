@@ -84,7 +84,7 @@ export function publicScratchGame(game:ScratchCardDraft):PublicScratchGame {
 export function esmeraldaScratchTest(brandId: string): ScratchCardDraft {
   return scratchCardDraftSchema.parse({
     brandId, title:'Skrab 3 felter og vind hos Esmeralda',
-    instruction:'Skrab alle tre felter. Tre ens symboler viser din præmie.',
+    instruction:'Skrab alle felter. Tre ens på stribe – vandret, lodret eller på tværs – vinder.',
     revealText:'Ingen gevinst denne gang', logoUrl:'', cardsPerPlay:3,totalCardLimit:3000,
     newsletterText:'Ja tak, jeg vil modtage nyheder og tilbud fra Esmeralda via e-mail. Jeg kan altid afmelde mig.',
     prizes:[
