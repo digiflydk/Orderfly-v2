@@ -119,6 +119,8 @@ const locationSchema = z.object({
     .min(0)
     .optional()
     .default(0),
+  contactPhone: z.string().trim().max(30, { message: 'Telefonnummeret må højst være 30 tegn.' }).regex(/^[+0-9 ()-]*$/, { message: 'Telefonnummeret må kun indeholde tal, mellemrum, +, - og parenteser.' }).optional().or(z.literal('')),
+  contactEmail: z.string().trim().max(200).email({ message: 'Indtast en gyldig e-mailadresse.' }).optional().or(z.literal('')),
   pickupLabel: deliveryMethodLabelSchema,
   deliveryLabel: deliveryMethodLabelSchema,
 });
@@ -245,6 +247,8 @@ export function LocationFormPage({
           travlhed_factor:
             location.travlhed_factor ?? 'normal',
           manual_override: location.manual_override ?? 0,
+          contactPhone: location.contactPhone ?? '',
+          contactEmail: location.contactEmail ?? '',
           pickupLabel: deliveryMethodLabel(location, 'pickup'),
           deliveryLabel: deliveryMethodLabel(location, 'delivery'),
         }
@@ -268,6 +272,8 @@ export function LocationFormPage({
           delivery_time: 20,
           travlhed_factor: 'normal',
           manual_override: 0,
+          contactPhone: '',
+          contactEmail: '',
           pickupLabel: '',
           deliveryLabel: '',
         }) as any,
@@ -1294,6 +1300,27 @@ export function LocationFormPage({
                     </FormItem>
                   )}
                 />
+
+                <Separator />
+
+                <div className="space-y-4" aria-label="Kontaktoplysninger">
+                  <div>
+                    <h3 className="font-semibold">Kontaktoplysninger</h3>
+                    <p className="text-sm text-muted-foreground">Vises for kunderne under "i" på bestillingssiden. Lad et felt være tomt for at skjule det.</p>
+                  </div>
+                  {([
+                    ['contactPhone', 'Telefon', '+45 12 34 56 78', 'tel'],
+                    ['contactEmail', 'E-mail', 'kontakt@restaurant.dk', 'email'],
+                  ] as const).map(([name, label, placeholder, type]) => (
+                    <FormField key={name} control={control} name={name} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{label}</FormLabel>
+                        <FormControl><Input {...field} type={type} value={field.value ?? ''} placeholder={placeholder} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  ))}
+                </div>
 
                 <Separator />
 
