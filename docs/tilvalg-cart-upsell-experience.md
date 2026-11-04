@@ -53,3 +53,7 @@ extras; it cannot retain unvalidated options. V1 does not show product option
 configuration or apply paid defaults, unless editing an already configured combo.
 Regression tests cover required groups and paid defaults in the legacy path and
 empty explicit configurations remaining strict after serialization.
+
+### Cart value trigger consistency
+
+The `cart_value_over` trigger uses one cart value in the storefront and at checkout: every line, combos included, at its current unit price after standard offers, multiplied by quantity, without options. `src/lib/upsell-cart-value.ts` implements the storefront side and mirrors `minimumCheckoutPrices`. Before this change the storefront added option prices and used list prices before offers. Customers could then see a discounted recommendation that checkout rejected, or that the 30-second repricing removed. The checkout price-change error is now in Danish. Coverage: `tests/unit/upsell-cart-value.cjs` checks that the offer is shown exactly when checkout accepts it, including options, standard offers, combos and the exact threshold.
