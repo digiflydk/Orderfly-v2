@@ -21,6 +21,11 @@ before(async()=>{
  const aliases={
   '@/lib/delivery/quotes/adoption':file('adoption',`export const managedDeliveryRequired=async()=>!!globalThis.fixture.managed;`),
   '@/context/cart-context':file('cart',`import{useEffect,useState}from'react';export const useCart=()=>{const [location,setLocation]=useState(null);useEffect(()=>{setLocation(globalThis.fixture.location)},[]);return{location,deliveryType:'delivery',cartReady:!!location&&globalThis.fixture.deliveryReady}};`),
+  // The location layout is a Server Component. The fixture bundles it with webpack outside the
+  // Next.js server runtime, so `server-only` would throw. Replace the guard and the Firestore-backed
+  // schedule reader with scope-checked fixture doubles. The client entry also renders without a schedule.
+  'server-only$':file('server-only',`export {};`),
+  '@/lib/delivery/public-schedule-server':file('schedule',`export const readPublicManagedDeliverySchedule=async({brandId,locationId})=>{const f=globalThis.fixture;if(!f.managed)throw Error('Schedule read for a legacy location');if(brandId!==f.brand.id||locationId!==f.initialLocation.id)throw Error('Incorrect schedule scope');return null;};`),
   '@/lib/data/brand-location':file('data',`export const getBrandAndLocation=async(brandSlug,locationSlug)=>{const f=globalThis.fixture;if(brandSlug!==f.brand.slug||locationSlug!==f.initialLocation.slug)throw Error('Incorrect route lookup');return{brand:f.brand,location:f.initialLocation,brandMatchesLocation:f.initialLocation.brandId===f.brand.id}};`),
   '@/components/layout/footer':file('footer',`export const Footer=()=>null;`),
   '@/components/layout/header':file('header',`import React from'react';export const Header=()=> <header>Global</header>;`),
