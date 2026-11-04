@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { isClubPath } from '@/lib/loyalty/portal-path';
 import { storefrontSegments } from '@/lib/brand-subdomain';
 import { EsmeraldaClubFooter } from './club/portal-frame';
@@ -22,6 +23,7 @@ export function BrandLayoutClient({
   location?: Location | null;
 }) {
   const pathname = usePathname();
+  const isV2 = useStorefrontV2();
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
   
   if (!brand) {
@@ -47,7 +49,8 @@ export function BrandLayoutClient({
       <div
         className="flex flex-col min-h-screen"
       >
-        {showGlobalHeader && <Header brand={brand} />}
+        {/* V2: the landing page shares the menu's header (logo, account, info). */}
+        {showGlobalHeader && (isV2 && segments.length === 0 ? <MenuHeader brand={brand} /> : <Header brand={brand} />)}
         {showMenuHeader && <MenuHeader brand={brand} />}
         <Content className="flex-1 w-full">
             {children}

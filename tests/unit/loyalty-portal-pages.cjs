@@ -8,7 +8,7 @@ const {locationSlugError,brandSlugError}=loadTs('src/lib/brand-subdomain.ts');
 
 test('the real brand layout selects the club footer only for Esmeralda club paths and keeps cookie settings wired',()=>{
   const fs=require('node:fs'),ts=require('typescript');
-  let pathname,opened=0;
+  let pathname,opened=0,v2=false;
   const mocks={
     'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},
     react:{useState:()=>[false,()=>{opened++;}]},
@@ -17,6 +17,7 @@ test('the real brand layout selects the club footer only for Esmeralda club path
     '@/components/layout/header':{Header:'Header'},
     '@/components/layout/footer':{Footer:'Footer'},
     '@/components/layout/menu-header':{MenuHeader:'MenuHeader'},
+    '@/context/storefront-v2-context':{useStorefrontV2:()=>v2},
     '@/lib/loyalty/portal-path':paths,
     '@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
     './club/portal-frame':{EsmeraldaClubFooter:'EsmeraldaClubFooter'},
@@ -34,6 +35,12 @@ test('the real brand layout selects the club footer only for Esmeralda club path
     if(path.includes('/club'))assert.equal(children.find(c=>c?.props?.children==='form').type,'div','club owns its single main');
   }
   assert.equal(opened,4);
+  // V2 landing page shares the menu header; other brands and V1 keep the generic header.
+  for(const [isV2,path,expected] of [[true,'/esmeralda','MenuHeader'],[false,'/esmeralda','Header'],[true,'/esmeralda/about','Header']]){
+    v2=isV2;pathname=path;
+    const children=mod.exports.BrandLayoutClient({brand:{id:'esmeralda',slug:'esmeralda'},children:'page'}).props.children;
+    assert.ok(children.some(c=>c?.type===expected),`${isV2?'V2':'V1'} ${path} uses ${expected}`);
+  }
 });
 
 test('club paths are recognised on the brand subdomain and on orderfly.dk/{slug}',()=>{

@@ -88,6 +88,7 @@ export function LocationCard({ location }: LocationCardProps) {
     <button
       type="button"
       onClick={onSelect}
+      data-location-card
       className="group w-full text-left"
       aria-label={`Vælg ${location.name}`}
     >
@@ -132,6 +133,7 @@ export function LocationCard({ location }: LocationCardProps) {
                 <Clock className="h-3 w-3 mr-1.5" />
                 {getOpeningStatusText()}
                </Badge>
+              <span className="v2-location-card-cta" aria-hidden="true">Bestil her</span>
           </div>
     </Card>
     </button>

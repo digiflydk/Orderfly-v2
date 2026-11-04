@@ -36,7 +36,7 @@ import { useForm, FormProvider, type UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useClubSignedIn } from '@/hooks/use-club-session';
+import { useClubSession } from '@/hooks/use-club-session';
 import { getDiscountCardCheckoutEnabledAction, getDiscountCardCheckoutOfferAction, getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer, CheckoutSignupConfig } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
@@ -354,7 +354,18 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const cardHost = React.useSyncExternalStore(() => () => {}, () => window.location.hostname, () => null);
   const cardNeedsCanonicalHost = !!cardHost && !['localhost','127.0.0.1'].includes(cardHost) && brandSlugFromHost(cardHost) !== params.brandSlug;
   const canonicalCardOrderUrl = `${brandSubdomainUrl(params.brandSlug as string)}${brandStorefrontPath(params.brandSlug as string,true,params.locationSlug as string)}`;
-  const clubSignedIn = useClubSignedIn(brand?.slug);
+  const club = useClubSession(brand?.slug);
+  const clubSignedIn = club.signedIn;
+  const clubProfileApplied = useRef(false);
+  // A signed-in Club member's own details fill the empty contact fields once; typed values are never overwritten.
+  // With the member's e-mail in place, an existing personal discount card applies through the usual server check.
+  useEffect(() => {
+    if (!club.signedIn || clubProfileApplied.current) return;
+    clubProfileApplied.current = true;
+    for (const [field, value] of [['name', club.name], ['email', club.email], ['phone', club.phone]] as const) {
+      if (value && !String(form.getValues(field) ?? '').trim()) form.setValue(field, value, { shouldDirty: true });
+    }
+  }, [club, form]);
   const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
@@ -430,7 +441,8 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const clubTermsAccepted = form.watch('clubTermsAccepted');
   const useClubDiscount = form.watch('useClubDiscount');
   const personalClubOffer = !signupConfig.clubSignupSuppressed && newsletterOffer?.applicationType === 'club_signup' && newsletterOffer.requiresSignup === false;
-  const clubSignupShown = signupConfig.mode === 'club' && !!signupConfig.clubProgram && !personalClubOffer;
+  // Signed-in Club members are already members: no signup card.
+  const clubSignupShown = signupConfig.mode === 'club' && !!signupConfig.clubProgram && !personalClubOffer && !clubSignedIn;
   const newsletterSelected = personalClubOffer ? useClubDiscount : clubSignupShown ? newsletterOptIn && clubTermsAccepted : signupConfig.mode === 'newsletter' && newsletterOptIn;
   useEffect(() => {
     let current = true;
@@ -1148,11 +1160,11 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                     Rabatkort bruges på brandets egen bestillingsside. Din kurv bliver på denne side og overføres ikke. Start en ny bestilling på brandets side for at bruge kortet.{' '}
                     <a className="underline" href={canonicalCardOrderUrl} target="_blank" rel="noopener noreferrer">Åbn brandets bestillingsside</a>
                   </p>}
-                  {discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
-                    {clubSignedIn
-                      ? <>Du er logget ind i {signupConfig.clubProgram?.name || `${brand?.name ?? ''} Club`.trim()}. Har du et personligt rabatkort, så brug kortets e-mail i kassen.</>
-                      : <>Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.</>}
-                  </p>}
+                  {club.signedIn
+                    ? <p className="text-sm" data-club-signed-in>Logget ind som <strong>{club.name || club.email}</strong> · <Link className="underline" href={storefrontPath('club')}>Min Club</Link></p>
+                    : discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
+                      Er du medlem af {signupConfig.clubProgram?.name || `${brand?.name ?? ''} Club`.trim()}? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link>
+                    </p>}
                   {discountCardOffer && <div role="status" className="rounded-xl border p-4" data-discount-card-offer>
                     <p className="font-semibold">{discountCardOffer.name} · {discountCardOffer.percentage}% rabat</p>
                     <p>{discountCardApplied ? 'Dit personlige rabatkort er anvendt på varer uden andet tilbud.' : 'Du får den bedste tilgængelige rabat. Rabatkortet lægges ikke oven i andre tilbud.'}</p>

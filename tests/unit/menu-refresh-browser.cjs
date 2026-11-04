@@ -24,7 +24,7 @@ before(async()=>{
  const aliases={
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'fixture'});`),
   '@/components/feedback/public-reviews-link':file('reviews','export const PublicReviewsLink=()=>null;'),
-  '@/app/club-session-actions':file('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
+  '@/app/club-session-actions':file('club-session','export const getClubSessionProfileAction=async()=>window.fixtureClubSignedIn?{signedIn:true,firstName:"Ole",name:"Ole Hansen",email:window.fixtureClubEmail||"ole@example.test",phone:"+4512345678"}:{signedIn:false};export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/cart-actions':file('restore',`export const restoreCartAction=async input=>fetch('/restore',{method:'POST',body:JSON.stringify(input)}).then(r=>r.json());`),
   '@/hooks/use-toast':file('toast','export const useToast=()=>({toast:()=>{}});'),
   'next/navigation':file('navigation',`import{useMemo}from'react';export const useSearchParams=()=>useMemo(()=>new URLSearchParams(window.location.search),[]);export const usePathname=()=>window.location.pathname;export const useRouter=()=>({push:href=>location.assign(href)});`),
@@ -148,16 +148,20 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  const info=page.getByRole('button',{name:'Restaurantoplysninger',exact:true});
  await info.click();
  const popup=page.getByRole('dialog',{name:'Esmeralda Pizza Amager'});await popup.waitFor();
- await popup.getByRole('link',{name:/Albaniensgade 6/}).waitFor();
+ await popup.getByText(/Albaniensgade 6/).waitFor();
+ assert.match(await popup.getByRole('link',{name:'Vis rute'}).getAttribute('href'),/google\.com\/maps\/search\/.*Albaniensgade/);
+ assert.equal(await popup.locator('[data-today]').count(),1,'today is marked');
+ await page.waitForTimeout(500);await page.screenshot({path:path.join(dir,'v2-info-390.png')});
+ await page.setViewportSize({width:1280,height:900});await page.waitForTimeout(150);await page.screenshot({path:path.join(dir,'v2-info-1280.png')});await page.setViewportSize({width:390,height:900});
  assert.equal(await popup.getByText('Mandag',{exact:true}).count(),1);assert.equal(await popup.getByText('Søndag',{exact:true}).count(),1);
  assert.equal(await popup.getByRole('link',{name:'+45 12 34 56 78'}).getAttribute('href'),'tel:+4512345678');
  assert.equal(await popup.getByRole('link',{name:'amager@example.test'}).getAttribute('href'),'mailto:amager@example.test');
  await page.keyboard.press('Escape');await popup.waitFor({state:'hidden'});
  assert.equal(await page.getByRole('region',{name:'Lokationsoplysninger'}).count(),0);
  await page.getByRole('button',{name:'Levering',exact:true}).click();
- await page.getByText('Leveringspris beregnes i kassen',{exact:true}).waitFor();
+ await page.getByText('Leveringspris beregnes i kassen',{exact:true}).filter({visible:true}).waitFor();
  await page.getByRole('button',{name:'Afhentning',exact:true}).click();
- assert.equal(await page.getByText('Leveringspris beregnes i kassen',{exact:true}).count(),0);
+ assert.equal(await page.getByText('Leveringspris beregnes i kassen',{exact:true}).filter({visible:true}).count(),0);
  const search=page.getByRole('searchbox',{name:'Søg i menuen'});
  await search.fill('nothingmatches');
  await page.getByRole('status').filter({hasText:'Ingen varer matcher'}).waitFor();
@@ -182,6 +186,7 @@ for(const width of [390,1280,1600])test(`V2 header: one row on desktop, no burge
   assert.ok(pickup.x<logo.x&&info.x>logo.x+logo.width,'toggle left, actions right');
   assert.equal(await banner.isVisible(),true);assert.equal(Math.round((await banner.boundingBox()).height),168);
   assert.ok((await banner.boundingBox()).width<=1300.5,'desktop frame is at most 1300px');
+  for(const text of ['Esmeralda Pizza Amager',/Albaniensgade 6/,/Åbningstid i dag/])assert.equal(await banner.getByText(text).first().isVisible(),true,'banner shows '+text);
   const search=await page.getByRole('searchbox',{name:'Søg i menuen'}).boundingBox(),nav=await page.getByRole('navigation',{name:'Menukategorier'}).boundingBox();
   assert.ok(search.x>nav.x,'search sits right of the categories');
   const cart=await page.locator('[data-menu-grid] > div').last().boundingBox();
@@ -199,6 +204,7 @@ test('V2 header says Min Club and links to the portal when the browser is signed
  await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup&v2');
  const link=page.locator('[data-v2-menu-header]').getByRole('link',{name:'Min Club'});await link.waitFor();
  assert.match(await link.getAttribute('href'),/\/club$/);
+ assert.equal((await link.innerText()).trim(),'Ole','the header greets the member by first name');
  assert.equal(await page.locator('[data-v2-menu-header]').getByRole('link',{name:'Log ind'}).count(),0);
 });
 

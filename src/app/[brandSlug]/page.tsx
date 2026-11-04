@@ -25,7 +25,7 @@ function BrandPageComponent({ brand, locations }: PageProps) {
   
   return (
     <>
-        <div className="mx-auto max-w-[1140px] px-4 py-8 w-full">
+        <div data-v2-landing={brand.slug === 'esmeralda' || undefined} className={brand.slug === 'esmeralda' ? "storefront-frame py-8" : "mx-auto max-w-[1140px] px-4 py-8 w-full"}>
         <div className="space-y-8">
             <div>
             <h1 className="text-3xl font-bold text-center sm:text-left">
