@@ -62,3 +62,7 @@ CART_CHROMIUM_PATH=/opt/pw-browsers/chromium node --test tests/unit/menu-refresh
 - no signup card for members.
 
 The browser fixtures mock `@/app/club-session-actions`.
+
+## Follow-up after live verification
+- In V2 checkout, the page-level "Tilbage til menuen" is hidden, because the shared header's "← Menu" covers it. V1 keeps it.
+- The V2 checkout content uses the same gutters as `.storefront-frame` (104/48/32px), so it lines up with the header at every width.
