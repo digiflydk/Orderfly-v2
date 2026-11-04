@@ -156,6 +156,8 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
   [data-v2-menu-header] .v2-header-login, [data-v2-menu-header] .v2-location-toggle { height: 44px; min-width: 44px; }
   /* Desktop shows the location photo as a plain banner, 30% taller than the former details card. */
   body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-location-banner] { display: block; }
+  [data-storefront-header][data-v2-menu-header] .v2-delivery-summary { display: none; }
+  [data-v2-bar]:not([data-v2-bar="menu"]) .storefront-order-toolbar { min-height: 72px; }
   [data-v2-menu-navigation] > div { order: 1; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-menu-header] [data-time-selector] { flex-direction: row; gap: 20px; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-v2-menu-header] [data-menu-controls-slot] { min-height: 58px; }
@@ -215,8 +217,24 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
 /* Transparent menu assets are centered; crop only empty side margins of the can canvases. */
 [data-storefront-version="2"][data-combo-step-flow] .v2-combo-choice-grid img[data-menu-cutout] { width: 96px; height: 96px; object-fit: cover; border-radius: 0; }
 
-[data-v2-location-banner] { display: none; height: 168px; margin-top: 8px; margin-bottom: 12px; overflow: hidden; border: 1px solid #373b38; border-radius: 8px; background: #000; }
-[data-v2-location-banner] img { width: 100%; height: 100%; object-fit: cover; }
+[data-v2-location-banner] { display: none; position: relative; isolation: isolate; height: 168px; margin-top: 8px; margin-bottom: 12px; overflow: hidden; border: 1px solid #373b38; border-radius: 8px; background: #000; color: #fff; }
+[data-v2-location-banner] img { position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; object-fit: cover; }
+[data-v2-location-banner]::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, #000000d9 0%, #00000099 45%, #00000026 100%); }
+[data-v2-location-banner] .v2-banner-copy { display: flex; height: 100%; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 20px 24px; }
+[data-v2-location-banner] h2 { font-size: 22px; line-height: 1.2; font-weight: 700; }
+[data-v2-location-banner] a { width: fit-content; color: #ffffffe6; font-size: 15px; text-decoration: underline dotted; text-underline-offset: 4px; }
+[data-v2-location-banner] p { color: #ffffffd9; font-size: 14px; }
+[data-v2-location-banner] .v2-banner-terms { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+[data-v2-location-banner] .v2-banner-terms span { padding: 4px 10px; border: 1px solid #ffffff80; border-radius: 999px; font-size: 13px; }
+
+/* Shared V2 header on the landing page and in checkout (the menu adds the pickup/delivery switch). */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-storefront-header][data-v2-bar] { position: relative; height: auto; border-bottom: 0; background: #111413; }
+body:has([data-brand-slug="esmeralda"]) [data-storefront-header][data-v2-bar]:not([data-v2-bar="menu"]) { position: relative; height: auto; border-bottom: 0; background: #111413; color: #f8f5ef; }
+[data-v2-bar]:not([data-v2-bar="menu"]) .storefront-order-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px 12px; min-height: 64px; padding-block: 10px; margin-inline: auto; }
+[data-v2-bar="checkout"] .storefront-order-toolbar > a, [data-v2-bar="landing"] .storefront-order-toolbar > a { grid-column: 2; grid-row: 1; justify-self: center; width: 168px; height: 44px; }
+[data-v2-bar="checkout"] .storefront-order-toolbar > a img, [data-v2-bar="landing"] .storefront-order-toolbar > a img { object-position: center; }
+[data-v2-menu-header] .v2-header-back { grid-column: 1; grid-row: 1; justify-self: start; }
+[data-v2-menu-header] .v2-header-back a { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding-inline: 6px; color: #f8f5ef; font-size: 14px; font-weight: 600; }
 
 /* Desktop page width (PO 2026-11-03): 1300px frame for the V2 menu, header and checkout. */
 body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .storefront-frame,
@@ -229,3 +247,40 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
   [data-v2-menu-navigation] > nav { grid-column: 1; grid-row: 1; }
   [data-v2-menu-navigation] > div { grid-column: 2; grid-row: 1; width: auto; }
 }
+
+/* "i" popup: dark cards with gold accents; a bottom sheet on mobile, a centred dialog on desktop. */
+[data-v2-location-info].v2-info-sheet { gap: 0; padding: 0; max-height: 90dvh; overflow-y: auto; border: 1px solid #373b38; border-radius: 12px; background: #111413; color: #f8f5ef; }
+@media (max-width: 639px) {
+  [data-v2-location-info].v2-info-sheet { top: auto; bottom: 0; left: 0; right: 0; max-width: none; transform: none; border-radius: 16px 16px 0 0; border-bottom: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+}
+@media (min-width: 640px) { [data-v2-location-info].v2-info-sheet { max-width: 440px; } }
+[data-v2-location-info] .v2-info-header { padding: 24px 56px 12px 24px; text-align: left; }
+[data-v2-location-info] .v2-info-header h2 { font-size: 22px; line-height: 1.25; font-weight: 700; }
+[data-v2-location-info] .v2-info-state { display: inline-flex; align-items: center; gap: 8px; width: fit-content; margin-top: 8px; padding: 4px 12px; border: 1px solid #514b40; border-radius: 999px; color: #cbc4b7; font-size: 13px; }
+[data-v2-location-info] .v2-info-state > span { width: 8px; height: 8px; border-radius: 999px; background: #8a8478; }
+[data-v2-location-info] .v2-info-state[data-open] { border-color: #e8bf6966; color: #efcd83; }
+[data-v2-location-info] .v2-info-state[data-open] > span { background: #e8bf69; }
+[data-v2-location-info] .v2-info-body { display: grid; gap: 12px; padding: 4px 24px 24px; }
+[data-v2-location-info] .v2-info-card { display: grid; gap: 10px; padding: 16px; border: 1px solid #373b38; border-radius: 8px; background: #202323; }
+[data-v2-location-info] .v2-info-card h3 { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 650; }
+[data-v2-location-info] .v2-info-card h3 svg { width: 18px; height: 18px; color: #e8bf69; }
+[data-v2-location-info] .v2-info-card > p { color: #cbc4b7; font-size: 14px; line-height: 1.5; }
+[data-v2-location-info] .v2-info-hours { display: grid; gap: 2px; margin: 0; }
+[data-v2-location-info] .v2-info-hours > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 10px; border-radius: 6px; color: #cbc4b7; font-size: 14px; }
+[data-v2-location-info] .v2-info-hours > div[data-today] { background: #e8bf6914; color: #f8f5ef; font-weight: 600; box-shadow: inset 0 0 0 1px #e8bf6955; }
+[data-v2-location-info] .v2-info-today { margin-left: 8px; padding: 1px 8px; border-radius: 999px; background: #e8bf69; color: #211a0d; font-size: 11px; font-weight: 700; }
+[data-v2-location-info] .v2-info-hours dd { font-variant-numeric: tabular-nums; }
+[data-v2-location-info] .v2-info-contact { display: grid; gap: 8px; }
+[data-v2-location-info] .v2-info-action { display: inline-flex; align-items: center; gap: 10px; width: fit-content; max-width: 100%; min-height: 44px; padding: 8px 14px; border: 1px solid #e8bf69; border-radius: 6px; color: #f8f5ef; font-size: 14px; font-weight: 600; }
+[data-v2-location-info] .v2-info-action svg { width: 16px; height: 16px; flex-shrink: 0; color: #e8bf69; }
+[data-v2-location-info] .v2-info-action:hover { background: #e8bf691a; }
+[data-v2-location-info] > button:last-child { top: 18px; right: 16px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 999px; color: #f8f5ef; opacity: 1; }
+
+/* Landing page ("Vælg restaurant") in the V2 menu style. */
+.v2-location-card-cta { display: none; }
+[data-v2-landing] h1 { font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; }
+[data-v2-landing] h1 + p { margin-top: 6px; color: #cbc4b7; font-size: 16px; }
+[data-v2-landing] [data-location-card] > div { height: 280px; border: 1px solid #373b38; border-radius: 8px; }
+[data-v2-landing] [data-location-card]:focus-visible { outline: 2px solid #e8bf69; outline-offset: 3px; border-radius: 8px; }
+[data-v2-landing] [data-location-card] h3 { font-size: 20px; }
+[data-v2-landing] [data-location-card] .v2-location-card-cta { display: flex; width: fit-content; align-items: center; margin-top: 12px; min-height: 40px; padding: 0 16px; border-radius: 6px; background: #e8bf69; color: #211a0d; font-size: 14px; font-weight: 700; }

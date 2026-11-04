@@ -1,17 +1,21 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { getClubSessionStatusAction } from '@/app/club-session-actions';
+import { getClubSessionProfileAction, type ClubSessionProfile } from '@/app/club-session-actions';
 
-/** True when this browser is signed in to the brand's Club. Rechecked when the tab regains focus. */
-export function useClubSignedIn(brandSlug: string | null | undefined): boolean {
-  const [signedIn, setSignedIn] = useState(false);
+/** The signed-in Club member for this brand (or { signedIn: false }). Rechecked when the tab regains focus. */
+export function useClubSession(brandSlug: string | null | undefined): ClubSessionProfile {
+  const [session, setSession] = useState<ClubSessionProfile>({ signedIn: false });
   useEffect(() => {
     if (!brandSlug) return;
     let current = true;
-    const check = () => { getClubSessionStatusAction(brandSlug).then(result => { if (current) setSignedIn(result.signedIn); }).catch(() => {}); };
+    const check = () => { getClubSessionProfileAction(brandSlug).then(result => { if (current) setSession(result); }).catch(() => {}); };
     check();
     window.addEventListener('focus', check);
     return () => { current = false; window.removeEventListener('focus', check); };
   }, [brandSlug]);
-  return signedIn;
+  return session;
+}
+
+export function useClubSignedIn(brandSlug: string | null | undefined): boolean {
+  return useClubSession(brandSlug).signedIn;
 }

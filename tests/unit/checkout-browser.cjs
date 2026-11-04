@@ -112,7 +112,7 @@ before(async()=>{
   '@':path.join(root,'src'),
   '@/context/cart-context':cart,
   '@/app/checkout/actions':actions,
-  '@/app/club-session-actions':fixture('club-session','export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
+  '@/app/club-session-actions':fixture('club-session','export const getClubSessionProfileAction=async()=>window.fixtureClubSignedIn?{signedIn:true,firstName:"Ole",name:"Ole Hansen",email:window.fixtureClubEmail||"ole@example.test",phone:"+4512345678"}:{signedIn:false};export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
   '@/app/superadmin/upsells/actions':upsells,
   '@/app/superadmin/brands/actions':fixture('brands','export const getBrandBySlug=async()=>null;'),
   '@/app/superadmin/settings/actions':fixture('settings','export const getActiveStripeKey=async()=>"pk_test_fixture";'),
@@ -507,14 +507,27 @@ test('personal discount card has same-origin login entry and clears benefit when
  assert.equal(await page.locator('[data-discount-card-offer]').count(),0);
  assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
 });
-test('a signed-in Club browser is told it is signed in instead of being asked to log in',async t=>{
+test('a signed-in Club browser sees who is signed in; typed contact details are kept',async t=>{
  const page=await setup(t,'ui-card-contact');await page.locator('[data-discount-card-offer]').waitFor();
  await page.getByPlaceholder('john@example.com').fill('other@example.test');
  await page.getByRole('link',{name:'Log ind i Club',exact:true}).waitFor();
  // The session check reruns when the tab regains focus, e.g. after logging in to Club in another tab.
  await page.evaluate(()=>{window.fixtureClubSignedIn=true;window.dispatchEvent(new Event('focus'));});
- await page.getByText(/Du er logget ind i/).waitFor();
+ await page.locator('[data-club-signed-in]').getByText('Ole Hansen').waitFor();
  assert.equal(await page.getByRole('link',{name:'Log ind i Club',exact:true}).count(),0);
+ assert.equal(await page.getByText(/personligt rabatkort/).count(),0,'no unexplained discount-card wording');
+ assert.equal(await page.getByPlaceholder('john@example.com').inputValue(),'other@example.test','prefill never overwrites typed values');
+});
+for(const v2 of [false,true])test(`a signed-in Club member gets empty contact fields filled and no signup card${v2?' (V2)':''}`,async t=>{
+ const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
+ const page=await context.newPage();await page.addInitScript(()=>{window.fixtureClubSignedIn=true;});
+ await page.goto(origin+'/?case=ui-club'+(v2?'&v2=1':''));
+ const email=page.getByPlaceholder(v2?'Indtast e-mail':'john@example.com',{exact:true});
+ await expect(email).toHaveValue('ole@example.test');
+ await expect(page.getByPlaceholder(v2?'Indtast dit navn':'John Doe',{exact:true})).toHaveValue('Ole Hansen');
+ await expect(page.getByPlaceholder(v2?'Indtast mobilnummer':'+123456789',{exact:true})).toHaveValue('+4512345678');
+ await page.locator('[data-club-signed-in]').waitFor();
+ assert.equal(await page.locator('[data-club-signup-offer]').count(),0,'members are not offered Club signup');
 });
 for(const host of ['orderfly.dk','brand.orderfly.dk'])test('personal card login respects browser origin '+host,async t=>{
  const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
