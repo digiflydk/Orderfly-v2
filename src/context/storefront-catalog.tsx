@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import type { ComboMenu, ProductForMenu, Upsell } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
-import { isLockedItem } from '@/lib/cart-utils';
+import { upsellCartValue } from '@/lib/upsell-cart-value';
 import { handledUpsells } from '@/lib/handled-upsells';
 type Offer = {
     upsell: Pick<Upsell, 'id' | 'upsellName' | 'discountType' | 'discountValue'>;
@@ -45,7 +45,7 @@ export function StorefrontCatalog({ products, combos, children }: {
                         cartItems: cartItems.map(item => ({ id: item.id, categoryId: item.categoryId, itemType: item.itemType, tags: item.tags,
                             toppingIds: item.toppings.map(t => t.id).filter((id): id is string => !!id).slice(0, 50),
                             includedProductIds: item.comboSelections?.flatMap(g => g.products.map(p => p.id)) })),
-                        cartTotal: cartItems.filter(item => !isLockedItem(item)).reduce((sum, item) => sum + (item.basePrice + item.toppings.reduce((n, t) => n + t.price, 0)) * item.quantity, 0),
+                        cartTotal: upsellCartValue(cartItems),
                         excludedUpsellIds: handledUpsells(),
                     }) });
                 if (!response.ok)
