@@ -284,3 +284,10 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-versi
 [data-v2-landing] [data-location-card]:focus-visible { outline: 2px solid #e8bf69; outline-offset: 3px; border-radius: 8px; }
 [data-v2-landing] [data-location-card] h3 { font-size: 20px; }
 [data-v2-landing] [data-location-card] .v2-location-card-cta { display: flex; width: fit-content; align-items: center; margin-top: 12px; min-height: 40px; padding: 0 16px; border-radius: 6px; background: #e8bf69; color: #211a0d; font-size: 14px; font-weight: 700; }
+
+/* Checkout: the shared header already has "← Menu"; the page-level back link would duplicate it. */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) .v2-checkout-heading > :is(a, button) { display: none; }
+/* Checkout content lines up with the shared header frame (same gutters as .storefront-frame). */
+body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-checkout-page] { width: calc(100% - 104px); padding-inline: 0; margin-inline: auto; }
+@media (max-width: 1023px) { body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-checkout-page] { width: calc(100% - 48px); } }
+@media (max-width: 639px) { body:has([data-commerce-root][data-brand-slug="esmeralda"][data-storefront-version="2"]) [data-checkout-page] { width: calc(100% - 32px); } }
