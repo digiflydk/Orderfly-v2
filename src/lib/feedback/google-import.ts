@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import {parseManualGoogleReviews} from './google-manual';
 import { OAuth2Client } from 'google-auth-library';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requireFeedbackAccess, assertFeedbackBrand, canEditFeedbackBrand } from './access';
@@ -56,4 +57,15 @@ export async function importGoogleReviews(brandId:string,locationId:string) {
     await db.runTransaction(async tx=>{const current=(await tx.get(ref)).data(); if(current?.runId===runId) tx.set(ref,{status:code,leaseUntil:new Date(0)},{merge:true});});
     return {ok:false,message:code==='GOOGLE_ACCESS'?'Google afviser API-adgangen. Kontrollér projektgodkendelse og adgang til lokationen.':code==='GOOGLE_AUTH'?'Google-login skal fornyes.':code==='GOOGLE_QUOTA'?'Google-kvoten er nået. Prøv senere.':'Importen kunne ikke gennemføres. Tidligere data er ikke erstattet.'};
   }
+}
+
+export async function importManualGoogleReviews(brandId:string,locationId:string,raw:string,publish:boolean){
+ const {ref,access}=await scope(brandId,locationId,true);
+ const reviews=parseManualGoogleReviews(raw);
+ await getAdminDb().runTransaction(async tx=>{
+  const previous=(await tx.get(ref)).data();
+  if(previous?.leaseUntil?.toMillis()>Date.now())throw Error('IMPORT_RUNNING');
+  tx.set(ref,{brandId,locationId,reviews,status:'manual',showPublicly:publish===true,importedAt:new Date(),expiresAt:new Date(Date.now()+29*86400000),importedBy:access.uid});
+ });
+ return {ok:true,message:`${reviews.length} anmeldelser importeret${publish?' og aktiveret til hjemmesiden':''}.`};
 }

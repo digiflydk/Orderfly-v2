@@ -2,6 +2,7 @@ import { z } from 'zod';
 const reviewSchema = z.object({
   reviewId: z.string().min(1).max(300), starRating: z.enum(['ONE','TWO','THREE','FOUR','FIVE']),
   comment: z.string().max(10000).optional(), createTime: z.string().datetime(), updateTime: z.string().datetime(),
+  dateApproximate: z.boolean().optional(), reviewUrl: z.string().url().optional(),
   reviewer: z.object({ displayName: z.string().max(300).optional(), profilePhotoUrl: z.string().url().optional(), isAnonymous: z.boolean().optional() }),
 });
 export type GoogleReview = z.infer<typeof reviewSchema>;
