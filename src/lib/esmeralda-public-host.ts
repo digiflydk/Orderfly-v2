@@ -35,6 +35,6 @@ export function esmeraldaPublicHeaders(pathname: string): Record<string, string>
     'Cache-Control': 'public, max-age=0, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' " + trackingScripts + contactScript + "; style-src 'self' 'unsafe-inline' https://fonts.soundestlink.com/fonts/css/; img-src 'self' data: " + trackingImages + "; font-src 'self' data: https://fonts.soundestlink.com/fonts/static/; connect-src 'self' " + trackingConnect + newsletterConnect + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' " + trackingScripts + contactScript + "; style-src 'self' 'unsafe-inline' https://fonts.soundestlink.com/fonts/css/; img-src 'self' data: " + trackingImages + (pathname === '/' ? ' https://*.googleusercontent.com' : '') + "; font-src 'self' data: https://fonts.soundestlink.com/fonts/static/; connect-src 'self' " + trackingConnect + newsletterConnect + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
   };
 }

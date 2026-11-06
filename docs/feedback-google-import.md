@@ -30,3 +30,11 @@ Run `npm run typecheck`, `node --test tests/unit/feedback-google-client.cjs test
 
 Reference: https://developers.google.com/my-business/reference/rest/v4/accounts.locations.reviews/list
 Storage: https://developers.google.com/my-business/content/policies
+
+## Homepage carousel (follow-up in this PR)
+
+The existing Orderfly website response inserts a scoped section immediately after the recommendation section, after verifying the original payload hash. Original packed assets and page inventory stay unchanged. The client adapter is included in standalone file tracing and served at the exact `/_reviews/rotation.js` route. `/_reviews/customer-reviews.json` returns a public projection of approved five-star Esmeralda/Amager feedback (up to 1,000); imported Google content is additionally opt-in through server environment `GOOGLE_FEEDBACK_PUBLIC_ENABLED=true`. This flag must stay unset until API access, public-display conditions, attribution and retention have been verified. No internal notes, customer contacts or OAuth credentials are exposed. The page hides the section on empty data or an unavailable feed.
+
+Three cards appear on desktop, one on mobile. The supplied screenshot informs the card layout; Esmeralda's black background is retained. An eight-second timer pauses outside the viewport, on hover/focus, in hidden tabs and for reduced-motion preference. Explicit pause and next controls remain available. The client maintains a shuffled queue and seen IDs in sessionStorage, retaining progress across reloads within the same tab. Every available item is drawn once before reshuffling. The final batch may contain fewer than three items. Changed datasets remove missing IDs and incorporate new IDs; round boundaries avoid immediately repeating the last cards when alternatives exist. No fake reviews or verification badges are included.
+
+Validation: `tests/unit/website-review-rotation.cjs` covers 3/3/3/1, fresh cycles, persistence, mobile, changing datasets, small/empty lists and exact insertion against the real homepage. Runtime/browser and live visual verification are still pending; do not claim this section is live.
