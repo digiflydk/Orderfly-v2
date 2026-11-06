@@ -71,6 +71,13 @@ jobs:
       - name: Install Chromium for browser regressions
         run: npx playwright install --with-deps chromium
 
+      - name: Esmeralda V2 image generation, routing and exact-source checks
+        run: node --test tests/unit/esmeralda-menu-thumbnails.cjs tests/unit/esmeralda-menu-images.cjs tests/unit/brand-subdomains-12.cjs
+
+      - name: Esmeralda V2 menu, products, combos and checkout browser checks
+        timeout-minutes: 12
+        run: node --test tests/unit/menu-refresh-browser.cjs tests/unit/tilvalg-storefront-browser.cjs tests/unit/combo-modifiers-browser.cjs tests/unit/checkout-browser.cjs
+
       - name: Cart price and mobile cart bar delivery regression
         run: node --test tests/unit/delivery-cart-price.cjs tests/unit/mobile-cart-bar-price.cjs
 
