@@ -320,7 +320,10 @@ test('brand tracking stays off on portal pages and still runs in the storefront'
     const { page } = await open(`tracking?path=${encodeURIComponent(pathname)}`);
     try {
       await page.waitForFunction(() => document.readyState === 'complete');
-      await page.waitForTimeout(50);
+      // Tracking loads through a dynamic import; wait for the observable mount,
+      // rather than assuming that chunk loading finishes within 50 ms on CI.
+      if (mounted === 1) await page.waitForFunction(() => window.__mounted === 1);
+      else await page.waitForTimeout(50);
       assert.equal(await page.evaluate(() => window.__mounted), mounted, pathname);
     } finally { await page.close(); }
   }

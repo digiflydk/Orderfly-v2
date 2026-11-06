@@ -304,6 +304,7 @@ test('idle time locks the tablet, logs out and survives a reload; a lost session
   try {
     await scan(expired.page);
     await expired.page.getByRole('button', { name: 'Giv stempel' }).click();
+    await expired.page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     await expired.page.getByRole('button', { name: 'Dine-in' }).click();
     await expired.page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('150');
     await expired.page.getByRole('button', { name: 'Bekræft' }).click();
