@@ -320,7 +320,7 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
     let state = null; const pushes = [], assigns = [], types = [];
     global.window = { location: { host, assign: url => assigns.push(url) } };
     try {
-      const mod = loadTsx('src/components/modals/DeliveryMethodModal.tsx', {
+      const mod = loadTsx('src/components/modals/delivery-method-content.tsx', {
         react: { useState: () => [state, next => { state = next; }], useEffect: fn => fn() },
         'react/jsx-runtime': require('react/jsx-runtime'),
         'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
@@ -329,9 +329,7 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
         '@/components/storefront/DeliveryMethodLabel': { DeliveryMethodLabel: () => null },
         'lucide-react': {}, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
       });
-      mod.default();
-      mod.openDeliveryModal({ brandSlug, locationSlug: 'esmeralda-pizza-amager', location: { deliveryTypes: ['pickup', 'delivery'] } });
-      const sheet = mod.default();
+      const sheet = mod.default({ payload: { brandSlug, locationSlug: 'esmeralda-pizza-amager', location: { deliveryTypes: ['pickup', 'delivery'] } }, onClose: () => {} });
       if (brandSlug === 'esmeralda') sheet.props.onDeliveryMethodSelected('delivery');
       // The generic dialog: [header, Afhentning, Levering].
       else sheet.props.children.props.children.filter(child => child.props?.onClick)[1].props.onClick();

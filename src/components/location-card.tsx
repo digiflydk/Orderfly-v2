@@ -10,7 +10,7 @@ import type { Location } from "@/types";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Badge } from "./ui/badge";
-import { openDeliveryModal } from "./modals/DeliveryMethodModal";
+import { openDeliveryModal } from '@/lib/delivery-modal-state';
 
 interface LocationCardProps {
   location: Location & { brandSlug: string };
