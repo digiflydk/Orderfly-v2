@@ -48,3 +48,6 @@ Validation at release: TypeScript passed; 14 targeted unit tests passed; browser
 
 ### Live contrast verification
 Review paragraphs explicitly use dark text inside the light review cards. The browser regression test includes the site's global white paragraph styling and checks the resulting computed text colour.
+
+### Danish website presentation
+The 44 approved 2025–2026 Google reviews have reviewed Danish display text; 14 foreign-language comments are translated and visibly labelled. Original imported text remains unchanged. New Google IDs require Danish text review before appearing. Native Danish comments are shuffled before translations, then ratings without text, without repeating any review until the round finishes. Pause button removed; hover/focus, hidden-page and reduced-motion safeguards remain.

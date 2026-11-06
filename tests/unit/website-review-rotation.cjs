@@ -26,3 +26,7 @@ test('real homepage insertion follows recommendations and preserves original pag
  assert.ok(output.endsWith(original.slice(boundary)));assert.equal(insertWebsiteReviews(output),output);
  assert.throws(()=>insertWebsiteReviews('<html></html>'));
 });
+
+test('Danish priorities preserve complete non-repeating rounds',()=>{let state;const all=[];for(let i=0;i<3;i++){const r=nextBatch(['foreign','empty','danish'],state,1,()=>0.5,{danish:0,foreign:1,empty:2});all.push(...r.batch);state=r.state;}assert.deepEqual(all,['danish','foreign','empty']);});
+
+test('homepage does not include a pause button',()=>{assert.doesNotMatch(insertWebsiteReviews('<section><div class="homepage-recommendation-header"></div></section>'),/data-review-pause|Pause rotation/);});
