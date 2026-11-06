@@ -206,6 +206,7 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
               <div className="relative h-16 w-16 shrink-0">
                 <StorefrontProductImage
                   product={item}
+                  variant="thumb"
                   alt={item.productName}
                   fill
                   className="rounded-md object-cover"
