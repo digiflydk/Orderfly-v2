@@ -16,7 +16,7 @@ export function PromotionStrip({ discounts, products }: {
     return <section data-v2-promotions={isV2 || undefined} aria-label="Aktuelle tilbud" className="flex gap-3 overflow-x-auto py-4 snap-x">
     {offers.map(offer => {
       const image = products.find(product => product.imageUrl && (offer.discountType === 'product' ? offer.referenceIds.includes(product.id) : offer.referenceIds.includes(product.categoryId)));
-      const cutout = image && esmeraldaProductImage(isV2, image);
+      const cutout = image && esmeraldaProductImage(isV2, image, 'thumb');
       return <button key={offer.id} className="commerce-promotion-card shrink-0 snap-start rounded-xl border bg-yellow-50 px-4 py-3 text-left max-w-[260px]" onClick={() => document.getElementById('category-offers')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })}>
       {isV2 && image && <img src={cutout?.src || safeImage(image.imageUrl)} data-product-cutout={cutout ? '' : undefined} data-pizza-cutout={cutout?.kind === 'pizza' ? '' : undefined} alt="" loading="lazy" className="v2-promotion-image" style={cutout ? {objectFit: 'contain'} : undefined} />}
       <span className="block font-semibold">{offer.discountName}</span><span className="block text-sm">{isQuantityMethod(offer.discountMethod) ? quantityOfferLabel(offer) : offer.discountMethod === 'percentage' ? `${offer.discountValue}% på udvalgte varer` : `Spar ${formatPrice(offer.discountValue || 0)} på udvalgte varer`}</span>
