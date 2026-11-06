@@ -110,3 +110,26 @@ test('catalog assets preserve alpha and a clear border on the common canvas',asy
   assert.ok(opaque>info.width*info.height*.03,'visible product is preserved');
  }
 });
+
+
+test('small variants require the original exact-source match and preserve full artwork',()=>{
+ for (const product of [...pizzas,...catalog]) {
+  const original=esmeraldaProductImage(true,product);
+  const thumb=esmeraldaProductImage(true,product,'thumb');
+  assert.equal(thumb?.src,original?.src.replace(/\.webp$/, '-192.webp'));
+  assert.equal(thumb?.kind,original?.kind);
+  assert.ok(ESMERALDA_MENU_IMAGE_PATHS.includes(thumb.src));
+  assert.ok(fs.existsSync('public'+thumb.src));
+  assert.equal(esmeraldaProductImage(true,{...product,categoryId:'different'},'thumb'),undefined);
+  assert.equal(esmeraldaProductImage(true,{...product,imageUrl:'/replaced-photo.webp'},'thumb'),undefined);
+ }
+ const normal=esmeraldaMenuImage(true,brand,combo,soda);
+ const small=esmeraldaMenuImage(true,brand,combo,soda,'thumb');
+ assert.equal(small.src,normal.src.replace(/\.webp$/, '-192.webp'));
+ assert.ok(fs.existsSync('public'+small.src));
+ const helper=loadTs('src/lib/esmeralda-menu-images.ts').esmeraldaApprovedMenuThumbnail;
+ assert.equal(helper(true,normal.src),small.src);
+ for (const url of ['/images/other/menu.webp','https://evil.example/product.webp','/images/esmeralda-v2/menu/unapproved.webp'])
+  assert.equal(helper(true,url),url,'arbitrary URLs are not rewritten');
+ assert.equal(helper(false,normal.src),normal.src,'other storefront versions remain untouched');
+});
