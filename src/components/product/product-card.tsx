@@ -116,6 +116,7 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
         <div className={cn("relative shrink-0 overflow-hidden rounded-md", compact ? "h-16 w-16" : "h-24 w-24")}>
           <StorefrontProductImage
             product={product}
+            variant="thumb"
             alt={product.productName || 'Produktbillede'}
             fill
             sizes={compact ? "64px" : "96px"}
