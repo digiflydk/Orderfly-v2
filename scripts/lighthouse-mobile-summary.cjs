@@ -13,15 +13,16 @@ const runs = [1, 2, 3].map(i => {
   const resources = audits['network-requests']?.details?.items ?? [];
   const bytes = f => resources.filter(f).reduce((sum, item) => sum + (Number(item.transferSize) || 0), 0);
   const isImage = item => item.resourceType === 'Image' || /\.(?:webp|avif|png|jpe?g|gif)(?:\?|$)/i.test(item.url || '');
-  const menu = item => (item.url || '').includes('/images/esmeralda-v2/menu/');
+  const decodedUrl = item => {try {return decodeURIComponent(item.url || '');} catch {return item.url || '';}};
+  const menu = item => decodedUrl(item).includes('/images/esmeralda-v2/menu/');
   const improperlySized = audits['uses-responsive-images'];
   return {
     run: i, score: Math.round(result.categories.performance.score * 100),
     fcpMs: metric('first-contentful-paint'), lcpMs: metric('largest-contentful-paint'),
     speedIndexMs: metric('speed-index'), tbtMs: metric('total-blocking-time'), cls: metric('cumulative-layout-shift'),
     totalBytes: metric('total-byte-weight'), imageBytes: bytes(isImage),
-    menuImageBytes: bytes(menu), thumbnailCount: resources.filter(item => menu(item) && /-192\.webp(?:\?|$)/.test(item.url || '')).length,
-    fullImageCount: resources.filter(item => menu(item) && !/-192\.webp(?:\?|$)/.test(item.url || '')).length,
+    menuImageBytes: bytes(menu), thumbnailCount: resources.filter(item => menu(item) && /-192\.webp(?:\?|$)/.test(decodedUrl(item))).length,
+    fullImageCount: resources.filter(item => menu(item) && !/-192\.webp(?:\?|$)/.test(decodedUrl(item))).length,
     responsiveImageSavingsBytes: improperlySized?.details?.overallSavingsBytes ?? null,
     finalUrl: result.finalDisplayedUrl || result.finalUrl,
     fetchTime: result.fetchTime,
