@@ -57,7 +57,15 @@ async function generateMenuThumbnails(directory = MENU_DIR) {
 
 if (require.main === module) {
   generateMenuThumbnails()
-    .then(result => console.log('Esmeralda menu thumbnails: ' + result.originals + ' sources, ' + result.generated + ' generated, ' + result.unchanged + ' unchanged, ' + Math.round(result.thumbnailBytes / 1024) + ' KiB in total'))
+    .then(async result => {
+      console.log('Esmeralda menu thumbnails: ' + result.originals + ' sources, ' + result.generated + ' generated, ' + result.unchanged + ' unchanged, ' + Math.round(result.thumbnailBytes / 1024) + ' KiB in total');
+      // TEMPORARY: transport public, generated thumbnails from CI to this PR; remove after binary assets are committed.
+      if (process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_EVENT_NAME === 'pull_request') {
+        for (const name of (await fs.readdir(MENU_DIR)).filter(n => n.endsWith(THUMB_SUFFIX)).sort()) {
+          console.log('ESMERALDA_THUMB_BINARY ' + name + ' ' + (await fs.readFile(path.join(MENU_DIR,name))).toString('base64'));
+        }
+      }
+    })
     .catch(error => { console.error(error); process.exitCode = 1; });
 }
 
