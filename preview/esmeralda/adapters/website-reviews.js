@@ -40,9 +40,10 @@
     if(r.receivedAt){var date=new Date(r.receivedAt);if(!isNaN(date)){var time=node('time','',(r.dateApproximate?'ca. ':'')+date.toLocaleDateString('da-DK'));time.dateTime=date.toISOString();who.append(time);}}
     header.append(avatar,who,sourceIcon(r.source==='google'));article.append(header);
     var rating=node('div','es-review-rating'),stars=node('span','es-review-stars','★★★★★');stars.setAttribute('aria-label','5 ud af 5 stjerner');
-    var info=node('details','es-review-info'),summary=node('summary','es-review-info-trigger','i');summary.setAttribute('aria-label','Om anmeldelsens kilde');
+    var info=node('details','es-review-info'),summary=node('summary','es-review-info-trigger','✓');summary.setAttribute('aria-label','Om anmeldelsens kilde');
     info.append(summary,node('span','es-review-info-box',r.source==='google'?'Denne anmeldelse er hentet fra Google. Du kan se originalen via “Se på Google”.':'Denne anmeldelse er indsendt via Esmeraldas feedbacksystem.'));
     info.addEventListener('keydown',function(e){if(e.key==='Escape'){info.open=false;summary.focus();}});
+    info.addEventListener('toggle',schedule);
     rating.append(stars,info);article.append(rating);
     article.append(node('p','es-review-text',r.comment||'5 stjerner'));
     if(r.translated)article.append(node('small','es-review-translation','Oversat til dansk'));
@@ -50,9 +51,9 @@
     return article;
   }
   function show(){var result=nextBatch(reviews.map(r=>r.id),state,matchMedia('(max-width: 767px)').matches?1:3,Math.random,Object.fromEntries(reviews.map(r=>[r.id,r.translated?1:!r.comment?2:0])));state=result.state;list.replaceChildren(...result.batch.map(id=>card(reviews.find(r=>r.id===id))));try{sessionStorage.setItem(key,JSON.stringify(state));}catch(_){} }
-  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !section.matches(':hover') && !section.contains(document.activeElement))timer=setInterval(show,8000);}
+  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !list.querySelector('details[open]') && !list.contains(document.activeElement))timer=setInterval(show,8000);}
   next.addEventListener('click',function(){show();schedule();});
-  section.addEventListener('mouseenter',()=>clearInterval(timer));section.addEventListener('mouseleave',schedule);section.addEventListener('focusin',()=>clearInterval(timer));section.addEventListener('focusout',()=>setTimeout(schedule,0));document.addEventListener('visibilitychange',schedule);
+  section.addEventListener('focusin',schedule);section.addEventListener('focusout',()=>setTimeout(schedule,0));document.addEventListener('visibilitychange',schedule);
   fetch('/_reviews/customer-reviews.json',{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{
     reviews=Array.isArray(data.reviews)?data.reviews.filter(r=>r && typeof r.id==='string' && r.rating===5):[];
     reviews=reviews.filter(r=>r.source!=='google'||danishReviews[r.id]).map(r=>r.source==='google'?Object.assign({},r,{comment:danishReviews[r.id].text,translated:danishReviews[r.id].translated}):r);
