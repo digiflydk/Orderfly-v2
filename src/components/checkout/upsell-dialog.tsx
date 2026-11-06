@@ -138,6 +138,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                             <div className="aspect-video w-full relative">
                                 <StorefrontProductImage
                                     product={product}
+                                    variant="thumb"
                                     src={safeImage(upsell.imageUrl || product.imageUrl)} 
                                     alt={product.productName || ''} 
                                     fill 
