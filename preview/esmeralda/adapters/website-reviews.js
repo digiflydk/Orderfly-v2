@@ -23,7 +23,7 @@
   if (!root.document) return;
   var section=document.getElementById('es-customer-reviews'); if(!section)return;
   var list=section.querySelector('[data-review-cards]'), next=section.querySelector('[data-review-next]');
-  var key='esmeralda-review-rotation-da-v2', state, reviews=[], timer, inView=false, started=false, paused=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var key='esmeralda-review-rotation-da-v2', state, reviews=[], timer, inView=false, started=false, paused=false;
   try {state=JSON.parse(sessionStorage.getItem(key)||'null');} catch (_) {}
   function node(tag,cls,text) {var el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;}
 
@@ -51,7 +51,7 @@
     return article;
   }
   function show(){var result=nextBatch(reviews.map(r=>r.id),state,matchMedia('(max-width: 767px)').matches?1:3,Math.random,Object.fromEntries(reviews.map(r=>[r.id,r.translated?1:!r.comment?2:0])));state=result.state;list.replaceChildren(...result.batch.map(id=>card(reviews.find(r=>r.id===id))));try{sessionStorage.setItem(key,JSON.stringify(state));}catch(_){} }
-  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !list.querySelector('details[open]') && !list.contains(document.activeElement))timer=setInterval(show,8000);}
+  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !list.querySelector('details[open]') && !list.querySelector(':focus-visible'))timer=setInterval(show,8000);}
   next.addEventListener('click',function(){show();schedule();});
   section.addEventListener('focusin',schedule);section.addEventListener('focusout',()=>setTimeout(schedule,0));document.addEventListener('visibilitychange',schedule);
   fetch('/_reviews/customer-reviews.json',{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{

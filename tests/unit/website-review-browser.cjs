@@ -22,3 +22,17 @@ test('browser carousel: desktop/mobile, safe rendering, reload and empty feed',a
  await context.close();
  }finally{await browser.close();}
 });
+
+test('touch mobile with reduced motion rotates on arrival and after closing source details',async()=>{
+ const browser=await chromium.launch({executablePath:process.env.PLAYWRIGHT_EXECUTABLE_PATH||undefined,headless:true});
+ try{
+ const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,reducedMotion:'reduce'});
+ const reviews=Array.from({length:5},(_,i)=>({id:String(i),displayName:'Mobile '+i,comment:'Dansk anmeldelse',rating:5,source:'esmeralda'}));
+ await context.route('https://reviews.test/**',r=>{const p=new URL(r.request().url()).pathname;return r.fulfill({contentType:p.endsWith('.js')?'application/javascript':p.endsWith('.json')?'application/json':'text/html',body:p.endsWith('.js')?fs.readFileSync('preview/esmeralda/adapters/website-reviews.js','utf8'):p.endsWith('.json')?JSON.stringify({reviews}):insertWebsiteReviews('<html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><section aria-labelledby="es-club-how-heading"></section></body></html>')});});
+ const page=await context.newPage();await page.goto('https://reviews.test/');const name=page.locator('.es-review-who h3');await name.waitFor();
+ const first=await name.textContent();await page.waitForTimeout(8500);assert.notEqual(await name.textContent(),first);
+ const badge=page.getByLabel('Om anmeldelsens kilde');await badge.tap();const opened=await name.textContent();await page.waitForTimeout(8500);assert.equal(await name.textContent(),opened);
+ await badge.tap();await page.waitForTimeout(8500);assert.notEqual(await name.textContent(),opened,'touch focus on closed badge must not stop autoplay');
+ await context.close();
+ }finally{await browser.close();}
+});
