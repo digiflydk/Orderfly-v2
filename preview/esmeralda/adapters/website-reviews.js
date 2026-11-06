@@ -26,13 +26,24 @@
   var key='esmeralda-review-rotation-da-v2', state, reviews=[], timer, inView=false, started=false, paused=matchMedia('(prefers-reduced-motion: reduce)').matches;
   try {state=JSON.parse(sessionStorage.getItem(key)||'null');} catch (_) {}
   function node(tag,cls,text) {var el=document.createElement(tag);el.className=cls;if(text!==undefined)el.textContent=text;return el;}
+
+  function sourceIcon(google) {
+    if(!google){var img=node('img','es-review-source-icon');img.src='/_assets/31f776328347ab431379fbb8.jpg';img.alt='Esmeralda';img.width=24;img.height=24;return img;}
+    var svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('class','es-review-source-icon');svg.setAttribute('role','img');svg.setAttribute('aria-label','Google');
+    [['#4285F4','M21.6 12.23c0-.71-.06-1.39-.18-2.05H12v3.88h5.38a4.6 4.6 0 0 1-1.99 3.02v2.51h3.23c1.89-1.74 2.98-4.3 2.98-7.36z'],['#34A853','M12 22c2.7 0 4.96-.9 6.62-2.41l-3.23-2.51c-.9.6-2.05.96-3.39.96-2.6 0-4.81-1.76-5.6-4.12H3.06v2.59A10 10 0 0 0 12 22z'],['#FBBC05','M6.4 13.92a6 6 0 0 1 0-3.84V7.49H3.06a10 10 0 0 0 0 9.02z'],['#EA4335','M12 5.96c1.47 0 2.79.5 3.82 1.49l2.87-2.87A9.6 9.6 0 0 0 12 2a10 10 0 0 0-8.94 5.49l3.34 2.59A6 6 0 0 1 12 5.96z']].forEach(function(v){var path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('fill',v[0]);path.setAttribute('d',v[1]);svg.append(path);});return svg;
+  }
+
   function card(r) {
     var article=node('article','es-review-card'), header=node('div','es-review-header'), avatar=node('span','es-review-avatar',(r.displayName||'G').slice(0,1));
     if(r.photoUrl && /^https:\/\/(?:[a-z0-9-]+\.)*googleusercontent\.com\//i.test(r.photoUrl)) {var img=node('img','');img.src=r.photoUrl;img.alt='';img.width=48;img.height=48;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=function(){this.remove();};avatar.append(img);}
     var who=node('div','es-review-who');who.append(node('h3','',r.displayName||'Anonym kunde'));
     if(r.receivedAt){var date=new Date(r.receivedAt);if(!isNaN(date)){var time=node('time','',(r.dateApproximate?'ca. ':'')+date.toLocaleDateString('da-DK'));time.dateTime=date.toISOString();who.append(time);}}
-    header.append(avatar,who,node('span','es-review-source',r.source==='google'?'Google':'Esmeralda'));article.append(header);
-    article.append(node('div','es-review-stars','★★★★★'));article.lastChild.setAttribute('aria-label','5 ud af 5 stjerner');
+    header.append(avatar,who,sourceIcon(r.source==='google'));article.append(header);
+    var rating=node('div','es-review-rating'),stars=node('span','es-review-stars','★★★★★');stars.setAttribute('aria-label','5 ud af 5 stjerner');
+    var info=node('details','es-review-info'),summary=node('summary','es-review-info-trigger','i');summary.setAttribute('aria-label','Om anmeldelsens kilde');
+    info.append(summary,node('span','es-review-info-box',r.source==='google'?'Denne anmeldelse er hentet fra Google. Du kan se originalen via “Se på Google”.':'Denne anmeldelse er indsendt via Esmeraldas feedbacksystem.'));
+    info.addEventListener('keydown',function(e){if(e.key==='Escape'){info.open=false;summary.focus();}});
+    rating.append(stars,info);article.append(rating);
     article.append(node('p','es-review-text',r.comment||'5 stjerner'));
     if(r.translated)article.append(node('small','es-review-translation','Oversat til dansk'));
     if(r.source==='google' && /^https:\/\/www\.google\.com\/maps\//.test(r.reviewUrl||'')){var link=node('a','es-review-link','Se på Google');link.href=r.reviewUrl;link.target='_blank';link.rel='noopener noreferrer';article.append(link);}

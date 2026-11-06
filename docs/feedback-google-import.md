@@ -51,3 +51,6 @@ Review paragraphs explicitly use dark text inside the light review cards. The br
 
 ### Danish website presentation
 The 44 approved 2025–2026 Google reviews have reviewed Danish display text; 14 foreign-language comments are translated and visibly labelled. Original imported text remains unchanged. New Google IDs require Danish text review before appearing. Native Danish comments are shuffled before translations, then ratings without text, without repeating any review until the round finishes. Pause button removed; hover/focus, hidden-page and reduced-motion safeguards remain.
+
+### Source icons and explanation
+The homepage subtitle is removed. Google reviews use the Google G mark; internal feedback uses the website's existing Esmeralda favicon. A blue information control opens a source explanation with native keyboard/touch support and Escape dismissal. This is source attribution, not Trustindex verification; no third-party verification badge or claim is displayed.
