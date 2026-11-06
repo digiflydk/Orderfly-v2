@@ -75,15 +75,22 @@ const pizzaAssets: Record<string, {source: string; categoryId: string}> = {
   }
 };
 
+export type EsmeraldaMenuImageVariant = 'full' | 'thumb';
+
+/** Only call after a known product/source match or an approved static-menu path. */
+function menuAssetVariant(src: string, variant: EsmeraldaMenuImageVariant): string {
+  return variant === 'thumb' ? src.replace(/\.webp$/, '-192.webp') : src;
+}
+
 export type PizzaImageProduct = {id: string; brandId: string; categoryId?: string; imageUrl?: string | null; productName?: string};
 
-export function esmeraldaPizzaImage(isV2: boolean, product: PizzaImageProduct) {
+export function esmeraldaPizzaImage(isV2: boolean, product: PizzaImageProduct, variant: EsmeraldaMenuImageVariant = 'full') {
   if (!isV2 || product.brandId !== 'oeypKaMyYcQjIwaa1PtV') return undefined;
   const asset = pizzaAssets[product.id];
   if (!asset || product.categoryId !== asset.categoryId || !product.imageUrl) return undefined;
   // Deliberately do not match by product name, URL suffix or category alone.
   if (product.imageUrl.split('?')[0] !== asset.source) return undefined;
-  return {src: `/images/esmeralda-v2/menu/pizza-${product.id}.webp`};
+  return {src: menuAssetVariant(`/images/esmeralda-v2/menu/pizza-${product.id}.webp`, variant)};
 }
 
 /** Other approved catalog photographs use the same exact-source safeguards as pizzas. */
@@ -260,24 +267,32 @@ const catalogAssets: Record<string, {source: string; categoryId: string; file: s
   }
 };
 
-export function esmeraldaProductImage(isV2: boolean, product: PizzaImageProduct) {
-  const pizza = esmeraldaPizzaImage(isV2, product);
+export function esmeraldaProductImage(isV2: boolean, product: PizzaImageProduct, variant: EsmeraldaMenuImageVariant = 'full') {
+  const pizza = esmeraldaPizzaImage(isV2, product, variant);
   if (pizza) return {...pizza, kind: 'pizza' as const};
   if (!isV2 || product.brandId !== 'oeypKaMyYcQjIwaa1PtV') return undefined;
   const asset = catalogAssets[product.id];
   if (!asset || product.categoryId !== asset.categoryId || !product.imageUrl) return undefined;
   if (product.imageUrl.split('?')[0] !== asset.source) return undefined;
-  return {src: `/images/esmeralda-v2/menu/${asset.file}.webp`, kind: 'catalog' as const};
+  return {src: menuAssetVariant(`/images/esmeralda-v2/menu/${asset.file}.webp`, variant), kind: 'catalog' as const};
 }
 
-export const ESMERALDA_MENU_IMAGE_PATHS = [
+const ESMERALDA_MENU_FULL_IMAGE_PATHS = Array.from(new Set([
   ...Object.values(assets).map(asset => `/images/esmeralda-v2/menu/${asset.file}.webp`),
   ...Object.values(catalogAssets).map(asset => `/images/esmeralda-v2/menu/${asset.file}.webp`),
   ...Object.keys(pizzaAssets).map(id => `/images/esmeralda-v2/menu/pizza-${id}.webp`),
-];
+]));
 
-export function esmeraldaMenuImage(isV2: boolean, brandId: string, comboId: string, productId: string) {
+/** Brand-subdomain middleware admits only known original/thumbnail asset paths. */
+export const ESMERALDA_MENU_IMAGE_PATHS = ESMERALDA_MENU_FULL_IMAGE_PATHS.flatMap(src => [src, menuAssetVariant(src, 'thumb')]);
+
+/** A combo image is not a product; never convert an arbitrary URL to a local image. */
+export function esmeraldaApprovedMenuThumbnail(isV2: boolean, src: string): string {
+  return isV2 && ESMERALDA_MENU_FULL_IMAGE_PATHS.includes(src) ? menuAssetVariant(src, 'thumb') : src;
+}
+
+export function esmeraldaMenuImage(isV2: boolean, brandId: string, comboId: string, productId: string, variant: EsmeraldaMenuImageVariant = 'full') {
   if (!isV2 || brandId !== 'oeypKaMyYcQjIwaa1PtV' || comboId !== 'esmeralda-v2-pizzamenu-20261030') return undefined;
   const asset = assets[productId];
-  return asset ? {src: `/images/esmeralda-v2/menu/${asset.file}.webp`, illustration: !!asset.illustration} : undefined;
+  return asset ? {src: menuAssetVariant(`/images/esmeralda-v2/menu/${asset.file}.webp`, variant), illustration: !!asset.illustration} : undefined;
 }
