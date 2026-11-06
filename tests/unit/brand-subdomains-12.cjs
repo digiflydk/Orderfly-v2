@@ -63,12 +63,12 @@ function middlewareFor() {
 test('#802 exact public menu images bypass brand rewrites without opening adjacent routes', () => {
   const { run } = middlewareFor();
   const { ESMERALDA_MENU_IMAGE_PATHS } = loadTs('src/lib/esmeralda-menu-images.ts');
-  for (const path of ESMERALDA_MENU_IMAGE_PATHS) {
+  for (const path of [...ESMERALDA_MENU_IMAGE_PATHS, '/images/esmeralda-v2/logo.png']) {
     assert.ok(require('node:fs').existsSync(`public${path}`));
     assert.deepEqual(run(`https://esmeralda2.orderfly.dk${path}`), {kind:'next'});
     assert.deepEqual(run(`https://backend.internal${path}`, {'x-forwarded-host':'esmeralda2.orderfly.dk'}), {kind:'next'});
   }
-  for (const path of ['/images', '/images/other-brand/menu.webp', '/images/esmeralda-v2/menu/private', '/images/esmeralda-v2/menu/pepsi.webp/extra']) {
+  for (const path of ['/images', '/images/other-brand/menu.webp', '/images/esmeralda-v2/menu/private', '/images/esmeralda-v2/logo.png/private', '/images/esmeralda-v2/logo-private.png', '/images/esmeralda-v2/menu/pepsi.webp/extra']) {
     assert.deepEqual(run(`https://esmeralda2.orderfly.dk${path}`), {kind:'rewrite', path:`/esmeralda${path}`});
   }
 });
@@ -162,7 +162,10 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
     'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
     '@/lib/data/brand-location': { getBrandBySlug: async () => (status ? { id: 'b', slug, name: 'Esmeralda', status } : null) },
     '@/styles/storefront-v2-checkout.css': {},
-    'next/headers': { headers: async () => new Headers({ host }) },
+    'next/headers': { headers: async () => new Headers({ host }), cookies: async () => ({get: () => undefined}) },
+    '@/lib/server/public-cookie-texts': { getPublicCookieTexts: async () => loadTs('src/lib/cookie-texts.ts').defaultTexts },
+    '@/lib/cookie-texts': loadTs('src/lib/cookie-texts.ts'),
+    '@/lib/cookie-banner-state': loadTs('src/lib/cookie-banner-state.ts'),
     '@/lib/esmeralda-v2-host': loadTs('src/lib/esmeralda-v2-host.ts'),
     '@/lib/storefront-home-screen': loadTs('src/lib/storefront-home-screen.ts'),
     '@/context/storefront-v2-context': { StorefrontV2Provider: ({ children }) => children },
@@ -343,4 +346,28 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
   assert.deepEqual(run('localhost:3000', 'esmeralda'), { pushes: ['/esmeralda/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
   // The generic dialog of other brands follows the same rule.
   assert.deepEqual(run('orderfly.dk', 'cph-qa').assigns, ['https://cph-qa.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery']);
+});
+
+test('Esmeralda server layout passes the scoped consent text and request-cookie state to the first render', async () => {
+  const texts=loadTs('src/lib/cookie-texts.ts').defaultTexts;
+  const seen=[];
+  const render=async raw=>{
+    const tree=await loadTsx('src/app/[brandSlug]/layout.tsx',{
+      react:require('react'),'react/jsx-runtime':require('react/jsx-runtime'),
+      'next/navigation':{notFound:()=>{throw Error('not found');}},
+      '@/lib/data/brand-location':{getBrandBySlug:async()=>({id:'only-this-brand',slug:'esmeralda',name:'Esmeralda',status:'active'})},
+      '@/styles/storefront-v2-checkout.css':{},
+      'next/headers':{headers:async()=>new Headers({host:'esmeralda.orderfly.dk'}),cookies:async()=>({get:name=>{assert.equal(name,'orderfly_cookie_consent');return raw===undefined?undefined:{value:raw};}})},
+      '@/lib/server/public-cookie-texts':{getPublicCookieTexts:async(id,lang)=>{assert.equal(id,'only-this-brand');assert.equal(lang,'da-DK');return texts;}},
+      '@/lib/cookie-texts':loadTs('src/lib/cookie-texts.ts'),'@/lib/cookie-banner-state':loadTs('src/lib/cookie-banner-state.ts'),
+      '@/lib/esmeralda-v2-host':loadTs('src/lib/esmeralda-v2-host.ts'),'@/lib/storefront-home-screen':loadTs('src/lib/storefront-home-screen.ts'),
+      '@/context/storefront-v2-context':{StorefrontV2Provider:({children})=>children},'@/context/cart-context':{CartProvider:({children})=>children},'@/context/analytics-context':{AnalyticsProvider:({children})=>children},
+      './deliverymodalhost':{default:()=>null},'./layout-client':{BrandLayoutClient:({children,cookieBanner})=>{seen.push(cookieBanner);return children;}},
+      '@/lib/next/resolve-props':{resolveParams:async p=>p},'@/lib/runtime':{isAdminReady:()=>true},'@/components/brand-tracking':{BrandTracking:()=>null},
+    }).default({children:'menu',params:Promise.resolve({brandSlug:'esmeralda'})});
+    require('react-dom/server').renderToStaticMarkup(tree);
+  };
+  for(const raw of [undefined,'invalid',JSON.stringify({consent_version:'old'}),JSON.stringify({consent_version:texts.consent_version})])await render(raw);
+  assert.deepEqual(seen.map(value=>value.show),[true,true,true,false]);
+  assert.ok(seen.every(value=>value.texts===texts));
 });

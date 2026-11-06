@@ -4,7 +4,7 @@ export const APP_VERSION = "1.0.59";
 // Regional Danish, so a saved da-DK text set is found before the base da set.
 export const STOREFRONT_COOKIE_LANGUAGE = 'da-DK';
 
-type PublicCookieTexts = Omit<CookieTexts, 'id' | 'last_updated'>;
+export type PublicCookieTexts = Omit<CookieTexts, 'id' | 'last_updated'>;
 const englishTexts: PublicCookieTexts = {
   consent_version: APP_VERSION, language: 'en', shared_scope: 'orderfly',
   banner_title: 'We use cookies',

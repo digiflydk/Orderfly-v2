@@ -1,6 +1,6 @@
 'use client';
 
-import Image from 'next/image';
+import { StorefrontBrandLogo } from './storefront-brand-logo';
 import Link from 'next/link';
 import type { Brand } from '@/types';
 import { useEffect, useState } from 'react';
@@ -20,9 +20,9 @@ export function Header({ brand }: { brand: Brand }) {
     <header data-header>
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between gap-4 px-4">
         <Link href={href} className="flex min-w-0 items-center gap-2">
-          {brand.logoUrl ? (
+          {brand.logoUrl || brand.slug === 'esmeralda' ? (
             <div className={brand.slug === 'esmeralda' ? "relative h-10 w-[180px] shrink-0" : "relative h-9 w-[164px] shrink-0"}>
-              <Image src={brand.logoUrl} alt={brand.name} fill sizes="180px" className="object-contain object-left" priority />
+              <StorefrontBrandLogo brand={brand} priority />
             </div>
           ) : <span className="truncate font-semibold">{brand.name}</span>}
         </Link>

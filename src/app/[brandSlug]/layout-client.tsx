@@ -12,15 +12,18 @@ import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { isClubPath } from '@/lib/loyalty/portal-path';
 import { storefrontSegments } from '@/lib/brand-subdomain';
 import { EsmeraldaClubFooter } from './club/portal-frame';
+import type { PublicCookieTexts } from '@/lib/cookie-texts';
 
 export function BrandLayoutClient({
   children,
   brand,
   location,
+  cookieBanner,
 }: {
   children: React.ReactNode;
   brand: Brand | null;
   location?: Location | null;
+  cookieBanner?: { texts: PublicCookieTexts; show: boolean };
 }) {
   const pathname = usePathname();
   const isV2 = useStorefrontV2();
@@ -63,7 +66,8 @@ export function BrandLayoutClient({
             onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}
-        <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
+        <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen}
+          compact={isV2} initialTexts={cookieBanner?.texts} initialShowBanner={cookieBanner?.show} />
       </div>
   );
 }
