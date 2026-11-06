@@ -16,7 +16,7 @@ export type TerminalClientProps = {
   onLogout?: () => void;
   onAccessDenied?: () => void;
 };
-export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', loginHref = '/admin-login?next=%2Fmerchant%2Forders', onLogout, onAccessDenied }: TerminalClientProps = {}) {
+export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', loginHref = '/login', onLogout, onAccessDenied }: TerminalClientProps = {}) {
   const [view, setView] = useState<TerminalView>('board');
   const [scope, setScope] = useState<{ brandId?: string; locationId?: string }>(fixedScope ?? {});
   const [filters, setFilters] = useState({ search: '', dateFrom: '', dateTo: '' });

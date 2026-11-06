@@ -77,3 +77,7 @@ Større historikker markeres på den slettede medlemsrecord med
 referencer er fjernet. Ingen aktiv medlemsrecord eller andet brands hændelser
 ændres. Loggens beløb, revisionsoplysninger og lås mod dobbeltregistrering bevares.
 Kunden og de oprindelige ordrer slettes ikke af en Club-udmeldelse.
+
+## Merchant-login
+
+Personalets korte loginadresse er `https://esmeralda.orderfly.dk/login`. Den viser den eksisterende restaurant-loginformular direkte og bevarer den korte URL. Login bruger fortsat navn/e-mail og PIN samt den eksisterende sessions- og adgangskontrol. Efter login åbnes merchantportalen; medarbejdere med kun kasseadgang sendes fortsat til stempelkassen. Gamle `/admin-login?next=%2Fmerchant`-links virker fortsat.

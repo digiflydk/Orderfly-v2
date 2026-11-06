@@ -3,10 +3,12 @@ import { Suspense, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 
 function AdminLoginForm() {
-  const merchantLogin=useSearchParams().get('next')==='/merchant';
+  const pathname=usePathname();
+  const next=useSearchParams().get('next');
+  const merchantLogin=pathname==='/login'||next==='/merchant';
   const [method,setMethod]=useState<'opsfly'|'firebase'>('opsfly');
   const [pending,setPending]=useState(false),[error,setError]=useState('');
   const [ready,setReady]=useState(false);

@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function MerchantLayout({children}:{children:React.ReactNode}) {
   const session=await orderflySession().catch(()=>null);
-  if(!session)redirect('/admin-login?next=%2Fmerchant');
+  if(!session)redirect('/login');
   // Counter-only staff get the counter view full screen, without the admin menu.
   if(counterOnly(session))return <div className="admin-shell min-h-screen bg-background text-foreground">{children}</div>;
   const branding=await getPlatformBrandingSettings().catch(()=>null);

@@ -290,7 +290,7 @@ function loadActualLoginForReadiness(react = require('react')) {
     } }).outputText;
     new Function('require', 'module', 'exports', code)(name => {
       if (name === 'react') return react;
-      if (name === 'next/navigation') return { useSearchParams: () => new URLSearchParams() };
+      if (name === 'next/navigation') return { usePathname: () => "/admin-login", useSearchParams: () => new URLSearchParams() };
       if (name.startsWith('@/')) {
         const base = path.resolve('src', name.slice(2));
         const target = [base + '.tsx', base + '.ts'].find(file => fs.existsSync(file));
