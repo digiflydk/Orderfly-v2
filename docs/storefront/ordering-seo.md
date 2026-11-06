@@ -11,3 +11,5 @@ Robots advertises an absolute sitemap URL from the validated brand hostname. Unk
 Validation: typecheck, SEO route unit tests (scope, inactive/suspended, XML, canonical), relevant storefront browser tests, production build, exact-head independent review, then live head/robots/sitemap verification and Lighthouse SEO. Re-measure performance with the existing mobile lab settings. Do not claim 100 before the live audit. Lighthouse100 is a technical checklist result, not a promise of ranking or comprehensive SEO perfection.
 
 Release is PM-authorized; use existing [skip ci] guards and local checks, never GitHub Actions. No secrets, production data, payment code, Firestore rules or apphosting.yaml changes. The user-facing report must contain readable findings and results, not only a raw Lighthouse HTML app.
+
+Independent review identified location slugs that collide with the brand or app-wide paths. Metadata and sitemap now both use storefrontPath, preserving the required prefix for supported names such as esmeralda and feedback. Regression tests cover both cases.

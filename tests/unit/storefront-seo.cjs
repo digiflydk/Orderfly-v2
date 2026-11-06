@@ -14,3 +14,12 @@ test('brand sitemap includes active owned routes only, excluding checkout and ot
  const queries=[];const r=await route('src/app/sitemap.xml/route.ts','esmeralda.orderfly.dk',{id:'b',slug:'esmeralda',status:'active'},[{brandId:'b',slug:'amager',isActive:true},{brandId:'other',slug:'foreign',isActive:true},{brandId:'b',slug:'closed',isActive:false},{brandId:'b',slug:'../bad',isActive:true},{brandId:'b',slug:'club',isActive:true},{brandId:'b',slug:'checkout',isActive:true}],queries).GET();const xml=await r.text();assert.match(xml,/<loc>https:\/\/esmeralda.orderfly.dk\/amager<\/loc>/);assert.doesNotMatch(xml,/foreign|closed|checkout|club|bad/);assert.deepEqual(queries,[['brand','esmeralda'],['locations','b']]);
 });
 test('suspended or absent brand has no sitemap and does not query locations',async()=>{for(const brand of [null,{id:'b',status:'suspended'}]){const q=[];assert.equal((await route('src/app/sitemap.xml/route.ts','esmeralda.orderfly.dk',brand,[],q).GET()).status,404);assert.equal(q.length,1);}});
+
+test('reserved app paths and brand-named locations retain their required brand prefix',async()=>{
+ for(const slug of ['esmeralda','feedback']) {
+  const expected='https://esmeralda.orderfly.dk/esmeralda/'+slug;
+  assert.equal(storefrontMenuMetadata({slug:'esmeralda',name:'Esmeralda'},{slug,name:slug}).alternates.canonical,expected);
+  const r=await route('src/app/sitemap.xml/route.ts','esmeralda.orderfly.dk',{id:'b',slug:'esmeralda'},[{brandId:'b',slug,isActive:true}],[]).GET();
+  assert.ok((await r.text()).includes('<loc>'+expected+'</loc>'));
+ }
+});
