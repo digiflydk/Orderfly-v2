@@ -24,6 +24,8 @@ Screenshots from the fixture are test evidence, not production screenshots. Full
 
 ## Release
 
-This task has its own branch and PR based on main. Its standalone branch does not contain unmerged task 1, so it must not replace the current production build by itself. A release must retain task 1 and include the reviewed task commits. Use manual Firebase App Hosting rollout and rollback; do not merge or push main or start GitHub Actions. Feature commits carry `[skip ci]` to prevent push/PR-triggered Actions. Independent review and release requirements still apply.
+PM explicitly accepted merge and deployment on 6 November 2026. PRs #858, #862 and #861 were merged, preserving task 1 and the concurrent feedback PR #860. Firebase App Hosting starts its rollout after merge. Feature and merge commits and PR titles carry `[skip ci]`, using the repository's existing internal-test path; GitHub records skipped checks without running Actions jobs. Independent review, local build/typecheck and live verification remain required.
+
+The first live check of merge `88dc9ad` found that the local logo returned HTTP 404. The file existed in source but was absent from the standalone runtime, whose public directory already contained traced menu images. The exact logo path is now included in `outputFileTracingIncludes`, ensuring it is packaged independently of adapter public-folder copying. This does not change the logo, middleware allowlist, consent behavior or hosting settings. After a production build, `node --test tests/unit/storefront-static-assets.cjs` starts the actual standalone server on loopback and verifies HTTP 200, PNG content type and byte-for-byte original logo content through the Esmeralda host route. The test fails against the preceding build with the observed 404.
 
 Task 2, `apphosting.yaml`, secrets, Firestore rules, payment logic and production data are unchanged.
