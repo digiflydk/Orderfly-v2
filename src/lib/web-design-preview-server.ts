@@ -1,3 +1,4 @@
+import { insertWebsiteReviews } from '@/lib/website-reviews-section';
 import { encodeWebsiteResponse } from '@/lib/website-response-encoding';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
@@ -64,13 +65,24 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     headers.set('Location', '/bordbooking' + rawSearch);
     return new Response(null, {status:307, headers});
   }
+  if (path === '/_reviews/customer-reviews.json') {
+    try {
+      const {esmeraldaWebsiteReviews}=await import('@/lib/feedback/website-reviews');
+      return Response.json({reviews:await esmeraldaWebsiteReviews()},{headers:{'Cache-Control':'no-store'}});
+    } catch {return Response.json({reviews:[]},{status:503,headers:{'Cache-Control':'no-store'}});}
+  }
+  if(path === '/_reviews/rotation.js') {
+    const script=await readFile(join(process.cwd(),'preview/esmeralda/adapters/website-reviews.js'));
+    return new Response(request.method==='HEAD'?null:script,{headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}});
+  }
   // Exact route keys only: no decoding, path joining, extension fallback or SPA fallback.
   if (!Object.hasOwn(routes,path)) { headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive'); return new Response(request.method === 'HEAD' ? null : 'Not found', {status:404,headers}); }
   try {
     const entry = (await loadPayload())[path];
     const expected = routes[path];
-    const bytes = Buffer.from(entry.data,'base64');
+    let bytes = Buffer.from(entry.data,'base64');
     if (bytes.length !== expected.size || sha(bytes) !== expected.sha256) throw new Error('Preview entry integrity mismatch');
+    if(path==='/') bytes=Buffer.from(insertWebsiteReviews(bytes.toString('utf8')));
     headers.set('Content-Type', mime[expected.file.split('.').pop()!] ?? 'application/octet-stream');
     headers.set('Content-Length', String(bytes.length));
     const encoded = encodeWebsiteResponse(bytes, headers, request);
