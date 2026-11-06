@@ -1,0 +1,90 @@
+name: Esmeralda Mobile Lighthouse
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'public/images/esmeralda-v2/menu/*-192.webp'
+
+permissions:
+  contents: read
+  checks: read
+
+jobs:
+  lighthouse:
+    name: Esmeralda Mobile Lighthouse
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out released commit
+        uses: actions/checkout@v6
+
+      - name: Wait for green CI and Firebase deployment of the exact commit
+        id: release
+        uses: actions/github-script@v7
+        env:
+          MERGE_SHA: ${{ github.sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { waitForRelease } = require(process.env.GITHUB_WORKSPACE + '/.github/scripts/wait-for-release.cjs');
+            const {release} = await waitForRelease({
+              github, owner: context.repo.owner, repo: context.repo.repo,
+              mergeSha: process.env.MERGE_SHA,
+              liveUrl: 'https://orderfly.dk',
+              self: 'Esmeralda Mobile Lighthouse',
+              required: ['Typecheck and build', 'rules'],
+              log: core.info,
+            });
+            core.setOutput('sha', release);
+
+      - name: Verify the Esmeralda subdomain is on the deployed release
+        env:
+          EXPECTED_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            https://esmeralda.orderfly.dk/api/health > /tmp/esmeralda-release.json
+          ACTUAL_SHA=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/esmeralda-release.json','utf8')).release")
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Measure 3 mobile Lighthouse 12 cold loads
+        run: |
+          set -euo pipefail
+          if command -v google-chrome >/dev/null 2>&1; then
+            CHROME_PATH=$(command -v google-chrome)
+          elif command -v google-chrome-stable >/dev/null 2>&1; then
+            CHROME_PATH=$(command -v google-chrome-stable)
+          elif command -v chromium >/dev/null 2>&1; then
+            CHROME_PATH=$(command -v chromium)
+          else
+            echo 'Chromium not installed on GitHub runner'
+            exit 1
+          fi
+          export CHROME_PATH
+          mkdir -p reports
+          for i in 1 2 3; do
+            npx --yes lighthouse@12 https://esmeralda.orderfly.dk/amager \
+              --only-categories=performance \
+              --form-factor=mobile \
+              --throttling-method=simulate \
+              --chrome-flags="--headless --no-sandbox --disable-dev-shm-usage" \
+              --output=json --output-path="./reports/lighthouse-mobile-$i.json" --quiet
+          done
+
+      - name: Write median and image byte report
+        run: node scripts/lighthouse-mobile-summary.cjs
+
+      - name: Upload full Lighthouse evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esmeralda-lighthouse-mobile-3x-${{ github.sha }}
+          path: reports/
+          if-no-files-found: ignore
+          retention-days: 30
