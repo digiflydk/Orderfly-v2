@@ -16,6 +16,7 @@ import { publicCampaignBenefits, memberCampaignBenefits } from './campaign-benef
 import {
   cardIsExpired, COLLECTIONS, hashKey, memberIdentityKey, readProgram, type CardDoc, type EventType, type LoyaltyEvent, type MemberDoc, type ProgramDoc, type RewardDoc,
 } from './model';
+import { preparePurchaseLinkCleanup } from './purchase-privacy';
 import { profileFromCustomer } from './profile-rules';
 import { stageClubQrConversion } from './qr-attribution';
 import { stageSignupNotification } from './signup-notifications';
@@ -354,7 +355,8 @@ export async function setNewsletterConsent(db: Firestore, brand: ProgramBrand, s
 
 // Deletes the membership and its personal data. The log is kept, pseudonymized:
 // events reference only the random member ID, whose document no longer holds
-// any personal data or customer link. The Orderfly customer and Omnisend contact remain.
+// any personal data or customer link. Purchase references are scrubbed in bounded
+// batches; the heartbeat completes large histories. The customer and Omnisend contact remain.
 export async function deleteMembership(db: Firestore, brand: ProgramBrand, session: MemberSession, now: number) {
   return db.runTransaction(async tx => {
     const memberRef = db.collection(COLLECTIONS.members).doc(session.memberId);
@@ -364,6 +366,11 @@ export async function deleteMembership(db: Firestore, brand: ProgramBrand, sessi
     const mails = await tx.get(db.collection(COLLECTIONS.mailOutbox).where('memberId', '==', session.memberId));
     const cardRef = member.currentCardId ? db.collection(COLLECTIONS.cards).doc(member.currentCardId) : null;
     const card = cardRef ? (await tx.get(cardRef)).data() as CardDoc | undefined : undefined;
+    const existingWrites = 3 + (cardRef && card?.status === 'active' ? 1 : 0)
+      + rewards.docs.filter(doc => doc.data().brandId === brand.brandId).length
+      + mails.docs.filter(doc => doc.data().brandId === brand.brandId).length;
+    const purchaseCleanup = await preparePurchaseLinkCleanup(db, tx, brand.brandId, session.memberId, 500 - existingWrites);
+    purchaseCleanup.apply();
     for (const reward of rewards.docs) if (reward.data().brandId === brand.brandId) tx.update(reward.ref, { status: 'cancelled' });
     if (cardRef && card?.status === 'active') tx.update(cardRef, { status: 'expired' });
     // Waiting login mails are cancelled and every mail job loses the member's name, address and link.
@@ -372,7 +379,7 @@ export async function deleteMembership(db: Firestore, brand: ProgramBrand, sessi
         ...(['pending', 'failed'].includes(mail.data().state) ? { state: 'cancelled' } : {}) });
     tx.delete(db.collection(COLLECTIONS.identities).doc(memberIdentityKey(brand.brandId, member.normalizedEmail)));
     tx.set(memberRef, { companyId: member.companyId, brandId: member.brandId, status: 'deleted', joinedAt: member.joinedAt, deletedAt: now,
-      sessionEpoch: member.sessionEpoch + 1, currentCardId: null });
+      sessionEpoch: member.sessionEpoch + 1, currentCardId: null, purchaseEventCleanupPending: purchaseCleanup.pending });
     tx.create(db.collection(COLLECTIONS.events).doc(hashKey('deleted', session.memberId)), loyaltyEvent(member, session.memberId, now, 'member_deleted'));
     return { deleted: true };
   });

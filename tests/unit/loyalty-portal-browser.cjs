@@ -72,7 +72,9 @@ before(async () => {
   const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8')
     + '\n' + fs.readFileSync(path.join(root, 'src/app/[brandSlug]/club/esmeralda-club.css'), 'utf8');
   server = http.createServer((req, res) => {
-    if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
+    // Serve Webpack's dynamic-import chunks as well as the entry bundle.
+    const script = path.join(dir, path.basename(new URL(req.url, 'http://localhost').pathname));
+    if (script.endsWith('.js') && fs.existsSync(script)) { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(script)); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
     const brand = new URL(req.url, 'http://localhost').searchParams.get('brand') === 'other' ? 'other' : 'esmeralda';
@@ -320,7 +322,10 @@ test('brand tracking stays off on portal pages and still runs in the storefront'
     const { page } = await open(`tracking?path=${encodeURIComponent(pathname)}`);
     try {
       await page.waitForFunction(() => document.readyState === 'complete');
-      await page.waitForTimeout(50);
+      // Tracking loads through a dynamic import; wait for the observable mount,
+      // rather than assuming that chunk loading finishes within 50 ms on CI.
+      if (mounted === 1) await page.waitForFunction(() => window.__mounted === 1);
+      else await page.waitForTimeout(50);
       assert.equal(await page.evaluate(() => window.__mounted), mounted, pathname);
     } finally { await page.close(); }
   }

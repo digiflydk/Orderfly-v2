@@ -155,3 +155,58 @@ test('legacy committed or failed settlement never schedules a managed courier ca
  const legacy=await fixture();await legacy.settle();assert.equal(legacy.afterCallbacks.length,0);
  const failed=await fixture('stripe',{failPath:'orders/'});await assert.rejects(failed.settle(),/fixture atomic failure/);assert.equal(failed.afterCallbacks.length,0);
 });
+
+function enableClub(f, settings = {}) {
+  const { defaultProgramSettings } = loadTs('src/lib/loyalty/stamp-card/rules.ts');
+  f.records.set('loyaltyPrograms/b', {brandId:'b',version:1,settings:{...defaultProgramSettings('Club'),active:true,
+    reward:{type:'fixed_amount',amountOre:1000},rewardDescription:'10 kr.',terms:'Vilkår',consentText:'Ja tak',minimumAmountOre:1,...settings}});
+  f.records.set('loyaltyMembers/member', {brandId:'b',companyId:'company',customerId:f.order().customerDetails.id,status:'active',
+    joinedAt:Date.now()-1000,currentCardId:null,stampDay:null,stampsOnDay:0,normalizedEmail:f.order().customerContact});
+}
+const stampEvents = f => [...f.records.values()].filter(v=>v.type==='stamp_added' && v.source==='order');
+
+test('Club stamps commit with verified payment for Stripe and pay-at-pickup and never repeat on webhook replay', async () => {
+  for (const kind of ['stripe','pickup']) {
+    const f=await fixture(kind);enableClub(f);
+    assert.equal(await f.settle(),true);
+    assert.equal(stampEvents(f).length,1);
+    const e=stampEvents(f)[0];
+    assert.equal(e.orderId,f.orderId);assert.equal(e.orderNumber,f.orderId);assert.equal(e.customerId,f.order().customerDetails.id);
+    assert.equal(e.amountOre,Math.round(f.order().totalAmount*100));assert.equal(e.memberId,'member');
+    assert.equal(f.records.get('loyaltyCards/'+f.records.get('loyaltyMembers/member').currentCardId).stamps,1);
+    assert.equal(await f.settle(),false);assert.equal(stampEvents(f).length,1);
+  }
+});
+
+test('Club payment retries recompute stamps and failure rolls back both payment and stamps', async () => {
+  const f=await fixture('stripe',{retry:true});enableClub(f,{stampsRequired:1});
+  await f.settle();assert.equal(stampEvents(f).length,1);
+  assert.equal([...f.records.values()].filter(v=>v.type==='reward_earned').length,1);
+  const broken=await fixture('stripe',{failPath:'invoiceCounters/'});enableClub(broken);
+  await assert.rejects(broken.settle(),/fixture atomic failure/);
+  assert.notEqual(broken.order().paymentStatus,'Paid');assert.equal(stampEvents(broken).length,0);
+  assert.equal(broken.records.get('loyaltyMembers/member').currentCardId,null);
+  const unpaid=await fixture('stripe');enableClub(unpaid);unpaid.session.amount_total++;
+  await assert.rejects(unpaid.settle(),/amount mismatch/);assert.equal(stampEvents(unpaid).length,0);
+});
+
+test('Club respects thresholds, channels, discounts, membership and tenant boundaries without blocking payment', async () => {
+  const cases=[
+    ['inactive',f=>enableClub(f,{active:false})],
+    ['minimum',f=>enableClub(f,{minimumAmountOre:10000000})],
+    ['channel',f=>enableClub(f,{orderTypes:['delivery']})],
+    ['discount',f=>{enableClub(f);f.order().paymentDetails.discountTotal=1;}],
+    ['personal card',f=>{enableClub(f,{discountedOrdersQualify:true});f.order().discountCard={purchaseStampsEligible:false};}],
+    ['deleted',f=>{enableClub(f);f.records.get('loyaltyMembers/member').status='deleted';}],
+    ['foreign brand',f=>{enableClub(f);f.records.get('loyaltyMembers/member').brandId='other';}],
+    ['foreign company',f=>{enableClub(f);f.records.get('loyaltyMembers/member').companyId='other';}],
+    ['wrong customer',f=>{enableClub(f);f.records.get('loyaltyMembers/member').customerId='other';}],
+    ['ambiguous',f=>{enableClub(f);f.records.set('loyaltyMembers/duplicate',{...f.records.get('loyaltyMembers/member')});}],
+    ['daily limit',f=>{enableClub(f,{maxStampsPerDay:1});const m=f.records.get('loyaltyMembers/member');m.stampDay=loadTs('src/lib/loyalty/stamp-card/day.ts').copenhagenDay(Date.now());m.stampsOnDay=1;}],
+  ];
+  for (const [label,configure] of cases) {
+    const f=await fixture('stripe');configure(f);assert.equal(await f.settle(),true,label);assert.equal(stampEvents(f).length,0,label);
+  }
+  const allowed=await fixture('stripe');enableClub(allowed,{discountedOrdersQualify:true});allowed.order().paymentDetails.discountTotal=1;
+  await allowed.settle();assert.equal(stampEvents(allowed).length,1);
+});

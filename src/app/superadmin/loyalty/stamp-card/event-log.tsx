@@ -20,8 +20,8 @@ export function EventLog({ rows, truncated, filter, multiBrand }: { rows: EventR
     const result = await exportEvents(filter);
     if (!result.ok || !result.data) { toast({ variant: 'destructive', title: 'Eksporten mislykkedes' }); return; }
     downloadCsv(`stempelkort-log-${filter.from}-${filter.to}.csv`, [
-      ['Tidspunkt', 'Hændelse', 'Medlem', 'Antal', 'Beløb', 'Kanal', 'Kilde', 'Afdeling', 'Medarbejder', 'Årsag', 'Ændringer'],
-      ...result.data.rows.map(r => [formatDateTime(r.createdAt), EVENT_LABELS[r.type] ?? r.type, r.memberName, r.quantity, formatKr(r.amountOre),
+      ['Tidspunkt', 'Hændelse', 'Medlem', 'Antal', 'Beløb', 'Ordrenummer', 'Kanal', 'Kilde', 'Afdeling', 'Medarbejder', 'Årsag', 'Ændringer'],
+      ...result.data.rows.map(r => [formatDateTime(r.createdAt), EVENT_LABELS[r.type] ?? r.type, r.memberName, r.quantity, formatKr(r.amountOre), r.orderNumber ?? '',
         r.channel ? CHANNEL_LABELS[r.channel] ?? r.channel : '', SOURCE_LABELS[r.source] ?? r.source, r.locationName ?? '', r.actorName ?? '', r.reason ?? '', r.details ?? '']),
     ]);
   });
@@ -42,7 +42,7 @@ export function EventLog({ rows, truncated, filter, multiBrand }: { rows: EventR
         <Table>
           <TableHeader><TableRow>
             <TableHead>Tidspunkt</TableHead><TableHead>Hændelse</TableHead><TableHead>Medlem</TableHead><TableHead>Antal · beløb</TableHead>
-            <TableHead>Kanal · kilde</TableHead><TableHead>Afdeling</TableHead><TableHead>Medarbejder</TableHead><TableHead>Årsag · ændringer</TableHead>
+            <TableHead>Ordrenummer</TableHead><TableHead>Kanal · kilde</TableHead><TableHead>Afdeling</TableHead><TableHead>Medarbejder</TableHead><TableHead>Årsag · ændringer</TableHead>
           </TableRow></TableHeader>
           <TableBody>
             {rows.map((r, i) => (
@@ -51,6 +51,7 @@ export function EventLog({ rows, truncated, filter, multiBrand }: { rows: EventR
                 <TableCell>{EVENT_LABELS[r.type] ?? r.type}</TableCell>
                 <TableCell>{r.memberName || '—'}</TableCell>
                 <TableCell className="whitespace-nowrap">{r.quantity || '—'}{r.amountOre != null ? ` · ${formatKr(r.amountOre)}` : ''}</TableCell>
+                <TableCell>{r.orderNumber ?? '—'}</TableCell>
                 <TableCell>{[r.channel ? CHANNEL_LABELS[r.channel] ?? r.channel : null, SOURCE_LABELS[r.source] ?? r.source].filter(Boolean).join(' · ')}</TableCell>
                 <TableCell>{r.locationName ?? '—'}</TableCell>
                 <TableCell>{r.actorName ?? '—'}</TableCell>

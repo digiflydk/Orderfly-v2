@@ -341,7 +341,7 @@ export function copenhagenMidnight(date: string): number {
   return Date.UTC(y, m - 1, d);
 }
 
-export type EventRow = { createdAt: number; type: string; memberId: string | null; memberName: string; quantity: number; amountOre: number | null;
+export type EventRow = { orderNumber?: string; customerId?: string; createdAt: number; type: string; memberId: string | null; memberName: string; quantity: number; amountOre: number | null;
   channel: string | null; source: string; locationName: string | null; actorId: string | null; actorName: string | null; reason: string | null;
   // Old and new value of each changed setting.
   details: string | null };
@@ -353,7 +353,7 @@ function settingsDetails(e: LoyaltyEvent) {
 }
 
 function eventRow(e: LoyaltyEvent, locationName: Map<string, string>, memberName: string): EventRow {
-  return { createdAt: e.createdAt, type: e.type, memberId: e.memberId, memberName, quantity: e.quantity, amountOre: e.amountOre, channel: e.channel,
+  return { orderNumber: e.orderNumber, customerId: e.customerId, createdAt: e.createdAt, type: e.type, memberId: e.memberId, memberName, quantity: e.quantity, amountOre: e.amountOre, channel: e.channel,
     source: e.source, locationName: e.locationId ? locationName.get(e.locationId) ?? null : null, actorId: e.actorId, actorName: e.actorName,
     // Correction reasons are shown; internal codes such as text versions are not.
     reason: e.source === 'correction' ? e.reason : null, details: e.type === 'settings_changed' ? settingsDetails(e) : null };

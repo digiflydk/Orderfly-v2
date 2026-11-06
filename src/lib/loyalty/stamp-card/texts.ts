@@ -43,6 +43,8 @@ export const CONDITIONS = {
   kun_restaurant: 'Kun køb i restauranten giver stempel',
   kun_takeaway: 'Kun takeaway bestilt direkte giver stempel',
   flere_afdelinger: 'Kortet gælder på tværs af flere afdelinger',
+  online_afhentning: 'Online afhentning giver stempler',
+  online_levering: 'Online levering giver stempler',
 } as const;
 export type Condition = keyof typeof CONDITIONS;
 
@@ -131,7 +133,7 @@ export type BrandTextSource = Partial<Record<'name' | 'companyName' | 'street' |
 export type TextSettings = {
   name: string; minimumAmountOre: number; stampsRequired: number; rewardDescription: string; rewardValidityMonths: number;
   cardValidityMonths: number; minimumAge: number; discountedOrdersQualify: boolean; crossLocation: boolean; stampsPerPurchase: number;
-  counterChannels: readonly string[]; maxStampsPerDay: number | null;
+  counterChannels: readonly string[]; orderTypes?: readonly string[]; maxStampsPerDay: number | null;
 };
 
 const str = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -155,9 +157,7 @@ export const lowerFirst = (text: string) => /^\p{Lu}\p{Ll}/u.test(text) ? text[0
 
 export function textValues(input: { brand: BrandTextSource; settings: TextSettings; activeLocations: number; version: number | null; effectiveFrom: number | null }): TextValues {
   const { brand, settings: s } = input, reward = s.rewardDescription.trim();
-  // The terms name the channels that give stamps today: dine-in and takeaway at the counter.
-  // Stamps from Orderfly orders (orderTypes) are not switched on yet, so they are not promised;
-  // when they are, this and textKey must include them.
+  // Legacy counter conditions retain their meaning for already-published texts.
   const restaurant = s.counterChannels.includes('dine_in'), takeaway = s.counterChannels.includes('takeaway');
   return {
     values: {
@@ -168,7 +168,7 @@ export function textValues(input: { brand: BrandTextSource; settings: TextSettin
       'stempler_pr_køb': String(s.stampsPerPurchase), maks_stempler_pr_dag: s.maxStampsPerDay === null ? null : String(s.maxStampsPerDay),
       version: input.version ? String(input.version) : null, 'gældende_fra': input.effectiveFrom ? danishDate(input.effectiveFrom) : null,
     },
-    conditions: { rabat_giver_stempel: s.discountedOrdersQualify, flere_afdelinger: s.crossLocation && input.activeLocations > 1,
+    conditions: { online_afhentning: !!s.orderTypes?.includes('pickup'), online_levering: !!s.orderTypes?.includes('delivery'), rabat_giver_stempel: s.discountedOrdersQualify, flere_afdelinger: s.crossLocation && input.activeLocations > 1,
       'flere_stempler_pr_køb': s.stampsPerPurchase > 1, 'dagsgrænse': s.maxStampsPerDay !== null,
       restaurant_og_takeaway: restaurant && takeaway, kun_restaurant: restaurant && !takeaway, kun_takeaway: takeaway && !restaurant },
   };
@@ -181,7 +181,7 @@ export function textKey(settings: ProgramTexts & TextSettings) {
   const s = settings;
   return JSON.stringify([TEXT_FIELDS.map(f => s[f]), s.name, s.minimumAmountOre, s.stampsRequired, s.rewardDescription.trim(),
     s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation, s.stampsPerPurchase,
-    [...s.counterChannels].sort(), s.maxStampsPerDay]);
+    [...s.counterChannels].sort(), s.maxStampsPerDay, [...(s.orderTypes ?? [])].sort()]);
 }
 
 type PublishedTexts = { version: number; effectiveFrom: number | null; key: string | null };
@@ -206,7 +206,7 @@ export const TERMS_ACCEPT_DEFAULT = 'Jeg accepterer vilkårene for {programnavn}
 
 export type TemplateVersion = { version: string; publishedAt: string; note: string; texts: ProgramTexts };
 
-export const TEMPLATE_VERSIONS: readonly TemplateVersion[] = [
+const LEGACY_TEMPLATE_VERSIONS: readonly TemplateVersion[] = [
   {
     version: 'stamp-card-da-2026-10-19',
     publishedAt: '2026-10-19',
@@ -269,6 +269,17 @@ Version {version}, gældende fra {gældende_fra}.`,
     },
   },
 ];
+
+const previousTemplate = LEGACY_TEMPLATE_VERSIONS[LEGACY_TEMPLATE_VERSIONS.length - 1];
+export const TEMPLATE_VERSIONS: readonly TemplateVersion[] = [...LEGACY_TEMPLATE_VERSIONS, {
+  version: 'stamp-card-da-2026-11-06', publishedAt: '2026-11-06', note: 'Automatiske stempler ved betalte onlineordrer.',
+  texts: { ...previousTemplate.texts, terms: previousTemplate.texts.terms
+    .replace('Stempler gives ved køb i restauranten.', 'Ved kassen gives stempler ved køb i restauranten.')
+    .replace('Takeaway og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.', 'Takeaway bestilt ved kassen og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.')
+    .replace('Du skal vise din QR-kode', 'Ved kassen skal du vise din QR-kode')
+    .replace('\n4. Belønninger', '\n{#hvis online_afhentning}Onlineordrer til afhentning bestilt direkte hos os giver automatisk stempler, når betalingen er registreret, og købet opfylder reglerne.{/hvis}\n{#hvis online_levering}Onlineordrer til levering bestilt direkte hos os giver automatisk stempler, når betalingen er registreret, og købet opfylder reglerne.{/hvis}\nVed onlinekøb skal ordren være knyttet til den kundeprofil, der har dit aktive medlemskab. Køb med personligt rabatkort giver ikke købsstempler.\n\n4. Belønninger'),
+  },
+}];
 
 export const CURRENT_TEMPLATE = TEMPLATE_VERSIONS[TEMPLATE_VERSIONS.length - 1];
 

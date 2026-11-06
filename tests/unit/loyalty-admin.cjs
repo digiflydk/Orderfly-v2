@@ -43,7 +43,7 @@ function setup(){
       currentCardId:null,stampDay:null,stampsOnDay:0,consent:{status:m==='bo'?'withdrawn':'given',at:NOW,source:'portal',eventId:'e'},termsVersion:'t',sessionEpoch:0});
 }
 const rows=prefix=>[...db.rows].filter(([p])=>p.startsWith(prefix+'/')).map(([p,v])=>({id:p.split('/')[1],...v}));
-const stamp=(memberId,n,at=NOW)=>counter.grantStamp(db,who('leder'),{brandId:'brand',locationId:'l1',memberId,channel:'takeaway',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:String(n).padStart(64,'0')},at);
+const stamp=(memberId,n,at=NOW)=>counter.grantStamp(db,who('leder'),{brandId:'brand',locationId:'l1',memberId,orderNumber:String(n),channel:'takeaway',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:String(n).padStart(64,'0')},at);
 const rejects=(promise,code)=>assert.rejects(promise,e=>e.code===code||(console.error(e),false));
 
 test('administration requires the permission for the whole brand and never crosses tenants',async()=>{
@@ -160,7 +160,7 @@ test('the log filters by Copenhagen period, type, employee and channel and label
   setup();
   await stamp('anna',1,Date.parse('2026-10-19T21:59:59Z'));
   await stamp('bo',2,Date.parse('2026-10-19T22:00:00Z'));
-  await counter.grantStamp(db,who('owner'),{brandId:'brand',locationId:'l2',memberId:'anna',channel:'dine_in',amountOre:20_000,discountUsed:false,via:'search',idempotencyKey:'9'.padStart(64,'0')},Date.parse('2026-10-20T21:59:59Z'));
+  await counter.grantStamp(db,who('owner'),{brandId:'brand',locationId:'l2',memberId:'anna',orderNumber:'900',channel:'dine_in',amountOre:20_000,discountUsed:false,via:'search',idempotencyKey:'9'.padStart(64,'0')},Date.parse('2026-10-20T21:59:59Z'));
   db.rows.set('loyaltyMembers/bo',{companyId:'esmeralda',brandId:'brand',status:'deleted',joinedAt:NOW,sessionEpoch:1});
   const list=filter=>admin.listEvents(db,who('leder'),{brandIds:['brand'],from:'2026-10-20',to:'2026-10-20',type:null,actorId:null,channel:null,...filter});
   const day=await list({});
@@ -199,7 +199,7 @@ test('the overview counts members, stamps, rewards, expiry and consent within fi
   setup();
   const at=Date.parse('2026-10-20T08:00:00Z');
   await stamp('anna',1,at);await stamp('anna',2,at+1000);
-  await counter.grantStamp(db,who('owner'),{brandId:'brand',locationId:'l2',memberId:'bo',channel:'dine_in',amountOre:20_000,discountUsed:false,via:'search',idempotencyKey:'7'.padStart(64,'0')},at+2000);
+  await counter.grantStamp(db,who('owner'),{brandId:'brand',locationId:'l2',memberId:'bo',orderNumber:'700',channel:'dine_in',amountOre:20_000,discountUsed:false,via:'search',idempotencyKey:'7'.padStart(64,'0')},at+2000);
   const [reward]=rows('loyaltyRewards');
   await counter.redeemReward(db,who('leder'),{brandId:'brand',locationId:'l1',rewardId:reward.id,via:'qr',idempotencyKey:'8'.padStart(64,'0')},at+3000);
   await counter.correctMember(db,who('leder'),{brandId:'brand',locationId:'l1',kind:'add_stamps',memberId:'bo',count:1,reason:'Kompensation',idempotencyKey:'9'.padStart(64,'0')},at+4000);

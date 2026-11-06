@@ -55,7 +55,7 @@ function addMember(memberId,brandId,email,companyId='esmeralda'){
 const rows=prefix=>[...db.rows].filter(([path])=>path.startsWith(prefix+'/')).map(([path,value])=>({id:path.split('/')[1],...value}));
 const events=type=>rows('loyaltyEvents').filter(e=>!type||e.type===type);
 const card=()=>db.rows.get('loyaltyCards/'+db.rows.get('loyaltyMembers/anna').currentCardId);
-const stamp=(changes={},who='cashier',now=NOW)=>counter.grantStamp(db,actor(who),counter.stampSchema.parse({brandId:'brand',locationId:'l1',memberId:'anna',channel:'dine_in',amountOre:12_000,discountUsed:false,via:'qr',idempotencyKey:key(Math.random().toString().slice(2)),...changes}),now);
+const stamp=(changes={},who='cashier',now=NOW)=>counter.grantStamp(db,actor(who),counter.stampSchema.parse({brandId:'brand',locationId:'l1',memberId:'anna',channel:'dine_in',amountOre:12_000,orderNumber:changes.idempotencyKey || String(Math.random()).slice(2),discountUsed:false,via:'qr',idempotencyKey:key(Math.random().toString().slice(2)),...changes}),now);
 const rejects=(promise,code)=>assert.rejects(promise,e=>e.code===code||e.message===code||(console.error(e),false));
 
 test('a qualifying purchase gives one stamp, logged with employee, channel, amount and source',async()=>{
@@ -229,4 +229,40 @@ test('a stamp after the deadline but before the job starts a new card and logs t
   assert.equal((await stamp({},'cashier',later)).stamps,1);
   assert.equal(events('stamps_expired').length,1);
   assert.deepEqual(await runLoyaltyExpiry(db,later),{cards:0,rewards:0});
+});
+
+test('order number is required and stored with member/customer; a bon cannot credit another member or request twice', async () => {
+  setup();
+  const base = {brandId:'brand',locationId:'l1',memberId:'anna',channel:'dine_in',amountOre:12000,discountUsed:false,via:'qr',idempotencyKey:key(123)};
+  for (const orderNumber of [undefined, '', '   ', 'x'.repeat(65), 'abc/def']) assert.equal(counter.stampSchema.safeParse({...base,orderNumber}).success,false);
+  await stamp({orderNumber:' bon-123 ',idempotencyKey:key(123)});
+  const e=events('stamp_added')[0];
+  assert.equal(e.orderNumber,'BON-123');assert.equal(e.customerId,'c-anna');
+  await rejects(stamp({orderNumber:'BON-123',idempotencyKey:key(124)}),'order_already_stamped');
+  addMember('other-member','brand','other@example.com');
+  await rejects(stamp({orderNumber:'bon-123',memberId:'other-member',idempotencyKey:key(125)}),'order_already_stamped');
+  await rejects(stamp({orderNumber:'ORD-123456'}),'online_order_automatic');
+  assert.equal(events('stamp_added').length,1);
+  // Restarted POS sequence is valid the following Copenhagen calendar day.
+  await stamp({orderNumber:'BON-123',idempotencyKey:key(126)},'cashier',NOW+DAY);
+  assert.equal(events('stamp_added').length,2);
+});
+
+test('online stamp plan respects delivery rules, card ownership/location, expiry and exact write counts', async () => {
+  const {prepareOrderStamps}=loadTs('src/lib/loyalty/stamp-card/order-stamps.ts',mocks);
+  const prepare=async(order={},now=NOW)=>db.runTransaction(async tx=>{
+    let count=0,wrote=false;
+    const wrapped={...tx,get:r=>{assert.equal(wrote,false);return tx.get(r);}};
+    for(const method of ['set','create','update']) wrapped[method]=(...args)=>{wrote=true;count++;return tx[method](...args);};
+    const plan=await prepareOrderStamps(db,wrapped,'ORD-111111',{brandId:'brand',locationId:'l1',customerDetails:{id:'c-anna'},
+      paymentStatus:'Pending',deliveryType:'Delivery',totalAmount:120,...order},now);
+    assert.equal(count,0);plan.apply();assert.equal(count,plan.writeCount);return count;
+  });
+  const init=(options={})=>{setup({program:settings({orderTypes:['delivery'],...options})});db.rows.set('customers/c-anna',{brandId:'brand'});};
+  init();assert.equal(await prepare(),3);assert.equal(events('stamp_added')[0].channel,'delivery');assert.equal(await prepare(),0);
+  init({stampsRequired:1});assert.equal(await prepare(),6);assert.equal(rows('loyaltyRewards').length,1);
+  init();await stamp();assert.equal(await prepare({},NOW+250*DAY),5);assert.equal(events('stamps_expired').length,1);
+  init({crossLocation:false});await stamp();assert.equal(await prepare({locationId:'l2'}),0);
+  init();await stamp();card();const ref=db.rows.get('loyaltyMembers/anna').currentCardId;db.rows.get('loyaltyCards/'+ref).memberId='bo';assert.equal(await prepare(),0);
+  for(const patch of [{paymentStatus:'Paid'},{paymentStatus:'Refunded'},{status:'Canceled'},{deliveryType:'Wolt'},{customerId:'foreign'},{totalAmount:-1}]){init();assert.equal(await prepare(patch),0);}
 });

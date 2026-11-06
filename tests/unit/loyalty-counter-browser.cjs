@@ -109,13 +109,14 @@ for (const [width, height] of [[1180, 820], [820, 1180], [390, 844]]) test(`scan
     await page.getByText('Gratis pizza').waitFor();
     assert.deepEqual(calls[0], ['lookup', { brandId: 'b', locationId: 'l1', qrToken: TOKEN }]);
     await page.getByRole('button', { name: 'Giv stempel' }).click();
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     await page.getByRole('button', { name: 'Dine-in' }).click();
     await page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('149,50');
     await page.getByRole('button', { name: 'Bekræft' }).click();
     await page.getByText('Stempel givet – 6 af 8').waitFor();
     const [, stamp] = calls.find(([name]) => name === 'stamp');
     assert.match(stamp.idempotencyKey, /^[a-f0-9]{64}$/);
-    assert.deepEqual({ ...stamp, idempotencyKey: 'k' }, { brandId: 'b', locationId: 'l1', memberId: 'm1', channel: 'dine_in', amountOre: 14950, discountUsed: false, via: 'qr', idempotencyKey: 'k' });
+    assert.deepEqual({ ...stamp, idempotencyKey: 'k' }, { brandId: 'b', locationId: 'l1', memberId: 'm1', channel: 'dine_in', orderNumber: '12345', amountOre: 14950, discountUsed: false, via: 'qr', idempotencyKey: 'k' });
     assert.ok(await noOverflow(page));
     await page.clock.runFor(4100);
     await page.getByRole('button', { name: 'Scan QR-kode' }).waitFor();
@@ -127,6 +128,7 @@ test('only dine-in and takeaway can be chosen; below minimum and discounted purc
   try {
     await scan(page);
     await page.getByRole('button', { name: 'Giv stempel' }).click();
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     const channels = await page.getByRole('group', { name: 'Kanal' }).getByRole('button').allTextContents();
     assert.deepEqual(channels, ['Dine-in', 'Takeaway']);
     assert.equal(await page.getByText(/Wolt|Uber/).count(), 0);
@@ -151,6 +153,7 @@ test('a double tap sends one stamp, and an uncertain failure only retries the sa
   try {
     await scan(page);
     await page.getByRole('button', { name: 'Giv stempel' }).click();
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     // A single channel is preselected: amount and confirm are the only taps.
     assert.equal(await page.getByRole('button', { name: 'Takeaway' }).getAttribute('aria-pressed'), 'true');
     await page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('120');
@@ -191,6 +194,7 @@ test('e-mail search shows the masked e-mail and stamps are sent as via search', 
     await page.getByText('a***@example.com').waitFor();
     assert.deepEqual(calls[0], ['lookup', { brandId: 'b', locationId: 'l1', email: 'anna@example.com' }]);
     await page.getByRole('button', { name: 'Giv stempel' }).click();
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     await page.getByRole('button', { name: 'Dine-in' }).click();
     await page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('250');
     await page.getByRole('button', { name: 'Bekræft' }).click();
@@ -300,6 +304,7 @@ test('idle time locks the tablet, logs out and survives a reload; a lost session
   try {
     await scan(expired.page);
     await expired.page.getByRole('button', { name: 'Giv stempel' }).click();
+    await expired.page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');
     await expired.page.getByRole('button', { name: 'Dine-in' }).click();
     await expired.page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('150');
     await expired.page.getByRole('button', { name: 'Bekræft' }).click();
@@ -348,4 +353,18 @@ test('the next PIN is sent only after the previous employee is logged out', asyn
     assert.deepEqual(order.slice(0, 3), ['session:DELETE', 'session:DELETE:done', 'session:POST']);
     assert.equal(order.filter(name => name === 'session:DELETE').length, 1);
   } finally { await close(); }
+});
+
+test('an amount alone cannot submit a purchase without an order number', async()=>{
+  const {page,calls,close}=await open();
+  try {
+    await scan(page);await page.getByRole('button',{name:'Giv stempel'}).click();
+    await page.getByRole('button',{name:'Takeaway'}).click();
+    await page.getByLabel('Købsbeløb inkl. moms (kr.)').fill('150');
+    const confirm=page.getByRole('button',{name:'Bekræft'});
+    assert.equal(await confirm.isDisabled(),true);
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('12345');assert.equal(await confirm.isDisabled(),false);
+    await page.getByLabel('Ordrenummer (obligatorisk)').fill('   ');assert.equal(await confirm.isDisabled(),true);
+    assert.equal(calls.filter(([name])=>name==='stamp').length,0);
+  }finally{await close();}
 });

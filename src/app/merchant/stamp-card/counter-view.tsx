@@ -299,16 +299,17 @@ function useAction<T>(path: string) {
 function StampStep({ m, scope, fail, onBack, onDone }: StepProps) {
   const channels = m.program.counterChannels;
   const [channel, setChannel] = useState(channels.length === 1 ? channels[0] : '');
+  const [orderNumber, setOrderNumber] = useState('');
   const [amount, setAmount] = useState(''), [discount, setDiscount] = useState(false);
   const action = useAction<{ stamps: number; stampsRequired: number; rewardsEarned: number }>('/api/merchant/loyalty/stamp');
   const amountOre = parseAmountOre(amount);
   const belowMinimum = amountOre !== null && amountOre < m.program.minimumAmountOre;
   const frozen = action.pending || action.uncertain;
-  const ready = !!channel && amountOre !== null && !belowMinimum && !(discount && !m.program.discountedOrdersQualify);
+  const ready = /^[A-Za-z0-9._-]{1,64}$/.test(orderNumber.trim()) && !!channel && amountOre !== null && !belowMinimum && !(discount && !m.program.discountedOrdersQualify);
 
   async function confirm() {
     if (!ready) return;
-    const outcome = await action.run({ ...scope, memberId: m.member.id, channel, amountOre, discountUsed: discount, via: m.via }, fail, m.program.minimumAmountOre);
+    const outcome = await action.run({ ...scope, memberId: m.member.id, orderNumber: orderNumber.trim(), channel, amountOre, discountUsed: discount, via: m.via }, fail, m.program.minimumAmountOre);
     if (!outcome) return;
     if (outcome.rewardsEarned > 0) onDone('Kortet er fyldt – belønning optjent', `Nyt kort: ${outcome.stamps} af ${outcome.stampsRequired}`);
     else onDone(`Stempel givet – ${outcome.stamps} af ${outcome.stampsRequired}`);
@@ -326,8 +327,13 @@ function StampStep({ m, scope, fail, onBack, onDone }: StepProps) {
         </div>
       </fieldset>
       <div className="grid gap-2">
+        <Label htmlFor="counter-order-number" className="text-lg">Ordrenummer (obligatorisk)</Label>
+        <Input id="counter-order-number" required maxLength={64} autoComplete="off" disabled={frozen} value={orderNumber}
+          onChange={e => setOrderNumber(e.target.value)} placeholder="Nummer fra bonen" className="h-20 text-3xl" />
+      </div>
+      <div className="grid gap-2">
         <Label htmlFor="counter-amount" className="text-lg">Købsbeløb inkl. moms (kr.)</Label>
-        <Input id="counter-amount" inputMode="decimal" autoComplete="off" autoFocus={channels.length === 1} disabled={frozen} value={amount}
+        <Input id="counter-amount" required inputMode="decimal" autoComplete="off" autoFocus={channels.length === 1} disabled={frozen} value={amount}
           onChange={e => setAmount(e.target.value)} placeholder="0" className="h-20 text-4xl" aria-invalid={belowMinimum} />
         {m.program.minimumAmountOre > 0 && <p className="text-base text-muted-foreground">Minimum {kr(m.program.minimumAmountOre)} kr.</p>}
         {belowMinimum && <p role="alert" className="text-lg font-medium text-destructive">{errorMessage('below_minimum', m.program.minimumAmountOre)}</p>}
