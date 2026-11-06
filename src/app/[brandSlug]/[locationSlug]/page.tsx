@@ -139,6 +139,7 @@ export default async function Page({
 
     return (
       <BrandPageClient
+        initialNow={Date.now()}
         initialDeliveryType={initialDeliveryType}
         brand={brand}
         location={location}

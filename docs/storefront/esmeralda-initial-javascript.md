@@ -32,3 +32,16 @@ Production baseline after task 1: three identical Lighthouse 12.8.2 mobile runs,
 Use the same three-run mobile lab procedure after deployment and verify the health release around each run. Preserve task 1 when building the combined release. This PR starts from main and is independently reviewable; do not deploy its standalone branch over unmerged task 1. Manual Firebase App Hosting is the authorized release path. No GitHub Actions, merge or push to main. Feature commits include `[skip ci]`; review and release requirements are still respected.
 
 No `apphosting.yaml`, infrastructure, cache policy, secrets, Firestore rules, payment logic or production-data changes.
+
+## Initial-render follow-up, 6 November 2026
+
+The first integrated live release (`3006c0f`) measured median LCP 2.97 s and TBT 651 ms across three Lighthouse 12.8.2 mobile runs. Its HTML was 32.3% smaller, but the LCP/TBT targets remained open. The current follow-up removes work instead of changing measurement settings or hiding errors:
+
+- V2's method-only menu no longer generates all pickup/delivery time slots. Checkout's actual time selection and the legacy menu keep their existing calculation. A browser probe asserts zero slot calculations on V2, including switching delivery mode, and confirms legacy times remain available.
+- Category grouping and ref callbacks remain stable between navigation updates. Memoized category sections and product cards avoid repeated rendering when their inputs have not changed. Cart/analytics context updates still propagate, and price, options and cart logic are unchanged.
+- Menu eligibility receives the same server timestamp for SSR and first hydration, then resumes its existing live clock updates.
+- Portal targets are published only by their owning header component after hydration, keyed by brand and location. Previously the menu queried arbitrary server-rendered target elements and could insert children before React hydrated their owner. The subscription returns null during SSR/hydration and removes stale targets on unmount or location changes. This addresses a concrete hydration race without suppressing React errors.
+
+The dedicated SSR browser regression deliberately hydrates the menu before its header and checks untouched server markup, working buttons after header hydration, no recoverable errors, route scope and cleanup at 320, 390, 768 and 1280px. Menu regression tests also cover search, category scrolling, fulfillment mode/prices, product options, combinations, cart and image geometry. Final build, review and production metrics are recorded in the release PR; target completion requires the production measurements, not the fixture timing.
+
+The PM has authorized completing, merging and deploying tasks 3/4. Local tests replace Actions under that explicit constraint; commits and PR title retain `[skip ci]` and existing workflow guards are unchanged. No task 2, hosting configuration, cache policy, secrets, payment logic or production data changes.

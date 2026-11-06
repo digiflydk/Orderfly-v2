@@ -1,5 +1,6 @@
 
 'use client';
+import { memo } from 'react';
 
 import type { Category, ProductForMenu, StandardDiscount } from '@/types';
 import { ProductCard, ProductCardSkeleton } from "@/components/product/product-card";
@@ -13,7 +14,7 @@ interface CategorySectionProps {
   categoryRef: (el: HTMLDivElement | null) => void;
 }
 
-export function CategorySection({ category, products, activeDiscounts, categoryRef }: CategorySectionProps) {
+export const CategorySection = memo(function CategorySection({ category, products, activeDiscounts, categoryRef }: CategorySectionProps) {
   
   const visibleProducts = products.filter(product => product.comboOnly !== true);
   if (visibleProducts.length === 0) {
@@ -39,4 +40,4 @@ export function CategorySection({ category, products, activeDiscounts, categoryR
       </div>
     </div>
   );
-}
+});

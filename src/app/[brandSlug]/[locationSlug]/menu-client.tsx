@@ -32,8 +32,10 @@ import {StorefrontCatalog} from '@/context/storefront-catalog';
 import {CartEditor} from '@/components/cart/cart-editor';
 import {formatPrice} from '@/lib/storefront-format';
 import { calculateTimeSlots } from '@/lib/time-slots';
+import { useMenuToolbarSlots } from '@/components/layout/menu-toolbar-slots';
 
 interface MenuClientProps {
+  initialNow?: number;
   initialDeliveryType?: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
@@ -44,6 +46,7 @@ interface MenuClientProps {
 }
 
 export function MenuClient({
+  initialNow,
   initialDeliveryType = 'pickup',
   brand,
   location,
@@ -55,14 +58,9 @@ export function MenuClient({
   const isV2 = useStorefrontV2();
   const { setCartContext, deliveryType, itemCount, standardDiscounts, cartReady } = useCart();
   const { trackEvent, measurementKey } = useAnalytics();
-  const [toolbarSlots, setToolbarSlots] = useState<{controls: Element; cart: Element} | null>(null);
-  useEffect(() => {
-    if (brand.slug !== 'esmeralda') return;
-    const controls = document.querySelector('[data-menu-controls-slot]');
-    const cart = document.querySelector('[data-menu-cart-slot]');
-    if (controls && cart) setToolbarSlots({controls, cart});
-  }, [brand.slug, location.id]);
+  const toolbarSlots = useMenuToolbarSlots(brand.slug, location.id);
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const categoryCallbacks = useMemo(() => Object.fromEntries(initialCategories.map(category => [category.id, (element: HTMLDivElement | null) => { categoryRefs.current[category.id] = element; }])), [initialCategories]);
   const [activeCategory, setActiveCategory] = useState<string>('offers');
   const [search, setSearch] = useState('');
   const viewKey = `orderfly.menu-view.${brand.id}.${location.id}`;
@@ -77,7 +75,7 @@ export function MenuClient({
     return () => {save(); window.removeEventListener('pagehide',save);};
   }, [viewKey]);
   const changeSearch = (value: string) => {setSearch(value); try {sessionStorage.setItem(viewKey,JSON.stringify({search:value,scroll:window.scrollY}));} catch {}};
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => new Date(initialNow ?? Date.now()));
   const activeStandardDiscounts = cartReady ? standardDiscounts : deliveryType === initialDeliveryType || !deliveryType ? initialActiveStandardDiscounts : [];
   const mode = deliveryType || initialDeliveryType;
   const activeCombos = useMemo(() => initialActiveCombos.filter(combo =>
@@ -87,14 +85,26 @@ export function MenuClient({
   ), [initialActiveCombos, initialProducts, brand.id, location.id, mode, now, isV2]);
   const visibleProducts = useMemo(() => searchMenu(initialProducts, search), [initialProducts, search]);
   const visibleCombos = useMemo(() => searchMenu(activeCombos, search), [activeCombos, search]);
-  const visibleCategories = initialCategories.filter(c => c.id === 'offers' || visibleProducts.some(p => (p.displayCategoryId || p.categoryId) === c.id));
-  const timeSlots = useMemo(() => calculateTimeSlots(location, undefined, now), [location, now]);
+  const productsByCategory = useMemo(() => {
+    const groups = new Map<string, DisplayProduct[]>();
+    for (const product of visibleProducts) {
+      const id = product.displayCategoryId || product.categoryId;
+      if (!id) continue;
+      const group = groups.get(id);
+      if (group) group.push(product); else groups.set(id, [product]);
+    }
+    return groups;
+  }, [visibleProducts]);
+  const visibleCategories = useMemo(() => initialCategories.filter(c => c.id === 'offers' || productsByCategory.has(c.id)), [initialCategories, productsByCategory]);
+  // V2 only displays the fulfillment method here. Slot generation belongs to checkout.
+  const timeSlots = useMemo(() => isV2 ? null : calculateTimeSlots(location, undefined, now), [isV2, location, now]);
 
   useEffect(() => {
     setCartContext(brand, location, {deliveryType: initialDeliveryType, discounts: initialActiveStandardDiscounts});
   }, [brand, location, setCartContext, initialDeliveryType, initialActiveStandardDiscounts]);
   useEffect(() => {
     const tick = () => setNow(new Date());
+    tick();
     const timer = setInterval(tick, 30000);
     window.addEventListener('focus', tick);
     return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
@@ -203,13 +213,9 @@ export function MenuClient({
                     brandId={brand.id}
                     locationId={location.id}
                     category={category}
-                    products={visibleProducts.filter(
-                      (p) => (p.displayCategoryId || p.categoryId) === category.id,
-                    )}
+                    products={productsByCategory.get(category.id)!}
                     activeDiscounts={activeStandardDiscounts}
-                    categoryRef={(el) =>
-                      (categoryRefs.current[category.id] = el)
-                    }
+                    categoryRef={categoryCallbacks[category.id]}
                   />
                 ))}
             </div>

@@ -22,6 +22,7 @@ before(async()=>{
  const combos=[];if(q.has('pizzaCutouts')){const source=${JSON.stringify(pizzaSources[0])};Object.assign(products[0],source,{productName:'Margherita',displayCategoryId:'c0'});brand.id=source.brandId;location.brandId=source.brandId;products.forEach(p=>p.brandId=source.brandId);combos.push({id:'cutout-menu',imageUrl:'/image.svg',brandId:source.brandId,locationIds:['l'],isActive:true,comboName:'Pizza og drik',pickupPrice:99,deliveryPrice:99,upgradeProductIds:[source.id],orderTypes:['pickup','delivery'],productGroups:[{id:'main',groupName:'Pizza',productIds:[source.id],minSelection:1,maxSelection:1},{id:'drink',groupName:'Drik',productIds:[products[3].id],minSelection:1,maxSelection:1}]});}
  createRoot(document.getElementById('root')).render(<StorefrontV2Provider enabled={q.has('v2')}><div data-commerce-root data-brand-slug={brand.slug} data-storefront-version={q.has('v2')?'2':undefined}><CartProvider><DeliveryPriceProvider managed={q.has('managed')}><MenuHeader brand={brand} initialLocation={location} initialNow={Date.now()}/><main><MenuClient brand={brand} location={location} initialDeliveryType={mode} initialCategories={${JSON.stringify(categories)}} initialProducts={products} initialActiveCombos={combos} initialActiveStandardDiscounts={[]}/></main></DeliveryPriceProvider></CartProvider></div></StorefrontV2Provider>);`);
  const aliases={
+  '@/lib/time-slots':file('timing-probe',`import {calculateTimeSlots as calculate} from ${JSON.stringify(path.join(root,'src/lib/time-slots.ts'))};export function calculateTimeSlots(...args){window.fixtureSlotCalculationCount=(window.fixtureSlotCalculationCount||0)+1;return calculate(...args);}`),
   '@/context/analytics-context':file('analytics',`const trackEvent=()=>false;export const useAnalytics=()=>({trackEvent,measurementKey:'fixture'});`),
   '@/components/feedback/public-reviews-link':file('reviews','export const PublicReviewsLink=()=>null;'),
   '@/app/club-session-actions':file('club-session','export const getClubSessionProfileAction=async()=>window.fixtureClubSignedIn?{signedIn:true,firstName:"Ole",name:"Ole Hansen",email:window.fixtureClubEmail||"ole@example.test",phone:"+4512345678"}:{signedIn:false};export const getClubSessionStatusAction=async()=>({signedIn:!!window.fixtureClubSignedIn});'),
@@ -295,4 +296,15 @@ for(const width of [390,1280])test(`catalog cutouts display with black product b
   await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
  }
  await page.screenshot({path:path.join(dir,`catalog-cutouts-${width}.png`),fullPage:true});
+});
+
+test('V2 menu never generates hidden time slots; legacy menu retains its visible times',async t=>{
+ const v2=await setup(t,390,'&v2');
+ assert.equal(await v2.evaluate(()=>window.fixtureSlotCalculationCount||0),0);
+ await v2.getByRole('button',{name:'Levering',exact:true}).click();
+ await v2.waitForFunction(()=>document.querySelector('button[aria-label="Tilføj Margherita"]')?.disabled===false);
+ assert.equal(await v2.evaluate(()=>window.fixtureSlotCalculationCount||0),0);
+ const legacy=await setup(t,390,'');
+ assert.ok(await legacy.evaluate(()=>window.fixtureSlotCalculationCount>0));
+ await legacy.getByRole('button',{name:'Ændre tidspunkt',exact:true}).waitFor();
 });

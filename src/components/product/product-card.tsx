@@ -6,7 +6,7 @@ import { StorefrontProductImage } from './storefront-product-image';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
 import { productPriceData } from '@/lib/product-price';
 import type { StandardDiscount, ProductForMenu } from '@/types';
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { memo, useState, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { publicRead } from '@/lib/public-read';
 import type { Topping, ToppingGroup } from '@/types';
@@ -47,7 +47,7 @@ export function ProductCardSkeleton() {
 }
 
 
-export function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false }: ProductCardProps) {
   const isV2 = useStorefrontV2();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
@@ -175,4 +175,4 @@ export function ProductCard({ product, activeDiscounts, upsellId, upsellInteract
       />}
     </>
   );
-}
+});

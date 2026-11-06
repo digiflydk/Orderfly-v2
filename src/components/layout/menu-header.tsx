@@ -17,6 +17,7 @@ import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { ArrowLeft, User } from 'lucide-react';
 import { LocationInfoDialog } from '@/components/storefront/location-info-dialog';
 import { useClubSession } from '@/hooks/use-club-session';
+import { MenuToolbarSlots } from './menu-toolbar-slots';
 
 export function MenuHeader({ brand, initialLocation, initialNow }: {
   brand: Brand;
@@ -74,7 +75,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
         {checkout && <div className="v2-header-back"><Link href={href}><ArrowLeft aria-hidden="true" className="h-4 w-4" /><span>Menu</span></Link></div>}
         <Link href={checkout ? href : landing ? storefront() : href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>
         {actions}
-        {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}
+        {refreshedMenu && location && <MenuToolbarSlots brandSlug={brand.slug} locationId={location.id} />}
         {refreshedMenu && showDelivery && details?.delivery && location && <div className="v2-delivery-summary text-xs text-muted-foreground">
           {(managed || Number.isFinite(location.deliveryFee)) && <p>{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
           {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p>Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
@@ -103,7 +104,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
         {checkout
           ? <div data-v2-checkout-logo={isV2 || undefined} className={isV2 ? "relative flex h-11 w-[168px] shrink-0 items-center" : "relative flex h-10 w-36 shrink-0 items-center"}>{logo}</div>
           : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>}
-        {refreshedMenu && <><div className="storefront-order-controls" data-menu-controls-slot /><div className="storefront-top-cart" data-menu-cart-slot /></>}
+        {refreshedMenu && location && <MenuToolbarSlots brandSlug={brand.slug} locationId={location.id} />}
         {isV2 && refreshedMenu && showDelivery && details?.delivery && location && <div className="v2-delivery-summary text-xs text-muted-foreground">
           {(managed || Number.isFinite(location.deliveryFee)) && <p>{managed ? 'Leveringspris beregnes i kassen' : `Levering fra: ${formatPrice(location.deliveryFee)}`}</p>}
           {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p>Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
