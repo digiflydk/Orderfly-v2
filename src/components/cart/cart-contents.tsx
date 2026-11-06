@@ -19,7 +19,7 @@ export function CartContents({ onEdit }: {
     {cartItems.map(item => {
             const toppings = item.toppings.reduce((sum, t) => sum + t.price, 0);
             return <article key={item.cartItemId} className="flex gap-3" data-cart-line={item.cartItemId}>
-        <div className="relative h-16 w-16 shrink-0 v2-cart-image"><StorefrontProductImage product={item} alt="" fill sizes={isV2 ? "88px" : "64px"} className="rounded-lg object-cover"/></div>
+        <div className="relative h-16 w-16 shrink-0 v2-cart-image"><StorefrontProductImage product={item} variant="thumb" alt="" fill sizes={isV2 ? "88px" : "64px"} className="rounded-lg object-cover"/></div>
         <div className="min-w-0 flex-1 v2-cart-line-details">
           <h3 className="font-semibold text-sm">{item.productName}</h3>
           <p className="text-sm commerce-cart-total">{formatPrice((item.price + toppings) * item.quantity)} {item.basePrice > item.price && <del className="text-muted-foreground text-xs">{formatPrice((item.basePrice + toppings) * item.quantity)}</del>}</p>

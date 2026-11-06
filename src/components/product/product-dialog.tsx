@@ -251,12 +251,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
             {/* V2: the photo starts at the top; a white pill overlays it and stays put while the sheet scrolls. */}
             {isV2 && <DialogClose asChild><button type="button" className="v2-product-back" aria-label="Tilbage til menu"><ArrowLeft aria-hidden="true" className="h-5 w-5" /></button></DialogClose>}
             {!isV2 && <div role="region" aria-label="Produktinformation" tabIndex={0} className="commerce-option-header shrink-0 max-h-[35dvh] overflow-y-auto overscroll-contain">
-                  <div className="commerce-option-image"><StorefrontProductImage product={product} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <div className="commerce-option-image"><StorefrontProductImage product={product} alt="" fill sizes="88px" variant="thumb" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-10"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>}
             <div data-product-options-scroll className="min-h-0 overflow-y-auto overscroll-contain">
                 {isV2 && <div className="v2-product-overview">
-                  <div className="v2-product-hero"><StorefrontProductImage product={product} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" className="object-cover" /></div>
+                  <div className="v2-product-hero"><StorefrontProductImage product={product} alt={product.productName} fill sizes="(max-width: 640px) 100vw, 512px" variant="full" className="object-cover" /></div>
                   <DialogHeader className="v2-product-heading text-left"><DialogTitle>{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="v2-product-price">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>}
                 <div className="v2-product-body px-4 pb-3 pt-2 space-y-2">

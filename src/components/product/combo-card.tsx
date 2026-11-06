@@ -16,6 +16,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
 import { safeImage } from "@/lib/images";
+import { esmeraldaApprovedMenuThumbnail } from "@/lib/esmeralda-menu-images";
 
 interface ComboCardProps {
   combo: ComboMenu;
@@ -40,7 +41,7 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
       >
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
-            src={safeImage(combo.imageUrl)}
+            src={esmeraldaApprovedMenuThumbnail(isV2, safeImage(combo.imageUrl))}
             alt={combo.comboName}
             fill
             sizes="96px"
