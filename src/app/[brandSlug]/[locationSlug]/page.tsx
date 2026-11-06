@@ -1,3 +1,6 @@
+import { headers } from 'next/headers';
+import { storefrontInstallHostAllowed } from '@/lib/storefront-home-screen';
+import { storefrontMenuMetadata } from '@/lib/storefront-seo';
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
@@ -14,6 +17,15 @@ type BrandLocationParams = {
   brandSlug: string;
   locationSlug: string;
 };
+
+export async function generateMetadata({params}: AsyncPageProps<BrandLocationParams>) {
+  const {brandSlug,locationSlug} = await resolveParams(params);
+  const h = await headers();
+  if (!storefrontInstallHostAllowed(brandSlug,h.get('x-forwarded-host') ?? h.get('host'))) return {robots:{index:false,follow:false}};
+  const {brand,location,ok} = await getBrandAndLocation(brandSlug,locationSlug);
+  if (!ok || !brand || !location || brand.status === 'suspended' || location.isActive === false) return {robots:{index:false,follow:false}};
+  return storefrontMenuMetadata(brand,location);
+}
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {

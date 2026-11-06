@@ -7,6 +7,8 @@ if (!/^[a-f0-9]{7,40}$/.test(releaseSha)) {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  // Deliver metadata in head for every visitor, not only selected crawler agents.
+  htmlLimitedBots: /.*/, 
   serverExternalPackages: ['@resvg/resvg-js'],
   outputFileTracingIncludes: { '/*': ['./public/fonts/orderfly/*.ttf', './public/fonts/inter/*', './public/images/esmeralda-v2/menu/*.webp', './public/images/esmeralda-v2/logo.png', './preview/esmeralda/payload.json.gz.part-*', './preview/esmeralda/adapters/website-reviews.js', './mpanel/esmeralda/**/*'] },
   env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
