@@ -7,7 +7,11 @@ let managed=false,deliveryType='delivery',freeDelivery=false;
 const mod={exports:{}};
 const code=ts.transpileModule(fs.readFileSync('src/components/cart/mobile-floating-cart.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
 const pass=({children})=>React.createElement(React.Fragment,null,children);
-new Function('require','module','exports',code)(name=>{
+new Function('require','module','exports',code)(function componentRequire(name){
+ if(name==='@/components/layout/storefront-brand-logo'){
+  const logo={exports:{}},source=ts.transpileModule(fs.readFileSync('src/components/layout/storefront-brand-logo.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  new Function('require','module','exports',source)(componentRequire,logo,logo.exports);return logo.exports;
+ }
  if(name==='@/context/cart-context')return {useCart:()=>({brand:{name:'Esmeralda Pizza',logoUrl:'/logo.png'},itemCount:1,checkoutTotal:deliveryType==='delivery'?(freeDelivery?99:148):99,bagFee:4,deliveryFee:49,freeDeliveryDiscountApplied:freeDelivery,editingItem:null,deliveryType,location:{name:'Esmeralda Pizza Amager'}})};
  if(name==='@/context/delivery-price-context')return {useManagedDeliveryPrice:()=>managed};
  if(name==='@/context/storefront-v2-context')return {useStorefrontV2:()=>true};

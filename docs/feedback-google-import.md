@@ -45,3 +45,6 @@ The Google page can be read while OAuth project setup is pending. Authorized edi
 Release requested by PM: merge/deploy, import the first 100 five-star Google reviews, and publish selected existing internal feedback for the live section. Production publication remains a deliberate authenticated admin action.
 
 Validation at release: TypeScript passed; 14 targeted unit tests passed; browser carousel test passed on desktop/mobile (including reload/no-repeat, HTML-safe comments, empty feed); 36 existing feedback browser regressions passed. Tests used the installed headless Chromium shell.
+
+### Live contrast verification
+Review paragraphs explicitly use dark text inside the light review cards. The browser regression test includes the site's global white paragraph styling and checks the resulting computed text colour.
