@@ -8,6 +8,7 @@ import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/stor
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
 import type { MenuData } from "@/types/menu";
+import { createMenuPayload, menuCombo } from '@/lib/server/menu-payload';
 
 type BrandLocationParams = {
   brandSlug: string;
@@ -141,8 +142,8 @@ export default async function Page({
         initialDeliveryType={initialDeliveryType}
         brand={brand}
         location={location}
-        menu={menu}
-        activeCombos={activeCombos}
+        menu={createMenuPayload(menu)}
+        activeCombos={activeCombos.map(menuCombo)}
         activeStandardDiscounts={activeStandardDiscounts}
       />
     );

@@ -49,7 +49,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   // V2 uses one header on the landing page, the menu and checkout: logo, account and restaurant info.
   const landing = segments.length === 0;
   const v2Bar = isV2 && (refreshedMenu || checkout || landing);
-  const club = useClubSession(v2Bar ? brand.slug : null);
+  const club = useClubSession(v2Bar ? brand.slug : null, true);
   const accountLabel = club.signedIn ? (club.firstName || 'Min Club') : 'Log ind';
   const href = location ? storefront(location.slug) : storefront();
   const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));

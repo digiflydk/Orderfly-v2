@@ -5,16 +5,13 @@ import { useMemo } from 'react';
 import { flattenMenu } from '@/lib/menu-display';
 import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDiscount } from '@/types';
 import { MenuClient } from './menu-client';
+import { readMenuPayload, type MenuPayload } from '@/lib/menu-payload';
 
 interface BrandPageClientProps {
   initialDeliveryType: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
-  menu: {
-    categories: Category[];
-    productsByCategory: Record<string, ProductForMenu[]>;
-    fallbackUsed?: boolean;
-  };
+  menu: MenuPayload;
   activeCombos: ComboMenu[];
   activeStandardDiscounts: StandardDiscount[];
 }
@@ -29,8 +26,8 @@ export default function BrandPageClient({
 }: BrandPageClientProps) {
     
     const allProductsForLocation = useMemo(() => {
-        return flattenMenu(menu.productsByCategory);
-    }, [menu.productsByCategory]);
+        return flattenMenu(readMenuPayload(menu).productsByCategory);
+    }, [menu]);
 
     const offerCategoryPlaceholder: Category = {
         id: 'offers',
