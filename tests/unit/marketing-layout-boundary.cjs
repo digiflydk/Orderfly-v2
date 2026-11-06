@@ -11,6 +11,9 @@ test('native brand layout fetches only its brand and never forwards global marke
   'next/headers':{headers:async()=>new Headers({host:'fixture.orderfly.dk'})},
   '@/lib/esmeralda-v2-host':{isEsmeraldaV2Host:()=>assert.fail('V2 host check must not run for another brand')},
   '@/lib/storefront-home-screen':loadTs('src/lib/storefront-home-screen.ts'),
+  '@/lib/server/public-cookie-texts':{getPublicCookieTexts:()=>assert.fail('Cookie texts must not be fetched for a non-V2 brand')},
+  '@/lib/cookie-texts':{STOREFRONT_COOKIE_LANGUAGE:'da'},
+  '@/lib/cookie-banner-state':{shouldShowCookieBanner:()=>assert.fail('Cookie banner must not be evaluated for a non-V2 brand')},
   '@/context/storefront-v2-context':{StorefrontV2Provider:'StorefrontV2'},
   'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},
   'next/navigation':{notFound:()=>{throw Error('not found');}},
@@ -31,7 +34,7 @@ test('native brand layout fetches only its brand and never forwards global marke
  assert.equal(tree.type,'StorefrontV2');
  assert.equal(tree.props.enabled,false);
  function find(node){if(node?.type==='BrandLayoutClient')return node;const children=node?.props?.children;for(const child of Array.isArray(children)?children:[children]){if(child&&typeof child==='object'){const found=find(child);if(found)return found;}}}
- assert.deepEqual(find(tree).props,{brand,children:'content'});
+ assert.deepEqual(find(tree).props,{brand,cookieBanner:undefined,children:'content'});
  assert.deepEqual(reads,['fixture']);
  await assert.rejects(layout({params:Promise.resolve({brandSlug:'unknown'}),children:'content'}),/not found/);
 });
