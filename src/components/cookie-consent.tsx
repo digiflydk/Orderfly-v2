@@ -2,24 +2,25 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import type { PublicCookieTexts } from '@/lib/cookie-texts';
+import { shouldShowCookieBanner } from '@/lib/cookie-banner-state';
+const CookiePreferencesDialog = dynamic(() => import('./cookie-preferences-dialog'), { ssr: false });
 import Cookies from 'js-cookie';
 import { optionalGet, optionalSet } from '@/lib/optional-storage';
 import { Button } from './ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
-import { Switch } from './ui/switch';
-import { Label } from './ui/label';
+import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { useCookieTexts } from '@/hooks/use-cookie-texts';
-import { Separator } from './ui/separator';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
-import { Badge } from './ui/badge';
 import type { AnonymousCookieConsent } from '@/types';
 import { saveConsentChoice, retryPendingConsent } from '@/lib/consent-sync';
 
 interface CookieConsentProps {
   brandId: string;
+  compact?: boolean;
+  initialTexts?: PublicCookieTexts;
+  initialShowBanner?: boolean;
   isModalOpen: boolean;
   setIsModalOpen: (isOpen: boolean) => void;
 }
@@ -45,60 +46,16 @@ function getOrCreateAnonId() {
   return id;
 }
 
-function CookieCategory({ title, description, checked, onCheckedChange, disabled = false, alwaysActive = 'Altid aktiv' }: { alwaysActive?: string; title: string, description: string, checked: boolean, onCheckedChange?: (checked: boolean) => void, disabled?: boolean }) {
-    return (
-        <div className="space-y-2">
-            <div className="flex items-start justify-between">
-                <div className="flex-1 pr-4">
-                    <h4 className="font-semibold text-base">{title}</h4>
-                </div>
-                {disabled ? (
-                     <Badge variant="outline" className="text-green-600 border-green-600">{alwaysActive}</Badge>
-                ) : (
-                    <Switch
-                        checked={checked}
-                        onCheckedChange={onCheckedChange}
-                        disabled={disabled}
-                        aria-label={title}
-                    />
-                )}
-            </div>
-            <p className="text-sm text-muted-foreground">{description}</p>
-        </div>
-    )
-}
-
-export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieConsentProps) {
-  const [showBanner, setShowBanner] = useState(false);
-  const { texts, loading } = useCookieTexts({ brandId });
+export function CookieConsent({ brandId, isModalOpen, setIsModalOpen, compact = false, initialTexts, initialShowBanner = false }: CookieConsentProps) {
+  const [showBanner, setShowBanner] = useState(initialShowBanner);
+  const { texts, loading } = useCookieTexts({ brandId, initialTexts });
   const pathname = usePathname();
 
   useEffect(() => {
     if (typeof window !== 'undefined' && texts.consent_version) {
         let existingConsentCookie = optionalGet(CONSENT_COOKIE_NAME);
         try { existingConsentCookie ||= Cookies.get(CONSENT_COOKIE_NAME) || null; } catch { /* No consent inferred. */ }
-        if (existingConsentCookie) {
-            try {
-                // Ensure the cookie string is a valid JSON before parsing.
-                if (existingConsentCookie.trim().startsWith('{') && existingConsentCookie.trim().endsWith('}')) {
-                    const parsedConsent = JSON.parse(existingConsentCookie);
-                    if (parsedConsent.consent_version !== texts.consent_version) {
-                        setShowBanner(true);
-                    } else {
-                        setShowBanner(false);
-                    }
-                } else {
-                    // Cookie is present but invalid, force banner.
-                    setShowBanner(true);
-                }
-            } catch (e) {
-                console.error("Failed to parse cookie:", e);
-                setShowBanner(true);
-            }
-        } else {
-            // No cookie found.
-            setShowBanner(true);
-        }
+        setShowBanner(shouldShowCookieBanner(existingConsentCookie, texts.consent_version));
     }
   }, [texts.consent_version]);
 
@@ -187,9 +144,19 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     return null;
   }
 
-  return (
-    <>
-      <div className={cn("fixed bottom-0 left-0 right-0 z-50 p-4 transform-gpu transition-transform duration-300", showBanner ? "translate-y-0" : "translate-y-full")}>
+  return <>
+    {showBanner && (compact ? <section data-cookie-banner="compact" role="region" aria-label={texts.banner_title}
+        className="fixed inset-x-0 bottom-0 z-50 border-t bg-background p-3 shadow-xl max-h-[30dvh] overflow-y-auto">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="text-sm font-semibold leading-5">{texts.banner_title}</h2>
+          <p className="mt-1 text-xs leading-4 text-muted-foreground">{texts.banner_description}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:flex">
+            <Button className="min-h-11 h-auto px-2 text-xs sm:text-sm" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>{texts.language.toLowerCase().split('-')[0] === 'da' ? 'Afvis valgfrie' : 'Reject optional'}</Button>
+            <Button className="min-h-11 h-auto px-2 text-xs sm:text-sm" onClick={handleAcceptAll}>{texts.accept_all_button}</Button>
+            <Button className="col-span-2 min-h-11 h-auto px-2 text-xs sm:text-sm" variant="outline" onClick={handleCustomize}>{texts.customize_button}</Button>
+          </div>
+        </div>
+      </section> : <div className={cn("fixed bottom-0 left-0 right-0 z-50 p-4 transform-gpu transition-transform duration-300", showBanner ? "translate-y-0" : "translate-y-full")}>
          <Card className="w-full max-w-4xl mx-auto shadow-xl">
           <CardHeader>
             <CardTitle>{texts.banner_title}</CardTitle>
@@ -201,51 +168,8 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
             <Button className="w-full sm:w-auto" variant="outline" onClick={handleCustomize}>{texts.customize_button}</Button>
           </CardFooter>
         </Card>
-      </div>
-
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="max-w-2xl p-0">
-          <DialogHeader className="p-6 pb-4">
-            <DialogTitle className="text-2xl">{texts.modal_title}</DialogTitle>
-            <DialogDescription>{texts.modal_description}</DialogDescription>
-          </DialogHeader>
-          <Separator />
-          <div className="px-6 py-4 space-y-4">
-             <CookieCategory
-                title={compatCategories.necessary.title}
-                description={compatCategories.necessary.description}
-                checked={true}
-                disabled
-                alwaysActive={texts.language.toLowerCase().split('-')[0] === 'da' ? 'Altid aktiv' : 'Always active'}
-             />
-              <Separator />
-               <CookieCategory
-                title={compatCategories.functional.title}
-                description={compatCategories.functional.description}
-                checked={preferences.functional}
-                onCheckedChange={(checked) => setPreferences(p => ({...p, functional: checked}))}
-              />
-               <Separator />
-              <CookieCategory
-                title={compatCategories.statistics.title}
-                description={compatCategories.statistics.description}
-                checked={preferences.statistics}
-                onCheckedChange={(checked) => setPreferences(p => ({...p, statistics: checked}))}
-              />
-               <Separator />
-              <CookieCategory
-                title={compatCategories.marketing.title}
-                description={compatCategories.marketing.description}
-                checked={preferences.marketing}
-                onCheckedChange={(checked) => setPreferences(p => ({...p, marketing: checked}))}
-              />
-          </div>
-          <DialogFooter className="p-6 bg-muted/50 border-t flex-col sm:flex-row gap-2">
-            <Button variant="outline" className="w-full sm:w-auto h-11" onClick={handleSavePreferences}>{texts.save_preferences_button}</Button>
-            <Button className="w-full sm:w-auto h-11" onClick={handleAcceptAll}>{texts.modal_accept_all_button}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+      </div>)}
+    {isModalOpen && <CookiePreferencesDialog texts={texts} preferences={preferences} setPreferences={setPreferences}
+      open={isModalOpen} onOpenChange={setIsModalOpen} onSave={handleSavePreferences} onAcceptAll={handleAcceptAll} />}
+  </>;
 }

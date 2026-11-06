@@ -37,7 +37,9 @@ before(async () => {
   const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/storefront-v2.css'), 'utf8');
   server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
-    if(url.pathname === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
+    if(url.pathname.endsWith('.js') && path.basename(url.pathname) === url.pathname.slice(1) && fs.existsSync(path.join(dir, path.basename(url.pathname)))) {
+      res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, path.basename(url.pathname))));
+    }
     if(url.pathname === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     if(url.pathname === '/data') { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ location: await f.locations.getLocationById('l'), brand })); }
     if(url.pathname === '/save') {

@@ -25,7 +25,7 @@ import { CategorySection } from '@/components/product/category-section';
 import { TimeSelector } from '@/components/checkout/time-selector';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/context/analytics-context';
-import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
+import { openDeliveryModal } from '@/lib/delivery-modal-state';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 import {StorefrontCatalog} from '@/context/storefront-catalog';

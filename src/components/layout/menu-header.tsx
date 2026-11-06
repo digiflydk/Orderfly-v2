@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
+import { StorefrontBrandLogo } from './storefront-brand-logo';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { Brand, Location } from '@/types';
@@ -49,7 +49,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   // V2 uses one header on the landing page, the menu and checkout: logo, account and restaurant info.
   const landing = segments.length === 0;
   const v2Bar = isV2 && (refreshedMenu || checkout || landing);
-  const club = useClubSession(v2Bar ? brand.slug : null);
+  const club = useClubSession(v2Bar ? brand.slug : null, true);
   const accountLabel = club.signedIn ? (club.firstName || 'Min Club') : 'Log ind';
   const href = location ? storefront(location.slug) : storefront();
   const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));
@@ -61,9 +61,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   }, []);
   const showDelivery = !refreshedMenu || (cartReady && cartLocation?.id === location?.id && deliveryType === 'delivery');
   const details = location ? locationHeaderDetails(location, now || new Date(0)) : null;
-  const logo = brand.logoUrl
-    ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="168px" priority className={checkout && isV2 ? "object-contain object-center" : "object-contain object-left"} />
-    : <span className="text-xl font-bold">{brand.name}</span>;
+  const logo = <StorefrontBrandLogo brand={brand} priority className={checkout && isV2 ? "object-contain object-center" : "object-contain object-left"} />;
 
   const actions = <div className="v2-header-actions">
     <Link href={club.signedIn ? storefront('club') : storefront('club', 'login')} aria-label={club.signedIn ? `Min Club · ${accountLabel}` : 'Log ind'} data-signed-in={club.signedIn || undefined} className="v2-header-login"><User aria-hidden="true" className="h-4 w-4" /><span>{accountLabel}</span></Link>
