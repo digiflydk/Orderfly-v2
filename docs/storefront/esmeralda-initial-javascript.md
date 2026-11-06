@@ -45,3 +45,9 @@ The first integrated live release (`3006c0f`) measured median LCP 2.97 s and TBT
 The dedicated SSR browser regression deliberately hydrates the menu before its header and checks untouched server markup, working buttons after header hydration, no recoverable errors, route scope and cleanup at 320, 390, 768 and 1280px. Menu regression tests also cover search, category scrolling, fulfillment mode/prices, product options, combinations, cart and image geometry. Final build, review and production metrics are recorded in the release PR; target completion requires the production measurements, not the fixture timing.
 
 The PM has authorized completing, merging and deploying tasks 3/4. Local tests replace Actions under that explicit constraint; commits and PR title retain `[skip ci]` and existing workflow guards are unchanged. No task 2, hosting configuration, cache policy, secrets, payment logic or production data changes.
+
+## Critical-render follow-up
+
+Release 2360940 passed the four-width production ordering and consent checks with no browser errors. Three identical Lighthouse 12.8.2 mobile runs measured score 80/78/32, LCP 2.82/2.96/5.97 seconds and TBT 268/314/5106 ms (median 78, 2.96 seconds, 314 ms). The slow third run is retained; no favorable-run selection is used. LCP and TBT targets remain open.
+
+The next small change preloads the existing Inter font only on the Esmeralda location menu. Its URL, font metrics, display policy and content are unchanged; the browser can start the existing font request before discovering it through CSS. The analytics provider now preserves its context object while its public values remain unchanged, avoiding redundant menu-wide consumer renders during internal consent initialization. Consent events, attribution, scope, event timing and tracking decisions are unchanged. Existing commerce/consent browser coverage and a clean production build/typecheck remain required before review and rollout.

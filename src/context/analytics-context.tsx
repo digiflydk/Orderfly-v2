@@ -1,7 +1,7 @@
 
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import Cookies from 'js-cookie';
 import { useSearchParams, usePathname } from 'next/navigation';
 import type { AnalyticsAttribution, AnalyticsEventName, Brand } from '@/types';
@@ -116,8 +116,12 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
     } catch { return false; /* Malformed attribution or telemetry failures must never block checkout. */ }
   }, [sessionId, brand, brandProp, attribution, consent]);
 
+  const measurementKey = `${consent.statistics ? sessionId || 'pending' : 'no-statistics'}/${consent.marketing ? 'marketing' : 'no-marketing'}`;
+  const value = useMemo(() => ({ trackEvent, sessionId, attribution, measurementKey }),
+    [trackEvent, sessionId, attribution, measurementKey]);
+
   return (
-    <AnalyticsContext.Provider value={{ trackEvent, sessionId, attribution, measurementKey: `${consent.statistics ? sessionId || 'pending' : 'no-statistics'}/${consent.marketing ? 'marketing' : 'no-marketing'}` }}>
+    <AnalyticsContext.Provider value={value}>
       {children}
     </AnalyticsContext.Provider>
   );

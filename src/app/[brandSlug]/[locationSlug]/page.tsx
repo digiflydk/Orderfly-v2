@@ -138,6 +138,8 @@ export default async function Page({
     }
 
     return (
+      <>
+      {brand.slug === 'esmeralda' && <link rel="preload" href="/fonts/inter/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />}
       <BrandPageClient
         initialNow={Date.now()}
         initialDeliveryType={initialDeliveryType}
@@ -147,6 +149,7 @@ export default async function Page({
         activeCombos={activeCombos.map(menuCombo)}
         activeStandardDiscounts={activeStandardDiscounts}
       />
+      </>
     );
   } catch (e: any) {
     await logDiag
