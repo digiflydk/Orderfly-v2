@@ -145,7 +145,7 @@ test('login-link requests are rate limited per e-mail and per IP',async()=>{
 test('the member view shows card, rewards and history without staff identities',async()=>{
   setup(settings({stampsRequired:2}));
   const s=await joined();
-  for(let i=0;i<3;i++)await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,channel:'takeaway',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:String(i).padStart(64,'0')},NOW+i);
+  for(let i=0;i<3;i++)await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,orderNumber:String(i),channel:'takeaway',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:String(i).padStart(64,'0')},NOW+i);
   const view=await m.memberView(db,await brand(),await m.readSession(db,await brand(),await (async()=>{const {mailJob}=await m.requestLoginLink(db,await brand(),{email:'anna@example.com'},ctx());return (await m.verifyLoginLink(db,await brand(),{token:tokenOf(mailJob)},ctx())).session;})(),NOW),NOW+10);
   assert.deepEqual({stamps:view.card.stamps,required:view.card.stampsRequired},{stamps:1,required:2});
   assert.equal(view.rewards.length,1);assert.equal(view.rewards[0].description,'Gratis pizza');
@@ -169,7 +169,7 @@ test('QR tokens are issued for the session member and rate limited',async()=>{
 test('unsubscribing keeps membership and stamps and is synced to Omnisend; re-subscribing needs the current text',async()=>{
   setup();
   const s=await joined(),b=await brand();
-  await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'1'.padStart(64,'0')},NOW);
+  await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,orderNumber:'123',channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'1'.padStart(64,'0')},NOW);
   assert.deepEqual(await m.setNewsletterConsent(db,b,s,{subscribed:false},NOW+1),{subscribed:false});
   const member=db.rows.get('loyaltyMembers/'+s.memberId);
   assert.equal(member.status,'active');assert.equal(member.consent.status,'withdrawn');
@@ -229,7 +229,7 @@ test('deletion removes personal data, sessions and rewards but keeps a pseudonym
   setup(settings({stampsRequired:1}));
   const s=await joined(),b=await brand(),member=db.rows.get('loyaltyMembers/'+s.memberId);
   const {mailJob:waiting}=await m.requestLoginLink(db,b,{email:'anna@example.com'},ctx());
-  await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'2'.padStart(64,'0')},NOW);
+  await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,orderNumber:'123',channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'2'.padStart(64,'0')},NOW);
   await m.deleteMembership(db,b,s,NOW+1);
   const tomb=db.rows.get('loyaltyMembers/'+s.memberId);
   assert.equal(tomb.status,'deleted');

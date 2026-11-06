@@ -2,6 +2,7 @@ import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
 import { managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/stripe-authority';
 import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import 'server-only';
+import { prepareOrderStamps } from '@/lib/loyalty/stamp-card/order-stamps';
 import { after } from 'next/server';
 import type Stripe from 'stripe';
 import type { Transaction } from 'firebase-admin/firestore';
@@ -270,6 +271,8 @@ async function settleOrder(proof: PaymentProof) {
       const ref = db.collection('upsells').doc(id);
       return {ref,snapshot:await transaction.get(ref)};
     }));
+    const stamps = await prepareOrderStamps(db, transaction, metadata.orderId, { ...order, brandId: order.brandId, locationId: order.locationId }, Date.now());
+    if (stamps.writeCount) addWrite(stamps.apply, stamps.writeCount);
     const settleCapacity = await prepareAdminCapacitySettlement(db, transaction, order, true);
     // Capacity is a multi-write internal component. Missing metadata must not
     // fall through addWrite's default for ordinary single writes.

@@ -70,8 +70,8 @@ test('the standard template is valid, fully filled with the brand and settings a
   assert.match(terms,/allerede har optjent\.\n\n11\. Lovvalg/);assert.doesNotMatch(terms,/indløses i varslingsperioden/);
 });
 
-test('conditional sections follow the settings and leave no empty line behind',()=>{
-  const render=(changes,locations)=>texts.renderProgramTexts(full(changes),texts.textValues({brand:BRAND_DATA,settings:full(changes),activeLocations:locations,version:1,effectiveFrom:NOW})).texts.terms;
+test('legacy conditional sections follow the settings and leave no empty line behind',()=>{
+  const render=(changes,locations)=>texts.renderProgramTexts({...full(changes),...texts.TEMPLATE_VERSIONS[0].texts},texts.textValues({brand:BRAND_DATA,settings:full(changes),activeLocations:locations,version:1,effectiveFrom:NOW})).texts.terms;
   const on=render({discountedOrdersQualify:true},2),off=render({discountedOrdersQualify:false},2);
   assert.match(on,/giver også stempler\./);assert.doesNotMatch(on,/kampagnetilbud giver ikke stempler/);
   assert.match(off,/kampagnetilbud giver ikke stempler\./);assert.doesNotMatch(off,/giver også stempler/);
@@ -128,7 +128,7 @@ test('every unfillable placeholder is reported and the template rules reject typ
 
 test('a published template version never changes; the brand copy is matched to it',()=>{
   // Locked hashes: changing a released version must be a new entry in TEMPLATE_VERSIONS.
-  const LOCKED={'stamp-card-da-2026-10-19':'960dff76'};
+  const LOCKED={'stamp-card-da-2026-10-19':'960dff76','stamp-card-da-2026-11-06':'670ab3e6'};
   for(const t of texts.TEMPLATE_VERSIONS){
     const hash=createHash('sha256').update(JSON.stringify(texts.TEXT_FIELDS.map(f=>t.texts[f]))).digest('hex').slice(0,8);
     assert.equal(hash,LOCKED[t.version],t.version);
@@ -138,7 +138,7 @@ test('a published template version never changes; the brand copy is matched to i
   assert.notEqual(texts.textKey(full()),texts.textKey(full({minimumAmountOre:15000})));
   assert.notEqual(texts.textKey(full()),texts.textKey(full({stampsPerPurchase:2})));
   for(const changes of [{counterChannels:['dine_in']},{maxStampsPerDay:3}])assert.notEqual(texts.textKey(full()),texts.textKey(full(changes)),JSON.stringify(changes));
-  assert.equal(texts.textKey(full()),texts.textKey(full({orderTypes:['delivery']})),'orderTypes do not change the terms yet');
+  assert.notEqual(texts.textKey(full()),texts.textKey(full({orderTypes:['delivery']})),'online order types publish a new terms version');
   assert.equal(texts.textKey(full({counterChannels:['dine_in','takeaway']})),texts.textKey(full({counterChannels:['takeaway','dine_in']})));
   assert.equal(texts.textKey(full()),texts.textKey(full({sessionDays:30,counterIdleMinutes:9})));
 });
@@ -310,4 +310,14 @@ test('an active program from before text versions publishes version 1 on any sav
   db.rows.set('loyaltyPrograms/brand',{brandId:'brand',version:2,settings:legacy});
   assert.equal((await save({...legacy,sessionDays:30})).textVersion,1);
   assert.equal(rows('loyaltyTextVersions').length,1);
+});
+
+test('new terms describe only enabled online order types and retain the published legacy copy',()=>{
+  const render=orderTypes=>texts.renderProgramTexts(full({orderTypes}),texts.textValues({brand:BRAND_DATA,settings:full({orderTypes}),activeLocations:1,version:2,effectiveFrom:NOW})).texts.terms;
+  assert.match(render(['pickup']),/Onlineordrer til afhentning .*automatisk stempler/);
+  assert.doesNotMatch(render(['pickup']),/Onlineordrer til levering/);
+  assert.match(render(['delivery']),/Onlineordrer til levering .*automatisk stempler/);
+  assert.doesNotMatch(render([]),/Onlineordrer til (afhentning|levering)/);
+  assert.match(render(['pickup']),/personligt rabatkort giver ikke købsstempler/);
+  assert.doesNotMatch(texts.TEMPLATE_VERSIONS[0].texts.terms,/Onlineordrer/);
 });

@@ -26,6 +26,7 @@ export const lookupSchema = z.union([
 ]);
 export const stampSchema = z.object({
   ...scope, memberId: id, channel: z.enum(COUNTER_CHANNELS), amountOre: z.number().int().min(0).max(10_000_000),
+  orderNumber: z.string().trim().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/).transform(v => v.toUpperCase()),
   discountUsed: z.boolean(), via: z.enum(['qr', 'search']), idempotencyKey,
 }).strict();
 export const redeemSchema = z.object({ ...scope, rewardId: id, via: z.enum(['qr', 'search']), idempotencyKey }).strict();
@@ -208,12 +209,22 @@ export function addStampsToCard(w: Writer, ctx: {
 }
 
 export async function grantStamp(db: Firestore, actor: CounterActor, input: z.infer<typeof stampSchema>, now: number) {
-  const hash = requestHash({ op: 'stamp', ...input }), eventId = hashKey('stamp', input.brandId, input.idempotencyKey);
+  const hash = requestHash({ op: 'stamp', ...input });
+  // POS numbers may restart each business day. One bon per location/day,
+  // regardless of member, channel or request key. The event itself is the lock.
+  const eventId = hashKey('counter-purchase', input.brandId, input.locationId, copenhagenDay(now), input.orderNumber);
   return db.runTransaction(async tx => {
-    // Authorized first: a replay never returns a stored receipt to someone who has lost the permission.
     const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.counter);
-    const prior = await replay(tx, db, eventId, hash);
-    if (prior) return { ...(prior.result as StampOutcome), replayed: true };
+    const receipts = await tx.get(db.collection(COLLECTIONS.events).where('idempotencyKey', '==', input.idempotencyKey));
+    const prior = receipts.docs.map(d => d.data() as LoyaltyEvent).find(e => e.brandId === input.brandId && e.type === 'stamp_added'
+      && (e.source === 'counter_qr' || e.source === 'counter_search'));
+    if (prior) {
+      if (prior.requestHash !== hash) throw new LoyaltyError('idempotency_conflict', 409);
+      return { ...(prior.result as StampOutcome), replayed: true };
+    }
+    if ((await tx.get(db.collection(COLLECTIONS.events).doc(eventId))).exists) throw new LoyaltyError('order_already_stamped', 409);
+    // Orderfly orders are stamped by settlement, never by the manual POS flow.
+    if (/^ORD-/i.test(input.orderNumber)) throw new LoyaltyError('online_order_automatic', 422);
     const member = await activeMember(tx, db, input.brandId, input.memberId);
     const [program, entry] = await Promise.all([
       tx.get(db.collection(COLLECTIONS.programs).doc(input.brandId)).then(s => readProgram(input.brandId, s.data())),
@@ -225,7 +236,7 @@ export async function grantStamp(db: Firestore, actor: CounterActor, input: z.in
     if (!decision.qualifies) throw new LoyaltyError(decision.reason, 422);
     const outcome = addStampsToCard({ tx, db }, { companyId, brandId: input.brandId, memberId: input.memberId, member, program, entry,
       count: decision.stamps, locationId: input.locationId, now, eventId, hash, idempotencyKey: input.idempotencyKey,
-      base: { source: input.via === 'qr' ? 'counter_qr' : 'counter_search', channel: input.channel, amountOre: input.amountOre,
+      base: { source: input.via === 'qr' ? 'counter_qr' : 'counter_search', channel: input.channel, amountOre: input.amountOre, orderNumber: input.orderNumber, customerId: member.customerId,
         actorId: principalId, actorName: actor.name },
       memberPatch: { stampDay: day, stampsOnDay: stampsToday + decision.stamps } });
     return { ...outcome, replayed: false };

@@ -26,6 +26,8 @@ export function newIdempotencyKey() {
 
 export function errorMessage(code: string, minimumAmountOre?: number): string {
   switch (code) {
+    case 'order_already_stamped': return 'Der er allerede registreret stempler på denne bon i dag.';
+    case 'online_order_automatic': return 'Orderfly-ordrer får automatisk stempler ved betaling. Brug kun bonnummer fra kassen her.';
     case 'qr_invalid': return 'QR-koden er udløbet. Bed kunden opdatere siden.';
     case 'member_not_found': return 'Kunden findes ikke.';
     case 'below_minimum':

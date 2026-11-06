@@ -34,6 +34,7 @@ export type LoyaltyEvent = {
   requestHash: string | null; cardId: string | null; rewardId: string | null; createdAt: number;
   // Receipt of the operation on its primary event, returned again for a retried request.
   result?: unknown;
+  orderNumber?: string; orderId?: string; customerId?: string;
 };
 
 export type CardDoc = {

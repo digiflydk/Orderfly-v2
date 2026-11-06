@@ -182,7 +182,7 @@ export function SettingsForm({ initial, canEditBrand }: { initial: Initial; canE
               <label key={value} className="flex items-center gap-2 text-sm"><Checkbox checked={s.orderTypes.includes(value)}
                 onCheckedChange={v => set('orderTypes', toggle(s.orderTypes, value, v === true))} />{label}</label>
             ))}
-            <p className="text-xs text-muted-foreground">Automatiske stempler fra Orderfly-ordrer aktiveres senere. Wolt, Uber Eats og andre tredjepartskanaler giver aldrig stempler.</p>
+            <p className="text-xs text-muted-foreground">Betalte Orderfly-ordrer giver automatisk stempler for de valgte ordretyper, når købet opfylder reglerne. Wolt, Uber Eats og andre tredjepartskanaler giver aldrig stempler.</p>
           </fieldset>
           {field('counterChannels')}
         </CardContent>
