@@ -54,3 +54,6 @@ The 44 approved 2025–2026 Google reviews have reviewed Danish display text; 14
 
 ### Source icons and explanation
 The homepage subtitle is removed. Google reviews use the Google G mark; internal feedback uses the website's existing Esmeralda favicon. A blue information control opens a source explanation with native keyboard/touch support and Escape dismissal. This is source attribution, not Trustindex verification; no third-party verification badge or claim is displayed.
+
+### Rotation and placement correction
+Reviews follow the Club benefits section headed LIDT MERE AT GLÆDE SIG TIL. Pointer hover (including sticky mobile hover) and focus on Next no longer suppress automatic rotation. Open source details and keyboard focus within a review card still pause it; closing/leaving resumes it. Hidden-page, offscreen and reduced-motion protections remain. The blue scalloped check icon opens source attribution, not Trustindex verification.
