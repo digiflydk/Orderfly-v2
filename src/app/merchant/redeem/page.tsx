@@ -7,7 +7,7 @@ export const dynamic='force-dynamic';
 export const runtime='nodejs';
 
 export default async function MerchantPage({searchParams}:{searchParams:Promise<{brand?:string;location?:string}>}){
-  await verifiedOrderflyIdentity().catch(()=>redirect('/admin-login?next=%2Fmerchant'));
+  await verifiedOrderflyIdentity().catch(()=>redirect('/login'));
   const view=await orderflyReadGrants('orderfly.games:view').catch(()=>[]);
   const redeem=await orderflyReadGrants('orderfly.games:redeem').catch(()=>[]);
   if(!view.length)return <section className="mx-auto max-w-lg p-6"><h1 className="text-2xl font-semibold">Restaurantens spil</h1><p className="mt-4">Din konto mangler adgang til at se spilkoder. Bed administratoren om Games-adgang.</p></section>;

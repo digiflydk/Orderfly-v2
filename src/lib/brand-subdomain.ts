@@ -14,7 +14,7 @@ export const BRAND_SLUG_MAX = 40;
 // slug must never shadow on the apex domain (/{slug}) or as a subdomain.
 export const RESERVED_BRAND_SLUGS = new Set([
   'web', 'internal-web-preview', 'internal-mpanel-host', 'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
-  'superadmin', 'superadmin-safe', 'merchant', 'terminal', 'mapp', 'admin-login', 'feedback', 'feedback-admin',
+  'superadmin', 'superadmin-safe', 'merchant', 'terminal', 'mapp', 'login', 'admin-login', 'feedback', 'feedback-admin',
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
   // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
   'club',
@@ -85,7 +85,7 @@ export function brandSlugFromHost(hostHeader: string | null | undefined): string
 }
 
 // App-wide paths keep their own routes on a brand subdomain.
-const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/terminal', '/mapp', '/verify'];
+const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/login', '/admin-login', '/superadmin', '/merchant', '/terminal', '/mapp', '/verify'];
 const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json', '/fonts/inter/inter-latin-wght-normal.woff2']);
 for (const path of ESMERALDA_MENU_IMAGE_PATHS) PASSTHROUGH_FILES.add(path);
 PASSTHROUGH_FILES.add('/images/esmeralda-v2/logo.png');

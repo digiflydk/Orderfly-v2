@@ -11,7 +11,7 @@ function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'opsfly-login-browser-'));
  // Match Next's real search-parameter context; the login uses it to choose its destination.
- const entry=file('entry',`import React from 'react';import{createRoot}from'react-dom/client';import{SearchParamsContext}from'next/dist/shared/lib/hooks-client-context.shared-runtime';import Login from ${JSON.stringify(path.join(root,'src/app/admin-login/page.tsx'))};import{LogoutButton}from ${JSON.stringify(path.join(root,'src/components/superadmin/logout-button.tsx'))};createRoot(document.getElementById('root')).render(<SearchParamsContext.Provider value={new URLSearchParams(location.search)}>{location.pathname.startsWith('/superadmin')?<><h1>Administration</h1><a href="/superadmin/feedback">Feedback</a><LogoutButton/></>:<Login/>}</SearchParamsContext.Provider>);`);
+ const entry=file('entry',`import React from 'react';import{createRoot}from'react-dom/client';import{SearchParamsContext,PathnameContext}from'next/dist/shared/lib/hooks-client-context.shared-runtime';import Login from ${JSON.stringify(path.join(root,'src/app/admin-login/page.tsx'))};import{LogoutButton}from ${JSON.stringify(path.join(root,'src/components/superadmin/logout-button.tsx'))};createRoot(document.getElementById('root')).render(<PathnameContext.Provider value={location.pathname}><SearchParamsContext.Provider value={new URLSearchParams(location.search)}>{location.pathname.startsWith('/superadmin')?<><h1>Administration</h1><a href="/superadmin/feedback">Feedback</a><LogoutButton/></>:<Login/>}</SearchParamsContext.Provider></PathnameContext.Provider>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},plugins:[new webpackModule.webpack.optimize.LimitChunkCountPlugin({maxChunks:1})],resolve:{alias:{'@/lib/firebase':file('firebase-config','window.firebaseLoaded=(window.firebaseLoaded||0)+1;'),'@':path.join(root,'src')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.[jt]sx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  let granted=true;
@@ -70,4 +70,11 @@ for(const width of [390,1440])test('one Opsfly login opens feedback and old logi
 test('feedback bookmark sends an unauthenticated visitor to the shared login',async()=>{
  const page=await browser.newPage();await page.goto(origin+'/feedback-admin/login');await page.waitForURL('**/admin-login');
  await page.getByRole('heading',{name:'ADMINISTRATION'}).waitFor();await page.close();
+});
+
+for(const entry of ['/login','/login?next=https://example.invalid','/admin-login?next=%2Fmerchant'])test('merchant login retains local destination from '+entry,async()=>{
+ const page=await browser.newPage();await page.goto(origin+entry);
+ await page.getByRole('heading',{name:'RESTAURANT LOGIN',exact:true}).waitFor();
+ await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
+ await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL(origin+'/merchant');await page.close();
 });
