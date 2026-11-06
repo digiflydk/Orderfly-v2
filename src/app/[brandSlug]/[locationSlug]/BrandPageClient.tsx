@@ -8,6 +8,7 @@ import { MenuClient } from './menu-client';
 import { readMenuPayload, type MenuPayload } from '@/lib/menu-payload';
 
 interface BrandPageClientProps {
+  initialNow: number;
   initialDeliveryType: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
@@ -17,6 +18,7 @@ interface BrandPageClientProps {
 }
 
 export default function BrandPageClient({
+  initialNow,
   initialDeliveryType,
   brand,
   location,
@@ -42,6 +44,7 @@ export default function BrandPageClient({
 
     return (
         <MenuClient 
+            initialNow={initialNow}
             initialDeliveryType={initialDeliveryType}
             brand={brand}
             location={location}
