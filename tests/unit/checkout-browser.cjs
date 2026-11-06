@@ -813,7 +813,7 @@ for(const width of [390,1280])test(`pizza cutouts render in the checkout summary
  await page.evaluate(item=>window.replaceFixtureItems([item]),item);
  const image=page.locator('.commerce-order-summary img[data-pizza-cutout]:visible');
  await image.waitFor();
- assert.equal(await image.getAttribute('src'),`/images/esmeralda-v2/menu/pizza-${product.id}.webp`);
+ assert.equal(await image.getAttribute('src'),`/images/esmeralda-v2/menu/pizza-${product.id}-192.webp`);
  assert.equal(await image.evaluate(e=>getComputedStyle(e).objectFit),'contain');
  await image.evaluate(e=>e.decode());
  await page.evaluate(item=>window.replaceFixtureItems([{...item,brandId:'other',imageUrl:'/image.png'}]),item);
