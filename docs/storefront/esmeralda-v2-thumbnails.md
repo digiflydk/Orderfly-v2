@@ -23,3 +23,7 @@ Run `node scripts/esmeralda-menu-thumbnails.cjs` after `npm ci`, or simply use `
 - Repeat mobile Lighthouse three times and use medians. Baseline 4.7MB images at first view, target ~600KB, no material new image-sizing warnings. Results are not claimed until a deployed build is measured.
 
 No changes to prices, checkout/payment, Firestore, secrets, `apphosting.yaml`, or other performance tasks.
+
+## Automatic post-merge Lighthouse evidence
+
+`.github/workflows/esmeralda-mobile-lighthouse.yml` runs on merges to `main` that add/update committed `*-192.webp` image files. It waits until the required green release checks finish and `/api/health` on both `orderfly.dk` and the Esmeralda subdomain identifies the exact merged commit. This run is entirely read-only; it opens the public menu page without buying anything. It runs Lighthouse 12 for mobile three times using simulated throttling, writes the per-run measurements and medians, and uploads the raw JSON reports and a human-readable summary to the Actions run artifacts. The post-release Lighthouse workflow excludes the existing `live-verify` job from its CI wait to avoid two post-release verification workflows waiting on each other. A passing automation run is evidence only; the PO must still check responsive visuals and decide whether the Lighthouse targets were reached.
