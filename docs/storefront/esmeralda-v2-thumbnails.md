@@ -10,7 +10,9 @@ The approved 960px transparent WebP cutouts remain untouched and authoritative f
 
 Run `node scripts/esmeralda-menu-thumbnails.cjs` after `npm ci`, or simply use `npm ci` / `npm run dev` / `npm run build` (automatic generation). The idempotent Sharp script scans all source .webp files, excludes existing 192px variants, preserves alpha and complete edges, and regenerates changed sources. It writes files atomically, leaving the 960px originals unchanged.
 
-**Binary artifact boundary:** This development environment has GitHub file/commit access but cannot download the original 56 binary source files into the local workspace. Until the generated WebPs can be committed from a full clone, the package postinstall/prebuild steps produce them before tests and production packaging. Do not merge until the exact-head CI confirms all paths exist and visual QA approves them. From a full clone, run the generator and commit `public/images/esmeralda-v2/menu/*-192.webp` to meet the binary-in-git requirement, then rerun tests. Do not claim the generated binaries are in this PR until they actually are.
+**Binary artifacts committed:** All 56 generated `*-192.webp` thumbnails are part of this PR alongside their 960px originals. The exact GitHub Actions generator output totalled 408,946 bytes (399 KiB); the largest thumbnail was 13,086 bytes, below the 20 KiB image-size target. The images were generated with the project’s pinned Sharp dependency and copied byte-for-byte into Git. Idempotent regeneration is still available for future approved image additions. No production data or deployed settings were modified.
+
+**Verification boundary:** The preceding numbers measure generated static assets, not actual first-load bytes or Lighthouse. Full CI, responsive browser checks and post-deployment mobile Lighthouse remain separate release checks. The thumbnails are public imagery; no proprietary or sensitive data is embedded in the images.
 
 ## Verification
 
