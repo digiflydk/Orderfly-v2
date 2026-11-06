@@ -67,3 +67,13 @@ minimum, ordretype, rabatkort, dagsgrænse og medlem/brand/virksomhedsgrænser.
 gentagelse efter netværksfejl og tablet-/mobilvisninger.
 
 TypeScript og relevante øvrige Club-/betalings-/printertests skal bestå.
+
+## Sletning af medlemskab
+
+Købsreferencer markeres med `purchaseLinksPresent`. Ved medlemssletning fjernes
+`customerId`, `orderId` og `orderNumber` fra op til 150 hændelser i samme transaktion.
+Større historikker markeres på den slettede medlemsrecord med
+`purchaseEventCleanupPending`; heartbeat fortsætter i batches på 150, indtil alle
+referencer er fjernet. Ingen aktiv medlemsrecord eller andet brands hændelser
+ændres. Loggens beløb, revisionsoplysninger og lås mod dobbeltregistrering bevares.
+Kunden og de oprindelige ordrer slettes ikke af en Club-udmeldelse.

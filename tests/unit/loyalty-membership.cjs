@@ -230,6 +230,9 @@ test('deletion removes personal data, sessions and rewards but keeps a pseudonym
   const s=await joined(),b=await brand(),member=db.rows.get('loyaltyMembers/'+s.memberId);
   const {mailJob:waiting}=await m.requestLoginLink(db,b,{email:'anna@example.com'},ctx());
   await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,orderNumber:'123',channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'2'.padStart(64,'0')},NOW);
+  const purchase=rows('loyaltyEvents').find(e=>e.type==='stamp_added');
+  assert.equal(purchase.customerId,member.customerId);assert.equal(purchase.orderNumber,'123');
+  db.rows.set('loyaltyEvents/online-purchase',{...purchase,id:undefined,source:'order',orderId:'ORD-123456',orderNumber:'ORD-123456',purchaseLinksPresent:true});
   await m.deleteMembership(db,b,s,NOW+1);
   const tomb=db.rows.get('loyaltyMembers/'+s.memberId);
   assert.equal(tomb.status,'deleted');
@@ -242,6 +245,8 @@ test('deletion removes personal data, sessions and rewards but keeps a pseudonym
   await rejects(m.readSession(db,b,s.token,NOW+2),'unauthorized');
   assert.ok(db.rows.get('customers/'+member.customerId));
   const events=rows('loyaltyEvents');assert.ok(events.some(e=>e.type==='member_deleted'));
+  for(const event of events) for(const field of ['customerId','orderId','orderNumber']) assert.equal(event[field],undefined,field);
+  assert.equal(tomb.purchaseEventCleanupPending,false);
   assert.doesNotMatch(JSON.stringify(events),/anna@example\.com|Anna Jensen/);
   await rejects(counter.lookupMember(db,cashier,{brandId:BRAND,locationId:'l1',email:'anna@example.com'},NOW+2),'member_not_found');
   // The e-mail can join again as a new member.
@@ -259,4 +264,25 @@ test('logout revokes the session; the session epoch revokes all sessions on dele
   const other=await m.readSession(db,b,second,NOW);
   await m.deleteMembership(db,b,other,NOW);
   await rejects(m.readSession(db,b,second,NOW),'unauthorized');
+});
+
+
+test('large purchase histories are cleaned in bounded resumable batches without touching other tenants or active members',async()=>{
+  setup();const s=await joined(),b=await brand(),member=db.rows.get('loyaltyMembers/'+s.memberId);
+  for(let i=0;i<320;i++) db.rows.set('loyaltyEvents/purchase-'+i,{brandId:BRAND,memberId:s.memberId,customerId:member.customerId,
+    orderId:'ORD-'+i,orderNumber:String(i),purchaseLinksPresent:true,type:'stamp_added',source:'order',amountOre:15000,quantity:1});
+  db.rows.set('loyaltyEvents/foreign',{brandId:'foreign',memberId:s.memberId,customerId:'other',purchaseLinksPresent:true});
+  db.rows.set('loyaltyMembers/active-other',{status:'active',brandId:BRAND,purchaseEventCleanupPending:true});
+  db.rows.set('loyaltyEvents/active-purchase',{brandId:BRAND,memberId:'active-other',customerId:'active-customer',purchaseLinksPresent:true});
+  const count=()=>rows('loyaltyEvents').filter(e=>e.brandId===BRAND&&e.memberId===s.memberId&&e.purchaseLinksPresent).length;
+  await m.deleteMembership(db,b,s,NOW+1);assert.equal(count(),170);
+  assert.equal(db.rows.get('loyaltyMembers/'+s.memberId).purchaseEventCleanupPending,true);
+  const {runPurchaseLinkCleanup}=loadTs('src/lib/loyalty/stamp-card/purchase-privacy.ts',mocks);
+  await runPurchaseLinkCleanup(db);assert.equal(count(),20);
+  await runPurchaseLinkCleanup(db);assert.equal(count(),0);
+  assert.equal(db.rows.get('loyaltyMembers/'+s.memberId).purchaseEventCleanupPending,false);
+  const snapshot=JSON.stringify([...db.rows]);await runPurchaseLinkCleanup(db);assert.equal(JSON.stringify([...db.rows]),snapshot);
+  assert.equal(db.rows.get('loyaltyEvents/foreign').customerId,'other');
+  assert.equal(db.rows.get('loyaltyEvents/active-purchase').customerId,'active-customer');
+  assert.ok(db.rows.has('customers/'+member.customerId));
 });

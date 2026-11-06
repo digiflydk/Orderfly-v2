@@ -61,7 +61,7 @@ export async function prepareOrderStamps(db: Firestore, tx: Transaction, orderId
   return { writeCount, apply: () => {
     addStampsToCard({ db, tx }, { companyId: member.companyId, brandId: order.brandId, memberId, member, program, entry,
       count: decision.stamps, locationId: order.locationId, now, eventId, hash: eventId, idempotencyKey: eventId,
-      base: { source: 'order', channel, amountOre, orderId, orderNumber: orderId, customerId },
+      base: { source: 'order', channel, amountOre, orderId, orderNumber: orderId, customerId, purchaseLinksPresent: true },
       memberPatch: { stampDay: day, stampsOnDay: stampsToday + decision.stamps } });
   } };
 }

@@ -236,7 +236,7 @@ export async function grantStamp(db: Firestore, actor: CounterActor, input: z.in
     if (!decision.qualifies) throw new LoyaltyError(decision.reason, 422);
     const outcome = addStampsToCard({ tx, db }, { companyId, brandId: input.brandId, memberId: input.memberId, member, program, entry,
       count: decision.stamps, locationId: input.locationId, now, eventId, hash, idempotencyKey: input.idempotencyKey,
-      base: { source: input.via === 'qr' ? 'counter_qr' : 'counter_search', channel: input.channel, amountOre: input.amountOre, orderNumber: input.orderNumber, customerId: member.customerId,
+      base: { source: input.via === 'qr' ? 'counter_qr' : 'counter_search', channel: input.channel, amountOre: input.amountOre, orderNumber: input.orderNumber, customerId: member.customerId, purchaseLinksPresent: true,
         actorId: principalId, actorName: actor.name },
       memberPatch: { stampDay: day, stampsOnDay: stampsToday + decision.stamps } });
     return { ...outcome, replayed: false };
