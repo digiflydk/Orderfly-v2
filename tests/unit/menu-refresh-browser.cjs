@@ -252,9 +252,10 @@ for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom w
 for(const width of [390,1280])test(`source-aware pizza image is contained in menu, dialog, cart and menu upgrade (${width}px)`,async t=>{
  const page=await setup(t,width,'&v2&pizzaCutouts');
  const asset=`/images/esmeralda-v2/menu/pizza-${pizzaSources[0].id}.webp`;
- const assertCutout=async image=>{
+ const thumb=asset.replace(/\.webp$/, '-192.webp');
+ const assertCutout=async (image,expected=thumb)=>{
   await image.waitFor();
-  assert.equal(await image.getAttribute('src'),asset);
+  assert.equal(await image.getAttribute('src'),expected);
   assert.equal(await image.evaluate(e=>getComputedStyle(e).objectFit),'contain');
   await image.evaluate(e=>e.decode());
   assert.ok(await image.evaluate(e=>e.naturalWidth>0));
@@ -264,7 +265,7 @@ for(const width of [390,1280])test(`source-aware pizza image is contained in men
  await page.screenshot({path:path.join(dir,`pizza-cutout-menu-${width}.png`),fullPage:false});
  await productCard.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
  let dialog=page.getByRole('dialog');
- await assertCutout(dialog.locator('.v2-product-hero img[data-pizza-cutout]'));
+ await assertCutout(dialog.locator('.v2-product-hero img[data-pizza-cutout]'),asset);
  assert.equal(await dialog.locator('.v2-product-hero').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)','product hero has a true black background behind transparent images');
  await page.screenshot({path:path.join(dir,`pizza-cutout-product-${width}.png`),fullPage:false});
  await dialog.getByRole('button',{name:/Læg i pose/}).click();await dialog.waitFor({state:'hidden'});
@@ -282,7 +283,7 @@ for(const width of [390,1280])test(`catalog cutouts display with black product b
  for(const product of catalogSources){
   const card=page.locator('[data-v2-product-card]').filter({has:page.getByRole('button',{name:`Se ${product.productName}`,exact:true})});
   const image=card.locator('img[data-product-cutout]');
-  assert.equal(await image.getAttribute('src'),product.asset);
+  assert.equal(await image.getAttribute('src'),product.asset.replace(/\.webp$/, '-192.webp'));
   assert.equal(await image.evaluate(e=>getComputedStyle(e).objectFit),'contain');
   await image.evaluate(e=>e.decode());
   await card.getByRole('button',{name:`Se ${product.productName}`,exact:true}).click();
