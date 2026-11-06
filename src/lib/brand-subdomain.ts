@@ -88,6 +88,7 @@ export function brandSlugFromHost(hostHeader: string | null | undefined): string
 const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/terminal', '/mapp', '/verify'];
 const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json', '/fonts/inter/inter-latin-wght-normal.woff2']);
 for (const path of ESMERALDA_MENU_IMAGE_PATHS) PASSTHROUGH_FILES.add(path);
+PASSTHROUGH_FILES.add('/images/esmeralda-v2/logo.png');
 
 /**
  * Internal path for a request on a brand subdomain, or null when no rewrite is

@@ -11,7 +11,10 @@ import { BrandLayoutClient } from './layout-client';
 import { isAdminReady } from '@/lib/runtime';
 import { BrandTracking } from '@/components/brand-tracking';
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import { getPublicCookieTexts } from '@/lib/server/public-cookie-texts';
+import { STOREFRONT_COOKIE_LANGUAGE } from '@/lib/cookie-texts';
+import { shouldShowCookieBanner } from '@/lib/cookie-banner-state';
 import { storefrontInstallMetadata, storefrontInstallHostAllowed } from '@/lib/storefront-home-screen';
 
 export async function generateMetadata({ params }: { params: Promise<{ brandSlug: string }> }): Promise<Metadata> {
@@ -61,6 +64,10 @@ export default async function BrandLayout({
 
   // The approved V2 presentation is now Esmeralda's standard storefront.
   const v2 = brand.slug === 'esmeralda';
+  const cookieBanner = v2 ? await (async () => {
+    const [texts, jar] = await Promise.all([getPublicCookieTexts(brand.id, STOREFRONT_COOKIE_LANGUAGE), cookies()]);
+    return { texts, show: shouldShowCookieBanner(jar.get('orderfly_cookie_consent')?.value, texts.consent_version) };
+  })() : undefined;
 
   return (
     <StorefrontV2Provider enabled={v2}>
@@ -80,7 +87,7 @@ export default async function BrandLayout({
               } as React.CSSProperties
             }
           >
-            <BrandLayoutClient brand={brand}>
+            <BrandLayoutClient brand={brand} cookieBanner={cookieBanner}>
               {children}
             </BrandLayoutClient>
           </div>
