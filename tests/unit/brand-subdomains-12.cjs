@@ -371,7 +371,7 @@ test('Esmeralda server layout passes the scoped consent text and request-cookie 
 });
 
  test('legacy merchant app routes redirect to KDS without changing host', () => {
-  for (const [file, destination] of [['src/app/mapp/page.tsx', '/kds'], ['src/app/mapp/login/page.tsx', '/kds/login']]) {
+  for (const [file, destination] of [['src/app/mapp/page.tsx', '/kds'], ['src/app/mapp/login/page.tsx', '/kds/login/terminal']]) {
     const redirects = [];
     loadTs(file, { 'next/navigation': { redirect: path => redirects.push(path) } }).default();
     assert.deepEqual(redirects, [destination]);
