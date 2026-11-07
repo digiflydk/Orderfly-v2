@@ -1,5 +1,5 @@
 import '@/styles/admin-ui.css';
-import type { Metadata } from 'next';
+import { merchantInstallMetadata } from '@/lib/server/merchant-home-screen';
 import { redirect } from 'next/navigation';
 import { SuperAdminLayoutClient } from '@/components/superadmin/superadmin-layout-client';
 import { getPlatformBrandingSettings } from '@/app/superadmin/settings/queries';
@@ -7,7 +7,7 @@ import { orderflySession } from '@/lib/access/orderfly-session';
 import { canNavigate, counterOnly } from '@/lib/access/navigation';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
-export const metadata: Metadata = { title: 'Merchant • Orderfly' };
+export const generateMetadata = merchantInstallMetadata;
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 

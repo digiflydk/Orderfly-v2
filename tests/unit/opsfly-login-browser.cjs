@@ -72,9 +72,9 @@ test('feedback bookmark sends an unauthenticated visitor to the shared login',as
  await page.getByRole('heading',{name:'ADMINISTRATION'}).waitFor();await page.close();
 });
 
-for(const entry of ['/login','/login?next=https://example.invalid','/admin-login?next=%2Fmerchant'])test('merchant login retains local destination from '+entry,async()=>{
+for(const entry of ['/login','/login?next=https://example.invalid','/login?next=%2Fmerchant%2Fstamp-card','/admin-login?next=%2Fmerchant'])test('merchant login retains local destination from '+entry,async()=>{
  const page=await browser.newPage();await page.goto(origin+entry);
  await page.getByRole('heading',{name:'RESTAURANT LOGIN',exact:true}).waitFor();
  await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
- await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL(origin+'/merchant');await page.close();
+ await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL(origin+(entry.includes('%2Fstamp-card')?'/merchant/stamp-card':'/merchant'));await page.close();
 });
