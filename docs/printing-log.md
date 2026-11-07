@@ -24,7 +24,7 @@ Issue #875 adds **Ikke sendt** rows from location-owned `automaticPrintSkips`.
 Policy decisions that suppress a new order's automatic print are saved atomically
 with successful Stripe settlement, unpaid pickup acceptance or managed delivery
 acceptance. The deterministic order ID makes each decision immutable and
-idempotent. Rows include a fixed, safe Danish reason and no assigned printer;
+idempotent. Later pickup payment collection preserves the acceptance-time decision and never creates a new skip. Rows include a fixed, safe Danish reason and no assigned printer;
 locations with no printer remain visible. Reasons cover disabled/unconfigured
 policy, inactive brand, activation bounds, invalid catalog/order/menu content,
 size limits, unavailable routed targets and legacy test-window expiry.

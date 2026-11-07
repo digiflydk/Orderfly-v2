@@ -391,7 +391,9 @@ async function settleOrder(proof: PaymentProof) {
         ? await preparePickupSettlementPrintIntents(context, prepared.pickupCapability, intentInput)
         : await prepareStripeSettlementPrintIntents(context, prepared.capability!, intentInput);
     }
-    const skipPlan = prepared.fulfilled && policy?.skipReason && !printPlan
+    // Pickup's original print decision belongs to acceptance, never payment
+    // collection. A later policy change must not invent a contradictory skip.
+    const skipPlan = proof.kind === 'stripe' && prepared.fulfilled && policy?.skipReason && !printPlan
       ? await prepareAutomaticPrintSkip(context, metadata, policy.skipReason) : undefined;
     if (prepared.writeCount + (skipPlan?.writeCount ?? 0) > 500) throw new Error('Settlement write budget exceeded');
     // Every native read is complete before either plan writes. The outbox's
