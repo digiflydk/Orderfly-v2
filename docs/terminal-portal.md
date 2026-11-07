@@ -247,7 +247,8 @@ New original print intents capture future `scheduledFulfillmentAt` in the existi
 canonical queue, retaining deterministic identity. Ordinary CloudPRNT dispatch
 skips held jobs until the same location lead time is reached, so a held job cannot
 block an immediate order. Unsent TTL starts at release, not purchase. Changing
-settings gives held jobs a fresh collection window. The existing five-minute
+the preorder lead time gives held jobs a fresh collection window; changing only
+alarm/night settings does not reset print age. The existing five-minute
 unsent window, activation epoch, immutable content, one-download and explicit ACK
 safeguards remain. Already offered/downloaded/confirmed jobs are never rescheduled
 or reprinted; historical jobs without scheduling metadata retain their original

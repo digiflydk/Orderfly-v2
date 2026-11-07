@@ -48,3 +48,10 @@ test('settings HTTP routes bind source, reject unsafe requests and sanitize fail
   for(const [failure,status]of [[new AuthorityError('private',401),401],[new AuthorityError('private'),403],[new KdsSettingsError(409),409],[Error('private'),503]]){error=failure;const response=await POST(req());assert.equal(response.status,status);assert.equal(response.headers.get('cache-control'),'no-store');assert.equal((await response.text()).includes('private'),false);}
  }
 });
+
+
+test('alarm-only settings changes do not reset print collection age',async()=>{
+ const f=fixture({location:{kdsSettingsChangedAt:123}});
+ await f.saveKdsSettings(command(),'kds');assert.equal(f.rows.get('locations/l').kdsSettingsChangedAt,123);
+ await f.saveKdsSettings(command({expectedRevision:1,settings:{preorderMinutes:45,warningMinutes:5,overdueMinutes:5,sleepWhenClosed:true}}),'kds');assert.ok(f.rows.get('locations/l').kdsSettingsChangedAt>123);
+});

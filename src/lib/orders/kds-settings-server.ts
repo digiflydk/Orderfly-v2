@@ -6,7 +6,7 @@ import { AuthorityError, principalKey } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { resolveKdsScope } from './kds-scope';
 import { getOrderTerminalActor, authorizeOrderTerminalTransaction } from '@/lib/terminal-auth/access';
-import { kdsSettingsSchema } from './kds-settings';
+import { kdsSettingsSchema, parseKdsSettings } from './kds-settings';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const schema = z.object({ brandId: id, locationId: id, settings: kdsSettingsSchema, expectedRevision: z.number().int().nonnegative(), requestId: z.string().uuid() }).strict();
 export class KdsSettingsError extends Error { constructor(public status: number) { super('kds_settings_conflict'); } }
@@ -32,7 +32,9 @@ export async function saveKdsSettings(input: unknown, source: 'kds' | 'terminal'
     }
     const revision = location.kdsSettingsRevision ?? 0;
     if (revision !== command.expectedRevision || !Number.isSafeInteger(revision + 1)) throw new KdsSettingsError(409);
-    tx.update(ref, { kdsSettings: command.settings, kdsSettingsRevision: revision + 1, kdsSettingsChangedAt: Date.now() });
+    // Only a print lead-time change may reopen the collection window for held jobs.
+    const printTimingChanged = parseKdsSettings(location.kdsSettings).preorderMinutes !== command.settings.preorderMinutes;
+    tx.update(ref, { kdsSettings: command.settings, kdsSettingsRevision: revision + 1, ...(printTimingChanged ? { kdsSettingsChangedAt: Date.now() } : {}) });
     tx.create(audit, { action: 'kds_settings_changed', actorId, fingerprint, brandId: command.brandId, locationId: command.locationId, settings: command.settings, revision: revision + 1, createdAt: getAdminFieldValue().serverTimestamp() });
     return { success: true, revision: revision + 1 };
   });
