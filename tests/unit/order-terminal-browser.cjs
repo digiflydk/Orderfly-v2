@@ -24,7 +24,7 @@ function order(id, extra = {}) {
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'order-terminal-browser-'));
   const entry = path.join(dir, 'entry.js'), loader = path.join(dir, 'loader.js'), navigation = path.join(dir, 'navigation.js'), actions = path.join(dir, 'actions.js');
-  fs.writeFileSync(entry, `import React from 'react';import{createRoot}from'react-dom/client';import{TerminalClient}from ${JSON.stringify(path.join(root, 'src/app/merchant/orders/terminal-client.tsx'))};createRoot(document.getElementById('root')).render(React.createElement(TerminalClient));`);
+  fs.writeFileSync(entry, `import React from 'react';import{createRoot}from'react-dom/client';import{TerminalClient}from ${JSON.stringify(path.join(root, 'src/app/merchant/orders/terminal-client.tsx'))};createRoot(document.getElementById('root')).render(React.createElement(TerminalClient, window.__kdsProps || {}));`);
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   fs.writeFileSync(navigation, `export const useRouter=()=>({refresh(){window.dispatchEvent(new Event('focus'));},push(url){window.__navigation=url;}});export const usePathname=()=>'/merchant/orders';export const useSearchParams=()=>new URLSearchParams();`);
   fs.writeFileSync(actions, `export async function registerPickupPayment(id,method){return window.__registerPayment(id,method);}export async function cancelPickupOrder(){throw Error('Cancellation outside fixture scope');}export async function updateOrderStatus(){throw Error('Legacy status action must not be used by terminal');}`);
@@ -48,18 +48,19 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
   const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
   const page = await context.newPage(), calls = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.addInitScript(() => {
-    window.__audioStarts = 0; window.__audioNotes = []; window.__audioStops = [];
+  await page.addInitScript(({suspended}) => {
+    window.__audioGains = []; window.__audioStarts = 0; window.__audioNotes = []; window.__audioStops = [];
     window.AudioContext = class {
-      state = 'running'; currentTime = 0; destination = {};
-      async resume() {} async close() {}
+      state = suspended ? 'suspended' : 'running'; currentTime = 0; destination = {};
+      async resume() { this.state = 'running'; } async close() {}
       createOscillator() { return { frequency: { setValueAtTime(value, at) { window.__audioNotes.push({value, at}); } }, connect() {}, start() { window.__audioStarts++; }, stop(at) { window.__audioStops.push(at); }, disconnect() {} }; }
-      createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
+      createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime(value) { window.__audioGains.push(value); } } }; }
     };
-  });
+  }, {suspended: !!extra.suspendedAudio});
   const state = { orders: [order('ORD-NEW'), order('ORD-COOK', { status: 'In Progress' }), order('ORD-READY', { status: 'Ready' }), order('ORD-UNPAID', { status: 'Ready', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup' }), order('ORD-HISTORY', { status: 'Completed' }), order('ORD-FUTURE', { fulfillmentAt: '2026-10-26T12:15:00.000Z' })], readStatus: 200, statusError: null, canEdit: true, emptyPage: false, ...extra };
   await page.exposeFunction('__registerPayment', async (id, method) => { calls.push({ kind: 'payment', id, method }); state.orders.find(o => o.id === id).paymentStatus = 'Paid'; return { success: true, message: 'Betalingen er registreret.' }; });
-  await page.route('**/api/merchant/orders**', async route => {
+  if (extra.kds) await page.addInitScript(() => { window.__kdsProps = { initialLocations:[{brandId:'brand-a',locationId:'loc-a',brandName:'Esmeralda',locationName:'Amager'}], apiBase:'/api/kds/orders', actionApiBase:'/api/merchant/orders' }; });
+  await page.route(/\/api\/(merchant|kds)\/orders/,  async route => {
     const req = route.request(), url = new URL(req.url());
     if (url.pathname === '/api/merchant/orders/status') {
       const command = req.postDataJSON(); calls.push({ kind: 'status', command });
@@ -70,8 +71,9 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
       row.status = command.status; return route.fulfill({ json: { success: true, changed: true, orderId: row.id, status: row.status } });
     }
     if (url.pathname === '/api/merchant/orders/reprint') return route.fulfill({ status: 403, json: { error: 'forbidden' } });
-    if (url.pathname !== '/api/merchant/orders') throw Error('Unexpected fixture endpoint ' + url.pathname);
-    calls.push({ kind: 'read', query: Object.fromEntries(url.searchParams) });
+    if (url.pathname !== '/api/merchant/orders' && url.pathname !== '/api/kds/orders') throw Error('Unexpected fixture endpoint ' + url.pathname);
+    if (state.readDelay) await new Promise(resolve=>setTimeout(resolve,state.readDelay));
+    calls.push({ kind: 'read', path:url.pathname, query: Object.fromEntries(url.searchParams) });
     if (state.historyReadStatus && url.searchParams.get('view') === 'history') return route.fulfill({status:state.historyReadStatus,json:{error:'terminal_unavailable'}});
     if (state.boardReadStatus && url.searchParams.get('view') === 'board') return route.fulfill({status:state.boardReadStatus,json:{error:'forbidden'}});
     if (state.readStatus !== 200) return route.fulfill({ status: state.readStatus, json: { error: state.readStatus === 401 ? 'unauthorized' : 'terminal_unavailable', message: 'Ordrene kunne ikke hentes.' } });
@@ -189,7 +191,8 @@ test('first load is silent; new board orders alert once even while history is op
   const { page, state } = await fixture(t);
   await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
   assert.equal(await page.evaluate(()=>window.__audioStarts),0);
-  await page.getByRole('button',{name:'Slå lyd til',exact:true}).click();
+  await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();
+  await page.getByRole('button',{name:'Test lyd',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1,'explicit sound test');
   assert.equal(await page.evaluate(()=>window.__audioNotes.length),8);
   assert.ok(await page.evaluate(()=>new Set(window.__audioNotes.map(n=>n.value)).size)>1);
@@ -340,4 +343,43 @@ test('terminal preserves quantity and removal labels without reversing exclusion
   assert.doesNotMatch(await dialog.innerText(), /\+ Uden løg|\+ 2 × Ost|4 × Ost/);
   assert.equal(calls.filter(c=>c.kind==='status'||c.kind==='payment').length,0);
   assert.deepEqual(errors,[]);
+});
+test('KDS shows Esmeralda before order response and uses scoped read with existing employee payment/status actions',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,readDelay:1200});
+ await expect(page.getByText('Esmeralda · Amager',{exact:true})).toBeVisible();await expect(page.getByRole('combobox',{name:'Restaurant'})).toHaveCount(0);
+ await expect(page.getByRole('link',{name:'Tilbage til oversigt'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Åbn ordre ORD-UNPAID',exact:true}).click();
+ await page.getByRole('button',{name:'Registrér betaling',exact:true}).click();
+ await page.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();
+ await expect.poll(()=>state.orders.find(o=>o.id==='ORD-UNPAID').paymentStatus).toBe('Paid');
+ assert.equal(calls.filter(c=>c.kind==='payment').length,1);
+ for(const call of calls.filter(c=>c.kind==='read')){assert.equal(call.path,'/api/kds/orders');assert.equal(call.query.brandId,'brand-a');assert.equal(call.query.locationId,'loc-a');assert.equal(call.query.brandName,undefined);}
+});
+test('sound defaults on, test plays melody at saved volume, mute persists after reload',async t=>{
+ const {page}=await fixture(t);
+ await expect(page.getByRole('button',{name:'Slå lyd fra',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
+ await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();
+ await page.getByRole('slider',{name:'Lydstyrke'}).fill('40');
+ await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ assert.equal(await page.evaluate(()=>Math.max(...window.__audioGains)),0.06);
+ await page.reload();await expect(page.getByText('Lydindstillinger · Til · 40%',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.reload();
+ await expect(page.getByRole('button',{name:'Slå lyd til',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
+});
+test('suspended autoplay is visible and Test lyd unlocks the melody',async t=>{
+ const {page}=await fixture(t,1024,768,{suspendedAudio:true});
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeVisible();
+ await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toHaveCount(0);
+});
+test('new orders play automatically by default, volume zero and mute suppress alerts',async t=>{
+ const {page,state}=await fixture(t);await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
+ state.orders.push(order('AUTO-ONE'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();await page.getByRole('slider',{name:'Lydstyrke'}).fill('0');
+ state.orders.push(order('AUTO-TWO'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('button',{name:'Åbn ordre AUTO-TWO',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),1);
+ await page.getByRole('slider',{name:'Lydstyrke'}).fill('80');await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();
+ state.orders.push(order('AUTO-THREE'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('button',{name:'Åbn ordre AUTO-THREE',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),1);
 });
