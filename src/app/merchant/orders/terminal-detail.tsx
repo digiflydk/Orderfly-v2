@@ -1,6 +1,7 @@
 'use client';
+import { KitchenClock } from './kitchen-clock';
 import { ManagedDeliveryTracking } from '@/components/checkout/managed-delivery-tracking';
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import type { OrderStatus } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,13 +11,20 @@ import { registerPickupPayment } from './actions';
 import { terminalTime } from './terminal-board';
 
 type Command = { orderId: string; brandId: string; locationId: string; expectedStatus: OrderStatus; status: OrderStatus; requestId: string };
-export function TerminalDetail({ order, canEdit, disabled = false, onClose, onChanged, reprint, statusEndpoint = '/api/merchant/orders/status', paymentEndpoint }: {
-  order: TerminalOrder; canEdit: boolean; disabled?: boolean; onClose: () => void; onChanged: () => void; reprint?: ReactNode; statusEndpoint?: string; paymentEndpoint?: string;
+export function TerminalDetail({ order, canEdit, disabled = false, onClose, onChanged, reprint, statusEndpoint = '/api/merchant/orders/status', paymentEndpoint, refreshRevision = 0, inline = false, now = Date.now(), readyTimeEndpoint = '/api/merchant/orders/ready-time' }: {
+  refreshRevision?: number; inline?: boolean; now?: number; readyTimeEndpoint?: string; order: TerminalOrder; canEdit: boolean; disabled?: boolean; onClose: () => void; onChanged: () => void; reprint?: ReactNode; statusEndpoint?: string; paymentEndpoint?: string;
 }) {
   const [busy, setBusy] = useState(false), lock = useRef(false), command = useRef<Command | null>(null);
   const [message, setMessage] = useState(''), [failure, setFailure] = useState(false);
   const [paymentConfirm, setPaymentConfirm] = useState(false), [paymentMethod, setPaymentMethod] = useState<'cash' | 'card'>('cash');
   const [uncertainPayment, setUncertainPayment] = useState(false);
+  const [reconcilingPayment, setReconcilingPayment] = useState(false);
+  const reconcileAfter = useRef(0);
+  useEffect(() => {
+    if (!reconcilingPayment || !uncertainPayment || disabled || !canEdit || refreshRevision <= reconcileAfter.current) return;
+    setReconcilingPayment(false); setUncertainPayment(false); setPaymentConfirm(false); setFailure(false);
+    setMessage(order.paymentStatus === 'Paid' ? 'Betalingen er registreret.' : 'Frisk status: betalingen er endnu ikke registreret. Bekræft kun igen, hvis beløbet er modtaget.');
+  }, [refreshRevision, reconcilingPayment, uncertainPayment, disabled, canEdit, order.paymentStatus]);
   const next: OrderStatus | null = order.status === 'Received' ? 'In Progress' : order.status === 'In Progress' ? 'Ready' : order.status === 'Ready' ? (order.deliveryType === 'Delivery' ? (order.managedDelivery?null:'Delivered') : 'Completed') : null;
   const unpaidCompletion = next !== null && ['Completed', 'Delivered'].includes(next) && order.paymentStatus !== 'Paid';
   async function advance() {
@@ -56,11 +64,13 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
     finally { lock.current = false; setBusy(false); }
   }
   const actionLabel = next === 'In Progress' ? 'Start tilberedning' : next === 'Ready' ? 'Markér klar' : next === 'Delivered' ? 'Markér leveret' : 'Markér afhentet';
-  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onPointerDownOutside={event => { if (busy) event.preventDefault(); }}>
-    <DialogHeader><DialogTitle className="break-all text-2xl">Ordre {order.id}</DialogTitle><DialogDescription>{order.brandName} · {order.locationName} · {ORDER_STATUS_LABELS[order.status]}</DialogDescription></DialogHeader>
-    <div className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><p className="text-sm text-slate-600">{order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p><p className="text-3xl font-bold tabular-nums">{terminalTime(order)}</p>{order.fulfillmentAt && <p className="text-sm">{new Date(order.fulfillmentAt).toLocaleDateString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p>}</div><div className="text-right"><p className="font-semibold">{order.customerName || 'Kunde'}</p>{order.customerPhone && <a href={`tel:${order.customerPhone}`} className="block py-2 text-blue-700 underline">{order.customerPhone}</a>}<p className="text-sm">{order.deliveryAddress}</p></div></div>
+  const content = <>
+    {inline ? <header><h3 className="break-all text-xl font-bold">Ordre {order.id}</h3><p className="text-sm text-slate-600">{ORDER_STATUS_LABELS[order.status]}</p></header> : <DialogHeader><DialogTitle className="break-all text-2xl">Ordre {order.id}</DialogTitle><DialogDescription>{order.brandName} · {order.locationName} · {ORDER_STATUS_LABELS[order.status]}</DialogDescription></DialogHeader>}
+    {inline && <KitchenClock order={order} now={now} canEdit={canEdit} disabled={disabled} endpoint={readyTimeEndpoint} onChanged={onChanged} />}
+    {inline ? <div className="text-sm"><p className="font-semibold">{order.customerName || 'Kunde'} · {order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p>{order.deliveryAddress && <p className="break-words">{order.deliveryAddress}</p>}{order.customerPhone && <a className="inline-block min-h-8 py-1 text-blue-700 underline" href={`tel:${order.customerPhone}`}>{order.customerPhone}</a>}</div> : <div className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><p className="text-sm text-slate-600">{order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p><p className="text-3xl font-bold tabular-nums">{terminalTime(order)}</p>{order.fulfillmentAt && <p className="text-sm">{new Date(order.fulfillmentAt).toLocaleDateString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p>}</div><div className="text-right"><p className="font-semibold">{order.customerName || 'Kunde'}</p>{order.customerPhone && <a href={`tel:${order.customerPhone}`} className="block py-2 text-blue-700 underline">{order.customerPhone}</a>}<p className="text-sm">{order.deliveryAddress}</p></div></div>}
     {order.managedDelivery&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking||null} variant="merchant" onRefresh={onChanged}/>}
     {order.managedDelivery&&order.status==='Ready'&&<p className="rounded border p-3">Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.</p>}
+    {inline && canEdit && next && <div className="space-y-2"><button className="min-h-16 w-full rounded-xl bg-slate-900 px-6 py-4 text-lg font-semibold text-white disabled:opacity-50" disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? 'Gemmer…' : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">Registrér betalingen, før ordren markeres afhentet eller leveret.</p>}</div>}
     <ul className="divide-y">{order.items.map((item, index) => <li key={index} className="flex justify-between gap-4 py-3"><div className="min-w-0"><p className="break-words font-semibold">{item.quantity}× {item.name}</p>{item.modifiers.map((modifier, i) => <p className="mt-1 break-words text-sm text-slate-600" key={i}>{modifier}</p>)}</div><span className="shrink-0">{formatPrice(item.totalPrice)}</span></li>)}</ul>
     {order.notes && <div className="rounded-xl bg-amber-50 p-4"><p className="font-semibold">Bemærkning til ordren</p><p className="whitespace-pre-wrap break-words">{order.notes}</p></div>}
     <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>I alt {formatPrice(order.totalAmount)}</strong><span className={order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? 'Betalt' : 'Betaling mangler'}</span></div>
@@ -68,10 +78,13 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
       <p className="font-semibold">Modtag {formatPrice(order.totalAmount)} ved afhentning</p>
       {!paymentConfirm ? <button className="mt-3 min-h-12 rounded-lg border bg-white px-4 font-semibold" disabled={busy || disabled || uncertainPayment} onClick={() => setPaymentConfirm(true)}>Registrér betaling</button> : <div className="mt-3 space-y-3"><label className="block">Betalingsform<select className="ml-2 min-h-12 rounded-lg border bg-white px-3" aria-label="Betalingsform" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cash' | 'card')} disabled={busy}><option value="cash">Kontant</option><option value="card">Kort i restaurant</option></select></label><p>Bekræft kun, når du har modtaget beløbet.</p><div className="flex flex-wrap gap-2"><button className="min-h-12 rounded-lg bg-slate-900 px-4 font-semibold text-white" disabled={busy || disabled || uncertainPayment} onClick={() => void collectPayment()}>Bekræft betaling modtaget</button><button className="min-h-12 rounded-lg border bg-white px-4" disabled={busy} onClick={() => setPaymentConfirm(false)}>Fortryd</button></div></div>}
     </section>}
+    {uncertainPayment && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3"><p className="text-sm">Kontrollér frisk betalingsstatus, før du prøver igen.</p><button className="mt-2 min-h-14 w-full rounded-lg border bg-white p-3 font-semibold" disabled={busy || !canEdit} onClick={() => { reconcileAfter.current = refreshRevision; setReconcilingPayment(true); onChanged(); }}>{reconcilingPayment ? 'Hent betalingsstatus igen' : 'Kontrollér betalingsstatus'}</button></div>}
     {message && <p role={failure ? 'alert' : 'status'} className={`rounded-lg p-3 ${failure ? 'bg-red-50 text-red-900' : 'bg-emerald-50 text-emerald-900'}`}>{message}</p>}
     {disabled && <p className="text-sm text-amber-900">Opdater forbindelsen, før du ændrer ordren.</p>}
-    {canEdit && next && <div className="space-y-2"><button className="min-h-14 w-full rounded-xl bg-slate-900 px-6 py-4 text-lg font-semibold text-white disabled:opacity-50" disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? 'Gemmer…' : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">Registrér betalingen, før ordren markeres afhentet eller leveret.</p>}</div>}
+    {!inline && canEdit && next && <div className="space-y-2"><button className="min-h-16 w-full rounded-xl bg-slate-900 px-6 py-4 text-lg font-semibold text-white disabled:opacity-50" disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? 'Gemmer…' : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">Registrér betalingen, før ordren markeres afhentet eller leveret.</p>}</div>}
     {!canEdit && <p className="text-sm text-slate-600">Du har læseadgang. En medarbejder med ordreadgang kan ændre status.</p>}
     {reprint}
-  </DialogContent></Dialog>;
+  </>;
+  if (inline) return <article aria-label={`Ordre ${order.id}`} className="min-w-0 space-y-3 rounded-xl border bg-white p-4 shadow-sm">{content}</article>;
+  return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onPointerDownOutside={event => { if (busy) event.preventDefault(); }}>{content}</DialogContent></Dialog>;
 }

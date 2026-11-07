@@ -72,3 +72,63 @@ Validation: local typecheck, production build, `kds-scope.cjs`,
 existing dedicated-terminal/login/status regression tests. No GitHub Actions.
 Authenticated production timing must be checked with an actual employee session;
 unauthenticated live checks alone do not establish that the timeout is resolved.
+
+## Kitchen workflow, dates, clock and alarms (2026-11-07)
+
+KDS employee and dedicated-terminal views enable `kitchenMode`. Cards display all
+items/modifiers, notes and large direct fulfillment buttons. Details, payment
+confirmation, ready-time editing and print controls stay inline; no order modal
+is needed. Existing payment prerequisites, optimistic status checks, audit and
+idempotent retries remain enforced. Printer discovery is lazy so visible cards
+cannot each generate two background printer requests before Genprint is opened.
+
+The board sends `serviceDate`, defaulting to today in Europe/Copenhagen. This is
+the fulfillment date, falling back to creation date only for orders without a
+fulfillment timestamp. It includes preorders created earlier but due today and
+excludes yesterday's unfinished orders by default. The date input can inspect a
+different day, and I dag restores automatic rollover at midnight. History retains
+its creation-date search and preorders retain their separate future-day view.
+Cursors bind the service date as well as the existing scope/filter fields.
+
+A card clock uses a saved `kitchenReadyAt`, then the bound courier pickup interval
+when available, then fulfillment time. Missing/invalid time is explicitly unknown.
+It counts down with a negative sign when late and stops at Ready. Tapping it opens
+an inline minutes-from-now editor (including +5/+10/+15 buttons). The employee or
+dedicated terminal `/orders/ready-time` POST rechecks native scope and edit access
+inside a transaction, compares the previous saved time and records an atomic audit
+entry. Retries reuse the same request ID. Only Received/In Progress orders can be
+changed, within the next 24 hours. This changes the kitchen target only: customer
+fulfillment time, provider booking and payment fields are untouched. No messages
+are sent and no courier rescheduling is implied.
+
+Menu contains sound enablement, four original synthesised sounds (Melodi, Klokke,
+Marimba, Alarm), test, volume and overdue minutes (default 5; range 0–120). Each
+sound lasts 3.6 seconds. Browsers do not expose the iPad's native system-sound
+catalogue, so no Apple sound files are copied. Preferences are device-local.
+Overdue Received/In Progress orders trigger a grouped alert and repeat at most
+once per minute while the data is authorized/current and sound is available.
+Marking Ready, changing the target, or muting suppresses subsequent alarms.
+
+Fullscreen keeps an independent fixed, internally scrollable KDS surface with
+overscroll disabled and an explicit × exit. A native fullscreen exit gesture does
+not close the KDS surface. Browser/OS fullscreen and home gestures cannot be
+forcibly locked by a web application; add to the iPad home screen for standalone
+browser chrome removal.
+
+Connection correction: a manually loaded history/preorder snapshot does not become
+an alleged disconnected feed solely after 45 seconds. Board freshness and all
+explicit failures still count. A single transient read failure with a complete
+snapshot younger than 45 seconds retries immediately, displaying reconnecting;
+repeated errors, expired snapshots, offline and authorization denial remain visible.
+401/403 still clear cached customer data immediately. The client timeout is 25s,
+allowing the existing 12s identity-upstream deadline plus database work. Read APIs
+emit server time at response completion for the countdown, not at request start.
+
+Local validation covers kitchen browser actions/payment, all item details, day
+selection, signed countdowns, alarm thresholds, time conflict/replay and authority,
+settings persistence, fullscreen scroll/native exit, stale-history recovery and
+existing terminal authentication/status regressions. GitHub Actions are not used.
+
+After an uncertain inline payment response, Kontrollér betalingsstatus requires a
+new authorized read before enabling another explicit payment confirmation. A failed
+refresh never unlocks it; paid orders are reconciled without another payment write.

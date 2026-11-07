@@ -21,7 +21,7 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 const querySchema = z.object({
   brandId: id.optional(), locationId: id.optional(), view: z.enum(['board', 'history', 'preorders']).default('board'),
   cursor: z.string().max(4096).optional(), search: z.string().trim().max(100).optional(),
-  dateFrom: day.optional(), dateTo: day.optional(),
+  serviceDate: day.optional(), dateFrom: day.optional(), dateTo: day.optional(),
 }).strict().refine(q => Boolean(q.brandId) === Boolean(q.locationId))
   .refine(q => !q.dateFrom || !q.dateTo || q.dateFrom <= q.dateTo);
 const ACTIVE: OrderStatus[] = ['Received', 'In Progress', 'Ready'];
@@ -65,7 +65,7 @@ export function projectTerminalOrder(orderId: string, value: unknown): TerminalO
     managedDelivery: data.managedDelivery != null,
     id: orderId, brandId: text(data.brandId), locationId: text(data.locationId), brandName: text(data.brandName), locationName: text(data.locationName),
     customerName: text(data.customerName), customerContact: text(data.customerContact), customerPhone: text(customer.phone),
-    deliveryAddress: text(customer.address), notes: text(customer.deliveryInstructions), createdAt: iso(data.createdAt), fulfillmentAt: iso(data.fulfillmentAt),
+    deliveryAddress: text(customer.address), notes: text(customer.deliveryInstructions), createdAt: iso(data.createdAt), fulfillmentAt: iso(data.fulfillmentAt), kitchenReadyAt: iso(data.kitchenReadyAt),
     deliveryTime: text(data.deliveryTime), deliveryType: data.deliveryType as TerminalOrder['deliveryType'], status: data.status as OrderStatus,
     paymentStatus: data.paymentStatus as TerminalOrder['paymentStatus'], paymentMethod: text(data.paymentMethod), totalAmount: amount(data.totalAmount),
     refundedAmountOre: amount(data.refundedAmountOre), items,
@@ -78,7 +78,8 @@ export function projectTerminalOrder(orderId: string, value: unknown): TerminalO
 }
 function matches(order: TerminalOrder, q: z.infer<typeof querySchema>, today: string): boolean {
   const future = order.fulfillmentAt !== null && analyticsCalendarDay(order.fulfillmentAt) > today;
-  if (q.view === 'board' && future || q.view === 'preorders' && !future) return false;
+  if (q.serviceDate && (!order.fulfillmentAt && !order.createdAt || analyticsCalendarDay(order.fulfillmentAt || order.createdAt!) !== q.serviceDate)) return false;
+  if (q.view === 'board' && !q.serviceDate && future || q.view === 'preorders' && !future) return false;
   // An unverified online payment must not enter the kitchen queues. Accepted
   // unpaid pickup remains visible, but completion is separately payment-gated.
   if (q.view !== 'history' && order.paymentStatus !== 'Paid'
@@ -136,7 +137,7 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
     catch (error) { if (!(error instanceof AuthorityError && error.status === 403)) throw error; }
   }
   const statuses = q.view === 'history' ? ALL : ACTIVE;
-  const scope = createHash('sha256').update(JSON.stringify([selected.brandId, selected.locationId, q.view, q.search || '', q.dateFrom || '', q.dateTo || ''])).digest('hex');
+  const scope = createHash('sha256').update(JSON.stringify([selected.brandId, selected.locationId, q.view, q.search || '', q.dateFrom || '', q.dateTo || '', q.serviceDate || ''])).digest('hex');
   let after: Record<string, string | null> = {};
   if (q.cursor) {
     try {

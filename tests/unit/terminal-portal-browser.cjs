@@ -30,10 +30,11 @@ before(async()=>{
    if(url.pathname==='/api/terminal/auth/logout'){state.logoutCalls++;if(state.logoutStatus!==200)return reply(state.logoutStatus,{error:'unavailable'});state.valid.delete(saved);setCookie(res,'',0);return reply(200,{success:true});}
    if(url.pathname==='/api/terminal/auth/session'){state.renewCalls++;if(state.sessionStatus!==200)return reply(state.sessionStatus,{error:'unavailable'});if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});if(state.holdRenewal){state.heldRenewal=()=>{setCookie(res,saved);reply(200,session);};return;}setCookie(res,saved);return reply(200,session);}
    if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});
-   if(url.pathname==='/api/terminal/orders/payment'){state.paymentCalls++;state.paid=true;return reply(200,{success:true,changed:true,message:'Betalingen er registreret.'});}
+   if(url.pathname==='/api/terminal/orders/payment'){state.paymentCalls++;if(state.paymentUnavailable){if(state.commitUncertain)state.paid=true;return reply(503,{error:'unavailable'});}state.paid=true;return reply(200,{success:true,changed:true,message:'Betalingen er registreret.'});}
    if(url.pathname==='/api/terminal/orders/status')return reply(200,{success:true,changed:true});
    if(url.pathname==='/api/terminal/orders/reprint'){state.printCalls++;return reply(200,{items:[],nextCursor:null});}
    if(url.pathname==='/api/terminal/orders'){
+    if(state.readUnavailable)return reply(503,{error:'unavailable'});
     if(url.searchParams.get('brandId')!=='brand-a'||url.searchParams.get('locationId')!=='loc-a'){state.badScope=true;return reply(403,{error:'forbidden'});}
     const order={id:'ORD-PORTAL',brandId:'brand-a',locationId:'loc-a',brandName:'Esmeralda',locationName:'Amager',customerName:'Syntetisk kunde',customerContact:'',customerPhone:'',deliveryAddress:'',notes:'Ingen løg',createdAt:'2026-10-25T17:00:00Z',fulfillmentAt:'2026-10-25T18:00:00Z',deliveryTime:'19:00',deliveryType:'Pickup',status:'Ready',paymentStatus:state.paid?'Paid':'Pending',paymentMethod:'PayAtPickup',totalAmount:149,refundedAmountOre:0,items:[{name:'Pizza',quantity:1,unitPrice:149,totalPrice:149,modifiers:[]}]};
     return reply(200,{orders:[order],locations:[{brandId:'brand-a',brandName:'Esmeralda',locationId:'loc-a',locationName:'Amager'}],selectedBrandId:'brand-a',selectedLocationId:'loc-a',canEdit:true,serverTime:'2026-10-25T17:00:00Z',nextCursor:null,hasMore:false});
@@ -47,13 +48,13 @@ before(async()=>{
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
 async function context(t,storageState){const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:768,height:1024},...(storageState?{storageState}:{})});t.after(()=>c.close());return c;}
-async function login(page){await page.goto(origin+'/terminal/login');await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();}
+async function login(page){await page.goto(origin+'/terminal/login');await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();}
 
 test('failed login is generic; successful portal has dedicated scope and no admin navigation',async t=>{
  state=newState();const c=await context(t),page=await c.newPage();await page.goto(origin+'/terminal/login');
  if(process.env.TERMINAL_PORTAL_SCREENSHOTS){fs.mkdirSync(process.env.TERMINAL_PORTAL_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.TERMINAL_PORTAL_SCREENSHOTS,'terminal-login.png'),fullPage:true});}
  await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('wrong-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Login kunne ikke bekræftes');assert.equal((await c.cookies()).length,0);await expect(page.getByLabel('Adgangskode',{exact:true})).toHaveValue('');
- await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();
+ await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();
  assert.equal(await page.locator('a[href^="/merchant"],a[href^="/superadmin"],a[href^="/admin-login"]').count(),0);assert.equal(await page.getByRole('combobox',{name:'Restaurant',exact:true}).count(),0);assert.equal(state.badScope,false);assert.equal(state.merchantCalls,0);
  if(process.env.TERMINAL_PORTAL_SCREENSHOTS)await page.screenshot({path:path.join(process.env.TERMINAL_PORTAL_SCREENSHOTS,'terminal-orders.png'),fullPage:true});
  assert.equal(await page.evaluate(()=>Object.keys(localStorage).length),0);assert.equal(await page.evaluate(()=>document.cookie.includes('__Host-orderfly_terminal')),false);
@@ -62,25 +63,25 @@ test('failed login is generic; successful portal has dedicated scope and no admi
 test('persistent HTTPS HttpOnly cookie survives context restart and renews on focus',async t=>{
  state=newState();const first=await context(t),page=await first.newPage();await login(page);
  const stored=await first.storageState();const saved=stored.cookies.find(x=>x.name===cookie);assert.ok(saved);assert.equal(saved.httpOnly,true);assert.equal(saved.secure,true);assert.equal(saved.sameSite,'Lax');assert.ok(saved.expires>Date.now()/1000+300*86400);
- saved.expires=Date.now()/1000+180*86400;const second=await context(t,stored),next=await second.newPage();const logins=state.loginCalls;await next.goto(origin+'/terminal/orders');await expect(next.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();assert.equal(state.loginCalls,logins);
+ saved.expires=Date.now()/1000+180*86400;const second=await context(t,stored),next=await second.newPage();const logins=state.loginCalls;await next.goto(origin+'/terminal/orders');await expect(next.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();assert.equal(state.loginCalls,logins);
  const before=state.renewCalls;await next.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>state.renewCalls).toBeGreaterThan(before);const renewed=(await second.cookies()).find(x=>x.name===cookie);assert.ok(renewed.expires>Date.now()/1000+399*86400);
 });
 test('transient renewal masks cached orders without logging out; revocation redirects safely',async t=>{
  state=newState();const c=await context(t),page=await c.newPage();await login(page);
- state.sessionStatus=503;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('alert').first()).toContainText('Du er ikke logget ud');await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toHaveCount(0);assert.equal(state.logoutCalls,0);assert.ok((await c.cookies()).some(x=>x.name===cookie));
- state.sessionStatus=200;await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();
+ state.sessionStatus=503;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('alert').first()).toContainText('Du er ikke logget ud');await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toHaveCount(0);assert.equal(state.logoutCalls,0);assert.ok((await c.cookies()).some(x=>x.name===cookie));
+ state.sessionStatus=200;await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();
  state.valid.clear();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();await expect(page.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
 });
 test('uncertain logout hides orders and pauses renewal until confirmed revocation',async t=>{
  state=newState();const c=await context(t),page=await c.newPage();await login(page);state.logoutStatus=503;
- await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Log ud kunne ikke bekræftes');assert.ok((await c.cookies()).some(x=>x.name===cookie));await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Log ud kunne ikke bekræftes');assert.ok((await c.cookies()).some(x=>x.name===cookie));await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toHaveCount(0);
  const before=state.renewCalls;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.waitForTimeout(50);assert.equal(state.renewCalls,before);
  state.logoutStatus=200;await page.getByRole('button',{name:'Prøv Log ud igen'}).click();await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await c.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
  await page.goto(origin+'/terminal/orders');await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();
 });
 test('dedicated detail payment and reprint reads never call merchant endpoints or actions',async t=>{
- state=newState();const c=await context(t),page=await c.newPage();await login(page);await page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'}).click();
- const dialog=page.getByRole('dialog');await expect(dialog).toBeVisible();await expect.poll(()=>state.printCalls).toBeGreaterThan(0);
+ state=newState();const c=await context(t),page=await c.newPage();await login(page);
+ const dialog=page.getByRole('article',{name:'Ordre ORD-PORTAL'});await expect(dialog).toBeVisible();await expect(page.getByRole('dialog')).toHaveCount(0);await dialog.getByText('Genprint',{exact:true}).click();await expect.poll(()=>state.printCalls).toBeGreaterThan(0);
  await dialog.getByRole('button',{name:'Registrér betaling'}).click();assert.equal(state.paymentCalls,0);await dialog.getByRole('button',{name:'Bekræft betaling modtaget'}).click();await expect.poll(()=>state.paymentCalls).toBe(1);await expect(dialog.getByRole('button',{name:'Markér afhentet'})).toBeEnabled();assert.equal(state.merchantCalls,0);
 });
 
@@ -97,13 +98,25 @@ test('KDS keeps login, persistence, renewal, revocation and logout on /kds',asyn
  state=newState();const first=await context(t),page=await first.newPage();
  await page.goto(origin+'/kds?terminal=1');await expect(page).toHaveURL(origin+'/kds/login/terminal');
  await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();
- await expect(page).toHaveURL(origin+'/kds?terminal=1');await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();
+ await expect(page).toHaveURL(origin+'/kds?terminal=1');await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();
  assert.equal(await page.locator('a[href^="/merchant"],a[href^="/superadmin"],a[href^="/admin-login"]').count(),0);assert.equal(state.merchantCalls,0);assert.equal(state.badScope,false);
  const stored=await first.storageState(),saved=stored.cookies.find(x=>x.name===cookie);assert.ok(saved);assert.equal(saved.httpOnly,true);assert.equal(saved.secure,true);assert.equal(saved.domain,'127.0.0.1');saved.expires=Date.now()/1000+180*86400;
- const second=await context(t,stored),next=await second.newPage(),logins=state.loginCalls;await next.goto(origin+'/kds?terminal=1');await expect(next.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();await expect(next).toHaveURL(origin+'/kds?terminal=1');assert.equal(state.loginCalls,logins);
+ const second=await context(t,stored),next=await second.newPage(),logins=state.loginCalls;await next.goto(origin+'/kds?terminal=1');await expect(next.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();await expect(next).toHaveURL(origin+'/kds?terminal=1');assert.equal(state.loginCalls,logins);
  await expect.poll(async()=>((await second.cookies()).find(x=>x.name===cookie)?.expires||0)).toBeGreaterThan(Date.now()/1000+399*86400);
  state.valid.clear();await next.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(next).toHaveURL(origin+'/kds/login/terminal');await expect(next.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
  await next.getByLabel('Brugernavn',{exact:true}).fill('amager');await next.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await next.getByRole('button',{name:'Log ind',exact:true}).click();await expect(next).toHaveURL(origin+'/kds?terminal=1');await expect(next.getByRole('button',{name:'Log ud',exact:true})).toBeVisible();
  await next.getByRole('button',{name:'Log ud',exact:true}).click();await expect(next).toHaveURL(origin+'/kds/login/terminal');await expect(next.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await second.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
  await next.goto(origin+'/kds?terminal=1');await expect(next).toHaveURL(origin+'/kds/login/terminal');assert.equal(state.merchantCalls,0);
+});
+
+test('uncertain inline payment reconciles fresh Pending status before another explicit confirmation',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await login(page);const card=page.getByRole('article',{name:'Ordre ORD-PORTAL'});
+ state.paymentUnavailable=true;await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await expect(card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true})).toBeVisible();await expect(card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true})).toBeDisabled();
+ state.readUnavailable=true;await card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true}).click();await expect(page.getByRole('alert').first()).toContainText('opdateres');await expect(card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true})).toBeDisabled();assert.equal(state.paymentCalls,1);
+ state.readUnavailable=false;state.paymentUnavailable=false;await card.getByRole('button',{name:'Hent betalingsstatus igen',exact:true}).click();await expect(card.getByRole('button',{name:'Registrér betaling',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,1);
+ await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,2);await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+test('uncertain committed payment reconciles Paid without sending a second write',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await login(page);const card=page.getByRole('article',{name:'Ordre ORD-PORTAL'});
+ state.paymentUnavailable=true;state.commitUncertain=true;await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true}).click();await expect(card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,1);
 });

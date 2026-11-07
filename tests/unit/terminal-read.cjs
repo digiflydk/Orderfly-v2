@@ -189,3 +189,10 @@ test('delivery enrichment is bounded concurrent work and verifies identity once 
  f.mocks['@/lib/access/orderfly-session'].verifiedOrderflyIdentity=async()=>{identities++;return {provider:'firebase',subject:'operator'};};
  const result=await f.readTerminalOrders({},now);assert.equal(result.orders.length,9);assert.equal(identities,1);assert.equal(max,4);
 });
+test('KDS service date includes today scheduled yesterday, excludes old active orders and binds cursor to date',async()=>{
+ const f=fixture({rows:[order('today',{createdAt:'2026-10-24T10:00:00Z'}),order('old',{createdAt:'2026-10-24T10:00:00Z',fulfillmentAt:'2026-10-24T12:00:00Z'}),order('future',{fulfillmentAt:'2026-10-26T12:00:00Z'}),order('late-night',{fulfillmentAt:'2026-10-24T22:30:00Z'})]});
+ const result=await f.readTerminalOrders({serviceDate:'2026-10-25'},now);assert.deepEqual(result.orders.map(o=>o.id).sort(),['late-night','today']);
+ assert.deepEqual((await f.readTerminalOrders({serviceDate:'2026-10-26'},now)).orders.map(o=>o.id),['future']);
+ await assert.rejects(f.readTerminalOrders({serviceDate:'2026-02-30'},now));
+ const large=fixture({rows:Array.from({length:55},(_,i)=>order('z'+String(i).padStart(2,'0')))});const first=await large.readTerminalOrders({serviceDate:'2026-10-25'},now);await assert.rejects(large.readTerminalOrders({serviceDate:'2026-10-24',cursor:first.nextCursor},now));
+});

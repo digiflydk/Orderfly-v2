@@ -30,5 +30,5 @@ export default async function KitchenDisplayPage({ searchParams }: {
     throw error;
   }
   // Employee reads/mutations keep their existing live, scoped permissions.
-  return <><LogoutButton loginHref="/kds/login" /><TerminalClient loginHref="/kds/login" initialLocations={scope.locations} apiBase="/api/kds/orders" actionApiBase="/api/merchant/orders" /></>;
+  return <><LogoutButton loginHref="/kds/login" /><TerminalClient kitchenMode loginHref="/kds/login" initialLocations={scope.locations} apiBase="/api/kds/orders" actionApiBase="/api/merchant/orders" /></>;
 }
