@@ -20,8 +20,21 @@ the printer acknowledged the job; it is not independent observation of paper.
 A download without timely confirmation becomes unknown. Generic failure text
 does not invent hardware diagnostics that were never recorded.
 
-This is a print-job log, not an audit of every checkout: orders suppressed before
-a job was created and synthetic pilot test receipts are outside this view.
+Issue #875 adds **Ikke sendt** rows from location-owned `automaticPrintSkips`.
+Policy decisions that suppress a new order's automatic print are saved atomically
+with successful Stripe settlement, unpaid pickup acceptance or managed delivery
+acceptance. The deterministic order ID makes each decision immutable and
+idempotent. Rows include a fixed, safe Danish reason and no assigned printer;
+locations with no printer remain visible. Reasons cover disabled/unconfigured
+policy, inactive brand, activation bounds, invalid catalog/order/menu content,
+size limits, unavailable routed targets and legacy test-window expiry.
+
+This is not an audit of every checkout: the global print-intents process flag OFF
+retains the existing no-print-I/O path. Exceptions that abort the whole native
+transaction (for example corrupt scope or unresolved routing after policy
+selection) are not committed as successful skip decisions. Synthetic pilot test
+receipts are outside this view. Previously suppressed orders have no stored
+decision and are not backfilled or automatically reprinted.
 Historical records already deleted cannot be reconstructed. The read endpoint
 does not change automatic-print activation or menu policy. See
 [brand automatic printing](printing-automatic-print.md) for permanent activation.
@@ -36,7 +49,7 @@ are excluded through database field selection and explicit response projection.
 All responses are non-cacheable. Brand ownership is validated independently
 for locations, printer configurations and job records.
 
-The reader merges descending per-printer collection queries with deterministic
+The reader merges descending per-printer and per-location skip collection queries with deterministic
 document-path tie breaks. Automatic dispatches use offer time; queued/manual
 jobs use creation time. The cursor advances over scanned records, including
 hidden queue duplicates, so a page may have fewer than 25 visible rows.
@@ -51,7 +64,7 @@ within the page on mobile.
 
 ## Validation and release
 
-Run `node --test tests/unit/printing-print-log*.cjs`, `npm run typecheck` and
+Run `node --test tests/unit/printing-print-log*.cjs tests/unit/printing-automatic-print-skip.cjs`, `npm run typecheck` and
 `npm run build`. Browser regressions exercise selection, pagination, status
 labels, errors, stale-response isolation, brand isolation and mobile overflow.
 The same focused tests are included in CI.

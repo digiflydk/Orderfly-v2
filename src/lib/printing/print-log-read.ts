@@ -1,11 +1,11 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
-import { decodePrintLogCursor, encodePrintLogCursor, printLogId, PrintLogError, projectPrintLog, type PrintLogScope, type PrintLogSource } from './print-log';
+import { decodePrintLogCursor, encodePrintLogCursor, printLogId, PrintLogError, projectPrintLog, projectSkippedPrintLog, type PrintLogScope, type PrintLogSource } from './print-log';
 
 // Single-field collection queries only: this reader needs no production indexes or writes.
 const MAX_LOCATIONS = 50, MAX_PRINTERS = 50;
-const fields = ['brandId', 'locationId', 'printerId', 'orderId', 'kind', 'createdAt', 'state', 'expiresAt', 'offeredAt', 'downloadedAt', 'completedAt', 'jobId', 'id', 'reason',
+const fields = ['schemaVersion', 'brandId', 'locationId', 'printerId', 'orderId', 'kind', 'createdAt', 'state', 'expiresAt', 'offeredAt', 'downloadedAt', 'completedAt', 'jobId', 'id', 'reason',
   'job.brandId', 'job.locationId', 'job.printerId', 'job.orderId', 'job.kind', 'job.createdAt'];
 const safeName = (value: unknown, fallback: string) => typeof value === 'string' && value.trim() ? value.slice(0, 160) : fallback;
 export async function readPrintLog(input: { brandId: string; cursor?: string; limit?: number }) {
@@ -27,7 +27,8 @@ export async function readPrintLog(input: { brandId: string; cursor?: string; li
     if (scopes.length > MAX_PRINTERS) throw new PrintLogError('print_log_scope_too_large');
   }
   const sources: PrintLogSource[] = ['jobs', 'ordinaryDispatches', 'manualPrintRequests', 'expiredPrintJobs'];
-  if (cursor && !scopes.some(({ ref }) => sources.some(source => cursor.path.startsWith(`${ref.path}/${source}/`)))) throw new PrintLogError('print_log_invalid', 400);
+  if (cursor && !scopes.some(({ ref }) => sources.some(source => cursor.path.startsWith(`${ref.path}/${source}/`)))
+    && !locations.docs.some(location => cursor.path.startsWith(`${location.ref.path}/automaticPrintSkips/`))) throw new PrintLogError('print_log_invalid', 400);
   const batches = await Promise.all(scopes.map(async ({ ref, scope }) => {
     const pages = await Promise.all(sources.map(async source => {
       const collection = ref.collection(source), field = source === 'ordinaryDispatches' ? 'offeredAt' : 'createdAt';
@@ -42,8 +43,21 @@ export async function readPrintLog(input: { brandId: string; cursor?: string; li
     }));
     return pages.flat();
   }));
-  if (batches.flat().some(item => !Number.isSafeInteger(item.at) || item.at < 0 || item.at > 8.64e15)) throw new PrintLogError('print_log_unavailable');
-  const all = batches.flat().sort((a, b) => b.at - a.at || (a.path < b.path ? 1 : a.path > b.path ? -1 : 0));
+  const skipped = await Promise.all(locations.docs.map(async location => {
+    const collection = location.ref.collection('automaticPrintSkips');
+    let query: FirebaseFirestore.Query = collection.orderBy('createdAt', 'desc').orderBy('__name__', 'desc');
+    if (cursor) {
+      const parent = cursor.path.slice(0, cursor.path.lastIndexOf('/'));
+      query = parent === collection.path ? query.startAfter(cursor.at, cursor.path.slice(cursor.path.lastIndexOf('/') + 1))
+        : query.where('createdAt', collection.path > parent ? '<' : '<=', cursor.at);
+    }
+    const result = await query.select('schemaVersion', 'brandId', 'locationId', 'orderId', 'reason', 'createdAt').limit(limit + 1).get();
+    return result.docs.map(doc => ({ source: 'automaticPrintSkips' as const, doc, at: doc.data().createdAt as number, path: doc.ref.path,
+      scope: { brandId, locationId: location.id, locationName: safeName(location.data().name, location.id), printerId: 'unassigned', printerName: 'Ikke sendt til printer' } }));
+  }));
+  const records = [...batches.flat(), ...skipped.flat()];
+  if (records.some(item => !Number.isSafeInteger(item.at) || item.at < 0 || item.at > 8.64e15)) throw new PrintLogError('print_log_unavailable');
+  const all = records.sort((a, b) => b.at - a.at || (a.path < b.path ? 1 : a.path > b.path ? -1 : 0));
   // A dispatch supersedes its queued record even while that queued record still exists.
   // Advance by scanned records (including hidden duplicates), avoiding gaps or loops.
   const page = all.slice(0, limit), queued = page.filter(item => item.source === 'jobs' || item.source === 'expiredPrintJobs');
@@ -55,7 +69,7 @@ export async function readPrintLog(input: { brandId: string; cursor?: string; li
     if (row?.jobId !== item.doc.id || row.brandId !== brandId || row.locationId !== item.scope.locationId || row.printerId !== item.scope.printerId) throw new PrintLogError('print_log_unavailable');
     hidden.add(item.path);
   });
-  const projected = page.map(item => ({ path: item.path, row: projectPrintLog(item.source, item.doc.id, item.doc.data(), item.scope, now) }));
+  const projected = page.map(item => ({ path: item.path, row: item.source === 'automaticPrintSkips' ? projectSkippedPrintLog(item.doc.id, item.doc.data(), item.scope) : projectPrintLog(item.source, item.doc.id, item.doc.data(), item.scope, now) }));
   const items = projected.filter(item => !hidden.has(item.path)).map(item => item.row);
   const last = page[page.length - 1];
   return { items, nextCursor: all.length > limit && last ? encodePrintLogCursor({ v: 1, brandId, at: last.at, path: last.path }) : null };

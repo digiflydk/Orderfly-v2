@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import type { AutomaticPrintSkipReason } from './automatic-print-skip';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { PrinterConfiguration, PrintJobKind } from './domain';
@@ -32,7 +33,7 @@ export class PrintIntentPolicyError extends Error {
 
 export type PreparedPrintIntentPolicy = Readonly<{
   brandId: string; locationId: string; policyRevision: number | null;
-  enabled: boolean; dispatchAuthorized: false; automaticActivationId?: string;
+  enabled: boolean; skipReason?: AutomaticPrintSkipReason; dispatchAuthorized: false; automaticActivationId?: string;
   targets: ReadonlyArray<Readonly<{
     configuration: Readonly<PrinterConfiguration>; printerRevision: number;
     kinds: ReadonlyArray<PrintJobKind>; dispatchAuthorized: false;
@@ -104,13 +105,14 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     ]);
     const nativeBrand = nativeScopeRecord(brand, brandId);
     if (nativeScopeRecord(location, locationId).brandId !== brandId) throw new PrintIntentPolicyError('policy_unverified');
-    const result = (policyRevision: number | null, targets: PreparedPrintIntentPolicy['targets']): PreparedPrintIntentPolicy => Object.freeze({
+    const result = (policyRevision: number | null, targets: PreparedPrintIntentPolicy['targets'], skipReason?: AutomaticPrintSkipReason): PreparedPrintIntentPolicy => Object.freeze({
       brandId, locationId, policyRevision, enabled: targets.length > 0,
-      dispatchAuthorized: false as const, targets: Object.freeze(targets),
+      dispatchAuthorized: false as const, targets: Object.freeze(targets), ...(skipReason ? { skipReason } : {}),
     });
     const automatic = await readBrandAutomaticPrintPolicy(context, brandId);
     if (automatic) {
-      if (!automatic.enabled || !['active', 'trialing'].includes(String(nativeBrand.status))) return result(automatic.revision, []);
+      if (!automatic.enabled) return result(automatic.revision, [], 'disabled');
+      if (!['active', 'trialing'].includes(String(nativeBrand.status))) return result(automatic.revision, [], 'brand_inactive');
       if (scope.data.orderId !== undefined) {
         const order = await transaction.get(db.collection('orders').doc(scope.data.orderId));
         const row = nativeScopeRecord(order, scope.data.orderId);
@@ -119,14 +121,14 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
         const createdAt = timestamp && typeof timestamp.toMillis === 'function' ? timestamp.toMillis()
           : timestamp && Number.isSafeInteger(timestamp.seconds) && Number.isInteger(timestamp.nanoseconds)
             ? timestamp.seconds! * 1000 + Math.floor(timestamp.nanoseconds! / 1_000_000) : NaN;
-        if (!Number.isSafeInteger(createdAt) || createdAt < automatic.enabledAt! || createdAt > Date.now()) return result(automatic.revision, []);
+        if (!Number.isSafeInteger(createdAt) || createdAt < automatic.enabledAt! || createdAt > Date.now()) return result(automatic.revision, [], 'outside_activation');
         try { await projectNativePrintCatalog(context, { orderId: scope.data.orderId, brandId, locationId }); }
-        catch (error) { if (error instanceof PrintCatalogProjectionError) return result(automatic.revision, []); throw error; }
+        catch (error) { if (error instanceof PrintCatalogProjectionError) return result(automatic.revision, [], error.code); throw error; }
       }
       const targets = await prepareAutomaticOutputTargets(context, { brandId, locationId }, automatic);
-      return Object.freeze({ ...result(automatic.revision, targets), automaticActivationId: automatic.activationId! });
+      return Object.freeze({ ...result(automatic.revision, targets, targets.length ? undefined : 'no_available_target'), automaticActivationId: automatic.activationId! });
     }
-    if (!saved.exists) return result(null, []); // Explicit default OFF; no fallback.
+    if (!saved.exists) return result(null, [], 'not_configured'); // Explicit default OFF; no fallback.
     const parsed = policySchema.safeParse(boundedSnapshot(saved.data(), 'policy_unverified'));
     if (!parsed.success || saved.id !== 'original' || parsed.data.brandId !== brandId || parsed.data.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');
     const policy = parsed.data;
@@ -137,9 +139,9 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     }
     // OFF policies have no latent targets; ON policies must select explicitly.
     if (policy.enabled !== (policy.targets.length > 0)) throw new PrintIntentPolicyError('policy_unverified');
-    if (!policy.enabled) return result(policy.revision, []);
+    if (!policy.enabled) return result(policy.revision, [], 'disabled');
     if (policy.supervisedOrderTest) {
-      if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, []);
+      if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, [], 'output_disabled');
       if (scope.data.orderId !== undefined) {
         // A test window must not make unrelated, supported checkout purchases
         // fail because their native projection is outside this printer pilot.
@@ -152,7 +154,7 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
         } catch (error) {
           // Only a known unsupported/invalid printing projection suppresses
           // the pilot. Unknown database failures still fail the transaction.
-          if (error instanceof PrintCatalogProjectionError) return result(policy.revision, []);
+          if (error instanceof PrintCatalogProjectionError) return result(policy.revision, [], error.code);
           throw error;
         }
       }
@@ -179,7 +181,7 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
           || !p.success || p.data.revision !== target.printerRevision || p.data.configuration.state !== 'active'
           || p.data.configuration.brandId !== brandId || p.data.configuration.locationId !== locationId
           || p.data.configuration.id !== target.printerId || p.data.configuration.model !== window.data.model
-          || p.data.configuration.paperWidthMm !== window.data.paperWidthMm || p.data.configuration.transport !== 'cloudprnt-http') return result(policy.revision, []);
+          || p.data.configuration.paperWidthMm !== window.data.paperWidthMm || p.data.configuration.transport !== 'cloudprnt-http') return result(policy.revision, [], 'test_window_unavailable');
       }
     }
     const targets = await Promise.all(policy.targets.map(async target => {
@@ -202,7 +204,7 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     // saved policy or block the caller's ordinary received-money settlement.
     const status = Object.getOwnPropertyDescriptor(nativeBrand, 'status');
     const eligible = status && 'value' in status && (status.value === 'active' || status.value === 'trialing');
-    return result(policy.revision, eligible ? targets : []);
+    return result(policy.revision, eligible ? targets : [], eligible ? undefined : 'brand_inactive');
   } catch (error) {
     if (error instanceof PrintIntentPolicyError) throw error;
     throw new PrintIntentPolicyError('policy_unavailable');

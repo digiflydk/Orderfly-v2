@@ -35,7 +35,7 @@ async function fixture(menu = false) {
     ['categories/cat', { isActive: true, locationIds: ['l1'] }],
   ]);
   if (menu) {
-    rows.set('combos/menu', {brandId:'b1',locationIds:['l1'],isActive:true});
+    rows.set('comboMenus/menu', {brandId:'b1',locationIds:['l1'],isActive:true});
     for(const id of ['cola','dip']) rows.set('products/'+id,{brandId:'b1',productName:id,isActive:true,locationIds:['l1'],categoryId:'cat'});
     rows.get('orders/o1').productItems=[{id:'menu',itemType:'combo',name:'Pizzamenu',quantity:2,toppings:['Margherita: Almindelig bund'],comboSelections:[
       {groupName:'Pizza',products:[{id:'pizza',name:'Margherita',modifiers:[{id:'base',quantity:1}]}]},

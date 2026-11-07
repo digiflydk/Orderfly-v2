@@ -137,7 +137,7 @@ export async function projectNativePrintCatalog(context: NativeTransactionContex
   });
   if (prepared.length > PRINT_CATALOG_PROJECTION_LIMITS.lines) fail('projection_too_large');
   for (const id of comboIds) {
-    const combo = await read('combos', id);
+    const combo = await read('comboMenus', id);
     if (field(combo, 'brandId') !== brandId || field(combo, 'isActive') !== true) fail('invalid_catalog');
     nativeLocations(combo, locationId, true);
   }

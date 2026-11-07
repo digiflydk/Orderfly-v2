@@ -79,3 +79,14 @@ test('archived expired offers retain one dispatch row in print log',async()=>{
  f.records.set(f.path+'/ordinaryDispatches/q',{...base,jobId:'q',job:base,state:'offered',offeredAt:1000,expiresAt:61000,downloadedAt:null,completedAt:null});
  const result=await f.read.readPrintLog({brandId:'b'});assert.equal(result.items.length,1);assert.equal(result.items[0].status,'expired');assert.ok(result.items[0].id.includes('/ordinaryDispatches/'));
 });
+test('skipped orders remain visible without a printer and paginate with jobs without leaking data',async()=>{
+ const f=fixture();f.records.set('locations/empty',{brandId:'b',name:'No printer'});
+ for(const orderId of ['ORD-S1','ORD-S2'])f.records.set('locations/empty/automaticPrintSkips/'+orderId,{schemaVersion:1,brandId:'b',locationId:'empty',orderId,reason:'invalid_catalog',createdAt:1000});
+ f.records.set(f.path+'/manualPrintRequests/m',manual);
+ let cursor,items=[];do{const page=await f.read.readPrintLog({brandId:'b',limit:1,cursor});items.push(...page.items);cursor=page.nextCursor;assert.ok(items.length<=3);}while(cursor);
+ assert.equal(items.length,3);assert.equal(items.filter(x=>x.status==='skipped').length,2);assert.equal(new Set(items.map(x=>x.id)).size,3);
+ assert.equal(items.find(x=>x.status==='skipped').error,'Varerne kan ikke valideres mod lokationens katalog.');
+ f.records.set('locations/empty/automaticPrintSkips/ORD-S1',{schemaVersion:1,brandId:'foreign',locationId:'empty',orderId:'ORD-S1',reason:'invalid_catalog',createdAt:1000});
+ await assert.rejects(f.read.readPrintLog({brandId:'b'}),e=>e.code==='print_log_unavailable');
+ for(const raw of [{schemaVersion:1,brandId:'b',locationId:'l',orderId:'ORD-1',reason:'raw-secret',createdAt:1000},{schemaVersion:1,brandId:'b',locationId:'l',orderId:'ORD-1',reason:'disabled',createdAt:1000,customer:'SECRET'}])assert.throws(()=>domain.projectSkippedPrintLog('ORD-1',raw,scope));
+});

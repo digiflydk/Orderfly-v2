@@ -34,6 +34,7 @@ test('print log: brand isolation, statuses, pagination, failures and mobile layo
     const url = new URL(route.request().url());
     calls.push({ method:route.request().method(), brand:url.searchParams.get('brandId'), cursor:url.searchParams.get('cursor') });
     if (mode === 'delay') { pending=route; return; }
+    if (mode === 'skipped') return route.fulfill({json:{items:[{...item,source:'automatic',status:'skipped',printerId:'unassigned',printerName:'Ikke sendt til printer',error:'Varerne kan ikke valideres mod lokationens katalog.'}],nextCursor:null}});
     if (mode === 'error') return route.fulfill({status:503,json:{error:'unavailable'}});
     if (mode === 'large') return route.fulfill({status:503,json:{error:'print_log_scope_too_large'}});
     if (mode === 'denied') return route.fulfill({status:403,json:{error:'forbidden'}});
@@ -63,6 +64,12 @@ test('print log: brand isolation, statuses, pagination, failures and mobile layo
   await expect(page.getByText('Overførsel startet',{exact:true})).toBeVisible();
   assert.equal(calls.at(-1).cursor,null);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth > innerWidth),false);
+  await page.getByRole('combobox').selectOption('brandA');
+  mode='skipped'; await page.getByRole('button',{name:'Opdater',exact:true}).click();
+  await expect(page.getByText('Ikke sendt',{exact:true})).toBeVisible();
+  await expect(page.getByText('Varerne kan ikke valideres mod lokationens katalog.')).toBeVisible();
+  await expect(page.getByText('Ikke sendt til printer',{exact:true})).toBeVisible();
+  await page.getByRole('combobox').selectOption('brandB');
   mode='error'; await page.getByRole('button',{name:'Opdater',exact:true}).click();
   await expect(page.getByRole('alert')).toContainText('kunne ikke indlæses');
   await expect(page.getByRole('link',{name:'ORD-B'})).toHaveCount(0);

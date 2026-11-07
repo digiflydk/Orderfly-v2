@@ -35,6 +35,7 @@ test('#549 supervised pilot preserves unpaid unsupported acceptance without part
     assert.equal(f.records.has('orders/order/printIntents/original'), false);
     assert.equal(f.records.has(printerPath + '/queue/state'), false);
     assert.equal([...f.records.keys()].some(p => p.includes('/jobs/')), false);
+    const skip=f.records.get('locations/l/automaticPrintSkips/order');assert.ok(skip);assert.equal(skip.orderId,'order');assert.ok(['invalid_catalog','projection_too_large','invalid_order'].includes(skip.reason));
     }
   } finally {
     if (before === undefined) delete process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
@@ -85,7 +86,7 @@ test('#506 actual native acceptance commits Received, notification, canonical ma
 test('#506 process OFF and native policy OFF preserve acceptance without original writes',async()=>{
  const old=process.env.ORDERFLY_PRINT_INTENTS_ENABLED;
  try {for(const off of ['process','policy']) {const f=await fixture();process.env.ORDERFLY_PRINT_INTENTS_ENABLED=off==='process'?'false':'true';if(off==='policy')Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});
- assert.equal(await f.accept(),null);assert.equal(f.records.get('orders/order').status,'Received');assert.equal(f.records.has('orders/order/printIntents/original'),false);assert.equal(f.events.some(([m,p])=>m!=='get'&&p.includes('/printers/')),false);}}
+ const result=await f.accept();if(off==='process')assert.equal(result,null);else {assert.equal(result.writeCount,1);assert.equal(f.records.get('locations/l/automaticPrintSkips/order').reason,'disabled');}assert.equal(f.records.get('orders/order').status,'Received');assert.equal(f.records.has('orders/order/printIntents/original'),false);assert.equal(f.events.some(([m,p])=>m!=='get'&&p.includes('/printers/')),false);}}
  finally{if(old===undefined)delete process.env.ORDERFLY_PRINT_INTENTS_ENABLED;else process.env.ORDERFLY_PRINT_INTENTS_ENABLED=old;}
 });
 test('#506 late job/ledger/notification failure rolls back acceptance, manifest and every queue mutation',()=>enabled(async()=>{
@@ -158,3 +159,5 @@ test('#506 lost acceptance commit response keeps holds and disallows blind retry
  assert.equal(f.records.has('orders/ORD-TEST/printIntents/original'),true);
  assert.equal(f.events.includes('release'),false);assert.equal(f.events.includes('stripe'),false);
 }));
+
+test('unpaid skip plan requires actual acceptance apply and remains atomic on skip write failure',()=>enabled(async()=>{const f=await fixture();Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});await f.run(async c=>{const acceptance=await f.acceptance.preparePickupCheckoutAcceptance(c,input);const skip=await f.adapter.prepareUnpaidAcceptanceOriginals(c,acceptance.capability);assert.throws(()=>skip.apply(),/Unverified/);});const g=await fixture({failPath:'locations/l/automaticPrintSkips/'});Object.assign(g.records.get(policyPath),{enabled:false,targets:[]});const before=structuredClone([...g.records]);await assert.rejects(g.accept(),/late failure/);assert.deepEqual([...g.records],before);}));

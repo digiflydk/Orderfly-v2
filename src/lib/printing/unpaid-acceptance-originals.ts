@@ -1,3 +1,4 @@
+import { prepareAutomaticPrintSkip } from './automatic-print-skip-native';
 import 'server-only';
 import { createHash } from 'node:crypto';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
@@ -18,7 +19,11 @@ export async function prepareUnpaidAcceptanceOriginals(context: NativeTransactio
   const { id: orderId, brandId, locationId } = authority.order;
   const scope = { brandId, locationId };
   const policy = await preparePrintIntentTargetPolicy(context, { ...scope, orderId });
-  if (!policy.enabled) return null;
+  if (!policy.enabled) {
+    if (!policy.skipReason) return null;
+    const skip = await prepareAutomaticPrintSkip(context, { ...scope, orderId }, policy.skipReason);
+    return { ...skip, apply() { readPickupAcceptanceCapability(context, capability, true); skip.apply(); } };
+  }
   const [catalog, saved] = await Promise.all([
     projectNativePrintCatalog(context, { orderId, ...scope }), prepareSavedPrinterRouting(context, scope),
   ]);

@@ -562,7 +562,7 @@ test('permanent Stripe menu settlement creates component-routed manifests and jo
  try{
   const f=await fixture();activatePermanent(f);f.records.delete(policyPath);
   const ordinary=f.order().productItems[0];
-  f.records.set('combos/menu',{brandId:'b',locationIds:['l'],isActive:true});
+  f.records.set('comboMenus/menu',{brandId:'b',locationIds:['l'],isActive:true});
   for(const id of ['cola','dip']){
    f.records.set('products/'+id,{brandId:'b',locationIds:['l'],categoryId:'sides',isActive:true,productName:id});
   }
@@ -581,3 +581,10 @@ test('permanent Stripe menu settlement creates component-routed manifests and jo
   const original=structuredClone([...f.records]);assert.equal(await f.settle(),false);assert.deepEqual([...f.records],original);
  }finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
 });
+test('disabled automatic print records one scoped skip with successful payment and never backfills on replay',async()=>{
+ const f=await fixture({retry:true});f.records.delete('locations/l/automaticPrintSkips/'+f.orderId);Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});
+ assert.equal(await f.settle(),true);const path='locations/l/automaticPrintSkips/'+f.orderId,saved=structuredClone(f.records.get(path));
+ assert.equal(saved.reason,'disabled');assert.equal(saved.orderId,f.orderId);assert.equal(f.jobs().length,0);assert.equal(f.order().paymentStatus,'Paid');
+ assert.equal(await f.settle(),false);assert.deepEqual(f.records.get(path),saved);assert.doesNotMatch(JSON.stringify(saved),/customer|token|secret/i);
+});
+test('skip write failure rolls back payment transaction',async()=>{const f=await fixture({failPath:'locations/l/automaticPrintSkips/'});f.records.delete('locations/l/automaticPrintSkips/'+f.orderId);Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});const before=structuredClone([...f.records]);await assert.rejects(f.settle(),/late write failure/);assert.deepEqual([...f.records],before);});

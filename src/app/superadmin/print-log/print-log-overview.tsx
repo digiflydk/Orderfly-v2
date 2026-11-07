@@ -8,13 +8,13 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 
 type Brand = { id: string; name: string };
 type Location = { id: string; name: string; brandId: string };
-type Status = 'queued' | 'offered' | 'download_started' | 'confirmed' | 'failed' | 'unknown' | 'expired';
+type Status = 'queued' | 'offered' | 'download_started' | 'confirmed' | 'failed' | 'unknown' | 'expired' | 'skipped';
 type Item = { id: string; brandId: string; locationId: string; locationName: string; printerId: string; printerName: string;
   orderId: string; kind: 'kitchen' | 'customer' | 'packing'; source: 'automatic' | 'manual'; status: Status;
   createdAt: number; updatedAt: number; error: string | null };
 type LogPage = { items: Item[]; nextCursor: string | null };
 const statusLabels: Record<Status, string> = { queued: 'I kø', offered: 'Tilbudt printer', download_started: 'Overførsel startet',
-  confirmed: 'Bekræftet af printer', failed: 'Fejlet', unknown: 'Ukendt resultat', expired: 'Udløbet' };
+  confirmed: 'Bekræftet af printer', failed: 'Fejlet', unknown: 'Ukendt resultat', expired: 'Udløbet', skipped: 'Ikke sendt' };
 const kindLabels = { kitchen: 'Køkkenbon', customer: 'Kundekvittering', packing: 'Pakkebon' };
 const date = new Intl.DateTimeFormat('da-DK', { dateStyle: 'short', timeStyle: 'medium', timeZone: 'Europe/Copenhagen' });
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;
@@ -92,7 +92,7 @@ export function PrintLogOverview({ brands, locations }: { brands: Brand[]; locat
     {current?.page && <>
       {current.page.items.length === 0 ? <p>Ingen printjob på denne side.</p> : <div className="rounded-md border overflow-x-auto">
         <Table aria-label="Printjob">
-          <TableHeader><TableRow><TableHead>Oprettet</TableHead><TableHead>Ordre</TableHead><TableHead>Lokation / printer</TableHead><TableHead>Printtype</TableHead><TableHead>Status</TableHead><TableHead>Senest opdateret</TableHead><TableHead>Fejl</TableHead></TableRow></TableHeader>
+          <TableHeader><TableRow><TableHead>Oprettet</TableHead><TableHead>Ordre</TableHead><TableHead>Lokation / printer</TableHead><TableHead>Printtype</TableHead><TableHead>Status</TableHead><TableHead>Senest opdateret</TableHead><TableHead>Årsag / fejl</TableHead></TableRow></TableHeader>
           <TableBody>{current.page.items.map(row => <TableRow key={row.id}>
             <TableCell><Time value={row.createdAt} /></TableCell>
             <TableCell><a className="font-medium underline underline-offset-4 whitespace-nowrap" href={`/superadmin/sales/orders/${encodeURIComponent(row.orderId)}/${row.kind === 'customer' ? 'receipt' : 'kitchen-receipt'}`}>{row.orderId}</a></TableCell>
