@@ -1,4 +1,4 @@
-.stamp-celebration{width:calc(100% - 32px);max-width:440px;max-height:calc(100dvh - 32px);overflow:auto;padding:32px 24px 20px;border:1px solid #8e753e;border-radius:24px;background:#111713;color:#fff;gap:16px;isolation:isolate}
+.stamp-celebration{display:grid;width:calc(100% - 32px);max-width:440px;max-height:calc(100dvh - 32px);overflow:auto;padding:32px 24px 20px;border:1px solid #8e753e;border-radius:24px;background:#111713;color:#fff;gap:16px;isolation:isolate}
 .stamp-celebration-emblem{display:grid;place-items:center;margin:0 auto;width:72px;height:72px;border-radius:50%;background:#e8be63;color:#171810;animation:stamp-land 900ms both}
 .stamp-celebration-card{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;justify-items:center;padding:16px 0}
 .stamp-slot{display:grid;place-items:center;width:48px;height:48px;border:1px dashed #6e756d;border-radius:50%;color:#aeb5ab}
