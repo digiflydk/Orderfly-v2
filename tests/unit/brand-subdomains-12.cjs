@@ -16,7 +16,7 @@ test('#12 slugs are suggested from brand names with Danish letters spelled out',
 test('#12 invalid, too short/long and reserved slugs are rejected with a reason', () => {
   assert.equal(lib.brandSlugError('esmeralda'), null);
   for (const bad of ['E', 'Esmeralda', '-esmeralda', 'esmeralda-', 'esme_ralda', 'esmé', 'a'.repeat(41)]) assert.ok(lib.brandSlugError(bad), bad);
-  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant', 'terminal', 'login', 'm3pizza']) assert.match(lib.brandSlugError(reserved), /reserveret/);
+  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant', 'terminal', 'login', 'kasse', 'm3pizza']) assert.match(lib.brandSlugError(reserved), /reserveret/);
 });
 
 test('#12 duplicate slugs get free alternatives', () => {
@@ -40,7 +40,7 @@ test('#12 subdomain paths are scoped to that brand; app-wide paths pass through'
   assert.equal(lib.brandSubdomainRewrite('/esmeralda/esmeralda-pizza-amager', 'esmeralda'), null);
   // Another brand's path never escapes this brand's scope.
   assert.equal(lib.brandSubdomainRewrite('/other-brand/amager', 'esmeralda'), '/esmeralda/other-brand/amager');
-  for (const path of ['/_next/static/x.js', '/fonts/inter/inter-latin-wght-normal.woff2', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/login', '/terminal/login', '/terminal/orders', '/robots.txt', '/icon.png'])
+  for (const path of ['/_next/static/x.js', '/fonts/inter/inter-latin-wght-normal.woff2', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/login', '/kasse', '/terminal/login', '/terminal/orders', '/robots.txt', '/icon.png'])
     assert.equal(lib.brandSubdomainRewrite(path, 'esmeralda'), null, path);
 });
 

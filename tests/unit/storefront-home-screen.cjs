@@ -131,3 +131,28 @@ test('unusable logo still returns a valid square background without Orderfly ass
   const png=await image.homeScreenIcon(180,null,'#123456');const meta=await sharp(png).metadata();assert.equal(meta.width,180);
   const center=await sharp(png).extract({left:90,top:90,width:1,height:1}).raw().toBuffer();assert.deepEqual([...center.subarray(0,3)],[18,52,86]);
 });
+
+
+test('merchant mobile identity uses host brand icons and a distinct counter start URL',async()=>{
+ const loads=[];const fixtureBrand={slug:'esmeralda',name:'Esmeralda',background:'#ffffff',logoUrl:null};
+ const mocks={'server-only':{},'next/headers':{headers:async()=>new Headers({host:'esmeralda.orderfly.dk'})},
+  '@/lib/server/storefront-home-screen':{loadStorefrontHomeScreen:async(slug,host)=>{loads.push({slug,host});return slug==='esmeralda'?fixtureBrand:null;}}};
+ const helper=loadTs('src/lib/server/merchant-home-screen.ts',mocks);
+ const metadata=await helper.merchantInstallMetadata();
+ assert.equal(metadata.applicationName,'Esmeralda');assert.equal(metadata.icons.apple[0].url,helper.ESMERALDA_MERCHANT_ICON);
+ assert.equal(metadata.manifest,'/api/merchant/manifest');assert.equal(metadata.appleWebApp.title,'Esmeralda');
+ assert.equal(await helper.merchantInstallBrand('orderfly.dk'),null);
+ assert.equal(await helper.merchantInstallBrand('esmeralda.orderfly.dk.evil.test'),null);
+ const route=loadTs('src/app/api/merchant/manifest/route.ts',mocks);
+ const result=await route.GET(new Request('https://esmeralda.orderfly.dk/api/merchant/manifest',{headers:{host:'esmeralda.orderfly.dk'}}));
+ const manifest=await result.json();assert.equal(result.status,200);assert.equal(manifest.id,'/merchant');assert.equal(manifest.start_url,'/kasse');assert.equal(manifest.scope,'/');assert.equal(manifest.icons[0].src,helper.ESMERALDA_MERCHANT_ICON);assert.equal(manifest.icons[0].sizes,'256x256');
+ assert.equal((await route.GET(new Request('https://unknown.orderfly.dk/api/merchant/manifest',{headers:{host:'unknown.orderfly.dk'}}))).status,404);
+ assert.equal((await route.GET(new Request('https://esmeralda.orderfly.dk/api/merchant/manifest',{headers:{host:'esmeralda.orderfly.dk','x-forwarded-host':'unknown.orderfly.dk'}}))).status,404);
+});
+
+test('short counter entry preserves login destination without bypassing merchant access',async()=>{
+ for(const session of [null,{actorId:'fixture'}]){
+  const page=loadTs('src/app/kasse/page.tsx',{'@/lib/server/merchant-home-screen':{},'@/lib/access/orderfly-session':{orderflySession:async()=>session},'next/navigation':{redirect:url=>{throw Object.assign(Error('redirect'),{url});}}}).default;
+  await assert.rejects(page(),error=>error.url===(session?'/merchant/stamp-card':'/login?next=%2Fmerchant%2Fstamp-card'));
+ }
+});

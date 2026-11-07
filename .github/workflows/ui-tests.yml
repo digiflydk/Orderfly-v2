@@ -72,7 +72,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Esmeralda V2 image generation, routing and exact-source checks
-        run: node --test tests/unit/esmeralda-menu-thumbnails.cjs tests/unit/lighthouse-image-url.cjs tests/unit/esmeralda-menu-images.cjs tests/unit/brand-subdomains-12.cjs
+        run: node --test tests/unit/esmeralda-menu-thumbnails.cjs tests/unit/lighthouse-image-url.cjs tests/unit/esmeralda-menu-images.cjs tests/unit/brand-subdomains-12.cjs tests/unit/storefront-home-screen.cjs tests/unit/storefront-home-screen-browser.cjs
 
       - name: Esmeralda V2 menu, products, combos and checkout browser checks
         timeout-minutes: 12

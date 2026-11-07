@@ -81,3 +81,7 @@ Kunden og de oprindelige ordrer slettes ikke af en Club-udmeldelse.
 ## Merchant-login
 
 Personalets korte loginadresse er `https://esmeralda.orderfly.dk/login`. Den viser den eksisterende restaurant-loginformular direkte og bevarer den korte URL. Login bruger fortsat navn/e-mail og PIN samt den eksisterende sessions- og adgangskontrol. Efter login åbnes merchantportalen; medarbejdere med kun kasseadgang sendes fortsat til stempelkassen. Gamle `/admin-login?next=%2Fmerchant`-links virker fortsat.
+
+### Mobilgenvej og direkte kasse
+
+`https://esmeralda.orderfly.dk/kasse` åbner stempelkassen og bevarer destinationen gennem login. Den eksisterende kasseside og API kontrollerer fortsat medarbejderens rettigheder. `/login` og merchant-siderne bruger brandets eksisterende logo-ikoner, også Apple touch icon. Esmeralda bruger det originale 256×256 Apple-ikon fra restaurantens hjemmeside, da det genererede webshopikon i live-kontrollen var hvidt. Merchant-manifestet har egen identitet og starter på `/kasse`, så en installeret medarbejdergenvej ikke åbner webshoppen. Branding bestemmes af værtsnavnet og udleveres ikke for ukendte/inaktive brands. Allerede gemte mobilgenveje skal eventuelt fjernes og tilføjes igen for at opdatere ikonet.

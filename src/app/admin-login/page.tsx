@@ -8,7 +8,8 @@ import { usePathname, useSearchParams } from 'next/navigation';
 function AdminLoginForm() {
   const pathname=usePathname();
   const next=useSearchParams().get('next');
-  const merchantLogin=pathname==='/login'||next==='/merchant';
+  const counterLogin=next==='/merchant/stamp-card';
+  const merchantLogin=pathname==='/login'||next==='/merchant'||counterLogin;
   const [method,setMethod]=useState<'opsfly'|'firebase'>('opsfly');
   const [pending,setPending]=useState(false),[error,setError]=useState('');
   const [ready,setReady]=useState(false);
@@ -45,7 +46,7 @@ function AdminLoginForm() {
         const body=await response.json().catch(()=>({}));
         // A new login restarts the counter view's idle timer (see merchant/stamp-card).
         try{sessionStorage.setItem('orderfly.counter.fresh-login','1');}catch{/* Private mode. */}
-        await clearFirebase?.();window.location.assign(body?.home==='/merchant/stamp-card'?body.home:merchantLogin?'/merchant':'/superadmin/sales/orders');
+        await clearFirebase?.();window.location.assign(body?.home==='/merchant/stamp-card'||counterLogin?'/merchant/stamp-card':merchantLogin?'/merchant':'/superadmin/sales/orders');
       } catch {setError('Kunne ikke logge ind. Prøv igen.');}
       finally {await clearFirebase?.().catch(()=>{});setPending(false);}
     }}>
