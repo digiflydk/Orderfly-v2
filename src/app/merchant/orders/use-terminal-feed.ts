@@ -1,4 +1,5 @@
 'use client';
+import { subscribeTerminalEvents } from './terminal-events-client';
 import { TERMINAL_SOUNDS, isTerminalSound, type TerminalSound } from '@/lib/orders/terminal-sounds';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalQuery, TerminalReadResult } from '@/lib/orders/terminal-types';
@@ -10,11 +11,14 @@ const TIMEOUT_MS = 25_000;
 // ordering of authorization evidence across foreground and background reads.
 let authorizationRevision = 0;
 let latestAuthorizationDenial = 0;
-export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders', notifications = true) {
+export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders', notifications = true, push = false) {
   const key = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== '') as [string, string][]).toString();
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [pushConnected, setPushConnected] = useState(false);
+  const [changeRevision, setChangeRevision] = useState(0);
+  const lastPushSignal = useRef<number | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const lastSuccessful = useRef<number | null>(null);
   const consecutiveFailures = useRef(0);
@@ -135,6 +139,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   useEffect(() => {
     const current = ++generation.current;
     active.current?.abort(); active.current = null;
+    lastPushSignal.current = null; setPushConnected(false);
     seen.current = null; nextCursor.current = null;
     setAuthorizedRevision(0);
     setData(null); setLastUpdated(null); setNewOrders(0); setError(''); setReconnecting(false); lastSuccessful.current = null; consecutiveFailures.current = 0;
@@ -143,7 +148,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      if (query.view === 'board' || !query.view) timer = setTimeout(() => void read(), POLL_MS);
+      if (query.view === 'board' || !query.view) {
+        if (!push || consecutiveFailures.current > 0) timer = setTimeout(() => void read(), push ? 60_000 : POLL_MS);
+      }
     };
     async function read(append = false) {
       if (disposed || (append && !nextCursor.current)) return;
@@ -210,7 +217,8 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
         if (disposed || generation.current !== current) return;
         setOffline(!navigator.onLine);
         consecutiveFailures.current++;
-        const retryFresh = !accessRejected && navigator.onLine && consecutiveFailures.current === 1 && lastSuccessful.current !== null && Date.now() - lastSuccessful.current < 45_000;
+        const snapshotCurrent = query.view && query.view !== 'board' || Date.now() - Math.max(lastSuccessful.current ?? 0, push ? (lastPushSignal.current ?? 0) : 0) < 45_000;
+        const retryFresh = !accessRejected && navigator.onLine && consecutiveFailures.current === 1 && lastSuccessful.current !== null && snapshotCurrent;
         setReconnecting(retryFresh);
         if (retryFresh) { pendingRefresh = true; return; }
         setError(failure instanceof Error && failure.name !== 'AbortError' ? failure.message : 'Forbindelsen tog for lang tid. Prøv igen.');
@@ -229,16 +237,28 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
     const offlineEvent = () => setOffline(true);
     document.addEventListener('visibilitychange', wake); window.addEventListener('focus', wake);
     window.addEventListener('online', online); window.addEventListener('offline', offlineEvent);
+    const stopEvents = push && query.brandId && query.locationId ? subscribeTerminalEvents(`${endpoint}/events?${new URLSearchParams({ brandId: query.brandId, locationId: query.locationId })}`, {
+      signal: () => { if (!disposed) { lastPushSignal.current = Date.now(); setPushConnected(true); } },
+      change: () => { if (!disposed) { setChangeRevision(value => value + 1); void read(); } },
+      disconnected: () => { if (!disposed) setPushConnected(false); },
+      denied: status => {
+        if (disposed) return;
+        latestAuthorizationDenial = ++authorizationRevision;
+        setDeniedRevision(latestAuthorizationDenial); setAuthorizedRevision(0); setData(null); setLastUpdated(null); nextCursor.current = null;
+        setDenialMessage(status === 401 ? 'Din session er udløbet. Log ind igen.' : 'Adgangen kontrolleres igen.');
+        void read();
+      },
+    }) : undefined;
     void read();
     return () => {
-      disposed = true; if (timer) clearTimeout(timer); active.current?.abort(); active.current = null;
+      disposed = true; stopEvents?.(); if (timer) clearTimeout(timer); active.current?.abort(); active.current = null;
       document.removeEventListener('visibilitychange', wake); window.removeEventListener('focus', wake);
       window.removeEventListener('online', online); window.removeEventListener('offline', offlineEvent);
     };
   // Query is serialized so caller object identity does not restart the feed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, beep, enabled, endpoint]);
-  const stale = lastUpdated !== null && (((!query.view || query.view === 'board') && Date.now() - lastUpdated > 45_000) || offline || !!error);
+  }, [key, beep, enabled, endpoint, push]);
+  const stale = lastUpdated !== null && (((!query.view || query.view === 'board') && Date.now() - Math.max(lastUpdated, push ? (lastPushSignal.current ?? 0) : 0) > 45_000) || offline || !!error);
   void tick;
-  return { data, loading, error, reconnecting, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
+  return { data, loading, error, changeRevision, reconnecting: reconnecting || (push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

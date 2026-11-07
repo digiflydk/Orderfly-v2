@@ -30,6 +30,7 @@ before(async()=>{
    if(url.pathname==='/api/terminal/auth/logout'){state.logoutCalls++;if(state.logoutStatus!==200)return reply(state.logoutStatus,{error:'unavailable'});state.valid.delete(saved);setCookie(res,'',0);return reply(200,{success:true});}
    if(url.pathname==='/api/terminal/auth/session'){state.renewCalls++;if(state.sessionStatus!==200)return reply(state.sessionStatus,{error:'unavailable'});if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});if(state.holdRenewal){state.heldRenewal=()=>{setCookie(res,saved);reply(200,session);};return;}setCookie(res,saved);return reply(200,session);}
    if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});
+   if(url.pathname==='/api/terminal/orders/events'){res.writeHead(200,{'content-type':'text/event-stream'});res.write('event: ready\ndata: {}\n\n');const timer=setInterval(()=>res.write('event: heartbeat\ndata: {}\n\n'),15000);res.on('close',()=>clearInterval(timer));return;}
    if(url.pathname==='/api/terminal/orders/payment'){state.paymentCalls++;if(state.paymentUnavailable){if(state.commitUncertain)state.paid=true;return reply(503,{error:'unavailable'});}state.paid=true;return reply(200,{success:true,changed:true,message:'Betalingen er registreret.'});}
    if(url.pathname==='/api/terminal/orders/status')return reply(200,{success:true,changed:true});
    if(url.pathname==='/api/terminal/orders/reprint'){state.printCalls++;return reply(200,{items:[],nextCursor:null});}

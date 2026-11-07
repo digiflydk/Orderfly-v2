@@ -23,7 +23,7 @@ function fixture({cookie=true,session={superuser:false,permissions:['orderfly.or
 }
 test('KDS uses existing order access for employee and superadmin, without name exceptions',async()=>{
  for(const session of [{superuser:true,permissions:[]},{superuser:false,permissions:['orderfly.orders:view']}]){
-  const f=fixture({session}),tree=await f.run(),children=tree.props.children;
+  const f=fixture({session}),tree=await f.run(),children=[tree.props.logoutControl,tree];
   assert.equal(children[1].type,f.employee);assert.equal(children[1].props.loginHref,'/kds/login');
   assert.equal(children[1].props.fixedScope,undefined);assert.equal(children[1].props.apiBase,'/api/kds/orders');assert.equal(children[1].props.actionApiBase,'/api/merchant/orders');assert.equal(children[1].props.initialLocations[0].brandName,'Esmeralda');
   assert.equal(children[0].type,f.logout);assert.equal(children[0].props.loginHref,'/kds/login');assert.equal(f.calls(),1);
