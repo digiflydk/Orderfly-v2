@@ -65,3 +65,17 @@ for(const width of [390,1280])test(`upsell exclusions can be saved and cleared (
  await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect.poll(()=>saves.length).toBe(2);
  for(const key of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])assert.deepEqual(saves[1].getAll(key),[]);
 });
+
+test('quantity ranges and dynamic heading templates survive the actual form',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(8000);let saved;
+ await page.route('**/save',async route=>{saved=await new Request('http://fixture/save',{method:'POST',headers:{'content-type':route.request().headers()['content-type']},body:route.request().postDataBuffer()}).formData();await route.fulfill({json:{error:false,message:'Saved'}});});
+ await page.goto(origin+'/upsell');
+ await page.getByLabel('Overskrift ved én matchende vare',{exact:true}).fill('Noget koldt til din pizza?');
+ await page.getByLabel('Overskrift ved flere matchende varer',{exact:true}).fill('Noget koldt til dine {antal} pizzaer?');
+ await page.getByRole('combobox',{name:'Trigger Type',exact:true}).click();await page.getByRole('option',{name:'Category in Cart',exact:true}).click();
+ await page.getByRole('combobox',{name:'Trigger Category',exact:true}).click();await page.getByRole('option',{name:'Drikkevarer',exact:true}).click();
+ await page.getByLabel('Mindst antal',{exact:true}).fill('3');await page.getByLabel('Højst antal',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.locator('p').filter({hasText:/^Maksimum skal være mindst minimum\.$/})).toBeVisible();assert.equal(saved,undefined);
+ await page.getByLabel('Højst antal',{exact:true}).fill('5');await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect.poll(()=>!!saved).toBe(true);
+ assert.equal(saved.get('headingPlural'),'Noget koldt til dine {antal} pizzaer?');assert.equal(JSON.parse(saved.get('triggerConditions'))[0].minQuantity,3);
+});

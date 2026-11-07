@@ -29,7 +29,7 @@ export function UpsellDialog({ upsellData, onContinue }: {upsellData: Storefront
   return <Dialog open onOpenChange={open => {if (!open) finish(false);}}>
     <DialogContent data-storefront-version={isV2 ? '2' : undefined} data-commerce-panel="upsell" className="w-[calc(100%-2rem)] max-w-lg max-h-[85dvh] overflow-y-auto flex flex-col gap-4 p-5 sm:p-6">
       <DialogHeader className="pr-8">
-        <DialogTitle>{upsell.upsellName || 'Lidt ekstra til din ordre'}</DialogTitle>
+        <DialogTitle>{upsell.displayHeading || upsell.upsellName || 'Lidt ekstra til din ordre'}</DialogTitle>
         <DialogDescription>{upsell.description || 'Vil du have lidt ekstra med, inden du går til kurven?'}</DialogDescription>
       </DialogHeader>
       <div aria-label="Tilbud til din ordre">

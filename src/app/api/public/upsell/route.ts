@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         const offer = await getActiveUpsellForCart(input.data);
         // Return only display terms and native product IDs; never expose admin
         // conditions, counters or internal records through a public endpoint.
-        const publicOffer = offer ? { upsell: { id: offer.upsell.id, upsellName: offer.upsell.upsellName, description: offer.upsell.description ?? null, discountType: offer.upsell.discountType, ...(offer.upsell.discountValue !== undefined ? { discountValue: offer.upsell.discountValue } : {}) }, products: offer.products.slice(0, 30).map(product => ({ id: product.id })) } : null;
+        const publicOffer = offer ? { upsell: { id: offer.upsell.id, upsellName: offer.upsell.upsellName, displayHeading: offer.upsell.displayHeading ?? offer.upsell.upsellName, description: offer.upsell.description ?? null, discountType: offer.upsell.discountType, ...(offer.upsell.discountValue !== undefined ? { discountValue: offer.upsell.discountValue } : {}) }, products: offer.products.slice(0, 30).map(product => ({ id: product.id })) } : null;
         return Response.json(publicOffer, { headers: { 'Cache-Control': 'no-store' } });
     }
     catch {

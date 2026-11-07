@@ -594,6 +594,8 @@ export type MinimalCartItem = {
 export type TriggerCondition = {
   id: string; // Unique ID for the condition in the array
   type: 'product_in_cart' | 'category_in_cart' | 'cart_value_over' | 'combo_in_cart' | 'product_tag_in_cart';
+  minQuantity?: number;
+  maxQuantity?: number;
   referenceId: string; // Product ID, Category ID, or cart value
 };
 
@@ -606,6 +608,9 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
+  headingSingular?: string;
+  headingPlural?: string;
+  displayHeading?: string;
   priority?: number;
   description?: string | null;
   imageUrl?: string | null;

@@ -1,7 +1,7 @@
 
 'use server';
 import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
-import { upsellTriggered, compareUpsells, upsellExcluded } from '@/lib/upsell-rules';
+import { upsellTriggered, compareUpsells, upsellExcluded, upsellHeading } from '@/lib/upsell-rules';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { linkedCartProductIds } from '@/lib/server/upsell-linked-options';
 import { promotionBoundary } from '@/lib/promotion-calendar';
@@ -44,13 +44,17 @@ const triggerConditionSchema = z.object({
     'product_tag_in_cart',
   ]),
   referenceId: z.string().min(1, 'A reference value is required.'),
-});
+  minQuantity: z.number().int().min(1).max(999).optional(),
+  maxQuantity: z.number().int().min(1).max(999).optional(),
+}).refine(v => !v.maxQuantity || v.maxQuantity >= (v.minQuantity ?? 1), {message:'Maksimum skal være mindst minimum.',path:['maxQuantity']});
 
 const upsellSchema = z.object({
     id: z.string().optional(),
     brandId: z.string().min(1, 'A brand must be selected.'),
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
+ headingSingular: z.string().max(160).optional(),
+ headingPlural: z.string().max(160).optional(),
     priority: z.coerce.number().int().min(0).max(9999).default(0),
     description: z.string().optional().nullable(),
     imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
@@ -122,6 +126,8 @@ export async function createOrUpdateUpsell(
 
       locationIds: formData.getAll('locationIds'),
       upsellName: formData.get('upsellName'),
+      headingSingular: formData.get('headingSingular') ?? undefined,
+      headingPlural: formData.get('headingPlural') ?? undefined,
       priority: formData.get('priority') ?? 0,
       description: formData.get('description'),
       imageUrl: formData.get('imageUrl'),
@@ -356,6 +362,7 @@ export async function getActiveUpsellForCart({
                   // Read only. UI telemetry records impressions when actually visible.
                   const serializableUpsell = {
                     ...upsell,
+                    displayHeading: upsellHeading(upsell, products[0].id, context.items, context.catalog, context.standardPrices),
                     startDate: toDate(upsell.startDate)?.toISOString(),
                     endDate: toDate(upsell.endDate)?.toISOString(),
                     createdAt: toDate(upsell.createdAt)?.toISOString(),

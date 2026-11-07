@@ -26,3 +26,8 @@ Regression coverage: `tests/unit/upsell-before-cart.cjs`, the existing upsell fo
 
 ## Display exclusions
 Campaigns optionally store `excludeProductIds`, `excludeCategoryIds`, and `excludeComboIds`. Any match suppresses the whole campaign and selection continues by priority. Product/category matching includes selected combo products and linked native toppings, resolved through the scoped public catalog. Existing campaigns default to empty exclusions. Clearing all selections persists empty arrays. These are display rules only: checkout trigger and discount validation remains unchanged so accepted discounts are not revoked by a subsequent excluded item. No production campaign is automatically configured.
+
+## Quantity ranges and customer headings
+Product/category/tag/menu triggers accept optional minQuantity (default 1) and maxQuantity (default unlimited). Quantities sum across matching standalone catalog rows; menu triggers count menus, not their nested components. The same rule validates checkout pricing. Value-over triggers retain existing arithmetic. When multiple OR triggers match, the first matching trigger supplies the heading count.
+
+Campaigns accept headingSingular and headingPlural (160 characters each). `{antal}` is substituted server-side using the matching quantity. The public DTO exposes only displayHeading, not templates or trigger rules. Empty templates retain upsellName for legacy campaigns. Example: category Pizza, quantity 1–2 offers cans; quantity 3+ offers a large bottle. Explicit exclusions still take precedence. No bottle capacity inference, automatic production campaign changes, or drink-to-meal coverage ratio is introduced.
