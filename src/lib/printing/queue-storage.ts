@@ -17,5 +17,6 @@ export const storedQueuedPrintJobSchema = z.object({
   schemaVersion: z.literal(1), ...scope, orderId: id, kind: z.enum(['kitchen', 'packing']),
   revision: z.literal(0), id: z.string().regex(/^[a-f0-9]{64}$/),
   printerRevision: integer.positive(), state: z.literal('queued'), attempts: z.literal(0),
+  scheduledFulfillmentAt: integer.optional(),
   createdAt: integer, updatedAt: z.unknown(), automaticActivationId: automaticActivationIdSchema.optional(),
 }).strict();

@@ -196,3 +196,12 @@ test('KDS service date includes today scheduled yesterday, excludes old active o
  await assert.rejects(f.readTerminalOrders({serviceDate:'2026-02-30'},now));
  const large=fixture({rows:Array.from({length:55},(_,i)=>order('z'+String(i).padStart(2,'0')))});const first=await large.readTerminalOrders({serviceDate:'2026-10-25'},now);await assert.rejects(large.readTerminalOrders({serviceDate:'2026-10-24',cursor:first.nextCursor},now));
 });
+
+test('KDS date snapshot includes same-day and later preorders with scoped settings; cursor cannot remove preorder filter', async () => {
+ const f=fixture({rows:[order('today'),order('yesterday',{fulfillmentAt:new Date('2026-10-24T16:00:00Z')}),order('later',{fulfillmentAt:new Date('2026-10-27T16:00:00Z')})]});
+ const data=await f.readTerminalOrders({view:'board',serviceDate:'2026-10-25',includePreorders:'1'},now);
+ assert.deepEqual(data.orders.map(x=>x.id).sort(),['later','today']);assert.deepEqual(data.kitchenSettings,{preorderMinutes:30,warningMinutes:5,overdueMinutes:5,sleepWhenClosed:true});assert.equal(data.kitchenSettingsRevision,0);
+ const large=fixture({rows:Array.from({length:60},(_,i)=>order(`o${String(i).padStart(3,'0')}`))});
+ const first=await large.readTerminalOrders({view:'board',serviceDate:'2026-10-25',includePreorders:'1'},now);
+ assert.ok(first.nextCursor);await assert.rejects(large.readTerminalOrders({view:'board',serviceDate:'2026-10-25',cursor:first.nextCursor},now));
+});

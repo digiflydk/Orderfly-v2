@@ -166,3 +166,13 @@ test('transaction retry after another winning original insert becomes a no-op', 
   assert.deepEqual(await f.insert(), { jobId: committed.jobId, created: false });
   assert.equal(f.records.get(queuePath).pendingCount, 1); assert.equal(f.records.get(queuePath).revision, 1);
 });
+
+test('future fulfillment is captured on original intent without changing deterministic identity', async () => {
+  const future = new Date(Date.now() + 86400_000);
+  const f = fixture({ savedOrder: { ...order, fulfillmentAt: future } });
+  const result = await f.insert(), job = f.records.get(`${path}/jobs/${result.jobId}`);
+  assert.equal(job.scheduledFulfillmentAt, future.getTime());
+  assert.deepEqual(await f.insert(), { jobId: result.jobId, created: false });
+  const immediate = fixture({ savedOrder: { ...order, fulfillmentAt: new Date(Date.now()-60000) } });
+  const next = await immediate.insert(); assert.equal(immediate.records.get(`${path}/jobs/${next.jobId}`).scheduledFulfillmentAt, undefined);
+});

@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, useMemo, type ReactNode } from 'react';
+import { KdsSettingsForm } from './kds-settings-form';
+import { parseKdsSettings, isKitchenPreorder, kitchenIsOpen, kitchenReleaseAt } from '@/lib/orders/kds-settings';
 import { TERMINAL_SOUNDS } from '@/lib/orders/terminal-sounds';
 import { kitchenDay, kitchenDeadline, kitchenOverdue } from '@/lib/orders/kitchen-clock';
 import type { TerminalLocation, TerminalOrder, TerminalQuery, TerminalView } from '@/lib/orders/terminal-types';
@@ -19,20 +21,26 @@ export type TerminalClientProps = {
   initialLocations?: TerminalLocation[];
   loginHref?: string;
   logoutControl?: ReactNode;
+  onAutomaticChange?: (active: boolean) => void;
   onLogout?: () => void;
   onAccessDenied?: () => void;
 };
-export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/api/merchant/orders', actionApiBase = apiBase, initialLocations, loginHref = '/login', logoutControl, onLogout, onAccessDenied }: TerminalClientProps = {}) {
+export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/api/merchant/orders', actionApiBase = apiBase, initialLocations, loginHref = '/login', logoutControl, onAutomaticChange, onLogout, onAccessDenied }: TerminalClientProps = {}) {
   const [now, setNow] = useState(Date.now());
   const [chosenDate, setChosenDate] = useState('');
-  const [overdueMinutes, setOverdueMinutes] = useState(5);
+  const [automaticDay, setAutomaticDay] = useState(() => kitchenDay(Date.now()));
+  const [automatic, setAutomatic] = useState(false), [sleeping, setSleeping] = useState(false);
+  const [preorderNotice, setPreorderNotice] = useState<string[]>([]);
+  useEffect(() => { try { setAutomatic(localStorage.getItem('orderfly.kds.automatic') !== 'false'); } catch {} }, []);
+  const live = !kitchenMode || automatic && !sleeping;
+  useEffect(() => { onAutomaticChange?.(live); }, [live, onAutomaticChange]);
   const [immersive, setImmersive] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<'sound' | 'orders'>('sound');
   const offset = useRef(0), alarmed = useRef(new Map<string, number>());
-  const day = chosenDate || kitchenDay(now);
+  const day = chosenDate || automaticDay;
+  useEffect(() => { if (live) setAutomaticDay(kitchenDay(now)); }, [live, now]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now() + offset.current), 1000); return () => clearInterval(timer); }, []);
-  useEffect(() => { try { const saved = localStorage.getItem('orderfly.kds.overdueMinutes'); if (saved !== null && Number.isFinite(Number(saved))) setOverdueMinutes(Math.max(0, Math.min(120, Number(saved)))); } catch {} }, []);
   useEffect(() => { if (!immersive) return; const overflow = document.body.style.overflow, overscroll = document.body.style.overscrollBehavior; document.body.style.overflow = 'hidden'; document.body.style.overscrollBehavior = 'none'; return () => { document.body.style.overflow = overflow; document.body.style.overscrollBehavior = overscroll; }; }, [immersive]);
   const [view, setView] = useState<TerminalView>('board');
   const [scope, setScope] = useState<{ brandId?: string; locationId?: string }>(fixedScope ?? (initialLocations?.[0] ? { brandId: initialLocations[0].brandId, locationId: initialLocations[0].locationId } : {}));
@@ -41,7 +49,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
   const [screenMessage, setScreenMessage] = useState('');
   const scopeResolved = !!scope.brandId && !!scope.locationId;
   const query: TerminalQuery = { ...scope, view, ...(view === 'history' ? filters : {}) };
-  const boardFeed = useTerminalFeed({ ...scope, view: 'board', ...(kitchenMode ? { serviceDate: day } : {}) }, true, apiBase, true, kitchenMode && (apiBase === '/api/kds/orders' || apiBase === '/api/terminal/orders'));
+  const boardFeed = useTerminalFeed({ ...scope, view: 'board', ...(kitchenMode ? { serviceDate: day, includePreorders: '1' as const } : {}) }, true, apiBase, true, kitchenMode && (apiBase === '/api/kds/orders' || apiBase === '/api/terminal/orders'), live);
   // The server may choose a default only during initial discovery. Pin that
   // restaurant for every subsequent read so revoked access fails closed rather
   // than silently changing the restaurant behind a cached history view.
@@ -53,16 +61,28 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
       });
     }
   }, [scopeResolved, boardFeed.data?.selectedBrandId, boardFeed.data?.selectedLocationId]);
-  const otherFeed = useTerminalFeed(query, view !== 'board' && scopeResolved, apiBase, false);
-  useEffect(() => { if (view !== 'board' && boardFeed.changeRevision > 0) otherFeed.refresh(); }, [boardFeed.changeRevision, view, otherFeed.refresh]);
-  const feed = view === 'board' ? boardFeed : otherFeed;
+  const otherFeed = useTerminalFeed(query, (view === 'history' || !kitchenMode && view === 'preorders') && scopeResolved, apiBase, false, false, live);
+  useEffect(() => { if ((view === 'history' || !kitchenMode && view === 'preorders') && boardFeed.changeRevision > 0) otherFeed.refresh(); }, [boardFeed.changeRevision, view, otherFeed.refresh]);
+  const feed = view === 'board' || kitchenMode && view === 'preorders' ? boardFeed : otherFeed;
+  const settingsKey = JSON.stringify(boardFeed.data?.kitchenSettings ?? {});
+  const settings = useMemo(() => parseKdsSettings(JSON.parse(settingsKey)), [settingsKey]);
+  const overdueMinutes = settings.overdueMinutes;
+  const allKitchenOrders = boardFeed.data?.orders ?? [];
+  const preorders = allKitchenOrders.filter(row => isKitchenPreorder(row, now, settings));
+  const activeKitchenOrders = allKitchenOrders.filter(row => !isKitchenPreorder(row, now, settings) && (kitchenDay(row.fulfillmentAt || row.createdAt || now) === day || !chosenDate && !!row.fulfillmentAt && Date.parse(row.fulfillmentAt) > now));
+  useEffect(() => {
+    const active = allKitchenOrders.some(row => !isKitchenPreorder(row, now, settings) && ['Received','In Progress','Ready'].includes(row.status));
+    const soon = preorders.some(row => (kitchenReleaseAt(row, settings) ?? Infinity) <= now + 60_000);
+    setSleeping(kitchenMode && settings.sleepWhenClosed && !!boardFeed.data && !kitchenIsOpen(boardFeed.data.openingHours, now) && !active && !soon);
+  }, [kitchenMode, settings, now, boardFeed.data]);
+  useEffect(() => { if (kitchenMode && boardFeed.newPreorders.length) setPreorderNotice(boardFeed.newPreorders); }, [kitchenMode, boardFeed.newPreorders]);
   const latestDenial = Math.max(boardFeed.deniedRevision, otherFeed.deniedRevision);
   const authorizationPending = boardFeed.authorizedRevision <= latestDenial || feed.authorizedRevision <= latestDenial;
   const denialMessage = boardFeed.deniedRevision >= otherFeed.deniedRevision ? boardFeed.denialMessage : otherFeed.denialMessage;
   const connectionError = authorizationPending && latestDenial > 0 ? denialMessage : feed.error || boardFeed.error;
   // A rejection invalidates selection as well as visibility. Restoring access
   // must not reopen a customer detail the operator selected before rejection.
-  useEffect(() => { if (latestDenial > 0) { setSelected(null); onAccessDenied?.(); } }, [latestDenial, onAccessDenied]);
+  useEffect(() => { if (latestDenial > 0) { setSelected(null); setPreorderNotice([]); onAccessDenied?.(); } }, [latestDenial, onAccessDenied]);
   useEffect(() => {
     if (view !== 'board' && latestDenial > 0 && boardFeed.authorizedRevision > latestDenial && otherFeed.authorizedRevision <= latestDenial) {
       otherFeed.refresh();
@@ -70,26 +90,26 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
   }, [view, latestDenial, boardFeed.authorizedRevision, otherFeed.authorizedRevision, otherFeed.refresh]);
   const disconnected = feed.offline || boardFeed.offline;
   const outdated = feed.stale || boardFeed.stale;
-  const refresh = () => { feed.refresh(); if (view !== 'board') boardFeed.refresh(); };
+  const refresh = () => { if (kitchenMode && !chosenDate && day !== kitchenDay(now)) setAutomaticDay(kitchenDay(now)); else boardFeed.refresh(); if (view === 'history' || !kitchenMode && view === 'preorders') otherFeed.refresh(); };
   const data = authorizationPending ? null : feed.data;
   const order = selected && data?.orders.find(row => row.id === selected.id);
   const locations = data?.locations ?? initialLocations ?? [];
   const selectedScope = scope.brandId && scope.locationId ? `${scope.brandId}/${scope.locationId}` : '';
   const pinnedLocation = initialLocations?.length === 1 ? initialLocations[0] : undefined;
-  const status = disconnected ? 'Offline' : outdated || connectionError ? 'Forbindelsen skal kontrolleres' : feed.reconnecting || boardFeed.reconnecting ? 'Genopretter forbindelse…' : feed.loading ? 'Opdaterer…' : 'Forbundet';
+  const status = kitchenMode && !automatic ? 'Manuel opdatering' : sleeping ? 'Nattilstand' : disconnected ? 'Offline' : outdated || connectionError ? 'Forbindelsen skal kontrolleres' : feed.reconnecting || boardFeed.reconnecting ? 'Genopretter forbindelse…' : feed.loading ? 'Opdaterer…' : 'Forbundet';
   useEffect(() => {
     if (boardFeed.data?.serverTime) { const server = Date.parse(boardFeed.data.serverTime); if (Number.isFinite(server)) offset.current = server - Date.now(); }
   }, [boardFeed.data?.serverTime]);
   useEffect(() => {
-    if (!kitchenMode || authorizationPending || boardFeed.stale || !boardFeed.sound || boardFeed.volume === 0 || boardFeed.soundError) return;
-    const overdue = (boardFeed.data?.orders ?? []).filter(row => kitchenOverdue(row, now, overdueMinutes));
+    if (!kitchenMode || sleeping || authorizationPending || !boardFeed.freshForAlerts || !boardFeed.sound || boardFeed.volume === 0 || boardFeed.soundError) return;
+    const overdue = (boardFeed.data?.orders ?? []).filter(row => !isKitchenPreorder(row, now, settings) && kitchenOverdue(row, now, overdueMinutes));
     const keys = new Set(overdue.map(row => `${row.brandId}/${row.locationId}/${row.id}/${kitchenDeadline(row)}`));
     for (const key of alarmed.current.keys()) if (!keys.has(key)) alarmed.current.delete(key);
     if ([...keys].some(key => now - (alarmed.current.get(key) ?? 0) >= 60_000)) {
       boardFeed.alertSound(); for (const key of keys) alarmed.current.set(key, now);
     }
-  }, [kitchenMode, now, overdueMinutes, authorizationPending, boardFeed.data, boardFeed.stale, boardFeed.sound, boardFeed.volume, boardFeed.soundError, boardFeed.alertSound]);
-  const renderKitchenOrder = (row: TerminalOrder) => <TerminalDetail inline refreshRevision={feed.authorizedRevision} key={row.id} order={row} now={now} readyTimeEndpoint={`${actionApiBase}/ready-time`} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <LazyKitchenReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} />;
+  }, [kitchenMode, now, overdueMinutes, authorizationPending, boardFeed.data, boardFeed.freshForAlerts, boardFeed.sound, boardFeed.volume, boardFeed.soundError, boardFeed.alertSound]);
+  const renderKitchenOrder = (row: TerminalOrder) => <TerminalDetail inline refreshRevision={feed.authorizedRevision} key={row.id} order={row} now={now} warningMinutes={settings.warningMinutes} overdueMinutes={settings.overdueMinutes} readyTimeEndpoint={`${actionApiBase}/ready-time`} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={(data?.canEdit ?? false) && !isKitchenPreorder(row, now, settings)} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit && !isKitchenPreorder(row, now, settings) ? <LazyKitchenReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} />;
   const choose = (row: TerminalOrder) => { boardFeed.clearNewOrders(); setSelected(row); };
   async function fullscreen() {
     setImmersive(true);
@@ -117,7 +137,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
         </label>
         <p className="text-sm text-slate-600">Melodi på 3,6 sekunder. Enhedens egen lydstyrke gælder også.</p>
         {boardFeed.soundError && <p role="status" className="w-full text-sm text-amber-900">{boardFeed.soundError}</p>}
-      </div>) : <div className="py-2"><label className="flex flex-wrap items-center gap-3">Alarm efter overskridelse (minutter)<input aria-label="Alarm efter minutter" type="number" min="0" max="120" className="min-h-12 w-24 rounded-lg border p-3" value={overdueMinutes} onChange={event => { const value = Math.max(0, Math.min(120, Math.round(Number(event.target.value)))); setOverdueMinutes(value); try { localStorage.setItem('orderfly.kds.overdueMinutes', String(value)); } catch {} }} /><span className="text-sm">Gentages hvert minut, indtil ordren er klar eller tiden ændres.</span></label></div>}
+      </div>) : <div className="space-y-5 py-2"><label className="flex items-center gap-3"><input type="checkbox" aria-label="Automatisk opdatering" checked={automatic} onChange={event => { setAutomatic(event.target.checked); try { localStorage.setItem('orderfly.kds.automatic', String(event.target.checked)); } catch {} }} />Automatisk opdatering på denne enhed</label><p className="text-sm">Slå fra for kun at hente data ved Opdater eller egne ordrehandlinger. Nye ordrer og alarmer kræver friske data.</p><KdsSettingsForm settings={settings} revision={boardFeed.data?.kitchenSettingsRevision ?? 0} brandId={scope.brandId} locationId={scope.locationId} endpoint={`${apiBase}/settings`} canEdit={!!boardFeed.data?.canEdit} onSaved={refresh} /></div>}
     </section> : (<details className="rounded-xl border bg-slate-50 p-3">
       <summary className="min-h-10 cursor-pointer font-semibold">Lydindstillinger · {boardFeed.sound ? 'Til' : 'Fra'} · {boardFeed.volume}%</summary>
       <div className="flex flex-wrap items-center gap-4 pt-2">
@@ -130,19 +150,20 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
         <p className="text-sm text-slate-600">Melodi på 3,6 sekunder. Enhedens egen lydstyrke gælder også.</p>
       </div>
     </details>)}
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><label className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">Restaurant{pinnedLocation ? <span className="text-base">{pinnedLocation.brandName} · {pinnedLocation.locationName}</span> : fixedScope ? <span className="text-base">{data ? `${data.locations.find(row => row.brandId === fixedScope.brandId && row.locationId === fixedScope.locationId)?.brandName || data.orders[0]?.brandName || 'Restaurant'} · ${data.locations.find(row => row.locationId === fixedScope.locationId)?.locationName || data.orders[0]?.locationName || 'Lokation'}` : 'Indlæser…'}</span> : <select aria-label="Restaurant" className="min-h-12 max-w-full rounded-lg border bg-white px-3 text-base" value={selectedScope} disabled={!locations.length} onChange={event => { const location = locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) { setSelected(null); setScope({ brandId: location.brandId, locationId: location.locationId }); } }}>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><label className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">Restaurant{pinnedLocation ? <span className="text-base">{pinnedLocation.brandName} · {pinnedLocation.locationName}</span> : fixedScope ? <span className="text-base">{data ? `${data.locations.find(row => row.brandId === fixedScope.brandId && row.locationId === fixedScope.locationId)?.brandName || data.orders[0]?.brandName || 'Restaurant'} · ${data.locations.find(row => row.locationId === fixedScope.locationId)?.locationName || data.orders[0]?.locationName || 'Lokation'}` : 'Indlæser…'}</span> : <select aria-label="Restaurant" className="min-h-12 max-w-full rounded-lg border bg-white px-3 text-base" value={selectedScope} disabled={!locations.length} onChange={event => { const location = locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) { setSelected(null); setPreorderNotice([]); setScope({ brandId: location.brandId, locationId: location.locationId }); } }}>
       {!locations.length && <option value="">Henter restauranter…</option>}{locations.map(location => <option key={`${location.brandId}/${location.locationId}`} value={`${location.brandId}/${location.locationId}`}>{location.brandName} · {location.locationName}</option>)}</select>}</label><div className="text-sm"><span className={`inline-block mr-2 h-2.5 w-2.5 rounded-full ${disconnected || outdated || connectionError ? 'bg-amber-500' : 'bg-emerald-600'}`} aria-hidden="true" /><span role="status">{status}</span>{feed.lastUpdated && <span className="ml-2 text-slate-500">Senest {new Date(feed.lastUpdated).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}</div></div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
       {kitchenMode && view === 'board' && <div className="flex flex-wrap items-center gap-3"><label className="font-semibold">Ordredato<input aria-label="Ordredato" type="date" value={day} onChange={event => setChosenDate(event.target.value)} className="ml-3 min-h-12 rounded-lg border p-2 text-lg" /></label><button className="min-h-12 rounded-lg border px-4 font-semibold" onClick={() => setChosenDate('')}>I dag</button></div>}
-    <nav aria-label="Ordrevisning" className="ml-auto flex flex-wrap justify-end gap-2">{tabs.map(tab => <button key={tab.value} aria-current={view === tab.value ? 'page' : undefined} className={`min-h-12 rounded-xl px-5 font-semibold ${view === tab.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`} onClick={() => { setSelected(null); setView(tab.value); }}>{tab.label}</button>)}</nav>
+    <nav aria-label="Ordrevisning" className="ml-auto flex flex-wrap justify-end gap-2">{tabs.map(tab => <button key={tab.value} aria-current={view === tab.value ? 'page' : undefined} className={`min-h-12 rounded-xl px-5 font-semibold ${view === tab.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`} onClick={() => { setSelected(null); setView(tab.value); }}>{tab.label}{' '}{kitchenMode && tab.value !== 'history' && <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-sm text-slate-900">{tab.value === 'preorders' ? preorders.filter(row => row.status === 'Received').length : activeKitchenOrders.filter(row => row.status === 'Received').length}</span>}</button>)}</nav>
     </div>
     {boardFeed.newOrders > 0 && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 font-semibold text-blue-900"><span>{boardFeed.newOrders === 1 ? 'Der er kommet en ny ordre' : `Der er kommet ${boardFeed.newOrders} nye ordrer`}</span><button className="min-h-11 rounded-lg border border-blue-200 px-4" onClick={() => { setView('board'); boardFeed.clearNewOrders(); }}>Vis nye ordrer</button></div>}
     {((!kitchenMode && boardFeed.soundError) || screenMessage) && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm">{(!kitchenMode && boardFeed.soundError) || screenMessage}</p>}
     {connectionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4"><p>{connectionError}</p><p className="mt-1 text-sm">Viste ordrer kan være forældede. Ingen ændring er bekræftet af denne fejl.</p><button className="mt-2 min-h-11 rounded-lg border bg-white px-4" disabled={feed.loading} onClick={refresh}>Prøv igen</button>{connectionError.includes('Log ind') && <a href={loginHref} className="ml-4 underline">Log ind igen</a>}</div>}
 
-    {view === 'board' && <TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
+    {kitchenMode && !authorizationPending && preorderNotice.length > 0 && <section role="alertdialog" aria-label="Forudbestilling modtaget" className="fixed inset-x-4 top-20 z-[120] mx-auto max-w-lg space-y-4 rounded-2xl border-4 border-blue-600 bg-white p-6 shadow-2xl"><h2 className="text-2xl font-bold">Forudbestilling modtaget</h2><p>{preorderNotice.join(', ')}</p><button className="min-h-14 rounded-xl bg-slate-900 px-6 text-lg font-semibold text-white" onClick={() => { setView('preorders'); setPreorderNotice([]); boardFeed.clearNewOrders(); }}>Vis forudbestillinger</button><button className="ml-3 min-h-14 rounded-xl border px-6" onClick={() => setPreorderNotice([])}>Luk</button></section>}
+    {view === 'board' && <TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={kitchenMode ? (data ? activeKitchenOrders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
     {view === 'history' && <TerminalHistory error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
-    {view === 'preorders' && <TerminalPreorders error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} serverTime={data?.serverTime} />}
+    {view === 'preorders' && <TerminalPreorders error={connectionError || undefined} onRetry={refresh} orders={kitchenMode ? (data ? preorders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} onReprint={!kitchenMode && data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} serverTime={data?.serverTime} />}
     {data && order && kitchenMode && <div><button className="min-h-12 rounded-lg border px-4" onClick={() => setSelected(null)}>Luk ordrevisning</button>{renderKitchenOrder(order)}</div>}
     {data && order && !kitchenMode && <TerminalDetail refreshRevision={feed.authorizedRevision} key={order.id} order={order} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <TerminalReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={order.id} brandId={order.brandId} locationId={order.locationId} /> : undefined} />}
     {!kitchenMode && <p className="text-xs text-slate-500">Hold siden åben for nye ordrer. Lyden skal aktiveres med et tryk og kan sættes på pause, når iPad låses.</p>}

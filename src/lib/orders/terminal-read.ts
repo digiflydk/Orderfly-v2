@@ -1,4 +1,5 @@
 import 'server-only';
+import { parseKdsSettings } from './kds-settings';
 import type { KdsScope } from './kds-scope';
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
@@ -21,7 +22,7 @@ const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
 const querySchema = z.object({
   brandId: id.optional(), locationId: id.optional(), view: z.enum(['board', 'history', 'preorders']).default('board'),
   cursor: z.string().max(4096).optional(), search: z.string().trim().max(100).optional(),
-  serviceDate: day.optional(), dateFrom: day.optional(), dateTo: day.optional(),
+  includePreorders: z.literal('1').optional(), serviceDate: day.optional(), dateFrom: day.optional(), dateTo: day.optional(),
 }).strict().refine(q => Boolean(q.brandId) === Boolean(q.locationId))
   .refine(q => !q.dateFrom || !q.dateTo || q.dateFrom <= q.dateTo);
 const ACTIVE: OrderStatus[] = ['Received', 'In Progress', 'Ready'];
@@ -76,9 +77,9 @@ export function projectTerminalOrder(orderId: string, value: unknown): TerminalO
   if (Buffer.byteLength(JSON.stringify(projected), 'utf8') > 65536) throw new TerminalReadError('terminal_order_too_large', 409);
   return projected;
 }
-function matches(order: TerminalOrder, q: z.infer<typeof querySchema>, today: string): boolean {
+function matches(order: TerminalOrder, q: z.infer<typeof querySchema>, today: string, timestamp: number): boolean {
   const future = order.fulfillmentAt !== null && analyticsCalendarDay(order.fulfillmentAt) > today;
-  if (q.serviceDate && (!order.fulfillmentAt && !order.createdAt || analyticsCalendarDay(order.fulfillmentAt || order.createdAt!) !== q.serviceDate)) return false;
+  if (q.serviceDate && !(q.includePreorders && order.fulfillmentAt && Date.parse(order.fulfillmentAt) > timestamp) && (!order.fulfillmentAt && !order.createdAt || analyticsCalendarDay(order.fulfillmentAt || order.createdAt!) !== q.serviceDate)) return false;
   if (q.view === 'board' && !q.serviceDate && future || q.view === 'preorders' && !future) return false;
   // An unverified online payment must not enter the kitchen queues. Accepted
   // unpaid pickup remains visible, but completion is separately payment-gated.
@@ -136,8 +137,11 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
     try { await requireOrderflyAccess(selected.brandId, [selected.locationId], 'orderfly.orders:edit'); canEdit = true; }
     catch (error) { if (!(error instanceof AuthorityError && error.status === 403)) throw error; }
   }
+  const nativeLocation = (await db.collection('locations').doc(selected.locationId).get()).data();
+  if (!nativeLocation || nativeLocation.brandId !== selected.brandId) throw new AuthorityError('forbidden');
+  Object.assign(empty, { kitchenSettings: parseKdsSettings(nativeLocation.kdsSettings), kitchenSettingsRevision: nativeLocation.kdsSettingsRevision ?? 0, openingHours: nativeLocation.openingHours ?? {} });
   const statuses = q.view === 'history' ? ALL : ACTIVE;
-  const scope = createHash('sha256').update(JSON.stringify([selected.brandId, selected.locationId, q.view, q.search || '', q.dateFrom || '', q.dateTo || '', q.serviceDate || ''])).digest('hex');
+  const scope = createHash('sha256').update(JSON.stringify([selected.brandId, selected.locationId, q.view, q.search || '', q.dateFrom || '', q.dateTo || '', q.serviceDate || '', q.includePreorders || ''])).digest('hex');
   let after: Record<string, string | null> = {};
   if (q.cursor) {
     try {
@@ -171,7 +175,7 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
         if (raw.brandId !== selected.brandId || raw.locationId !== selected.locationId || raw.status !== status) return null;
         if (q.view !== 'history' && raw.paymentStatus !== 'Paid' && (raw.psp || raw.discountReservation !== 'held')) return null;
         const order = projectTerminalOrder(doc.id, raw);
-        if (order && matches(order, q, today)) {
+        if (order && matches(order, q, today, now.getTime())) {
           if(order.managedDelivery){
             const identity=actor?null:kdsScope?.identity ?? await (identityPromise ??= verifiedOrderflyIdentity());
             const tracking=await db.runTransaction(async tx=>{

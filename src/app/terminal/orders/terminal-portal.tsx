@@ -8,6 +8,7 @@ const validSession = (value: unknown): value is Session => !!value && typeof val
 
 export function TerminalPortal({ loginHref = '/terminal/login' }: { loginHref?: string }) {
   const router = useRouter();
+  const automatic = useRef(true);
   const [session, setSession] = useState<Session | null>(null), [message, setMessage] = useState('');
   const [checking, setChecking] = useState(true), [unavailable, setUnavailable] = useState(false);
   const [leaving, setLeaving] = useState(false), [logoutFailed, setLogoutFailed] = useState(false);
@@ -34,7 +35,7 @@ export function TerminalPortal({ loginHref = '/terminal/login' }: { loginHref?: 
   }, [router, loginHref]);
   useEffect(() => {
     void checkSession();
-    const wake = () => { if (document.visibilityState === 'visible') void checkSession(); };
+    const wake = () => { if (automatic.current && document.visibilityState === 'visible') void checkSession(); };
     const timer = setInterval(wake, 5 * 60_000);
     window.addEventListener('focus', wake); window.addEventListener('online', wake); document.addEventListener('visibilitychange', wake);
     return () => { clearInterval(timer); generation.current++; request.current?.abort(); request.current = null; window.removeEventListener('focus', wake); window.removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake); };
@@ -55,5 +56,5 @@ export function TerminalPortal({ loginHref = '/terminal/login' }: { loginHref?: 
   if (leaving) return <section className="mx-auto max-w-lg space-y-4 py-16"><h1 className="text-2xl font-bold">Log ud</h1>{logoutFailed ? <><p role="alert">{message}</p><button className="min-h-12 rounded-xl bg-slate-900 px-5 text-white" onClick={() => void logout()}>Prøv Log ud igen</button></> : <p role="status">Logger ud…</p>}</section>;
   if (checking) return <p role="status" className="p-8 text-center">Åbner ordreterminalen…</p>;
   if (unavailable || !session) return <section className="mx-auto max-w-lg space-y-4 py-16"><h1 className="text-2xl font-bold">Forbindelsen skal kontrolleres</h1><p role="alert">{message || 'Terminaladgangen kunne ikke bekræftes.'}</p><button className="min-h-12 rounded-xl bg-slate-900 px-5 text-white" onClick={() => void checkSession()}>Prøv igen</button>{session && <button className="ml-3 min-h-12 rounded-xl border px-5" onClick={() => void logout()}>Log ud</button>}</section>;
-  return <TerminalClient kitchenMode key={`${session.brandId}/${session.locationId}`} fixedScope={{ brandId: session.brandId, locationId: session.locationId }} apiBase="/api/terminal/orders" loginHref={loginHref} onLogout={() => void logout()} onAccessDenied={checkSession} />;
+  return <TerminalClient onAutomaticChange={value => { automatic.current = value; }} kitchenMode key={`${session.brandId}/${session.locationId}`} fixedScope={{ brandId: session.brandId, locationId: session.locationId }} apiBase="/api/terminal/orders" loginHref={loginHref} onLogout={() => void logout()} onAccessDenied={checkSession} />;
 }
