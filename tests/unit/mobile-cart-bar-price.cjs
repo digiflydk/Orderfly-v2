@@ -14,6 +14,7 @@ new Function('require','module','exports',code)(function componentRequire(name){
  }
  if(name==='@/context/cart-context')return {useCart:()=>({brand:{name:'Esmeralda Pizza',logoUrl:'/logo.png'},itemCount:1,checkoutTotal:deliveryType==='delivery'?(freeDelivery?99:148):99,bagFee:4,deliveryFee:49,freeDeliveryDiscountApplied:freeDelivery,editingItem:null,deliveryType,location:{name:'Esmeralda Pizza Amager'}})};
  if(name==='@/context/delivery-price-context')return {useManagedDeliveryPrice:()=>managed};
+ if(name==='@/context/storefront-catalog')return {useStorefrontCatalog:()=>({openCart:proceed=>proceed(),cartOpening:false})};
  if(name==='@/context/storefront-v2-context')return {useStorefrontV2:()=>true};
  if(name==='@/lib/storefront-format')return {formatPrice:n=>`${n.toFixed(2)} DKK`,itemCountLabel:n=>`${n}`};
  if(name==='@/components/ui/button')return {Button:({asChild,...props})=>React.createElement('button',props)};

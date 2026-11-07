@@ -15,3 +15,11 @@ QA #45 on release 691dedb confirmed create/edit, saved selections and the tested
 Targeted tests render the actual feedback component using the real action's empty-trigger response, assert the alert and inline message, then retry with a valid rule and verify persistence of the location. Tests also check both feedback components are mounted by the form. Database I/O and hooks in these unit tests remain mocked; this is not a live browser verification.
 
 Work QA after release: repeat the empty-trigger case in #45, verify the explicit message in Trigger Conditions and the form summary, add a valid rule and retry, then reopen to verify selections. Payment/receipt testing still needs an approved safe test-payment setup. Negative live location testing still needs a suitable second location. Neither blocked test is claimed fixed or passed by this change.
+
+## Pre-cart upsell follow-up (2026-11-07)
+
+The editor now supplies scoped menu selectors for `combo_in_cart` and the native Popular/Recommended/Campaign selector for `product_tag_in_cart`. Changing trigger type clears its incompatible reference. Brand changes cancel stale selector responses. Campaign priority is an integer 0–9999; higher values win, and existing campaigns default to 0. Priority is shown in the campaign table.
+
+Clearing a start/end date submits an explicit empty field and writes null, rather than retaining the previous database date. Dates that were not submitted by an older client remain untouched, and unchanged selected dates still preserve the original timestamp. Editing preserves views and paid conversions.
+
+Regression coverage: `tests/unit/upsell-before-cart.cjs`, the existing upsell form/API/price tests, and production-component Playwright in `tests/unit/commerce-p2-browser.cjs`. Release uses local typecheck, build, tests and independent review; all pushed and merged commits carry `[skip ci]` as requested by the PM. Production release verification is read-only.

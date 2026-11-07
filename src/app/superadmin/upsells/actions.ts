@@ -1,5 +1,8 @@
 
 'use server';
+import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
+import { upsellTriggered, compareUpsells } from '@/lib/upsell-rules';
+import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { linkedCartProductIds } from '@/lib/server/upsell-linked-options';
 import { promotionBoundary } from '@/lib/promotion-calendar';
 import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
@@ -48,6 +51,7 @@ const upsellSchema = z.object({
     brandId: z.string().min(1, 'A brand must be selected.'),
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
+    priority: z.coerce.number().int().min(0).max(9999).default(0),
     description: z.string().optional().nullable(),
     imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
 
@@ -111,6 +115,7 @@ export async function createOrUpdateUpsell(
       brandId: formData.get('brandId'),
       locationIds: formData.getAll('locationIds'),
       upsellName: formData.get('upsellName'),
+      priority: formData.get('priority') ?? 0,
       description: formData.get('description'),
       imageUrl: formData.get('imageUrl'),
       offerType: formData.get('offerType'),
@@ -195,6 +200,7 @@ export async function createOrUpdateUpsell(
     await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>{
       for (const key of ['startDate', 'endDate'] as const) {
         const day = formData.get(key);
+        if (day === '') writeData[key] = null;
         if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) writeData[key] = savedPromotionTimestamp(day, before?.[key], key === 'endDate');
       }
       return {...before,...writeData,views:before?.views??0,conversions:before?.conversions??0};
@@ -251,7 +257,7 @@ type GetActiveUpsellParams = {
   brandId: string;
   locationId: string;
   deliveryType: 'pickup' | 'delivery';
-  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[]; includedProductIds?: string[]; toppingIds?: string[] }[];
+  cartItems: UpsellCartItem[];
   cartTotal: number;
   excludedUpsellIds?: string[];
 };
@@ -260,7 +266,6 @@ export async function getActiveUpsellForCart({
   locationId,
   deliveryType,
   cartItems,
-  cartTotal,
   excludedUpsellIds = [],
 }: GetActiveUpsellParams): Promise<{
   upsell: Upsell;
@@ -287,7 +292,7 @@ export async function getActiveUpsellForCart({
   });
   
   // 2. Filter by date, day, and time in code
-  const activeNowUpsells = allUpsells.filter(upsell => {
+  const activeNowUpsells = allUpsells.sort(compareUpsells).filter(upsell => {
       if (excludedUpsellIds.includes(upsell.id)) return false;
       if (!(upsell.orderTypes || []).includes(deliveryType)) return false;
       const startDate = toDate(upsell.startDate) ?? null;
@@ -310,29 +315,10 @@ export async function getActiveUpsellForCart({
   // Linked add-ons only suppress repeat recommendations; they never activate offers.
   const linkedIds = await linkedCartProductIds(db, brandId, locationId, cartItems, getProductsByIds);
   const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || [])]), ...linkedIds]);
-  const cartProductIds = cartItems.map(item => item.id);
-  const cartCategoryIds = new Set(cartItems.map(item => item.categoryId).filter(Boolean));
-  
-  // 3. Check trigger conditions for each active upsell
+  const scope = {brandId, locationId, deliveryType};
+  const context = await upsellCart(db, cartItems, scope, getProductsByIds, await getActiveStandardDiscounts(scope));
   for (const upsell of activeNowUpsells) {
-      let isTriggered = false;
-      for (const condition of upsell.triggerConditions) {
-          if (condition.type === 'cart_value_over') {
-              if (cartTotal > parseFloat(condition.referenceId)) isTriggered = true;
-          } else if (condition.type === 'product_in_cart') {
-              if (cartProductIds.includes(condition.referenceId)) isTriggered = true;
-          } else if (condition.type === 'category_in_cart') {
-               if (cartCategoryIds.has(condition.referenceId)) isTriggered = true;
-          } else if (condition.type === 'combo_in_cart') {
-              if (cartItems.some(item => item.itemType === 'combo' && item.id === condition.referenceId)) isTriggered = true;
-          } else if (condition.type === 'product_tag_in_cart') {
-              if (cartItems.some(item => (item.tags || []).includes(condition.referenceId))) isTriggered = true;
-          }
-          if (isTriggered) break; // If any condition is met, we don't need to check others for this upsell
-      }
-
-      if (isTriggered) {
-           // 4. If triggered, fetch the offered products
+      // Candidates are checked individually below; no offered item can qualify itself.
           let offeredProductIds: string[] = [];
           if (upsell.offerType !== 'product' && !upsell.offerCategoryIds?.length) continue;
           if (upsell.offerType === 'product') {
@@ -344,7 +330,7 @@ export async function getActiveUpsellForCart({
           }
           
           // 5. Suppression Logic: Filter out products already in the cart
-          const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id));
+          const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id) && upsellTriggered(upsell, id, context.items, context.catalog, context.standardPrices));
 
           if (finalProductIds.length > 0) {
               // Fetch full product details
@@ -364,7 +350,6 @@ export async function getActiveUpsellForCart({
                   return { upsell: serializableUpsell as unknown as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
               }
           }
-      }
   }
 
   return null; // No valid upsell found
@@ -382,4 +367,9 @@ export async function getProductsForBrand(brandId: string): Promise<ProductForMe
 }
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
   return (await listLocationCatalog('categories',brandId)).sort((a,b)=>String(a.categoryName).localeCompare(String(b.categoryName))) as Category[];
+}
+
+export async function getCombosForUpsellBrand(brandId: string): Promise<import('@/types').ComboMenu[]> {
+  const rows = await listScopedDocuments('comboMenus', 'orderfly.catalog:view', 'locations', [['brandId', '==', brandId]]);
+  return upsellClientData(rows.map(doc => ({...doc.data(), id:doc.id})).sort((a:any,b:any) => String(a.comboName).localeCompare(String(b.comboName)))) as import('@/types').ComboMenu[];
 }

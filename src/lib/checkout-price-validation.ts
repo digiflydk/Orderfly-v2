@@ -1,3 +1,4 @@
+import { upsellTriggered } from './upsell-rules';
 import { discountedUnit, ore } from './money';
 import type { MinimalCartItem, StandardDiscount, Upsell } from '@/types';
 import { restaurantClock } from './promotion-rules';
@@ -13,7 +14,7 @@ function date(value: unknown): Date | undefined {
 }
 
 // Catalog records and campaign rows are loaded by the server, never from the request.
-export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }, verifiedUpsellIds?: Set<string>) {
+export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }, verifiedUpsellIds?: Set<string>, verifiedLines?: Set<number>) {
   const now = scope.now || new Date();
   const clock = restaurantClock(now);
   const active = (d: StandardDiscount | Upsell) => {
@@ -36,28 +37,19 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
       if (!active(upsell)) continue;
       const offered = upsell.offerType === 'product' ? upsell.offerProductIds.includes(line.id) : !!line.categoryId && upsell.offerCategoryIds.includes(line.categoryId);
       if (!offered) continue;
-      // The offered product cannot supply its own trigger. Thresholds use server
-      // catalog prices capped by submitted totals, not an inflated browser subtotal.
-      const others = catalog.map((record,i) => ({record,i})).filter(x => x.record.id !== line.id);
-      const triggered = upsell.triggerConditions.some(t => {
-        if (t.type === 'cart_value_over') return others.reduce((sum,{i}) => sum + Math.max(0,Math.min(items[i].totalPrice,standardPrices[i]*items[i].quantity)),0) > Number(t.referenceId);
-        return others.some(({record}) => t.type === 'product_in_cart' ? !record.isCombo && record.id === t.referenceId :
-          t.type === 'category_in_cart' ? record.categoryId === t.referenceId :
-          t.type === 'combo_in_cart' ? record.isCombo && record.id === t.referenceId :
-          t.type === 'product_tag_in_cart' && record.tags.includes(t.referenceId));
-      });
+      const triggered = upsellTriggered(upsell, line.id, items, catalog, standardPrices);
       if (triggered) {
         minimum = Math.min(minimum,discountedUnit(line.price,upsell.discountType,upsell.discountValue));
-        if (item.upsellId === upsell.id) { verifiedUpsellIds?.add(upsell.id); }
+        if (item.upsellId === upsell.id) { verifiedUpsellIds?.add(upsell.id); verifiedLines?.add(index); }
       }
     }
     return ore(minimum) / 100;
   });
 }
 
-export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
+export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }, verifiedLines?: Set<number>) {
   const verifiedUpsellIds = new Set<string>();
-  const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope, verifiedUpsellIds);
+  const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope, verifiedUpsellIds, verifiedLines);
   const currentStandardPrices = minimumCheckoutPrices(items, catalog, discounts, [], scope);
   items.forEach((item, index) => {
     const minimum = minimums[index];
@@ -72,4 +64,9 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
     }
   });
   return [...verifiedUpsellIds];
+}
+
+/** Verified upsell merchandise after item discounts, before order-wide discounts and fees. */
+export function verifiedUpsellAmount(items: MinimalCartItem[], verifiedLines: Set<number>): number {
+  return items.reduce((sum, item, index) => sum + (verifiedLines.has(index) ? ore(item.totalPrice) : 0), 0) / 100;
 }

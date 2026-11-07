@@ -9,7 +9,7 @@ function load(path,mocks={}) {
  new Function('require','module','exports',code)(name=>['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 const rules=load('src/lib/promotion-rules.ts');
-const pricing=load('src/lib/checkout-price-validation.ts',{'./promotion-rules':rules});
+const pricing=loadTs('src/lib/checkout-price-validation.ts');
 const automatic=load('src/lib/automatic-discounts.ts');
 const scope={brandId:'b',locationId:'l',deliveryType:'pickup',now:new Date('2026-09-07T10:00:00Z')};
 const catalog=[{id:'p',categoryId:'pizza',tags:[],price:100,isCombo:false}];

@@ -5,7 +5,7 @@ const ts=require('typescript');
 function load(path,mocks={}) {
   const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name.includes('promotion-timestamp')?require('../helpers/load-ts.cjs').loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}}):name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
+  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name==='@/lib/server/upsell-linked-options'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-linked-options.ts'):name==='@/lib/server/upsell-cart'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-cart.ts'):name==='@/lib/upsell-rules'?require('../helpers/load-ts.cjs').loadTs('src/lib/upsell-rules.ts'):name==='@/app/superadmin/standard-discounts/actions'?{getActiveStandardDiscounts:async()=>[]}:name.includes('promotion-timestamp')?require('../helpers/load-ts.cjs').loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}}):name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
   return mod.exports;
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');

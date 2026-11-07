@@ -606,6 +606,7 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
+  priority?: number;
   description?: string | null;
   imageUrl?: string | null;
 

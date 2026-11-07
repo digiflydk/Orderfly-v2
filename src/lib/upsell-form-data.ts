@@ -3,7 +3,7 @@ import { calendarDay } from './promotion-calendar';
 export function upsellFormData(values: Record<string, unknown>, id?: string): FormData {
   const data = new FormData();
   if (id) data.set('id', id);
-  for (const key of ['brandId', 'upsellName', 'description', 'imageUrl', 'offerType', 'discountType', 'discountValue']) {
+  for (const key of ['brandId', 'upsellName', 'priority', 'description', 'imageUrl', 'offerType', 'discountType', 'discountValue']) {
     if (values[key] != null) data.set(key, String(values[key]));
   }
   for (const key of ['locationIds', 'offerProductIds', 'offerCategoryIds', 'orderTypes', 'activeDays', 'tags']) {
@@ -12,7 +12,7 @@ export function upsellFormData(values: Record<string, unknown>, id?: string): Fo
   for (const key of ['triggerConditions', 'activeTimeSlots']) data.set(key, JSON.stringify(values[key] ?? []));
   for (const key of ['startDate', 'endDate']) {
     const date = values[key];
-    if (date instanceof Date) data.set(key, calendarDay(date)!);
+    data.set(key, date instanceof Date ? calendarDay(date)! : '');
   }
   if (values.isActive === true) data.set('isActive', 'on');
   return data;

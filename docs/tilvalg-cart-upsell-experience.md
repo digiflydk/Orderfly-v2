@@ -1,17 +1,27 @@
-# Cart and contextual recommendations
+# Cart and pre-cart upsell
 
 ## Customer behavior
 
 - On mobile, editing a basket line returns to the basket after saving or cancelling. The customer does not need to find and reopen the basket to review the result.
 - Quantity, remove and close controls preserve 44px touch targets. The checkout area stays outside the scrolling basket and respects the device bottom safe area.
-- Configured recommendations remain inline, with at most three distinct products and compact 64px images. They do not block checkout or introduce another mandatory step.
+- The shared storefront provider shows one upsell popup before opening the basket from mobile, desktop or header controls. The desktop side panel is now a basket summary with “Se kurv”. No recommendations are rendered inside the basket.
+- The popup offers at most three native products. Adding one successfully opens the basket; “Fortsæt til kurven”, Escape, backdrop and close continue without an addition. Product customization remains available and required choices are enforced.
+- Offer lookup happens on basket entry only, with a two-second abort limit. Missing, invalid or unavailable offers fall through to the basket. There is no background minute polling or offer request during checkout. Duplicate clicks share one pending gate; stale restaurant responses cannot open a basket.
 - Offer products are taken from the current native catalog, in configured offer order. Missing, inactive, duplicate, standalone already-added and combo-included products are removed from the visible recommendations. Server matching additionally owns brand/location/channel eligibility.
-- Dismissing a recommendation synchronizes responsive basket views and survives basket close/reopen for the browser session.
+- Completing or dismissing a popup marks its campaign handled for the browser session. Reopening or editing the basket does not repeat it.
 - Quick add and configured products both preserve the offer ID in the basket. Checkout continues to validate the offer and price on the server. Required product options still must be selected; a recommendation never bypasses them.
 
 ## Measurement
 
-An actually visible recommendation emits `upsell_offer_shown`. Its stable interaction ID is passed to acceptance and dismissal events. Acceptance fires only following a successful cart save. Responsive views are observed separately and hidden offers do not count as visible impressions. These interaction events are not paid conversions or proof of sales uplift.
+An actually visible recommendation emits `upsell_offer_shown`. Its stable interaction ID is passed to acceptance and dismissal events. Acceptance fires only following a successful cart save. One shared popup produces one impression, and hidden offers do not count as visible impressions. These interaction events are not paid conversions or proof of sales uplift.
+
+## Matching and accounting (2026-11-07)
+
+Campaigns sort by `priority` descending (integer 0–9999, legacy default 0), then ID for deterministic ties. Only the first matching campaign with available products is shown. Conditions remain OR, with a strict “greater than” cart threshold.
+
+The public request now includes bounded quantities, line totals and combo selections. Native product/category/tag identities and channel prices are resolved server-side. Combo supplements come from the native group configuration. `upsellTriggered` is shared with checkout: the offered product cannot trigger itself, and each other line contributes at most its server standard-discounted price × quantity, capped by its submitted line total. Options and fees cannot inflate that cap. Browser line totals use the same integer-øre calculation as checkout. Legacy requests without totals contribute zero to amount thresholds. Linked options only suppress repeated suggestions.
+
+Checkout records `paymentDetails.upsellAmount` from individually verified upsell lines, including quantity and paid options, after item discounts and **before order-wide discounts**. It excludes delivery, bags, administration fees and tips. This is attributed merchandise revenue, not incremental uplift or a net-after-voucher metric. An ineligible line cannot borrow an eligible line's campaign ID. Existing paid-order filters govern dashboard reporting; historical orders are not backfilled. Paid campaign conversions remain atomically incremented at settlement, once per campaign per paid order.
 
 ## Validation
 

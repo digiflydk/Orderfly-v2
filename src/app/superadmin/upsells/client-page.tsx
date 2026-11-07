@@ -161,6 +161,7 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
               <TableRow>
                 <TableHead>Upsell Name</TableHead>
                 <TableHead>Brand</TableHead>
+                <TableHead>Priority</TableHead>
                 <TableHead>Trigger</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Conversions</TableHead>
@@ -172,6 +173,7 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
                 <TableRow key={upsell.id}>
                   <TableCell className="font-medium">{upsell.upsellName}</TableCell>
                   <TableCell>{upsell.brandName}</TableCell>
+                  <TableCell>{upsell.priority ?? 0}</TableCell>
                   <TableCell className="text-xs capitalize">{upsell.triggerConditions.map(t => t.type.replace(/_/g, ' ')).join(', ')}</TableCell>
                    <TableCell>
                     <Badge variant={upsell.isActive ? 'default' : 'secondary'}>
@@ -208,7 +210,7 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
               ))}
               {filteredUpsells.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                         No upsells found.
                     </TableCell>
                 </TableRow>

@@ -1,178 +1,46 @@
-
-
 'use client';
-import { money, discountedUnit } from '@/lib/money';
-
-import { StorefrontProductImage } from '@/components/product/storefront-product-image';
-import type { Product, Upsell, ProductForMenu } from '@/types';
-import { useCart } from '@/context/cart-context';
-import { useToast } from '@/hooks/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
+import { useEffect, useRef } from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '../ui/badge';
-import { cn } from '@/lib/utils';
-import { useMemo, useTransition, useEffect, useRef } from 'react';
-import { ScrollArea } from '../ui/scroll-area';
-import { Loader2 } from 'lucide-react';
+import { ProductCard } from '@/components/product/product-card';
+import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
-import { safeImage } from '@/lib/images';
+import { useStorefrontV2 } from '@/context/storefront-v2-context';
+import type { StorefrontUpsell } from '@/context/storefront-catalog';
+import { discountedUnit, money } from '@/lib/money';
 
-interface UpsellDialogProps {
-  isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
-  upsellData: { upsell: Upsell, products: ProductForMenu[] };
-  onContinue: () => void;
-}
-
-export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: UpsellDialogProps) {
-  const { addToCart, deliveryType, cartTotal } = useCart();
-  const { trackEvent } = useAnalytics();
-  const { toast } = useToast();
-  const { upsell, products: upsellProducts } = upsellData;
-  const [isPending, startTransition] = useTransition();
-  const handled = useRef(false);
-
+/** Offers open before the basket. ProductCard retains native required choices and pricing. */
+export function UpsellDialog({ upsellData, onContinue }: {upsellData: StorefrontUpsell; onContinue: () => void}) {
+  const {deliveryType, standardDiscounts, location} = useCart();
+  const {trackEvent, measurementKey} = useAnalytics();
+  const isV2 = useStorefrontV2();
+  const handled = useRef(false), shown = useRef(false);
+  const interactionId = useRef(crypto.randomUUID());
+  const {upsell, products} = upsellData;
   useEffect(() => {
-    if (isOpen) {
-      handled.current = false;
-      trackEvent('upsell_offer_shown', {
-        upsellId: upsell.id,
-        upsellName: upsell.upsellName,
-        cartValue: cartTotal,
-      });
-    }
-  }, [isOpen, upsell.id, upsell.upsellName, cartTotal, trackEvent]);
-
-  const calculatePrices = (product: ProductForMenu) => {
-    const originalPrice = money(deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
-    let finalPrice = originalPrice;
-    let discountPercentage = 0;
-
-    if (upsell.discountType !== 'none' && upsell.discountValue) {
-        if (upsell.discountType === 'percentage') {
-            discountPercentage = upsell.discountValue;
-            finalPrice = discountedUnit(originalPrice, 'percentage', discountPercentage);
-        } else if (upsell.discountType === 'fixed_amount') {
-            finalPrice = discountedUnit(originalPrice, 'fixed_amount', upsell.discountValue);
-            if (originalPrice > 0) {
-              discountPercentage = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
-            }
-        }
-    }
-    return { originalPrice, finalPrice, discountPercentage };
-  }
-
-  const handleProductClick = (product: ProductForMenu) => {
+    if (!shown.current && trackEvent('upsell_offer_shown', {upsellId:upsell.id, interactionId:interactionId.current, locationId:location?.id})) shown.current = true;
+  }, [upsell.id, location?.id, measurementKey, trackEvent]);
+  const finish = (accepted: boolean) => {
     if (handled.current) return;
     handled.current = true;
-    startTransition(() => {
-        const { originalPrice, finalPrice } = calculatePrices(product);
-        
-        // Add item to cart and close dialog. The parent component will handle the next step.
-        addToCart(product, 1, [], originalPrice, finalPrice, undefined, upsell.id);
-        
-        // Click telemetry is separate from server-confirmed paid conversions.
-
-        trackEvent('upsell_accepted', {
-            upsellId: upsell.id,
-            productId: product.id,
-            productName: product.productName,
-            finalPrice: finalPrice,
-        });
-        
-        toast({
-            title: 'Item Added',
-            description: `${product.productName} has been added to your cart.`,
-        });
-        
-        // Close the dialog, the user is now back on the checkout page with an updated cart.
-        setIsOpen(false);
-    });
-  };
-  
-  const handleSkipAndContinue = () => {
-    if (handled.current) return;
-    handled.current = true;
-    trackEvent('upsell_rejected', {
-        upsellId: upsell.id,
-        upsellName: upsell.upsellName,
-    });
-    // Just call the onContinue function which should proceed to payment.
+    if (!accepted) trackEvent('upsell_rejected', {upsellId:upsell.id, interactionId:interactionId.current, locationId:location?.id});
     onContinue();
-  }
-
-  return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-        // If the user closes the dialog manually (e.g. by clicking outside),
-        // treat it as skipping the upsell and proceed to payment.
-        if(!open) handleSkipAndContinue();
-    }}>
-      <DialogContent 
-        className="w-full sm:max-w-4xl p-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 border-0
-                   bottom-0 rounded-t-2xl h-[90vh] sm:h-auto sm:bottom-auto sm:rounded-lg flex flex-col
-                   data-[state=closed]:slide-out-to-bottom sm:data-[state=closed]:slide-out-to-top-[48%]
-                   data-[state=open]:slide-in-from-bottom sm:data-[state=open]:slide-in-from-top-[48%]"
-      >
-        <DialogHeader className="px-6 pt-6 text-center">
-          <DialogTitle className="text-2xl font-bold tracking-wider uppercase">{upsell.upsellName}</DialogTitle>
-          {upsell.description && (
-            <DialogDescription className="text-center">{upsell.description}</DialogDescription>
-          )}
-        </DialogHeader>
-        
-        <ScrollArea className="flex-1 px-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-4">
-                {upsellProducts.map(product => {
-                    const { originalPrice, finalPrice, discountPercentage } = calculatePrices(product);
-                    const hasDiscount = originalPrice > finalPrice;
-                    
-                    return (
-                        <div key={product.id} className="relative group flex flex-col overflow-hidden rounded-lg border">
-                            <div className="aspect-video w-full relative">
-                                <StorefrontProductImage
-                                    product={product}
-                                    variant="thumb"
-                                    src={safeImage(upsell.imageUrl || product.imageUrl)} 
-                                    alt={product.productName || ''} 
-                                    fill 
-                                    className="object-cover"
-                                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                    data-ai-hint="delicious food"
-                                />
-                                {hasDiscount && (
-                                    <Badge className="absolute top-2 left-2" variant="destructive">Save {discountPercentage}%</Badge>
-                                )}
-                            </div>
-                            <div className="p-3 bg-card flex flex-col flex-1">
-                                <h3 className="font-bold truncate">{product.productName}</h3>
-                                <div className="flex items-baseline gap-2 mt-1">
-                                    <p className="font-bold text-lg text-primary">kr. {finalPrice.toFixed(2)}</p>
-                                    {hasDiscount && (
-                                        <p className="text-sm text-muted-foreground line-through">kr. {originalPrice.toFixed(2)}</p>
-                                    )}
-                                </div>
-                                <Button className="w-full h-[46px] mt-auto" onClick={() => handleProductClick(product)} disabled={isPending}>
-                                    {isPending ? <Loader2 className="animate-spin" /> : 'Add to cart'}
-                                </Button>
-                            </div>
-                        </div>
-                    )
-                })}
-            </div>
-             <DialogFooter className="px-0 pb-6 pt-4 mt-auto sm:justify-center">
-                <Button variant="link" size="sm" onClick={handleSkipAndContinue} className="w-full h-[41.4px] sm:w-auto text-muted-foreground">
-                    No thanks, continue to payment
-                </Button>
-            </DialogFooter>
-        </ScrollArea>
-      </DialogContent>
-    </Dialog>
-  );
+  };
+  return <Dialog open onOpenChange={open => {if (!open) finish(false);}}>
+    <DialogContent data-storefront-version={isV2 ? '2' : undefined} data-commerce-panel="upsell" className="w-[calc(100%-2rem)] max-w-lg max-h-[85dvh] overflow-y-auto flex flex-col gap-4 p-5 sm:p-6">
+      <DialogHeader className="pr-8">
+        <DialogTitle>{upsell.upsellName || 'Lidt ekstra til din ordre'}</DialogTitle>
+        <DialogDescription>{upsell.description || 'Vil du have lidt ekstra med, inden du går til kurven?'}</DialogDescription>
+      </DialogHeader>
+      <div aria-label="Tilbud til din ordre">
+        {products.map(product => {
+          const basePrice = money(deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price);
+          const price = discountedUnit(basePrice, upsell.discountType, upsell.discountValue);
+          return <ProductCard key={product.id} product={{...product, price, basePrice} as typeof product} activeDiscounts={standardDiscounts}
+            upsellId={upsell.id} upsellInteractionId={interactionId.current} onProductAdded={() => finish(true)} compact />;
+        })}
+      </div>
+      <Button variant="outline" className="min-h-12 w-full" onClick={() => finish(false)}>Fortsæt til kurven</Button>
+    </DialogContent>
+  </Dialog>;
 }

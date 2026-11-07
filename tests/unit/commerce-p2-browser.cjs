@@ -56,7 +56,7 @@ before(async()=>{
  function ConsentFixture(){const [events,setEvents]=useState([]);useEffect(()=>{const original=window.fetch;window.fetch=(url,options)=>{if(url==='/api/analytics/collect')setEvents(previous=>[...previous,JSON.parse(options.body)]);return original(url,options);};return()=>{window.fetch=original;};},[]);const consent=statistics=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics}));window.dispatchEvent(new Event('orderfly:consent'));};return <aside><button onClick={()=>consent(true)}>Allow analytics</button><button onClick={()=>consent(false)}>Reject analytics</button><pre id="funnel-events">{JSON.stringify(events)}</pre></aside>;}
  function DashboardFixture(){const [count,setCount]=useState(1);const data={totals:{sessions:2,measuredPurchasingSessions:1,view_menu:2,view_product:1,add_to_cart:1,start_checkout:1,click_purchase:1,payment_succeeded:count,revenue_paid:count*100},daily:[],byLocation:[],attribution:[],dataQualityWarnings:[]};return <><button onClick={()=>setCount(7)}>Receive refreshed report</button><AnalyticsDashboardClient initialData={data} locations={[]} searchParams={{dateFrom:'2026-09-01',dateTo:'2026-09-11',counting:'events'}}/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/brand-header'?<Header brand={new URLSearchParams(window.location.search).has('no-logo')?{...brand,slug:'other-brand',name:'Another very long restaurant brand name for narrow screens',logoUrl:null}:brand}/>:window.location.pathname==='/website-admin-fixture'?<StorefrontOverviewView brands={[{id:'b',name:'Fixture Pizza',brandStatus:'active',href:'/fixture',canEditBrand:false,locations:[{id:'l',name:'Restaurant',active:true,href:'/fixture/restaurant'},{id:'off',name:'Closed location',active:false,href:'/fixture/closed'}]}]}/>:window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/product-v2'?<ProductV2Fixture/>:window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:window.location.pathname==='/location-picker'?<div data-commerce-root data-brand-slug="esmeralda"><button onClick={()=>openDeliveryModal({brandSlug:new URLSearchParams(window.location.search).get('brand')||'esmeralda',locationSlug:'restaurant',location})}>Vælg restaurant</button><DeliveryMethodModal/></div>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/brand-header'?<Header brand={new URLSearchParams(window.location.search).has('no-logo')?{...brand,slug:'other-brand',name:'Another very long restaurant brand name for narrow screens',logoUrl:null}:brand}/>:window.location.pathname==='/website-admin-fixture'?<StorefrontOverviewView brands={[{id:'b',name:'Fixture Pizza',brandStatus:'active',href:'/fixture',canEditBrand:false,locations:[{id:'l',name:'Restaurant',active:true,href:'/fixture/restaurant'},{id:'off',name:'Closed location',active:false,href:'/fixture/closed'}]}]}/>:window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/product-v2'?<ProductV2Fixture/>:window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:window.location.pathname==='/location-picker'?<div data-commerce-root data-brand-slug="esmeralda"><button onClick={()=>openDeliveryModal({brandSlug:new URLSearchParams(window.location.search).get('brand')||'esmeralda',locationSlug:'restaurant',location})}>Vælg restaurant</button><DeliveryMethodModal/></div>:<><StorefrontV2Provider enabled={new URLSearchParams(window.location.search).has('v2')}><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/></StorefrontV2Provider><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
@@ -245,24 +245,24 @@ for (const width of [360,390,768,820,1023,1280]) test(`#71 cart is reachable and
  await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
  assert.equal(await page.getByRole('dialog').count(),0,'simple plus adds without an options step');
- if(width<1024)await page.getByRole('button',{name:/Se kurv/}).click();
- const surface=width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'});
+ await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ const surface=page.getByRole('dialog');
  await surface.getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).waitFor();
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1,'draft is not written before save');
  await page.keyboard.press('Escape');
- if(width<1024)await expect(page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Soda',exact:true})).toBeVisible();
- await (width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'})).getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
+ await expect(page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Soda',exact:true})).toBeVisible();
+ await (page.getByRole('dialog')).getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].quantity,2);
- if(width<1024)await expect(page.getByRole('dialog').getByRole('button',{name:'Til kassen',exact:true})).toBeVisible();
- const cta=(width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'})).getByRole('button',{name:'Til kassen',exact:true});
+ await expect(page.getByRole('dialog').getByRole('button',{name:'Til kassen',exact:true})).toBeVisible();
+ const cta=(page.getByRole('dialog')).getByRole('button',{name:'Til kassen',exact:true});
  assert.ok(await cta.isVisible());assert.ok((await cta.boundingBox()).height>=55);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal page overflow');
- await (width<1024?page.getByRole('dialog'):page.getByRole('complementary',{name:'Din kurv'})).evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
+ await (page.getByRole('dialog')).evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
  const ctaBounds=await cta.boundingBox();assert.ok(ctaBounds.y>=0 && ctaBounds.y+ctaBounds.height<=900,'checkout CTA is inside the viewport');
  if(process.env.UI71_SCREENSHOTS)await page.screenshot({path:process.env.UI71_SCREENSHOTS+'/cart-'+width+'.png'});
 });
@@ -285,22 +285,23 @@ test('#71 existing product upgrades to one combo and cancelling preserves the pr
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].id,'combo');assert.equal(stored.choices[0].comboSelections.length,2);
 });
 
-test('#71 inline quick upsell removes itself after add without a popup',async t=>{
+test('#71 popup precedes the cart and successful add continues to the cart',async t=>{
  const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=active');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();
- const offers=page.getByRole('dialog').getByRole('region',{name:'Anbefalet til din ordre'});
+ const offers=page.getByRole('dialog',{name:'Til din pizza'});
+ await expect(page.getByRole('dialog').getByRole('heading',{name:/Din kurv/})).toHaveCount(0);
  await offers.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
- await offers.waitFor({state:'hidden'});assert.equal(await page.getByRole('dialog').count(),1,'cart stays open without an upsell modal');
+ await offers.waitFor({state:'hidden'});assert.equal(await page.getByRole('dialog').count(),1,'only the cart is open after adding');
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(saved.choices.find(item=>item.id==='drink').upsellId,'u');
 });
 test('#71 a hanging recommendation request cannot delay checkout navigation',async t=>{
  const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=hang');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();await page.getByRole('button',{name:/Se kurv/}).click();
- const cta=page.getByRole('dialog').getByRole('button',{name:'Til kassen'});const started=Date.now();await cta.click();await page.waitForURL('**/fixture/restaurant/checkout');assert.ok(Date.now()-started<1500,'navigation does not wait for the 2s optional timeout');
+ const cta=page.getByRole('dialog').getByRole('button',{name:'Til kassen'});await expect(cta).toBeVisible();const started=Date.now();await cta.click();await page.waitForURL('**/fixture/restaurant/checkout');assert.ok(Date.now()-started<1500,'navigation does not wait for the 2s optional timeout');
 });
 
 
@@ -309,7 +310,7 @@ test('#71 recommended product requires options and cannot add twice',async t=>{
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();
- await page.getByRole('region',{name:'Anbefalet til din ordre'}).getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog',{name:'En pizza til?'}).getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
  const dialog=page.getByRole('dialog').last();
  await dialog.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1);
@@ -512,11 +513,11 @@ test('dismissed recommendation stays hidden when the mobile cart reopens',async 
  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();
- const offers=page.getByRole('region',{name:'Anbefalet til din ordre'});
+ const offers=page.getByRole('dialog',{name:'Til din pizza'});
  await offers.scrollIntoViewIfNeeded();
  await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_offer_shown').length).toBe(1);
  const shown=(await events()).find(e=>e.name==='upsell_offer_shown');
- await offers.getByRole('button',{name:'Skjul anbefaling',exact:true}).click();
+ await offers.getByRole('button',{name:'Fortsæt til kurven',exact:true}).click();
  await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_rejected').length).toBe(1);
  const rejected=(await events()).find(e=>e.name==='upsell_rejected');
  assert.equal(shown.params.locationId,'l');assert.equal(rejected.params.locationId,'l');assert.equal(rejected.params.interactionId,shown.params.interactionId);
@@ -566,10 +567,11 @@ test('visible recommendation acceptance keeps the same measured interaction and 
  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();
- const offers=page.getByRole('dialog').getByRole('region',{name:'Anbefalet til din ordre'});
+ const offers=page.getByRole('dialog',{name:'Til din pizza'});
  await offers.scrollIntoViewIfNeeded();
  await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_offer_shown').length).toBe(1);
  const shown=(await events()).find(e=>e.name==='upsell_offer_shown');
+ await expect(page.getByRole('dialog').getByRole('heading',{name:/Din kurv/})).toHaveCount(0);
  await offers.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await expect.poll(async()=> (await events()).filter(e=>e.name==='upsell_accepted').length).toBe(1);
  const accepted=(await events()).find(e=>e.name==='upsell_accepted');
@@ -663,4 +665,42 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  assert.equal(restored.count,2);assert.equal(restored.total,214);assert.deepEqual(restored.comboModifiers,cart.comboModifiers);
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));
  assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].comboSelections[0].products[0].id,'p');
+});
+
+for (const width of [390,1280]) test(`pre-cart popup is optional and shared on V2 (${width})`,async t=>{
+ const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup&upsell=active&v2');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ let reads=0;page.on('request',r=>{if(r.url().endsWith('/api/public/upsell'))reads++;});
+ const entry=page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first();
+ await entry.evaluate(button=>{button.click();button.click();});
+ const popup=page.getByRole('dialog',{name:'Til din pizza'});
+ await expect(popup).toBeVisible();assert.equal(reads,1);
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toHaveCount(0);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await popup.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
+ const bounds=await popup.boundingBox();assert.ok(bounds.y>=0 && bounds.y+bounds.height<=901,'popup fits viewport');
+ const skip=await popup.getByRole('button',{name:'Fortsæt til kurven'}).boundingBox();assert.ok(skip.y+skip.height<=901,'continue remains reachable');
+ fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:`test-results/upsell-before-cart-${width}.png`});
+ if(width===390){
+  await popup.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+  await page.getByRole('dialog',{name:'Fixture Soda',exact:true}).getByRole('button',{name:/Læg i pose/}).click();
+  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
+ }else await popup.getByRole('button',{name:'Luk',exact:true}).click();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
+ await expect(page.getByRole('dialog',{name:'Til din pizza'})).toHaveCount(0);
+ await expect(page.getByRole('region',{name:'Anbefalet til din ordre'})).toHaveCount(0);
+ await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);
+ await entry.click();await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
+ await expect(popup).toHaveCount(0);
+});
+test('failed upsell service opens the cart without losing items',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.route('**/api/public/upsell',route=>route.fulfill({status:503,body:'null',contentType:'application/json'}));
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await page.getByRole('button',{name:/Se kurv/}).click();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:/Din kurv/})).toBeVisible();
+ assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1);
 });

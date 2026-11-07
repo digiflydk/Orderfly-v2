@@ -7,7 +7,6 @@ import { useManagedDeliveryPrice } from '@/context/delivery-price-context';
 import { useMenuCheckout } from '@/hooks/use-menu-checkout';
 import { Button } from '@/components/ui/button';
 import { formatPrice } from '@/lib/storefront-format';
-import { InlineUpsell } from '@/components/product/inline-upsell';
 export function CartContents({ onEdit }: {
     onEdit?: () => void;
 }) {
@@ -36,7 +35,6 @@ export function CartContents({ onEdit }: {
         </div>
       </article>;
         })}
-    <InlineUpsell />
   </div>;
 }
 export function CartTotals({ onBrowse }: {

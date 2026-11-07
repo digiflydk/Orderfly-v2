@@ -13,13 +13,13 @@ import { UpsellValidationFeedback } from './upsell-validation-feedback';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
-import { getCategoriesForBrand, getProductsForBrand } from '@/app/superadmin/upsells/actions';
+import { getCategoriesForBrand, getProductsForBrand, getCombosForUpsellBrand } from '@/app/superadmin/upsells/actions';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import type { Upsell, Brand, Product, Location, Category, ProductForMenu } from '@/types';
+import type { Upsell, Brand, Product, Location, Category, ProductForMenu, ComboMenu } from '@/types';
 import { createOrUpdateUpsell, type FormState } from '@/app/superadmin/upsells/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -49,6 +49,7 @@ const upsellSchema = z.object({
 	brandId: z.string().min(1, 'A brand must be selected.'),
 	locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
 	upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
+    priority: z.coerce.number().int().min(0).max(9999).default(0),
 	description: z.string().optional().nullable(),
 	imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
 
@@ -178,6 +179,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 	const [state, formAction, isPending] = useActionState(createOrUpdateUpsell, null);
 	const [, startTransition] = useTransition();
 
+	const [brandCombos, setBrandCombos] = useState<ComboMenu[]>([]);
 	const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>(products || []);
 	const [brandCategories, setBrandCategories] = useState<Category[]>(categories || []);
 	const [isProductsLoading, setIsProductsLoading] = useState(false);
@@ -187,6 +189,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 		resolver: zodResolver(upsellSchema),
 		defaultValues: upsell ? {
 			...upsell,
+            priority: upsell.priority ?? 0,
 			description: upsell.description ?? undefined,
 			imageUrl: upsell.imageUrl ?? undefined,
 			discountValue: upsell.discountValue ?? undefined,
@@ -199,6 +202,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 			brandId: '',
 			locationIds: [],
 			upsellName: '',
+            priority: 0,
 			description: '',
 			offerType: 'product',
 			offerProductIds: [],
@@ -234,16 +238,22 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 	}, [selectedBrandId, locations]);
 
 	useEffect(() => {
+        let cancelled = false;
 		if (selectedBrandId) {
 			setIsProductsLoading(true);
 			Promise.all([
 				getProductsForBrand(selectedBrandId),
-				getCategoriesForBrand(selectedBrandId)
-			]).then(([products, categories]) => {
+				getCategoriesForBrand(selectedBrandId),
+                getCombosForUpsellBrand(selectedBrandId)
+			]).then(([products, categories, combos]) => {
+                if (cancelled) return;
+                setBrandCombos(combos);
 				setBrandProducts(products as ProductForMenu[]);
 				setBrandCategories(categories);
-			}).finally(() => {
-				setIsProductsLoading(false);
+			}).catch(() => {
+                if (!cancelled) toast({variant:'destructive', title:'Produkterne kunne ikke indlæses'});
+            }).finally(() => {
+				if (!cancelled) setIsProductsLoading(false);
 			});
 
 			if (upsell?.brandId !== selectedBrandId) {
@@ -253,11 +263,13 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 				setValue('offerCategoryIds', []);
 			}
 		} else {
-			setBrandProducts([]);
+			setBrandCombos([]);
+            setBrandProducts([]);
 			setBrandCategories([]);
 			setValue('locationIds', []);
 		}
-	}, [selectedBrandId, setValue, upsell?.brandId]);
+	    return () => { cancelled = true; };
+	}, [selectedBrandId, setValue, upsell?.brandId, toast]);
 
 	const filteredBrandProducts = useMemo(() => {
 		if (categoryFilter === 'all') return brandProducts;
@@ -442,7 +454,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 											</Button>
 											<div className="grid grid-cols-2 gap-4">
 												<FormField control={control} name={`triggerConditions.${index}.type`} render={({ field }) => (
-													<FormItem><FormLabel>Trigger Type</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a trigger" /></SelectTrigger></FormControl><SelectContent>
+													<FormItem><FormLabel>Trigger Type</FormLabel><Select onValueChange={value => { field.onChange(value); setValue(`triggerConditions.${index}.referenceId`, ''); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a trigger" /></SelectTrigger></FormControl><SelectContent>
 														<SelectItem value="product_in_cart">Product in Cart</SelectItem>
 														<SelectItem value="category_in_cart">Category in Cart</SelectItem>
 														<SelectItem value="cart_value_over">Cart Value Over</SelectItem>
@@ -460,6 +472,12 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 														<FormItem><FormLabel>Trigger Category</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map(c => <SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
 													)} />
 												)}
+                                                {triggerType === 'combo_in_cart' && <FormField control={control} name={`triggerConditions.${index}.referenceId`} render={({ field }) => (
+                                                    <FormItem><FormLabel>Trigger Menu</FormLabel><Select value={field.value} onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Select a menu" /></SelectTrigger></FormControl><SelectContent>{brandCombos.map(combo => <SelectItem key={combo.id} value={combo.id}>{combo.comboName}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                )} />}
+                                                {triggerType === 'product_tag_in_cart' && <FormField control={control} name={`triggerConditions.${index}.referenceId`} render={({ field }) => (
+                                                    <FormItem><FormLabel>Trigger Product Tag</FormLabel><Select value={field.value} onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Select a product tag" /></SelectTrigger></FormControl><SelectContent>{UPSELL_TAGS.map(tag => <SelectItem key={tag} value={tag}>{tag}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
+                                                )} />}
 												{triggerType === 'cart_value_over' && (
 													<FormField control={control} name={`triggerConditions.${index}.referenceId`} render={({ field }) => (
 														<FormItem><FormLabel>Cart Value Threshold</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} /></FormControl><FormMessage /></FormItem>
@@ -480,6 +498,8 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 						<Card>
 							<CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
 							<CardContent className="space-y-4">
+                                <FormField control={control} name="priority" render={({field}) => <FormItem><FormLabel>Priority</FormLabel><FormControl><Input type="number" min={0} max={9999} step={1} {...field}/></FormControl><FormDescription>Higher numbers are shown first. Default: 0.</FormDescription><FormMessage/></FormItem>} />
+
 								<FormField control={control} name="isActive" render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel><FormDescription>Is this upsell available?</FormDescription></div><FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
