@@ -60,7 +60,10 @@ const upsellSchema = z.object({
 	discountType: z.enum(['none', 'percentage', 'fixed_amount']),
 	discountValue: z.coerce.number({ invalid_type_error: 'Indtast et gyldigt tal.' }).finite('Indtast et endeligt tal.').positive('Rabatten skal være større end 0.').optional(),
 
-	triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
+	excludeProductIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+excludeCategoryIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+excludeComboIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
 	orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
 	activeDays: z.array(z.string()).optional().default([]),
@@ -189,6 +192,10 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 		resolver: zodResolver(upsellSchema),
 		defaultValues: upsell ? {
 			...upsell,
+            excludeProductIds: upsell.excludeProductIds ?? [],
+            excludeCategoryIds: upsell.excludeCategoryIds ?? [],
+            excludeComboIds: upsell.excludeComboIds ?? [],
+
             priority: upsell.priority ?? 0,
 			description: upsell.description ?? undefined,
 			imageUrl: upsell.imageUrl ?? undefined,
@@ -214,6 +221,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 			activeDays: WEEKDAYS,
 			activeTimeSlots: [{ start: '00:00', end: '23:59' }],
 			triggerConditions: [],
+excludeProductIds: [], excludeCategoryIds: [], excludeComboIds: [],
 		},
 	});
 
@@ -259,6 +267,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 			if (upsell?.brandId !== selectedBrandId) {
 				setValue('locationIds', []);
 				setValue('triggerConditions', []);
+setValue('excludeProductIds', []); setValue('excludeCategoryIds', []); setValue('excludeComboIds', []);
 				setValue('offerProductIds', []);
 				setValue('offerCategoryIds', []);
 			}
@@ -441,7 +450,8 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 							</CardContent>
 						</Card>
 
-						<Card>
+						<Card><CardHeader><CardTitle>Vis ikke tilbuddet, hvis kurven indeholder …</CardTitle><CardDescription>Tilbuddet springes over, hvis mindst ét valg findes i kurven, også i en menu eller som tilvalg. Uden valg vises tilbuddet efter de normale betingelser.</CardDescription></CardHeader><CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4"><FormField control={control} name="excludeProductIds" render={({field}) => (<FormItem><FormLabel>Produkter</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandProducts.map(p => ({id:p.id, name:p.productName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /><FormField control={control} name="excludeCategoryIds" render={({field}) => (<FormItem><FormLabel>Kategorier</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandCategories.map(p => ({id:p.id, name:p.categoryName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /><FormField control={control} name="excludeComboIds" render={({field}) => (<FormItem><FormLabel>Menuer</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandCombos.map(p => ({id:p.id, name:p.comboName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /></CardContent></Card>
+<Card>
 							<CardHeader><CardTitle>Trigger Conditions</CardTitle><CardDescription>Define when this upsell offer should be shown. The offer triggers if ANY of these conditions are met.</CardDescription></CardHeader>
 							<CardContent className="space-y-4">
 								<UpsellValidationFeedback state={clientValidation ?? state} field="triggerConditions" />

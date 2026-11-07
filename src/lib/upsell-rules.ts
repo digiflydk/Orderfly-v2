@@ -17,3 +17,8 @@ export function upsellTriggered(upsell: Upsell, offeredProductId: string, items:
 export function compareUpsells(a: Upsell, b: Upsell) {
   return (b.priority ?? 0) - (a.priority ?? 0) || a.id.localeCompare(b.id);
 }
+
+/** Display-only exclusions never revoke an accepted offer's checkout discount. */
+export function upsellExcluded(upsell: Pick<Upsell, 'excludeProductIds' | 'excludeCategoryIds' | 'excludeComboIds'>, products: {id:string; categoryId?:string}[], comboIds: string[]): boolean {
+  return products.some(p => upsell.excludeProductIds?.includes(p.id) || (p.categoryId && upsell.excludeCategoryIds?.includes(p.categoryId))) || comboIds.some(id => upsell.excludeComboIds?.includes(id));
+}

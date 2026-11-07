@@ -622,6 +622,9 @@ export type Upsell = {
 
   // Trigger Logic
   triggerConditions: TriggerCondition[];
+  excludeProductIds?: string[];
+  excludeCategoryIds?: string[];
+  excludeComboIds?: string[];
 
   // Availability
   orderTypes: ('pickup' | 'delivery')[];
