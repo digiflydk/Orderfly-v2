@@ -6,6 +6,7 @@ class AuthorityError extends Error { constructor(status){super('authority');this
 function fixture({cookie=true,session={superuser:false,permissions:['orderfly.orders:view']},failure}={}){
  let calls=0;const denied=()=>null, terminal=()=>null, employee=()=>null,logout=()=>null;
  const mocks={
+  '@/lib/orders/kds-scope':{resolveKdsScope:async()=>({locations:[{brandId:'b1',locationId:'l1',brandName:'Esmeralda',locationName:'Amager'}]})},
   'next/headers':{cookies:async()=>({has:()=>cookie})},
   'next/navigation':{redirect:href=>{throw Object.assign(Error('redirect'),{href});}},
   '@/lib/access/orderfly-session':{orderflySession:async()=>{calls++;if(failure)throw failure;return session;}},
@@ -24,7 +25,7 @@ test('KDS uses existing order access for employee and superadmin, without name e
  for(const session of [{superuser:true,permissions:[]},{superuser:false,permissions:['orderfly.orders:view']}]){
   const f=fixture({session}),tree=await f.run(),children=tree.props.children;
   assert.equal(children[1].type,f.employee);assert.equal(children[1].props.loginHref,'/kds/login');
-  assert.equal(children[1].props.fixedScope,undefined);assert.equal(children[1].props.apiBase,undefined);
+  assert.equal(children[1].props.fixedScope,undefined);assert.equal(children[1].props.apiBase,'/api/kds/orders');assert.equal(children[1].props.actionApiBase,'/api/merchant/orders');assert.equal(children[1].props.initialLocations[0].brandName,'Esmeralda');
   assert.equal(children[0].type,f.logout);assert.equal(children[0].props.loginHref,'/kds/login');assert.equal(f.calls(),1);
  }
 });

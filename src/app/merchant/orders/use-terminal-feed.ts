@@ -8,7 +8,7 @@ const TIMEOUT_MS = 12_000;
 // ordering of authorization evidence across foreground and background reads.
 let authorizationRevision = 0;
 let latestAuthorizationDenial = 0;
-export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders') {
+export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders', notifications = true) {
   const key = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== '') as [string, string][]).toString();
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -19,10 +19,12 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [newOrders, setNewOrders] = useState(0);
-  const [sound, setSound] = useState(false);
+  const [sound, setSound] = useState(true);
+  const [volume, setVolumeState] = useState(80);
+  const volumeRef = useRef(80);
   const [soundError, setSoundError] = useState('');
   const [tick, setTick] = useState(0);
-  const audio = useRef<AudioContext | null>(null), soundEnabled = useRef(false);
+  const audio = useRef<AudioContext | null>(null), soundEnabled = useRef(true);
   const stopMelody = useRef<(() => void) | null>(null);
   const seen = useRef<Set<string> | null>(null), active = useRef<AbortController | null>(null);
   const generation = useRef(0), nextCursor = useRef<string | null>(null);
@@ -32,7 +34,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const clearNewOrders = useCallback(() => setNewOrders(0), []);
   const beep = useCallback(() => {
     const context = audio.current;
-    if (!soundEnabled.current || !context) return;
+    if (!soundEnabled.current || !context || volumeRef.current === 0) return;
     if (context.state !== 'running') { setSoundError('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.'); return; }
     try {
       stopMelody.current?.();
@@ -44,7 +46,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
         const at = start + index * 0.45;
         oscillator.frequency.setValueAtTime(frequency, at);
         gain.gain.setValueAtTime(0.001, at);
-        gain.gain.exponentialRampToValueAtTime(0.12, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.001, 0.15 * volumeRef.current / 100), at + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.001, at + 0.42);
       });
       let stopped = false;
@@ -57,20 +59,62 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       oscillator.start(start); oscillator.stop(start + 3.6);
     } catch { setSoundError('Lyden kunne ikke afspilles. Nye ordrer vises stadig på skærmen.'); }
   }, []);
-  const toggleSound = useCallback(async () => {
-    if (soundEnabled.current && !soundError) { soundEnabled.current = false; stopMelody.current?.(); setSound(false); return; }
+  const saveSound = (value: boolean) => { try { localStorage.setItem('orderfly.kds.sound', String(value)); } catch {} };
+  const prepareAudio = useCallback(() => {
+    const Audio = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Audio) throw new Error('unsupported');
+    if (!audio.current || audio.current.state === 'closed') audio.current = new Audio();
+    return audio.current;
+  }, []);
+  const testSound = useCallback(async () => {
+    soundEnabled.current = true; setSound(true); saveSound(true);
     try {
-      const Audio = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!Audio) throw new Error('unsupported');
-      audio.current ??= new Audio();
-      await audio.current.resume();
-      if (audio.current.state !== 'running') throw new Error('suspended');
-      soundEnabled.current = true; setSound(true); setSoundError(''); beep();
-    } catch { soundEnabled.current = false; setSound(false); setSoundError('Lyd er ikke tilgængelig. Brug det synlige ordreoverblik.'); }
-  }, [beep, soundError]);
+      const context = prepareAudio();
+      // Safari may leave resume pending until a gesture. Always show the
+      // activation state before awaiting it, including on unsupported devices.
+      setSoundError('Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
+      await context.resume();
+      if (!soundEnabled.current) return;
+      if (context.state !== 'running') throw new Error('suspended');
+      setSoundError(''); beep();
+    } catch { setSoundError('Lyden kunne ikke aktiveres. Tryk på “Test lyd” for at prøve igen.'); }
+  }, [beep, prepareAudio]);
+  const toggleSound = useCallback(async () => {
+    if (soundEnabled.current) {
+      soundEnabled.current = false; stopMelody.current?.(); setSound(false); setSoundError(''); saveSound(false);
+    } else await testSound();
+  }, [testSound]);
+  const setVolume = useCallback((value: number) => {
+    if (!Number.isFinite(value)) return;
+    const level = Math.max(0, Math.min(100, Math.round(value)));
+    volumeRef.current = level; setVolumeState(level); stopMelody.current?.();
+    try { localStorage.setItem('orderfly.kds.volume', String(level)); } catch {}
+  }, []);
+  useEffect(() => {
+    if (!notifications) { soundEnabled.current = false; return; }
+    try {
+      const savedVolume = localStorage.getItem('orderfly.kds.volume');
+      if (savedVolume !== null && Number.isFinite(Number(savedVolume))) {
+        volumeRef.current = Math.max(0, Math.min(100, Number(savedVolume))); setVolumeState(volumeRef.current);
+      }
+      soundEnabled.current = localStorage.getItem('orderfly.kds.sound') !== 'false';
+      setSound(soundEnabled.current);
+    } catch {}
+    if (!soundEnabled.current) return;
+    try {
+      const context = prepareAudio();
+      if (context.state !== 'running') setSoundError('Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
+      const changed = () => {
+        if (soundEnabled.current) setSoundError(context.state === 'running' ? '' : 'Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
+      };
+      context.onstatechange = changed;
+      // No startup melody. Notifications start after the first complete snapshot.
+      return () => { context.onstatechange = null; };
+    } catch { setSoundError('Lyden kunne ikke aktiveres. Tryk på “Test lyd” for at prøve igen.'); }
+  }, [notifications, prepareAudio]);
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 5_000);
-    return () => { clearInterval(timer); stopMelody.current?.(); void audio.current?.close(); };
+    return () => { clearInterval(timer); soundEnabled.current = false; stopMelody.current?.(); void audio.current?.close(); audio.current = null; };
   }, []);
   useEffect(() => {
     const current = ++generation.current;
@@ -173,5 +217,5 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   }, [key, beep, enabled, endpoint]);
   const stale = lastUpdated !== null && (Date.now() - lastUpdated > 45_000 || offline || !!error);
   void tick;
-  return { data, loading, error, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound };
+  return { data, loading, error, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume };
 }

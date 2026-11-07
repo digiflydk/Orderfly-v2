@@ -177,3 +177,15 @@ test('delivered-only scan page retains cursor and reaches following active order
  assert.equal(history.orders.length,50);assert.equal(history.hasMore,true);
  assert.ok(history.orders.every(o=>o.status==='Ready'&&o.managedDeliveryTracking.deliveryStatus==='delivered'));
 });
+test('server-resolved KDS scope skips global grants and still rejects foreign query scope',async()=>{
+ const f=fixture({denyView:true,rows:[order('a')]});
+ const scope={locations:[{brandId:'b1',locationId:'l1',brandName:'Esmeralda',locationName:'Amager'}],editableLocationIds:[],identity:{provider:'firebase',subject:'operator'}};
+ const result=await f.readTerminalOrders({},now,'admin',scope);assert.deepEqual(result.orders.map(o=>o.id),['a']);assert.equal(result.canEdit,false);assert.deepEqual(f.access,[]);
+ await assert.rejects(f.readTerminalOrders({brandId:'b2',locationId:'l2'},now,'admin',scope),e=>e.status===403);
+});
+test('delivery enrichment is bounded concurrent work and verifies identity once per request',async()=>{
+ let inFlight=0,max=0,identities=0;
+ const f=fixture({rows:Array.from({length:9},(_,i)=>order('o'+i,{managedDelivery:{}})),tracking:async()=>{inFlight++;max=Math.max(max,inFlight);await new Promise(r=>setTimeout(r,5));inFlight--;return null;}});
+ f.mocks['@/lib/access/orderfly-session'].verifiedOrderflyIdentity=async()=>{identities++;return {provider:'firebase',subject:'operator'};};
+ const result=await f.readTerminalOrders({},now);assert.equal(result.orders.length,9);assert.equal(identities,1);assert.equal(max,4);
+});

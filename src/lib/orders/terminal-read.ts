@@ -1,4 +1,5 @@
 import 'server-only';
+import type { KdsScope } from './kds-scope';
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { loadAuthorizedDeliveryTracking } from '@/lib/delivery/tracking-server';
@@ -92,14 +93,14 @@ function matches(order: TerminalOrder, q: z.infer<typeof querySchema>, today: st
 }
 
 /** Each request revalidates grants. Cursor selects a position, never authority. */
-export async function readTerminalOrders(input: TerminalQuery = {}, now = new Date(), source: OrderTerminalAuthSource = 'admin'): Promise<TerminalReadResult> {
+export async function readTerminalOrders(input: TerminalQuery = {}, now = new Date(), source: OrderTerminalAuthSource = 'admin', kdsScope?: KdsScope): Promise<TerminalReadResult> {
   const parsed = querySchema.safeParse(input);
   if (!parsed.success || !Number.isFinite(now.getTime())) return invalid();
   const q = parsed.data, db = getAdminDb();
   const actor = source === 'terminal' ? await getOrderTerminalActor('terminal') : null;
-  const grants = actor?.kind === 'terminal' ? [{ brandId: actor.session.brandId, locationIds: [actor.session.locationId] }] : await orderflyReadGrants('orderfly.orders:view');
+  const grants = kdsScope ? [] : actor?.kind === 'terminal' ? [{ brandId: actor.session.brandId, locationIds: [actor.session.locationId] }] : await orderflyReadGrants('orderfly.orders:view');
   if (grants.length > MAX_LOCATIONS) throw new TerminalReadError('terminal_scope_too_large', 409);
-  const locations: TerminalLocation[] = [];
+  const locations: TerminalLocation[] = kdsScope ? [...kdsScope.locations] : [];
   for (const grant of grants) {
     const brand = await db.collection('brands').doc(grant.brandId).get();
     if (!brand.exists) continue;
@@ -124,7 +125,9 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
     selectedLocationId: selected?.locationId ?? null, canEdit: false, serverTime: now.toISOString(), nextCursor: null, hasMore: false };
   if (!selected) return empty;
   let canEdit = false;
-  if (actor) {
+  if (kdsScope) {
+    canEdit = kdsScope.editableLocationIds.includes(selected.locationId);
+  } else if (actor) {
     await db.runTransaction(tx => authorizeOrderTerminalTransaction(tx, actor, { brandId: selected.brandId, locationId: selected.locationId }), { readOnly: true });
     canEdit = true;
   } else {
@@ -148,37 +151,50 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
   const next: Record<string, string | null> = {}, orders: TerminalOrder[] = [];
   const today = analyticsCalendarDay(now);
   let responseBytes = 0;
-  for (const status of statuses) {
-    if (after[status] === null) { next[status] = null; continue; }
+  let identityPromise: ReturnType<typeof verifiedOrderflyIdentity> | undefined;
+  const pages = await Promise.all(statuses.map(async status => {
+    if (after[status] === null) return { status, docs: [], more: false };
     let query = db.collection('orders').where('brandId', '==', selected.brandId)
       .where('locationId', '==', selected.locationId).where('status', '==', status).orderBy(FieldPath.documentId());
     if (after[status]) query = query.startAfter(after[status]);
     const snapshot = await query.limit(PAGE_PER_STATUS + 1).get();
     const docs = snapshot.docs.slice(0, PAGE_PER_STATUS);
-    next[status] = snapshot.docs.length > PAGE_PER_STATUS ? docs.at(-1)!.id : null;
-    for (const doc of docs) {
-      const raw = doc.data();
-      if (raw.brandId !== selected.brandId || raw.locationId !== selected.locationId || raw.status !== status) continue;
-      if (q.view !== 'history' && raw.paymentStatus !== 'Paid' && (raw.psp || raw.discountReservation !== 'held')) continue;
-      const order = projectTerminalOrder(doc.id, raw);
-      if (order && matches(order, q, today)) {
-        if(order.managedDelivery){
-          const identity=actor?null:await verifiedOrderflyIdentity();
-          const tracking=await db.runTransaction(async tx=>{
-            const fresh=(await tx.get(doc.ref)).data();
-            if(!fresh||fresh.brandId!==selected.brandId||fresh.locationId!==selected.locationId)throw new AuthorityError('forbidden');
-            if(actor)await authorizeOrderTerminalTransaction(tx,actor,{brandId:selected.brandId,locationId:selected.locationId});
-            else await authorizeTransaction(tx,identity!,fresh,'orderfly.orders:view','location');
-            return loadAuthorizedDeliveryTracking(tx,doc.id,fresh);
-          },{readOnly:true});
-          if(tracking)order.managedDeliveryTracking=tracking;
+    return { status, docs, more: snapshot.docs.length > PAGE_PER_STATUS };
+  }));
+  for (const { status, docs, more } of pages) {
+    next[status] = more ? docs.at(-1)!.id : null;
+    // Bound tracking work to four concurrent transactions per status page.
+    for (let offset = 0; offset < docs.length; offset += 4) {
+      const batch = await Promise.all(docs.slice(offset, offset + 4).map(async doc => {
+        const raw = doc.data();
+        if (raw.brandId !== selected.brandId || raw.locationId !== selected.locationId || raw.status !== status) return null;
+        if (q.view !== 'history' && raw.paymentStatus !== 'Paid' && (raw.psp || raw.discountReservation !== 'held')) return null;
+        const order = projectTerminalOrder(doc.id, raw);
+        if (order && matches(order, q, today)) {
+          if(order.managedDelivery){
+            const identity=actor?null:kdsScope?.identity ?? await (identityPromise ??= verifiedOrderflyIdentity());
+            const tracking=await db.runTransaction(async tx=>{
+              const fresh=(await tx.get(doc.ref)).data();
+              if(!fresh||fresh.brandId!==selected.brandId||fresh.locationId!==selected.locationId)throw new AuthorityError('forbidden');
+              if(actor)await authorizeOrderTerminalTransaction(tx,actor,{brandId:selected.brandId,locationId:selected.locationId});
+              else await authorizeTransaction(tx,identity!,fresh,'orderfly.orders:view','location');
+              return loadAuthorizedDeliveryTracking(tx,doc.id,fresh);
+            },{readOnly:true});
+            if(tracking)order.managedDeliveryTracking=tracking;
+          }
+          // Courier completion closes active queues without rewriting kitchen status.
+          // Only the freshly authorized, identity-bound tracking projection can hide a row.
+          if(q.view!=='history'&&order.managedDeliveryTracking?.deliveryStatus==='delivered')return null;
+          return order;
         }
-        // Courier completion closes active queues without rewriting kitchen status.
-        // Only the freshly authorized, identity-bound tracking projection can hide a row.
-        if(q.view!=='history'&&order.managedDeliveryTracking?.deliveryStatus==='delivered')continue;
-        responseBytes += Buffer.byteLength(JSON.stringify(order), 'utf8');
-        if (responseBytes > 2 * 1024 * 1024) throw new TerminalReadError('terminal_result_too_large', 409);
-        orders.push(order);
+        return null;
+      }));
+      for (const order of batch) {
+        if (order) {
+          responseBytes += Buffer.byteLength(JSON.stringify(order), 'utf8');
+          if (responseBytes > 2 * 1024 * 1024) throw new TerminalReadError('terminal_result_too_large', 409);
+          orders.push(order);
+        }
       }
     }
   }

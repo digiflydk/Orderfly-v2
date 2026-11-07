@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import type { TerminalOrder, TerminalQuery, TerminalView } from '@/lib/orders/terminal-types';
+import type { TerminalLocation, TerminalOrder, TerminalQuery, TerminalView } from '@/lib/orders/terminal-types';
 import { TerminalBoard } from './terminal-board';
 import { TerminalDetail } from './terminal-detail';
 import { TerminalHistory } from './terminal-history';
@@ -12,13 +12,15 @@ const tabs: { value: TerminalView; label: string }[] = [{ value: 'board', label:
 export type TerminalClientProps = {
   fixedScope?: { brandId: string; locationId: string };
   apiBase?: string;
+  actionApiBase?: string;
+  initialLocations?: TerminalLocation[];
   loginHref?: string;
   onLogout?: () => void;
   onAccessDenied?: () => void;
 };
-export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', loginHref = '/login', onLogout, onAccessDenied }: TerminalClientProps = {}) {
+export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', actionApiBase = apiBase, initialLocations, loginHref = '/login', onLogout, onAccessDenied }: TerminalClientProps = {}) {
   const [view, setView] = useState<TerminalView>('board');
-  const [scope, setScope] = useState<{ brandId?: string; locationId?: string }>(fixedScope ?? {});
+  const [scope, setScope] = useState<{ brandId?: string; locationId?: string }>(fixedScope ?? (initialLocations?.[0] ? { brandId: initialLocations[0].brandId, locationId: initialLocations[0].locationId } : {}));
   const [filters, setFilters] = useState({ search: '', dateFrom: '', dateTo: '' });
   const [selected, setSelected] = useState<TerminalOrder | null>(null);
   const [screenMessage, setScreenMessage] = useState('');
@@ -36,7 +38,7 @@ export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', l
       });
     }
   }, [scopeResolved, boardFeed.data?.selectedBrandId, boardFeed.data?.selectedLocationId]);
-  const otherFeed = useTerminalFeed(query, view !== 'board' && scopeResolved, apiBase);
+  const otherFeed = useTerminalFeed(query, view !== 'board' && scopeResolved, apiBase, false);
   const feed = view === 'board' ? boardFeed : otherFeed;
   const latestDenial = Math.max(boardFeed.deniedRevision, otherFeed.deniedRevision);
   const authorizationPending = boardFeed.authorizedRevision <= latestDenial || feed.authorizedRevision <= latestDenial;
@@ -55,7 +57,9 @@ export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', l
   const refresh = () => { feed.refresh(); if (view !== 'board') boardFeed.refresh(); };
   const data = authorizationPending ? null : feed.data;
   const order = selected && data?.orders.find(row => row.id === selected.id);
-  const selectedScope = data?.selectedBrandId && data.selectedLocationId ? `${data.selectedBrandId}/${data.selectedLocationId}` : '';
+  const locations = data?.locations ?? initialLocations ?? [];
+  const selectedScope = scope.brandId && scope.locationId ? `${scope.brandId}/${scope.locationId}` : '';
+  const pinnedLocation = initialLocations?.length === 1 ? initialLocations[0] : undefined;
   const status = disconnected ? 'Offline' : outdated || connectionError ? 'Forbindelsen skal kontrolleres' : feed.loading ? 'Opdaterer…' : 'Forbundet';
   const choose = (row: TerminalOrder) => { boardFeed.clearNewOrders(); setSelected(row); };
   async function fullscreen() {
@@ -67,9 +71,20 @@ export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', l
     } catch { setScreenMessage('Fuld skærm er ikke tilgængelig her. På iPad kan du bruge Føj til hjemmeskærm i Safari.'); }
   }
   return <div className="min-h-[80dvh] space-y-5 bg-white p-1 text-slate-900 sm:p-3">
-    <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Orderfly · Ordreterminal</p><h1 className="mt-1 text-2xl font-bold">Dagens ordrer</h1>{!fixedScope && <a className="mt-1 inline-block py-2 text-sm text-slate-600 underline" href="/merchant">Tilbage til oversigt</a>}</div><div className="flex flex-wrap items-center gap-2">{onLogout && <button className="min-h-12 rounded-xl border px-4 font-medium" onClick={onLogout}>Log ud</button>}<button className="min-h-12 rounded-xl border px-4 font-medium" aria-pressed={boardFeed.sound} onClick={() => void boardFeed.toggleSound()}>{boardFeed.sound ? (boardFeed.soundError ? 'Aktivér lyd igen' : 'Slå lyd fra') : 'Slå lyd til'}</button><button className="min-h-12 rounded-xl border px-4 font-medium" onClick={() => void fullscreen()}>Fuld skærm</button><button className="min-h-12 rounded-xl bg-slate-900 px-5 font-semibold text-white disabled:opacity-50" onClick={refresh} disabled={feed.loading}>Opdater</button></div></header>
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><label className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">Restaurant{fixedScope ? <span className="text-base">{data ? `${data.locations.find(row => row.brandId === fixedScope.brandId && row.locationId === fixedScope.locationId)?.brandName || data.orders[0]?.brandName || 'Restaurant'} · ${data.locations.find(row => row.locationId === fixedScope.locationId)?.locationName || data.orders[0]?.locationName || 'Lokation'}` : 'Indlæser…'}</span> : <select aria-label="Restaurant" className="min-h-12 max-w-full rounded-lg border bg-white px-3 text-base" value={selectedScope} disabled={!data?.locations.length} onChange={event => { const location = data?.locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) { setSelected(null); setScope({ brandId: location.brandId, locationId: location.locationId }); } }}>
-      {!data?.locations.length && <option value="">Henter restauranter…</option>}{data?.locations.map(location => <option key={`${location.brandId}/${location.locationId}`} value={`${location.brandId}/${location.locationId}`}>{location.brandName} · {location.locationName}</option>)}</select>}</label><div className="text-sm"><span className={`inline-block mr-2 h-2.5 w-2.5 rounded-full ${disconnected || outdated || connectionError ? 'bg-amber-500' : 'bg-emerald-600'}`} aria-hidden="true" /><span role="status">{status}</span>{feed.lastUpdated && <span className="ml-2 text-slate-500">Senest {new Date(feed.lastUpdated).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}</div></div>
+    <header className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">Orderfly · Ordreterminal</p><h1 className="mt-1 text-2xl font-bold">Dagens ordrer</h1>{!fixedScope && !initialLocations && <a className="mt-1 inline-block py-2 text-sm text-slate-600 underline" href="/merchant">Tilbage til oversigt</a>}</div><div className="flex flex-wrap items-center gap-2">{onLogout && <button className="min-h-12 rounded-xl border px-4 font-medium" onClick={onLogout}>Log ud</button>}<button className="min-h-12 rounded-xl border px-4 font-medium" aria-pressed={boardFeed.sound} onClick={() => void boardFeed.toggleSound()}>{boardFeed.sound ? 'Slå lyd fra' : 'Slå lyd til'}</button><button className="min-h-12 rounded-xl border px-4 font-medium" onClick={() => void fullscreen()}>Fuld skærm</button><button className="min-h-12 rounded-xl bg-slate-900 px-5 font-semibold text-white disabled:opacity-50" onClick={refresh} disabled={feed.loading}>Opdater</button></div></header>
+    <details className="rounded-xl border bg-slate-50 p-3">
+      <summary className="min-h-10 cursor-pointer font-semibold">Lydindstillinger · {boardFeed.sound ? 'Til' : 'Fra'} · {boardFeed.volume}%</summary>
+      <div className="flex flex-wrap items-center gap-4 pt-2">
+        <button className="min-h-12 rounded-xl border bg-white px-4 font-medium" onClick={() => void boardFeed.testSound()}>Test lyd</button>
+        <label className="flex items-center gap-3">Lydstyrke
+          <input aria-label="Lydstyrke" type="range" min="0" max="100" step="5" value={boardFeed.volume} onChange={event => boardFeed.setVolume(Number(event.target.value))} />
+          <output>{boardFeed.volume}%</output>
+        </label>
+        <p className="text-sm text-slate-600">Melodi på 3,6 sekunder. Enhedens egen lydstyrke gælder også.</p>
+      </div>
+    </details>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-slate-50 p-3"><label className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">Restaurant{pinnedLocation ? <span className="text-base">{pinnedLocation.brandName} · {pinnedLocation.locationName}</span> : fixedScope ? <span className="text-base">{data ? `${data.locations.find(row => row.brandId === fixedScope.brandId && row.locationId === fixedScope.locationId)?.brandName || data.orders[0]?.brandName || 'Restaurant'} · ${data.locations.find(row => row.locationId === fixedScope.locationId)?.locationName || data.orders[0]?.locationName || 'Lokation'}` : 'Indlæser…'}</span> : <select aria-label="Restaurant" className="min-h-12 max-w-full rounded-lg border bg-white px-3 text-base" value={selectedScope} disabled={!locations.length} onChange={event => { const location = locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) { setSelected(null); setScope({ brandId: location.brandId, locationId: location.locationId }); } }}>
+      {!locations.length && <option value="">Henter restauranter…</option>}{locations.map(location => <option key={`${location.brandId}/${location.locationId}`} value={`${location.brandId}/${location.locationId}`}>{location.brandName} · {location.locationName}</option>)}</select>}</label><div className="text-sm"><span className={`inline-block mr-2 h-2.5 w-2.5 rounded-full ${disconnected || outdated || connectionError ? 'bg-amber-500' : 'bg-emerald-600'}`} aria-hidden="true" /><span role="status">{status}</span>{feed.lastUpdated && <span className="ml-2 text-slate-500">Senest {new Date(feed.lastUpdated).toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>}</div></div>
     <nav aria-label="Ordrevisning" className="flex flex-wrap gap-2 border-b pb-3">{tabs.map(tab => <button key={tab.value} aria-current={view === tab.value ? 'page' : undefined} className={`min-h-12 rounded-xl px-5 font-semibold ${view === tab.value ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`} onClick={() => { setSelected(null); setView(tab.value); }}>{tab.label}</button>)}</nav>
     {boardFeed.newOrders > 0 && <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 font-semibold text-blue-900"><span>{boardFeed.newOrders === 1 ? 'Der er kommet en ny ordre' : `Der er kommet ${boardFeed.newOrders} nye ordrer`}</span><button className="min-h-11 rounded-lg border border-blue-200 px-4" onClick={() => { setView('board'); boardFeed.clearNewOrders(); }}>Vis nye ordrer</button></div>}
     {(boardFeed.soundError || screenMessage) && <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm">{boardFeed.soundError || screenMessage}</p>}
@@ -77,7 +92,7 @@ export function TerminalClient({ fixedScope, apiBase = '/api/merchant/orders', l
     {view === 'board' && <TerminalBoard orders={data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
     {view === 'history' && <TerminalHistory error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
     {view === 'preorders' && <TerminalPreorders error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} serverTime={data?.serverTime} />}
-    {data && order && <TerminalDetail key={order.id} order={order} statusEndpoint={`${apiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <TerminalReprint onAccessDenied={onAccessDenied} apiEndpoint={`${apiBase}/reprint`} orderId={order.id} brandId={order.brandId} locationId={order.locationId} /> : undefined} />}
+    {data && order && <TerminalDetail key={order.id} order={order} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <TerminalReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={order.id} brandId={order.brandId} locationId={order.locationId} /> : undefined} />}
     <p className="text-xs text-slate-500">Hold siden åben for nye ordrer. Lyden skal aktiveres med et tryk og kan sættes på pause, når iPad låses.</p>
   </div>;
 }
