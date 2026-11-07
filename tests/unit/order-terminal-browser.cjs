@@ -57,6 +57,23 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
       createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime(value) { window.__audioGains.push(value); } } }; }
     };
   }, {suspended: !!extra.suspendedAudio});
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.__pushConnections = 0; window.__pushSend = () => {};
+    window.fetch = (url, options) => {
+      if (!String(url).includes('/orders/events?')) return original(url, options);
+      window.__pushConnections++;
+      const encoder = new TextEncoder();
+      let timer;
+      const stream = new ReadableStream({ start(controller) {
+        window.__pushSend = event => controller.enqueue(encoder.encode(`event: ${event}\ndata: {}\n\n`));
+        window.__pushSend('ready');
+        timer = setInterval(() => window.__pushSend('heartbeat'), 15000);
+        options.signal.addEventListener('abort', () => { clearInterval(timer); controller.close(); });
+      }, cancel() { clearInterval(timer); } });
+      return Promise.resolve(new Response(stream, { headers: {'content-type':'text/event-stream'} }));
+    };
+  });
   const state = { orders: [order('ORD-NEW'), order('ORD-COOK', { status: 'In Progress' }), order('ORD-READY', { status: 'Ready' }), order('ORD-UNPAID', { status: 'Ready', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup' }), order('ORD-HISTORY', { status: 'Completed' }), order('ORD-FUTURE', { fulfillmentAt: '2026-10-26T12:15:00.000Z' })], readStatus: 200, statusError: null, canEdit: true, emptyPage: false, ...extra };
   await page.exposeFunction('__registerPayment', async (id, method) => { calls.push({ kind: 'payment', id, method }); state.orders.find(o => o.id === id).paymentStatus = 'Paid'; return { success: true, message: 'Betalingen er registreret.' }; });
   if (extra.kitchenMode) await page.addInitScript(() => { window.__kitchenMode = true; });
@@ -84,6 +101,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     calls.push({ kind: 'read', path:url.pathname, query: Object.fromEntries(url.searchParams) });
     if (state.historyReadStatus && url.searchParams.get('view') === 'history') return route.fulfill({status:state.historyReadStatus,json:{error:'terminal_unavailable'}});
     if (state.boardReadStatus && url.searchParams.get('view') === 'board') return route.fulfill({status:state.boardReadStatus,json:{error:'forbidden'}});
+    if (state.failHistoryOnce && url.searchParams.get('view') === 'history') {state.failHistoryOnce=false;return route.fulfill({status:503,json:{error:'terminal_unavailable'}});}
     if (state.failOnce) {state.failOnce=false;return route.fulfill({status:503,json:{error:'terminal_unavailable'}});}
     if (state.readStatus !== 200) return route.fulfill({ status: state.readStatus, json: { error: state.readStatus === 401 ? 'unauthorized' : 'terminal_unavailable', message: 'Ordrene kunne ikke hentes.' } });
     if (state.initialRevoked && url.searchParams.get('brandId') === 'brand-a') return route.fulfill({status:403,json:{error:'forbidden'}});
@@ -406,10 +424,10 @@ test('kitchen cards show all details and large progress buttons without dialogs;
 });
 test('kitchen menu selects and persists sounds, threshold and volume',async t=>{
  const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
- await expect(page.getByLabel('Vælg lyd',{exact:true})).not.toBeVisible();await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();
- await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByLabel('Alarm efter minutter',{exact:true}).fill('8');await page.getByRole('slider',{name:'Lydstyrke'}).fill('60');
+ await expect(page.getByLabel('Vælg lyd',{exact:true})).not.toBeVisible();await page.getByRole('button',{name:'Menu',exact:true}).click();
+ await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Alarm efter minutter',{exact:true}).fill('8');await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('slider',{name:'Lydstyrke'}).fill('60');
  await page.getByRole('button',{name:'Test lyd',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__audioNotes[0]?.value)).toBe(392);
- await page.reload();await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveValue('marimba');await expect(page.getByLabel('Alarm efter minutter',{exact:true})).toHaveValue('8');await expect(page.getByRole('slider',{name:'Lydstyrke'})).toHaveValue('60');
+ await page.reload();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveValue('marimba');await expect(page.getByRole('slider',{name:'Lydstyrke'})).toHaveValue('60');await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await expect(page.getByLabel('Alarm efter minutter',{exact:true})).toHaveValue('8');
 });
 test('clock edits are inline, save server time and preserve customer fulfillment time',async t=>{
  const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
@@ -433,12 +451,30 @@ test('immersive kitchen persists through scroll and native exit until its close 
 test('history remains connected after 45 seconds and one transient refresh retries without a false error banner',async t=>{
  const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();await page.clock.runFor(61_000);
  await expect(page.getByText('Forbindelsen skal kontrolleres',{exact:true})).toHaveCount(0);await expect(page.getByRole('alert')).toHaveCount(0);
- const before=calls.filter(c=>c.kind==='read').length;state.failOnce=true;await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect.poll(()=>calls.filter(c=>c.kind==='read').length).toBeGreaterThan(before+1);await expect(page.getByRole('alert')).toHaveCount(0);
+ const before=calls.filter(c=>c.kind==='read').length;state.failHistoryOnce=true;await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect.poll(()=>calls.filter(c=>c.kind==='read').length).toBeGreaterThan(before+1);await expect(page.getByRole('alert')).toHaveCount(0);
 });
 test('overdue threshold is configurable and alarm repeats at most once a minute',async t=>{
  const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,orders:[order('LATE',{fulfillmentAt:'2026-10-25T11:56:00.000Z'})]});
  await expect(page.getByRole('article',{name:'Ordre LATE',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
- await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();await page.getByLabel('Alarm efter minutter',{exact:true}).fill('3');await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Alarm efter minutter',{exact:true}).fill('3');await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
  await page.clock.runFor(59_000);assert.equal(await page.evaluate(()=>window.__audioStarts),1);await page.clock.runFor(2_000);await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
- await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.clock.runFor(61_000);assert.equal(await page.evaluate(()=>window.__audioStarts),2);
+ await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.clock.runFor(61_000);assert.equal(await page.evaluate(()=>window.__audioStarts),2);
+});
+
+test('KDS stays fresh on heartbeats without polling, and changes fetch scoped orders',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,suspendedAudio:true});
+ await expect(page.getByRole('article',{name:'Ordre ORD-NEW',exact:true})).toBeVisible();
+ await expect(page.getByText('Forbundet',{exact:true})).toBeVisible();
+ const before=calls.filter(c=>c.kind==='read').length;
+ await page.clock.runFor(120_000);
+ assert.equal(calls.filter(c=>c.kind==='read').length,before,'no timer-based order reads');
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toHaveCount(0);
+ await expect(page.getByText('Afhentnings-/leveringsdato · dansk tid',{exact:true})).toHaveCount(0);
+ const date=await page.getByLabel('Ordredato',{exact:true}).boundingBox(),tabs=await page.getByRole('navigation',{name:'Ordrevisning'}).boundingBox();assert.ok(Math.abs(date.y-tabs.y)<15);assert.ok(tabs.x>date.x+date.width);
+ const card=page.getByRole('article',{name:'Ordre ORD-NEW',exact:true});const button=await card.getByRole('button',{name:'Start tilberedning',exact:true}).boundingBox(),clock=await card.getByRole('button',{name:'Ændr klartid for ORD-NEW',exact:true}).boundingBox();assert.ok(button.y<clock.y);
+ state.orders.push(order('PUSH-NEW'));await page.evaluate(()=>window.__pushSend('change'));
+ await expect(page.getByRole('article',{name:'Ordre PUSH-NEW',exact:true})).toBeVisible();assert.ok(calls.filter(c=>c.kind==='read').length>before);
+ state.readStatus=403;await page.evaluate(()=>window.__pushSend('access'));
+ await expect(page.getByRole('article')).toHaveCount(0);await expect(page.getByRole('alert')).toBeVisible();
 });

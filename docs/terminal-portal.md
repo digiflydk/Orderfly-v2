@@ -132,3 +132,62 @@ existing terminal authentication/status regressions. GitHub Actions are not used
 After an uncertain inline payment response, Kontrollér betalingsstatus requires a
 new authorized read before enabling another explicit payment confirmation. A failed
 refresh never unlocks it; paid orders are reconciled without another payment write.
+
+### Compact KDS header and push updates (7 November 2026)
+
+KDS has a hamburger button beside the title. Its Settings panel separates Sound
+(test, melody, mute and volume) from Order settings (overdue alarm threshold).
+Audio activation/error help lives inside Sound settings instead of a page-wide
+banner. Logout sits immediately beside Refresh for both employee and terminal
+sessions. On tablet landscape the service-date selector and right-aligned view
+tabs share a row; they wrap on narrow screens. The service-date helper is removed.
+Kitchen status buttons now follow the order-number header, before the clock and
+customer details. The existing Copenhagen service-date semantics are unchanged:
+fulfillment date, falling back to creation date, independent of kitchen-only ETA.
+
+KDS now subscribes to cookie-authenticated notification-only SSE at
+`/api/kds/orders/events?brandId=…&locationId=…` or the dedicated terminal equivalent.
+Source is fixed by the route. Employee access resolves the host-bound KDS scope;
+terminal access validates its own session and native location transaction. Unknown,
+duplicate or foreign scope parameters fail before any subscription is established.
+The channel sends only empty `ready`, `change`, `heartbeat`, `access`, `unavailable`
+and `reconnect` events. It never sends order/customer/policy/session contents.
+
+Three server-side Firestore listeners watch the selected restaurant's active
+statuses without pagination limits, so changes beyond the first page are not lost.
+Managed delivery orders also watch their five tracking documents, including
+courier completion. Status departures remove those subscriptions. Notifications
+are coalesced for 250ms and cause the existing authorized read API to refresh the
+complete board, and the other view if open. The original cursor completion,
+new-order deduplication and explicit payment-confirmation guards still apply.
+
+Policy/native brand/location changes immediately close the channel with an access
+invalidation; dedicated channels additionally watch their session and credentials.
+Authorization is rechecked after initial listener snapshots to cover subscription
+races. Every reconnect and every order read/mutation revalidates authorization.
+External identity revocation without a policy update is detected on the next
+API read or stream renewal; no customer data travels on the persistent channel.
+
+Healthy KDS no longer polls order data every 15 seconds. Heartbeats every 15s
+perform no database reads and keep an unchanged board from falsely becoming stale.
+Streams renew after 240s, below App Hosting's documented 5-minute request limit;
+renewal performs a complete read to close any disconnect gap. Browser heartbeat
+loss after 45s disables stale actions; retries back off from 1s to 30s. Failed
+order reads may retry after 60s; manual refresh, focus, online and mutations also
+refresh. The non-KDS merchant board keeps its existing polling behavior.
+All listeners/timers are released on abort, cancellation, error or lifetime expiry.
+
+This reduces repeated idle order queries, not all costs: listener initial snapshots,
+document changes and reconnects incur Firestore reads, and a long-lived Cloud Run
+request consumes runtime. No promise of a lower total bill without live usage
+measurement. No database rules/index changes, production writes or GitHub Actions
+are required for this release.
+
+Validation: local typecheck/build, synthetic browser layout/settings/date/status/
+payment tests, an idle 120-second heartbeat test with zero additional order reads,
+push refresh and denied-access masking, plus server subscription isolation,
+revocation, tracking changes and cleanup tests. Production checks are read-only;
+an authenticated physical iPad session is not covered by these synthetic checks.
+
+References: [Firestore listener billing](https://firebase.google.com/docs/firestore/pricing),
+[App Hosting request limits](https://firebase.google.com/docs/app-hosting/product-comparison).
