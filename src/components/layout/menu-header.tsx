@@ -33,6 +33,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   const pathname = usePathname();
   const checkout = pathname?.includes('/checkout');
   const segments = storefrontSegments(pathname, brand.slug);
+  const confirmation = segments.at(-2) === 'checkout' && segments.at(-1) === 'confirmation';
   const refreshedMenu = brand.slug === 'esmeralda' && !!location && segments.length === 1 && segments[0] === location.slug;
   const headerRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -72,7 +73,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   if (v2Bar) return <>
     <header ref={headerRef} data-menu-refresh={refreshedMenu || undefined} data-v2-bar={checkout ? 'checkout' : landing ? 'landing' : 'menu'} data-storefront-header data-v2-menu-header data-brand-slug={brand.slug} className="sticky top-0 z-40 w-full border-b">
       <div className="storefront-frame storefront-order-toolbar">
-        {checkout && <div className="v2-header-back"><Link href={href}><ArrowLeft aria-hidden="true" className="h-4 w-4" /><span>Menu</span></Link></div>}
+        {checkout && !confirmation && <div className="v2-header-back"><Link href={href}><ArrowLeft aria-hidden="true" className="h-4 w-4" /><span>Menu</span></Link></div>}
         <Link href={checkout ? href : landing ? storefront() : href} aria-label={brand.name} className="relative flex h-10 w-24 shrink-0 items-center">{logo}</Link>
         {actions}
         {refreshedMenu && location && <MenuToolbarSlots brandSlug={brand.slug} locationId={location.id} />}
