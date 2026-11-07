@@ -30,10 +30,11 @@ before(async()=>{
    if(url.pathname==='/api/terminal/auth/logout'){state.logoutCalls++;if(state.logoutStatus!==200)return reply(state.logoutStatus,{error:'unavailable'});state.valid.delete(saved);setCookie(res,'',0);return reply(200,{success:true});}
    if(url.pathname==='/api/terminal/auth/session'){state.renewCalls++;if(state.sessionStatus!==200)return reply(state.sessionStatus,{error:'unavailable'});if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});if(state.holdRenewal){state.heldRenewal=()=>{setCookie(res,saved);reply(200,session);};return;}setCookie(res,saved);return reply(200,session);}
    if(!state.valid.has(saved))return reply(401,{error:'unauthorized'});
-   if(url.pathname==='/api/terminal/orders/payment'){state.paymentCalls++;state.paid=true;return reply(200,{success:true,changed:true,message:'Betalingen er registreret.'});}
+   if(url.pathname==='/api/terminal/orders/payment'){state.paymentCalls++;if(state.paymentUnavailable){if(state.commitUncertain)state.paid=true;return reply(503,{error:'unavailable'});}state.paid=true;return reply(200,{success:true,changed:true,message:'Betalingen er registreret.'});}
    if(url.pathname==='/api/terminal/orders/status')return reply(200,{success:true,changed:true});
    if(url.pathname==='/api/terminal/orders/reprint'){state.printCalls++;return reply(200,{items:[],nextCursor:null});}
    if(url.pathname==='/api/terminal/orders'){
+    if(state.readUnavailable)return reply(503,{error:'unavailable'});
     if(url.searchParams.get('brandId')!=='brand-a'||url.searchParams.get('locationId')!=='loc-a'){state.badScope=true;return reply(403,{error:'forbidden'});}
     const order={id:'ORD-PORTAL',brandId:'brand-a',locationId:'loc-a',brandName:'Esmeralda',locationName:'Amager',customerName:'Syntetisk kunde',customerContact:'',customerPhone:'',deliveryAddress:'',notes:'Ingen løg',createdAt:'2026-10-25T17:00:00Z',fulfillmentAt:'2026-10-25T18:00:00Z',deliveryTime:'19:00',deliveryType:'Pickup',status:'Ready',paymentStatus:state.paid?'Paid':'Pending',paymentMethod:'PayAtPickup',totalAmount:149,refundedAmountOre:0,items:[{name:'Pizza',quantity:1,unitPrice:149,totalPrice:149,modifiers:[]}]};
     return reply(200,{orders:[order],locations:[{brandId:'brand-a',brandName:'Esmeralda',locationId:'loc-a',locationName:'Amager'}],selectedBrandId:'brand-a',selectedLocationId:'loc-a',canEdit:true,serverTime:'2026-10-25T17:00:00Z',nextCursor:null,hasMore:false});
@@ -106,4 +107,16 @@ test('KDS keeps login, persistence, renewal, revocation and logout on /kds',asyn
  await next.getByLabel('Brugernavn',{exact:true}).fill('amager');await next.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await next.getByRole('button',{name:'Log ind',exact:true}).click();await expect(next).toHaveURL(origin+'/kds?terminal=1');await expect(next.getByRole('button',{name:'Log ud',exact:true})).toBeVisible();
  await next.getByRole('button',{name:'Log ud',exact:true}).click();await expect(next).toHaveURL(origin+'/kds/login/terminal');await expect(next.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await second.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
  await next.goto(origin+'/kds?terminal=1');await expect(next).toHaveURL(origin+'/kds/login/terminal');assert.equal(state.merchantCalls,0);
+});
+
+test('uncertain inline payment reconciles fresh Pending status before another explicit confirmation',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await login(page);const card=page.getByRole('article',{name:'Ordre ORD-PORTAL'});
+ state.paymentUnavailable=true;await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await expect(card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true})).toBeVisible();await expect(card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true})).toBeDisabled();
+ state.readUnavailable=true;await card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true}).click();await expect(page.getByRole('alert').first()).toContainText('opdateres');await expect(card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true})).toBeDisabled();assert.equal(state.paymentCalls,1);
+ state.readUnavailable=false;state.paymentUnavailable=false;await card.getByRole('button',{name:'Hent betalingsstatus igen',exact:true}).click();await expect(card.getByRole('button',{name:'Registrér betaling',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,1);
+ await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,2);await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+test('uncertain committed payment reconciles Paid without sending a second write',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await login(page);const card=page.getByRole('article',{name:'Ordre ORD-PORTAL'});
+ state.paymentUnavailable=true;state.commitUncertain=true;await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true}).click();await expect(card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,1);
 });

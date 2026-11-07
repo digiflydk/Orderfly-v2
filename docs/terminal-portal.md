@@ -128,3 +128,7 @@ Local validation covers kitchen browser actions/payment, all item details, day
 selection, signed countdowns, alarm thresholds, time conflict/replay and authority,
 settings persistence, fullscreen scroll/native exit, stale-history recovery and
 existing terminal authentication/status regressions. GitHub Actions are not used.
+
+After an uncertain inline payment response, Kontrollér betalingsstatus requires a
+new authorized read before enabling another explicit payment confirmation. A failed
+refresh never unlocks it; paid orders are reconciled without another payment write.
