@@ -23,7 +23,7 @@ import { assertCheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 import { validateCheckoutItems } from '@/lib/checkout-items';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
-import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
+import { validateCheckoutPrices, verifiedUpsellAmount } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { checkoutCustomerIdentityMessage } from '@/lib/checkout-public-error';
 import { customerHasEmail, customerHasPhone, mergeCustomerIdentity } from '@/lib/customer-identity';
@@ -566,10 +566,11 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
+    const verifiedUpsellLines = new Set<number>();
     const verifiedUpsellIds = validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
       id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price: combo ? validated.items[i].listUnitPrice : price,
       tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
-    })), activeStandardDiscounts, upsells, {brandId,locationId,deliveryType});
+    })), activeStandardDiscounts, upsells, {brandId,locationId,deliveryType}, verifiedUpsellLines);
     const eligibleLines = resolvedLines.map(({productSnap,catalog,combo,price:catalogPrice},index) => {
       const item = cartItems[index];
       if (combo) return 0;
@@ -652,6 +653,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
       ...paymentDetails,
       subtotal: validated.subtotal,
       itemDiscountTotal,
+      upsellAmount: verifiedUpsellAmount(cartItems, verifiedUpsellLines),
       cartDiscountTotal,
       cartDiscountName,
       discountTotal: sumMoney([itemDiscountTotal, cartDiscountTotal]),

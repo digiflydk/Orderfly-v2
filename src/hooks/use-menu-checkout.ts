@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
 import { browserStorefrontPath } from '@/hooks/use-storefront-path';
-// Recommendations are inline. Navigation never waits for marketing services.
+// Upsell is handled before opening the basket. Checkout never repeats it.
 export function useMenuCheckout() {
     const { brand, location, cartReady, deliveryType, cartItems, checkoutTotal, itemCount } = useCart();
     const { trackEvent } = useAnalytics();

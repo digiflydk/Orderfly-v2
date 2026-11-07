@@ -27,6 +27,7 @@ interface ProductCardProps {
   upsellId?: string;
   upsellInteractionId?: string;
   compact?: boolean;
+  onProductAdded?: () => void;
 }
 
 export function ProductCardSkeleton() {
@@ -47,7 +48,7 @@ export function ProductCardSkeleton() {
 }
 
 
-export const ProductCard = memo(function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false, onProductAdded }: ProductCardProps) {
   const isV2 = useStorefrontV2();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
@@ -62,7 +63,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
   const { deliveryType, location, cartReady, cartItems, addToCart } = useCart();
   const {trackEvent} = useAnalytics();
   const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
-  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id});};
+  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id}); onProductAdded?.();};
 
   const priceData = useMemo(() => productPriceData(product, activeDiscounts, deliveryType), [product, activeDiscounts, deliveryType]);
 

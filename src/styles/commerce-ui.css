@@ -304,3 +304,9 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) [id^="category-"] { 
 [data-menu-controls-slot] { min-height: 54px; }
 [data-menu-cart-slot] { min-width: 140px; min-height: 44px; }
 @media (max-width: 639px) { [data-menu-controls-slot] { min-height: 106px; } }
+
+/* Upsell appears before the basket, with a reachable skip action on small screens. */
+[data-commerce-panel="upsell"] { padding-bottom: max(1.25rem, env(safe-area-inset-bottom)); }
+@media (min-width: 640px) {
+  [data-commerce-panel="upsell"] { top: 50% !important; bottom: auto !important; transform: translate(-50%, -50%) !important; border-radius: 16px !important; }
+}

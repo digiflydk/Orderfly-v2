@@ -1,4 +1,5 @@
 'use client';
+import { useStorefrontCatalog } from '@/context/storefront-catalog';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import { useEffect, useRef, useState } from 'react';
 import { StorefrontBrandLogo } from '@/components/layout/storefront-brand-logo';
@@ -14,6 +15,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     compact?: boolean;
 }) {
     const isV2 = useStorefrontV2();
+    const {openCart, cartOpening} = useStorefrontCatalog();
     const { itemCount, checkoutTotal, bagFee, deliveryFee, freeDeliveryDiscountApplied, editingItem, deliveryType, location, brand } = useCart();
     // Managed delivery is priced at checkout; like the cart sheet, the bar must not total the location's legacy fee.
     const managedDelivery = useManagedDeliveryPrice() && deliveryType === 'delivery';
@@ -29,7 +31,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     if (!itemCount && floating)
         return null;
     const trigger = <SheetTrigger asChild>
-      <Button data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating
+      <Button disabled={cartOpening} aria-busy={cartOpening} data-v2-cart-bar={isV2 && floating || undefined} size="lg" className={floating
         ? isV2 ? 'w-full h-[54px] text-base font-bold' : 'fixed left-0 right-0 bottom-0 z-40 lg:hidden w-full h-[64.4px] rounded-none text-base font-bold'
         : 'font-bold min-h-11'}>
         <span className="flex w-full items-center justify-between gap-3">{compact && <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />}<span>Se kurv · {itemCount}</span>{!compact && <span>{formatPrice(barTotal)}</span>}</span>
@@ -37,7 +39,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     </SheetTrigger>;
     return <>
     {floating && <div data-v2-cart-clearance={isV2 || undefined} className="h-20 lg:hidden" aria-hidden="true"/>}
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={next => next ? openCart(() => setOpen(true)) : setOpen(false)}>
       {isV2 && floating
         ? <div data-v2-cart-dock className="fixed inset-x-0 bottom-0 z-40 lg:hidden">{trigger}</div>
         : trigger}
