@@ -24,7 +24,7 @@ function failureMessage(status: number) {
 }
 /** Deliberately outside LocationFormPage's form/recovery provider. Secrets exist only in this component's memory. */
 export function LocationTerminalLogin({ locationId, locationName, brandSlug }: { locationId: string; locationName: string; brandSlug?: string }) {
-  const merchantAppHref = brandSlug && !brandSlugError(brandSlug) ? `${brandSubdomainUrl(brandSlug)}/mapp` : '/mapp';
+  const merchantAppHref = brandSlug && !brandSlugError(brandSlug) ? `${brandSubdomainUrl(brandSlug)}/kds` : '/kds';
   const endpoint = `/api/superadmin/locations/${encodeURIComponent(locationId)}/terminal-login`;
   const [saved, setSaved] = useState<LoginSettings | null>(null);
   const [username, setUsername] = useState(''), [password, setPassword] = useState('');
