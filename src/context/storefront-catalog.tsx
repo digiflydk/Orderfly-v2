@@ -7,7 +7,7 @@ import { lineMoney } from '@/lib/money';
 import { relevantUpsellProducts } from '@/lib/relevant-upsell-products';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
 export type StorefrontUpsell = {
-  upsell: Pick<Upsell, 'id' | 'upsellName' | 'description' | 'discountType' | 'discountValue'>;
+  upsell: Pick<Upsell, 'id' | 'displayHeading' | 'upsellName' | 'description' | 'discountType' | 'discountValue'>;
   products: ProductForMenu[];
 };
 const Catalog = createContext<{

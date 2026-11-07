@@ -125,3 +125,28 @@ test('display exclusions match any product/category/menu, but never affect price
  const campaign={...offer,excludeCategoryIds:['drinks'],triggerConditions:[{type:'product_in_cart',referenceId:'pizza'}]};
  assert.equal(upsellTriggered(campaign,'drink',[{quantity:1,totalPrice:100}],[{id:'pizza',price:100,tags:[],isCombo:false}],[100]),true);
 });
+
+test('quantity ranges and headings count matching line quantities and preserve legacy behavior',()=>{
+ const {upsellHeading}=loadTs('src/lib/upsell-rules.ts');
+ const catalog=[{id:'pizza',isCombo:false,categoryId:'pizzas',tags:[],price:80},{id:'pizza2',isCombo:false,categoryId:'pizzas',tags:[],price:90}];
+ const campaign={...offer,headingSingular:'Noget koldt til din pizza?',headingPlural:'Noget koldt til dine {antal} pizzaer?',triggerConditions:[{type:'category_in_cart',referenceId:'pizzas',minQuantity:3,maxQuantity:4}]};
+ for(const [quantity,eligible] of [[1,false],[2,true],[3,true],[4,false]]) {
+  const items=[{quantity,totalPrice:80*quantity},{quantity:1,totalPrice:90}];
+  assert.equal(upsellTriggered(campaign,'drink',items,catalog,[80,90]),eligible);
+  if(eligible)assert.equal(upsellHeading(campaign,'drink',items,catalog,[80,90]),`Noget koldt til dine ${quantity+1} pizzaer?`);
+ }
+ campaign.triggerConditions=[{type:'category_in_cart',referenceId:'pizzas'}];
+ assert.equal(upsellHeading(campaign,'drink',[{quantity:1,totalPrice:80}],catalog.slice(0,1),[80]),'Noget koldt til din pizza?');
+ delete campaign.headingSingular;
+ assert.equal(upsellHeading(campaign,'drink',[{quantity:1,totalPrice:80}],catalog.slice(0,1),[80]),campaign.upsellName || 'Lidt ekstra til din ordre');
+ assert.equal(upsellTriggered(campaign,'pizza',[{quantity:3,totalPrice:240}],catalog.slice(0,1),[80]),false);
+});
+test('checkout accepts quantity-qualified discounts and rejects out-of-range baskets',()=>{
+ const campaign={...offer,triggerConditions:[{type:'product_in_cart',referenceId:'pizza',minQuantity:2,maxQuantity:3}]};
+ for(const quantity of [1,2,3,4]) {
+  const items=[{id:'pizza',name:'Pizza',quantity,unitPrice:100,totalPrice:quantity*100},{id:'drink',name:'Drink',upsellId:'offer',quantity:1,unitPrice:20,totalPrice:20}];
+  const catalog=[{...product,isCombo:false,tags:[]},soda];
+  if(quantity>=2&&quantity<=3)assert.deepEqual(validateCheckoutPrices(items,catalog,[],[campaign],scope),['offer']);
+  else assert.throws(()=>validateCheckoutPrices(items,catalog,[],[campaign],scope));
+ }
+});

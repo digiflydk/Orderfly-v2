@@ -42,13 +42,17 @@ const triggerConditionSchema = z.object({
 	id: z.string(),
 	type: z.enum(['product_in_cart', 'category_in_cart', 'cart_value_over', 'combo_in_cart', 'product_tag_in_cart']),
 	referenceId: z.string().min(1, 'A reference value is required.'),
-});
+ minQuantity: z.number().int().min(1).max(999).optional(),
+ maxQuantity: z.number().int().min(1).max(999).optional(),
+}).refine(v=>!v.maxQuantity || v.maxQuantity >= (v.minQuantity ?? 1),{message:'Maksimum skal være mindst minimum.',path:['maxQuantity']});
 
 const upsellSchema = z.object({
 	id: z.string().optional(),
 	brandId: z.string().min(1, 'A brand must be selected.'),
 	locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
 	upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
+ headingSingular: z.string().max(160).optional(),
+ headingPlural: z.string().max(160).optional(),
     priority: z.coerce.number().int().min(0).max(9999).default(0),
 	description: z.string().optional().nullable(),
 	imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
@@ -363,7 +367,9 @@ setValue('excludeProductIds', []); setValue('excludeCategoryIds', []); setValue(
 								<FormField control={control} name="upsellName" render={({ field }) => (
 									<FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Friday Burger Deal" {...field} /></FormControl><FormMessage /></FormItem>
 								)} />
-								<FormField control={control} name="description" render={({ field }) => (
+								<FormField control={control} name="headingSingular" render={({ field }) => (<FormItem><FormLabel>Overskrift ved én matchende vare</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormDescription>Valgfri. Brug {'{antal}'} for antal matchende varer. Tomt felt bruger kampagnens navn.</FormDescription><FormMessage /></FormItem>)} />
+<FormField control={control} name="headingPlural" render={({ field }) => (<FormItem><FormLabel>Overskrift ved flere matchende varer</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormDescription>Valgfri. Brug {'{antal}'} for antal matchende varer. Tomt felt bruger kampagnens navn.</FormDescription><FormMessage /></FormItem>)} />
+<FormField control={control} name="description" render={({ field }) => (
 									<FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
 								)} />
 								<FormField control={control} name="imageUrl"
@@ -464,7 +470,7 @@ setValue('excludeProductIds', []); setValue('excludeCategoryIds', []); setValue(
 											</Button>
 											<div className="grid grid-cols-2 gap-4">
 												<FormField control={control} name={`triggerConditions.${index}.type`} render={({ field }) => (
-													<FormItem><FormLabel>Trigger Type</FormLabel><Select onValueChange={value => { field.onChange(value); setValue(`triggerConditions.${index}.referenceId`, ''); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a trigger" /></SelectTrigger></FormControl><SelectContent>
+													<FormItem><FormLabel>Trigger Type</FormLabel><Select onValueChange={value => { field.onChange(value); setValue(`triggerConditions.${index}.referenceId`, ''); setValue(`triggerConditions.${index}.minQuantity`, undefined); setValue(`triggerConditions.${index}.maxQuantity`, undefined); }} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a trigger" /></SelectTrigger></FormControl><SelectContent>
 														<SelectItem value="product_in_cart">Product in Cart</SelectItem>
 														<SelectItem value="category_in_cart">Category in Cart</SelectItem>
 														<SelectItem value="cart_value_over">Cart Value Over</SelectItem>
@@ -488,7 +494,8 @@ setValue('excludeProductIds', []); setValue('excludeCategoryIds', []); setValue(
                                                 {triggerType === 'product_tag_in_cart' && <FormField control={control} name={`triggerConditions.${index}.referenceId`} render={({ field }) => (
                                                     <FormItem><FormLabel>Trigger Product Tag</FormLabel><Select value={field.value} onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue placeholder="Select a product tag" /></SelectTrigger></FormControl><SelectContent>{UPSELL_TAGS.map(tag => <SelectItem key={tag} value={tag}>{tag}</SelectItem>)}</SelectContent></Select><FormMessage /></FormItem>
                                                 )} />}
-												{triggerType === 'cart_value_over' && (
+												{triggerType !== 'cart_value_over' && <div className="grid grid-cols-2 gap-3">{(['minQuantity','maxQuantity'] as const).map(key => <FormField key={key} control={control} name={`triggerConditions.${index}.${key}`} render={({field}) => (<FormItem><FormLabel>{key === 'minQuantity' ? 'Mindst antal' : 'Højst antal'}</FormLabel><FormControl><Input type="number" min="1" max="999" value={field.value ?? ''} onChange={e=>field.onChange(e.target.value === '' ? undefined : Number(e.target.value))} /></FormControl><FormDescription>{key === 'minQuantity' ? 'Tomt felt betyder mindst 1.' : 'Tomt felt betyder ingen øvre grænse.'}</FormDescription><FormMessage /></FormItem>)} />)}</div>}
+{triggerType === 'cart_value_over' && (
 													<FormField control={control} name={`triggerConditions.${index}.referenceId`} render={({ field }) => (
 														<FormItem><FormLabel>Cart Value Threshold</FormLabel><FormControl><Input type="number" placeholder="100.00" {...field} /></FormControl><FormMessage /></FormItem>
 													)} />

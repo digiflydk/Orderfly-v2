@@ -4,7 +4,7 @@ export function upsellFormData(values: Record<string, unknown>, id?: string): Fo
   const data = new FormData();
   data.set('exclusionsSubmitted', '1');
   if (id) data.set('id', id);
-  for (const key of ['brandId', 'upsellName', 'priority', 'description', 'imageUrl', 'offerType', 'discountType', 'discountValue']) {
+  for (const key of ['headingSingular', 'headingPlural', 'brandId', 'upsellName', 'priority', 'description', 'imageUrl', 'offerType', 'discountType', 'discountValue']) {
     if (values[key] != null) data.set(key, String(values[key]));
   }
   for (const key of ['excludeProductIds', 'excludeCategoryIds', 'excludeComboIds', 'locationIds', 'offerProductIds', 'offerCategoryIds', 'orderTypes', 'activeDays', 'tags']) {
