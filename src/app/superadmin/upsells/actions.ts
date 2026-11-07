@@ -1,7 +1,7 @@
 
 'use server';
 import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
-import { upsellTriggered, compareUpsells } from '@/lib/upsell-rules';
+import { upsellTriggered, compareUpsells, upsellExcluded } from '@/lib/upsell-rules';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { linkedCartProductIds } from '@/lib/server/upsell-linked-options';
 import { promotionBoundary } from '@/lib/promotion-calendar';
@@ -62,7 +62,10 @@ const upsellSchema = z.object({
     discountType: z.enum(['none', 'percentage', 'fixed_amount']),
     discountValue: z.coerce.number({ invalid_type_error: 'Indtast et gyldigt tal.' }).finite('Indtast et endeligt tal.').positive('Rabatten skal være større end 0.').optional(),
 
-    triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
+    excludeProductIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+excludeCategoryIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+excludeComboIds: z.array(z.string().min(1).max(160)).max(500).default([]),
+triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
     activeDays: z.array(z.string()).optional().default([]),
@@ -113,6 +116,10 @@ export async function createOrUpdateUpsell(
 
     const rawData: Record<string, any> = {
       brandId: formData.get('brandId'),
+      excludeProductIds: formData.getAll('excludeProductIds'),
+      excludeCategoryIds: formData.getAll('excludeCategoryIds'),
+      excludeComboIds: formData.getAll('excludeComboIds'),
+
       locationIds: formData.getAll('locationIds'),
       upsellName: formData.get('upsellName'),
       priority: formData.get('priority') ?? 0,
@@ -198,6 +205,9 @@ export async function createOrUpdateUpsell(
     
     const writeData = Object.fromEntries(Object.entries({ ...dataToSave, id: upsellRef.id }).filter(([, value]) => value !== undefined));
     await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>{
+      if (id && formData.get('exclusionsSubmitted') !== '1') {
+        for (const key of ['excludeProductIds', 'excludeCategoryIds', 'excludeComboIds']) delete writeData[key];
+      }
       for (const key of ['startDate', 'endDate'] as const) {
         const day = formData.get(key);
         if (day === '') writeData[key] = null;
@@ -314,10 +324,14 @@ export async function getActiveUpsellForCart({
 
   // Linked add-ons only suppress repeat recommendations; they never activate offers.
   const linkedIds = await linkedCartProductIds(db, brandId, locationId, cartItems, getProductsByIds);
-  const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || [])]), ...linkedIds]);
+  const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || []), ...(item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || [])]), ...linkedIds]);
   const scope = {brandId, locationId, deliveryType};
   const context = await upsellCart(db, cartItems, scope, getProductsByIds, await getActiveStandardDiscounts(scope));
+  const exclusionProducts = activeNowUpsells.some(u => u.excludeProductIds?.length || u.excludeCategoryIds?.length)
+    ? (await Promise.all(Array.from({length:Math.ceil(currentCartProductIds.size/500)}, (_, i) => getProductsByIds([...currentCartProductIds].slice(i*500,(i+1)*500), brandId, locationId)))).flat() : [];
+  const comboIds = context.catalog.filter(p => p.isCombo).map(p => p.id);
   for (const upsell of activeNowUpsells) {
+      if (upsellExcluded(upsell, exclusionProducts, comboIds)) continue;
       // Candidates are checked individually below; no offered item can qualify itself.
           let offeredProductIds: string[] = [];
           if (upsell.offerType !== 'product' && !upsell.offerCategoryIds?.length) continue;

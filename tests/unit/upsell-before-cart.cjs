@@ -69,6 +69,12 @@ test('editing clears both dates, preserves paid counters and saves priority',asy
  await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values,'offer')),/REDIRECT/);
  assert.equal(saved.startDate,null);assert.equal(saved.endDate,null);assert.equal(saved.priority,9);
  assert.equal(saved.views,12);assert.equal(saved.conversions,3);assert.equal(saved.triggerConditions[0].referenceId,'menu');
+ for(const key of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])saved[key]=['keep'];
+ const legacy=upsellFormData(values,'offer');legacy.delete('exclusionsSubmitted');
+ await assert.rejects(api.createOrUpdateUpsell(null,legacy),/REDIRECT/);
+ for(const key of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])assert.deepEqual(saved[key],['keep']);
+ await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values,'offer')),/REDIRECT/);
+ for(const key of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])assert.deepEqual(saved[key],[]);
  const invalid=await api.createOrUpdateUpsell(null,upsellFormData({...values,priority:-1},'offer'));assert.equal(invalid.error,true);assert.equal(saved.priority,9);
 });
 test('fractional prices use the checkout integer-ore boundary for strict thresholds',()=>{
@@ -94,6 +100,11 @@ test('real offer lookup chooses the highest eligible campaign and ignores forged
  campaigns[1].triggerConditions=[{type:'product_tag_in_cart',referenceId:'Popular'}];
  assert.equal((await api.getActiveUpsellForCart(input)).upsell.id,'high');
  assert.equal((await api.getActiveUpsellForCart({...input,excludedUpsellIds:['high']})).upsell.id,'low');
+ campaigns[0].offerProductIds=['dessert']; products.push({...product,id:'dessert'});
+ campaigns[1].excludeCategoryIds=['drinks'];
+ assert.equal((await api.getActiveUpsellForCart({...input,cartItems:[...input.cartItems,{id:'other',comboSelections:[{groupName:'Drink',products:[{id:'drink'}]}]}]})).upsell.id,'low');
+ campaigns[1].excludeCategoryIds=[];
+ assert.equal((await api.getActiveUpsellForCart(input)).upsell.id,'high');
  campaigns=[{...campaigns[1],triggerConditions:[{type:'product_tag_in_cart',referenceId:'forged'}]}];
  assert.equal(await api.getActiveUpsellForCart(input),null);
 });
@@ -103,4 +114,14 @@ test('combo and product-tag references survive controlled serialization',()=>{
   const data=upsellFormData({triggerConditions:[condition],priority:4});
   assert.deepEqual(JSON.parse(data.get('triggerConditions')),[condition]);assert.equal(data.get('priority'),'4');
  }
+});
+
+test('display exclusions match any product/category/menu, but never affect price eligibility',()=>{
+ const {upsellExcluded}=loadTs('src/lib/upsell-rules.ts');
+ const products=[{id:'pepsi',categoryId:'drinks'}];
+ assert.equal(upsellExcluded({},products,[]),false);
+ for(const rules of [{excludeProductIds:['pepsi']},{excludeCategoryIds:['drinks']},{excludeComboIds:['menu']}]) assert.equal(upsellExcluded(rules,products,['menu']),true);
+ assert.equal(upsellExcluded({excludeProductIds:['faxe'],excludeCategoryIds:['desserts'],excludeComboIds:['other']},products,['menu']),false);
+ const campaign={...offer,excludeCategoryIds:['drinks'],triggerConditions:[{type:'product_in_cart',referenceId:'pizza'}]};
+ assert.equal(upsellTriggered(campaign,'drink',[{quantity:1,totalPrice:100}],[{id:'pizza',price:100,tags:[],isCombo:false}],[100]),true);
 });

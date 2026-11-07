@@ -12,7 +12,7 @@ const {upsellFormData}=load('src/lib/upsell-form-data.ts');
 const serialization=load('src/lib/upsell-serialization.ts');
 const {UpsellValidationFeedback}=load('src/components/superadmin/upsell-validation-feedback.tsx');
 const {renderToStaticMarkup}=require('react-dom/server');
-const values={brandId:'brand-cph',locationIds:['location-m3'],upsellName:'Andre købte også',description:'',imageUrl:'',offerType:'product',offerProductIds:['p1','p2'],offerCategoryIds:[],discountType:'none',isActive:true,orderTypes:['pickup','delivery'],activeDays:['monday'],tags:['Popular'],triggerConditions:[{id:'t1',type:'cart_value_over',referenceId:'100'}],activeTimeSlots:[{start:'11:00',end:'22:00'}],startDate:new Date('2026-09-07T09:00:00Z')};
+const values={excludeProductIds:['p3'],excludeCategoryIds:['drinks'],excludeComboIds:['menu'],brandId:'brand-cph',locationIds:['location-m3'],upsellName:'Andre købte også',description:'',imageUrl:'',offerType:'product',offerProductIds:['p1','p2'],offerCategoryIds:[],discountType:'none',isActive:true,orderTypes:['pickup','delivery'],activeDays:['monday'],tags:['Popular'],triggerConditions:[{id:'t1',type:'cart_value_over',referenceId:'100'}],activeTimeSlots:[{start:'11:00',end:'22:00'}],startDate:new Date('2026-09-07T09:00:00Z')};
 test('controlled create values satisfy the real server parser and persist native IDs',async()=>{
   let saved;
   const api=load('src/app/superadmin/upsells/actions.ts',{
@@ -25,6 +25,7 @@ test('controlled create values satisfy the real server parser and persist native
   });
   await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values)),/REDIRECT/);
   assert.equal(saved.brandId,'brand-cph');
+  for(const k of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])assert.deepEqual(saved[k],values[k]);
   assert.deepEqual(saved.locationIds,['location-m3']);
   assert.deepEqual(saved.offerProductIds,['p1','p2']);
   assert.deepEqual(saved.orderTypes,['pickup','delivery']);
