@@ -1,0 +1,13 @@
+.stamp-celebration{width:calc(100% - 32px);max-width:440px;max-height:calc(100dvh - 32px);overflow:auto;padding:32px 24px 20px;border:1px solid #8e753e;border-radius:24px;background:#111713;color:#fff;gap:16px;isolation:isolate}
+.stamp-celebration-emblem{display:grid;place-items:center;margin:0 auto;width:72px;height:72px;border-radius:50%;background:#e8be63;color:#171810;animation:stamp-land 900ms both}
+.stamp-celebration-card{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;justify-items:center;padding:16px 0}
+.stamp-slot{display:grid;place-items:center;width:48px;height:48px;border:1px dashed #6e756d;border-radius:50%;color:#aeb5ab}
+.stamp-slot.is-earned{background:#e8be63;color:#171810;border:1px solid #e8be63}
+.stamp-slot.is-new{animation:stamp-land 900ms 250ms both}
+.stamp-confetti{position:absolute;inset:0;overflow:hidden;border-radius:inherit;pointer-events:none;z-index:-1}
+.stamp-confetti i{position:absolute;top:-12px;width:6px;height:12px;background:#e8be63;animation:stamp-confetti 1800ms ease-out both}
+.stamp-confetti i:nth-child(3n){background:#fff}.stamp-confetti i:nth-child(3n + 1){background:#96b49a}
+.stamp-celebration-primary{background:#e8be63!important;color:#171810!important;min-height:44px}
+@keyframes stamp-land{0%{opacity:0;transform:translateY(-28px) scale(1.6) rotate(-18deg)}55%{opacity:1;transform:translateY(0) scale(.88) rotate(5deg)}75%{transform:scale(1.08) rotate(-2deg)}100%{opacity:1;transform:none}}
+@keyframes stamp-confetti{0%{opacity:0;transform:translateY(0) rotate(0)}15%{opacity:.9}100%{opacity:0;transform:translateY(420px) rotate(220deg)}}
+@media(prefers-reduced-motion:reduce){.stamp-celebration,.stamp-celebration *{animation:none!important;transition:none!important}.stamp-confetti{display:none}}
