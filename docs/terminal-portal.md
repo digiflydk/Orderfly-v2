@@ -199,7 +199,8 @@ The first page load and explicit user reads (Refresh, changing scope/view/date,
 settings saves and order actions) still fetch authorized data. Timers, focus,
 visibility, online events and SSE do not fetch while disabled. Dedicated-terminal
 periodic session renewal also pauses; initial login verification and explicit
-access failures remain checked. The preference persists locally. The last complete
+access failures remain checked. The preference persists locally. Audible overdue alarms require a snapshot/read or live heartbeat no older than
+45 seconds, independently of manual-mode presentation. The last complete
 snapshot remains visible as **Manuel opdatering** with its update time, not a false
 connection error. Countdown/colour changes run locally and incur no API calls.
 The automatic date rollover waits until automatic updates resume or Refresh is

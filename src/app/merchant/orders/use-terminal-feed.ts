@@ -262,8 +262,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   // Query is serialized so caller object identity does not restart the feed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, beep, enabled, endpoint, push, automatic]);
-  const ageStale = automatic && (!query.view || query.view === 'board') && lastUpdated !== null && Date.now() - Math.max(lastUpdated, push ? (lastPushSignal.current ?? 0) : 0) > 45_000;
+  const freshForAlerts = lastUpdated !== null && !offline && !error && Date.now() - Math.max(lastUpdated, push ? (lastPushSignal.current ?? 0) : 0) <= 45_000;
+  const ageStale = automatic && (!query.view || query.view === 'board') && lastUpdated !== null && !freshForAlerts;
   const stale = lastUpdated !== null && (ageStale || offline || !!error);
   void tick;
-  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
+  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, freshForAlerts, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

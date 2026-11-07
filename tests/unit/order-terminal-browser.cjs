@@ -520,3 +520,13 @@ test('manual mode does not fetch at midnight; explicit refresh advances the defa
  await page.clock.runFor(61000);assert.equal(calls.filter(c=>c.kind==='read').length,count);await expect(page.getByLabel('Ordredato',{exact:true})).toHaveValue('2026-10-25');
  await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByLabel('Ordredato',{exact:true})).toHaveValue('2026-10-26');await expect.poll(()=>calls.filter(c=>c.kind==='read').length).toBeGreaterThan(count);
 });
+
+test('manual mode retains old cards without sounding overdue alarms from an outdated snapshot',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,manual:true,orders:[order('OLD',{fulfillmentAt:'2026-10-25T11:54:00Z'})]});
+ await expect(page.getByRole('article',{name:'Ordre OLD',exact:true})).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBeGreaterThan(0);
+ const sounds=await page.evaluate(()=>window.__audioStarts),reads=calls.filter(c=>c.kind==='read').length;
+ state.orders[0].status='Ready';await page.clock.runFor(181000);
+ assert.equal(await page.evaluate(()=>window.__audioStarts),sounds);assert.equal(calls.filter(c=>c.kind==='read').length,reads);
+ await expect(page.getByText('Manuel opdatering',{exact:true})).toBeVisible();await expect(page.getByRole('article',{name:'Ordre OLD',exact:true})).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);
+ await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByRole('button',{name:'Markér afhentet',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),sounds);
+});

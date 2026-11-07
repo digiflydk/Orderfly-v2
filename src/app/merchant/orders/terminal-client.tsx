@@ -101,14 +101,14 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     if (boardFeed.data?.serverTime) { const server = Date.parse(boardFeed.data.serverTime); if (Number.isFinite(server)) offset.current = server - Date.now(); }
   }, [boardFeed.data?.serverTime]);
   useEffect(() => {
-    if (!kitchenMode || sleeping || authorizationPending || boardFeed.stale || !boardFeed.sound || boardFeed.volume === 0 || boardFeed.soundError) return;
+    if (!kitchenMode || sleeping || authorizationPending || !boardFeed.freshForAlerts || !boardFeed.sound || boardFeed.volume === 0 || boardFeed.soundError) return;
     const overdue = (boardFeed.data?.orders ?? []).filter(row => !isKitchenPreorder(row, now, settings) && kitchenOverdue(row, now, overdueMinutes));
     const keys = new Set(overdue.map(row => `${row.brandId}/${row.locationId}/${row.id}/${kitchenDeadline(row)}`));
     for (const key of alarmed.current.keys()) if (!keys.has(key)) alarmed.current.delete(key);
     if ([...keys].some(key => now - (alarmed.current.get(key) ?? 0) >= 60_000)) {
       boardFeed.alertSound(); for (const key of keys) alarmed.current.set(key, now);
     }
-  }, [kitchenMode, now, overdueMinutes, authorizationPending, boardFeed.data, boardFeed.stale, boardFeed.sound, boardFeed.volume, boardFeed.soundError, boardFeed.alertSound]);
+  }, [kitchenMode, now, overdueMinutes, authorizationPending, boardFeed.data, boardFeed.freshForAlerts, boardFeed.sound, boardFeed.volume, boardFeed.soundError, boardFeed.alertSound]);
   const renderKitchenOrder = (row: TerminalOrder) => <TerminalDetail inline refreshRevision={feed.authorizedRevision} key={row.id} order={row} now={now} warningMinutes={settings.warningMinutes} overdueMinutes={settings.overdueMinutes} readyTimeEndpoint={`${actionApiBase}/ready-time`} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={(data?.canEdit ?? false) && !isKitchenPreorder(row, now, settings)} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit && !isKitchenPreorder(row, now, settings) ? <LazyKitchenReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} />;
   const choose = (row: TerminalOrder) => { boardFeed.clearNewOrders(); setSelected(row); };
   async function fullscreen() {
