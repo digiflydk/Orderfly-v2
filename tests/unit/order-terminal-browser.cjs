@@ -254,6 +254,7 @@ test('native fullscreen includes the actual Radix order dialog and its controls'
   await page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true}).click();
   const dialog=page.getByRole('dialog'); await expect(dialog).toBeVisible();
   assert.equal(await dialog.evaluate(element=>document.fullscreenElement?.contains(element)),true,'body portal must be inside fullscreen top layer');
+  assert.equal(await dialog.evaluate(element=>Number(getComputedStyle(element).zIndex)>Number(getComputedStyle(document.querySelector('[data-kds-fullscreen]')).zIndex)),true,'dialog must render above the opaque immersive surface');
   await dialog.getByRole('button',{name:'Start tilberedning',exact:true}).click();
   await expect(dialog.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();
   await page.evaluate(()=>document.exitFullscreen());
