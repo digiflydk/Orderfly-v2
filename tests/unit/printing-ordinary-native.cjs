@@ -410,3 +410,26 @@ test('changed menu selection after immutable manifest refuses original rather th
  await assert.rejects(f.poll(),/ordinary_content_unavailable/);
  assert.equal(f.rows.has(path('ordinaryDispatches',f.job.id)),false);
 }));
+test('scheduled original is held until kitchen lead time and then prints exactly once',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);const job=f.rows.get(path('jobs',f.job.id));
+ job.scheduledFulfillmentAt=Date.now()+3600000;f.rows.get('locations/l1').kdsSettings={preorderMinutes:30};
+ assert.equal((await f.poll()).jobReady,false);assert.equal(f.rows.has(path('ordinaryState')),false);
+ f.rows.get('locations/l1').kdsSettings={preorderMinutes:61};f.rows.get('locations/l1').kdsSettingsChangedAt=Date.now();
+ const offer=await f.poll();assert.equal(offer.jobReady,true);await f.download(offer.jobToken);await f.confirm(offer.jobToken);
+ assert.equal(f.rows.has(path('jobs',f.job.id)),false);assert.equal((await f.poll()).jobReady,false);
+}));
+
+test('held originals survive hours of waiting and do not block immediate purchases',permanentEnabled(async()=>{
+ const f=await fixture();permanent(f);const realNow=Date.now;let clock=realNow();
+ try{
+  Date.now=()=>clock;f.rows.get(path('jobs',f.job.id)).scheduledFulfillmentAt=clock+7200000;
+  f.rows.get('locations/l1').kdsSettings={preorderMinutes:30};
+  assert.deepEqual(await f.poll(),{jobReady:false});
+  const immediate=await f.enqueueOther('immediate');
+  f.rows.get(path('jobs',immediate)).automaticActivationId='P'.repeat(43);f.rows.get('orders/immediate/printIntents/original').automaticActivationId='P'.repeat(43);
+  const offer=await f.poll();assert.equal(offer.jobReady,true);
+  assert.equal(f.rows.get(path('ordinaryState')).jobId,immediate);await f.download(offer.jobToken);await f.confirm(offer.jobToken);
+  clock+=5399999;assert.deepEqual(await f.poll(),{jobReady:false});assert.ok(f.rows.has(path('jobs',f.job.id)));
+  clock++;const due=await f.poll();assert.equal(due.jobReady,true);assert.equal(f.rows.get(path('ordinaryState')).jobId,f.job.id);await f.download(due.jobToken);await f.confirm(due.jobToken);assert.deepEqual(await f.poll(),{jobReady:false});
+ }finally{Date.now=realNow;}
+}));

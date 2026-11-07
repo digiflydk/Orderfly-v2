@@ -1,4 +1,6 @@
 import 'server-only';
+import { parseKdsSettings } from '@/lib/orders/kds-settings';
+import { originalAvailableAt } from './kitchen-release';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
@@ -111,11 +113,16 @@ export async function pollOrdinaryPrint(input: unknown) {
       const expiry = await prepareUnsentPrintExpiry(context, binding(c), { automaticActivationId: policy.automaticActivationId, issuedAt: policy.issuedAt });
       if (expiry.count) { expiry.apply(); return { jobReady: false as const }; }
     }
-    const pending = await queue(context, printer, c), job = pending.jobs[0];
+    const pending = await queue(context, printer, c);
+    const location = (await transaction.get(db.collection('locations').doc(c.locationId))).data();
+    if (!location || location.brandId !== c.brandId) return conflict();
+    const settings = parseKdsSettings(location.kdsSettings), changedAt = Number.isSafeInteger(location.kdsSettingsChangedAt) ? location.kdsSettingsChangedAt : 0;
+    const availableAt = (job: (typeof pending.jobs)[number]) => originalAvailableAt(job, settings, changedAt);
+    const job = pending.jobs.find(row => availableAt(row) <= pending.now);
     if (!job) return { jobReady: false as const };
     if (job.printerRevision !== identity.printerRevision || job.createdAt < policy.issuedAt
       || job.automaticActivationId !== policy.automaticActivationId
-      || pending.now - job.createdAt > 300_000 || (policy.expiresAt !== null && policy.expiresAt - pending.now < 60_000)) return conflict();
+      || pending.now - availableAt(job) > 300_000 || (policy.expiresAt !== null && policy.expiresAt - pending.now < 60_000)) return conflict();
     let attempt = attempts.get(job.id);
     if (!attempt) { attempt = createCloudPrntClaimAttempt({ ...c, jobId: job.id }); attempts.set(job.id, attempt); }
     const tokens = nativeClaimAttemptTokens(attempt), indexRef = printer.collection('ordinaryTokens').doc(tokenIndex(c, tokens.deliveryToken));

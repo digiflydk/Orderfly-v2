@@ -1,4 +1,6 @@
 import 'server-only';
+import { parseKdsSettings } from '@/lib/orders/kds-settings';
+import { originalAvailableAt } from './kitchen-release';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -50,8 +52,11 @@ export async function prepareUnsentPrintExpiry(context: NativeTransactionContext
     return parsed.data;
   }).sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   if (ledger.data.pendingCount !== jobs.length || ledger.data.oldestPendingAt !== (jobs[0]?.createdAt ?? null)) return fail();
+  const location = jobs.some(job => job.scheduledFulfillmentAt !== undefined) ? (await tx.get(context.db.collection('locations').doc(scope.data.locationId))).data() : { brandId: scope.data.brandId };
+  if (!location || location.brandId !== scope.data.brandId) return fail();
+  const settings = parseKdsSettings(location.kdsSettings), changedAt = Number.isSafeInteger(location.kdsSettingsChangedAt) ? location.kdsSettingsChangedAt : 0;
   const candidates = jobs.filter(job => job.automaticActivationId !== policy.data.automaticActivationId
-    || job.createdAt < policy.data.issuedAt || now - job.createdAt > UNSENT_PRINT_MAX_AGE_MS).slice(0, UNSENT_PRINT_EXPIRY_BATCH);
+    || job.createdAt < policy.data.issuedAt || now - originalAvailableAt(job, settings, changedAt) > UNSENT_PRINT_MAX_AGE_MS).slice(0, UNSENT_PRINT_EXPIRY_BATCH);
   const checked = await Promise.all(candidates.map(async job => {
     const proof = await Promise.all(['claims', 'ordinaryDispatches', 'originalPrintHistory', 'deliveries', 'printResults', 'expiredPrintJobs'].map(collection => tx.get(printer.collection(collection).doc(job.id))));
     // Any existing execution evidence is deliberately left for explicit review.

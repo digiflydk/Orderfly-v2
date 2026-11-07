@@ -63,3 +63,11 @@ test('mismatched queued activation, claim revision/digests, pointer and ledger f
  const mutations=[f=>f.records.get(f.root+'/jobs/'+f.jobs[0].id).automaticActivationId='B'.repeat(43),f=>f.records.get(f.root+'/claims/'+f.jobs[0].id).credentialRevision=2,f=>f.records.get(f.root+'/claims/'+f.jobs[0].id).claimDigest='d'.repeat(64),f=>f.records.get(f.root+'/ordinaryState/current').jobId='e'.repeat(64),f=>f.records.get(f.root+'/queue/state').pendingCount=2];
  for(const mutate of mutations){const f=offerFixture();mutate(f);await assert.rejects(f.cleanup());assert.equal(f.writes.length,0);}
 });
+test('scheduled originals wait through closure and expire only after their kitchen release window',async()=>{
+ const f=fixture(1,{scheduledFulfillmentAt:now+3600000});f.records.set('locations/l',{brandId:'b',kdsSettings:{preorderMinutes:30}});
+ assert.equal((await f.run()).count,0);
+ f.records.get(f.root+'/jobs/'+f.jobs[0].id).scheduledFulfillmentAt=now+1800000-301000;
+ assert.equal((await f.run()).count,1);
+ f.records.get('locations/l').kdsSettingsChangedAt=now;
+ assert.equal((await f.run()).count,0,'changing lead time grants a new collection window');
+});

@@ -24,10 +24,10 @@ export function TerminalPreorders({ orders, loading = false, error, onRetry, onS
     groups.set(day, [...(groups.get(day) || []), order]);
   }
   return <section aria-label="Forudbestillinger" aria-busy={loading} className="min-w-0 space-y-5">
-    <div><h2 className="text-2xl font-semibold">Forudbestillinger</h2><p className="mt-1 text-sm text-muted-foreground">Ordrer til kommende dage. Senere i dag vises under Ordrer med det aftalte tidspunkt.</p></div>
+    <div><h2 className="text-2xl font-semibold">Forudbestillinger</h2><p className="mt-1 text-sm text-muted-foreground">Planlagte ordrer, som endnu ikke er frigivet til køkkenet.</p></div>
     {error && <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"><span>{error} Tidligere viste data kan være forældede.</span>{onRetry && <button type="button" disabled={loading} onClick={onRetry} className="min-h-12 rounded-lg border border-red-300 px-4 font-semibold">Prøv igen</button>}</div>}
     {loading && <p role="status" className="text-sm text-muted-foreground">Henter forudbestillinger…</p>}
-    {!orders.length && !loading && !error && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{hasMore ? 'Ingen forudbestillinger i denne del. Hent flere for at fortsætte.' : 'Ingen forudbestillinger til kommende dage.'}</p>}
+    {!orders.length && !loading && !error && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{hasMore ? 'Ingen forudbestillinger i denne del. Hent flere for at fortsætte.' : 'Ingen ventende forudbestillinger.'}</p>}
     {[...groups.entries()].map(([day, dayOrders]) => <section key={day} aria-label={terminalDateHeading(dayOrders[0].fulfillmentAt)} className="space-y-3">
       <h3 className="text-lg font-semibold capitalize">{terminalDateHeading(dayOrders[0].fulfillmentAt)} <span className="ml-1 text-sm font-normal text-muted-foreground">({dayOrders.length})</span></h3>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{dayOrders.map(order => <article key={order.id} aria-label={`Forudbestilling ${order.id}`} className="min-w-0 rounded-xl border bg-background p-4">

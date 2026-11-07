@@ -2,8 +2,8 @@
 import { useRef, useState } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { kitchenCountdown, kitchenDeadline } from '@/lib/orders/kitchen-clock';
-export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChanged }: {
-  order: TerminalOrder; now: number; canEdit: boolean; disabled: boolean; endpoint: string; onChanged: () => void;
+export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChanged, alertClass }: {
+  alertClass?: string; order: TerminalOrder; now: number; canEdit: boolean; disabled: boolean; endpoint: string; onChanged: () => void;
 }) {
   const deadline = kitchenDeadline(order), late = !!deadline && now > Date.parse(deadline);
   const active = ['Received', 'In Progress'].includes(order.status);
@@ -28,7 +28,7 @@ export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChange
     finally { clearTimeout(timer); lock.current = false; setBusy(false); }
   }
   return <div className="my-3 space-y-2">
-    <button aria-label={`Ændr klartid for ${order.id}`} disabled={!canEdit || disabled || !active || busy} onClick={() => { setMinutes(Math.max(1, Math.ceil(((deadline ? Date.parse(deadline) : now + 30 * 60_000) - now) / 60_000))); setEditing(value => !value); }} className={`min-h-16 w-full rounded-xl border-2 p-3 text-left ${late && active ? 'border-red-600 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50'}`}>
+    <button aria-label={`Ændr klartid for ${order.id}`} disabled={!canEdit || disabled || !active || busy} onClick={() => { setMinutes(Math.max(1, Math.ceil(((deadline ? Date.parse(deadline) : now + 30 * 60_000) - now) / 60_000))); setEditing(value => !value); }} className={`min-h-16 w-full rounded-xl border-2 p-3 text-left ${alertClass || (late && active ? 'border-red-600 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50')}`}>
       <span className="block font-semibold">Klar kl. {time}</span>
       <strong className="block text-3xl tabular-nums">{active ? kitchenCountdown(deadline, now) : order.status === 'Ready' ? 'Klar ✓' : ['Completed', 'Delivered'].includes(order.status) ? 'Afsluttet' : 'Ikke aktiv'}</strong>
       {canEdit && active && <span className="text-sm">Tryk for at ændre køkkentiden</span>}

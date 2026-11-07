@@ -1,4 +1,5 @@
 'use client';
+import { isKitchenPreorder, parseKdsSettings } from '@/lib/orders/kds-settings';
 import { subscribeTerminalEvents } from './terminal-events-client';
 import { TERMINAL_SOUNDS, isTerminalSound, type TerminalSound } from '@/lib/orders/terminal-sounds';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -11,7 +12,7 @@ const TIMEOUT_MS = 25_000;
 // ordering of authorization evidence across foreground and background reads.
 let authorizationRevision = 0;
 let latestAuthorizationDenial = 0;
-export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders', notifications = true, push = false) {
+export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint = '/api/merchant/orders', notifications = true, push = false, automatic = true) {
   const key = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== '') as [string, string][]).toString();
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +28,8 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const [denialMessage, setDenialMessage] = useState('');
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
+  const [newPreorders, setNewPreorders] = useState<string[]>([]);
+  const previousKey = useRef('');
   const [newOrders, setNewOrders] = useState(0);
   const [sound, setSound] = useState(true);
   const [soundId, setSoundIdState] = useState<TerminalSound>('melody');
@@ -139,16 +142,17 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   useEffect(() => {
     const current = ++generation.current;
     active.current?.abort(); active.current = null;
+    const changedKey = previousKey.current !== key; previousKey.current = key;
     lastPushSignal.current = null; setPushConnected(false);
-    seen.current = null; nextCursor.current = null;
+    if (changedKey) { seen.current = null; nextCursor.current = null;
     setAuthorizedRevision(0);
-    setData(null); setLastUpdated(null); setNewOrders(0); setError(''); setReconnecting(false); lastSuccessful.current = null; consecutiveFailures.current = 0;
+    setData(null); setLastUpdated(null); setNewOrders(0); setError(''); setReconnecting(false); lastSuccessful.current = null; consecutiveFailures.current = 0; setNewPreorders([]); }
     if (!enabled) { setLoading(false); run.current = async () => {}; return; }
     let pendingRefresh = false;
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined;
     const schedule = () => {
       if (timer) clearTimeout(timer);
-      if (query.view === 'board' || !query.view) {
+      if (automatic && (query.view === 'board' || !query.view)) {
         if (!push || consecutiveFailures.current > 0) timer = setTimeout(() => void read(), push ? 60_000 : POLL_MS);
       }
     };
@@ -203,7 +207,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
           const received = [...collected.values()].filter(order => order.status === 'Received');
           if (seen.current) {
             const fresh = received.filter(order => !seen.current!.has(order.id));
-            if (fresh.length) { setNewOrders(n => n + fresh.length); beep(); }
+            if (fresh.length) { setNewOrders(n => n + fresh.length); setNewPreorders(fresh.filter(row => isKitchenPreorder(row, Date.parse(result.serverTime), parseKdsSettings(result.kitchenSettings))).map(row => row.id)); beep(); }
           } else seen.current = new Set();
           collected.forEach(order => seen.current!.add(order.id));
           if (seen.current.size > 5_000) seen.current = new Set([...seen.current].slice(-2_500).concat([...collected.keys()]));
@@ -232,12 +236,12 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       }
     }
     run.current = read;
-    const wake = () => { if (document.visibilityState === 'visible') void read(); };
-    const online = () => { setOffline(false); void read(); };
+    const wake = () => { if (automatic && document.visibilityState === 'visible') void read(); };
+    const online = () => { setOffline(false); if (automatic) void read(); };
     const offlineEvent = () => setOffline(true);
     document.addEventListener('visibilitychange', wake); window.addEventListener('focus', wake);
     window.addEventListener('online', online); window.addEventListener('offline', offlineEvent);
-    const stopEvents = push && query.brandId && query.locationId ? subscribeTerminalEvents(`${endpoint}/events?${new URLSearchParams({ brandId: query.brandId, locationId: query.locationId })}`, {
+    const stopEvents = automatic && push && query.brandId && query.locationId ? subscribeTerminalEvents(`${endpoint}/events?${new URLSearchParams({ brandId: query.brandId, locationId: query.locationId })}`, {
       signal: () => { if (!disposed) { lastPushSignal.current = Date.now(); setPushConnected(true); } },
       change: () => { if (!disposed) { setChangeRevision(value => value + 1); void read(); } },
       disconnected: () => { if (!disposed) setPushConnected(false); },
@@ -249,7 +253,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
         void read();
       },
     }) : undefined;
-    void read();
+    if (changedKey || automatic) void read(); else setLoading(false);
     return () => {
       disposed = true; stopEvents?.(); if (timer) clearTimeout(timer); active.current?.abort(); active.current = null;
       document.removeEventListener('visibilitychange', wake); window.removeEventListener('focus', wake);
@@ -257,8 +261,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
     };
   // Query is serialized so caller object identity does not restart the feed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, beep, enabled, endpoint, push]);
-  const stale = lastUpdated !== null && (((!query.view || query.view === 'board') && Date.now() - Math.max(lastUpdated, push ? (lastPushSignal.current ?? 0) : 0) > 45_000) || offline || !!error);
+  }, [key, beep, enabled, endpoint, push, automatic]);
+  const ageStale = automatic && (!query.view || query.view === 'board') && lastUpdated !== null && Date.now() - Math.max(lastUpdated, push ? (lastPushSignal.current ?? 0) : 0) > 45_000;
+  const stale = lastUpdated !== null && (ageStale || offline || !!error);
   void tick;
-  return { data, loading, error, changeRevision, reconnecting: reconnecting || (push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
+  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

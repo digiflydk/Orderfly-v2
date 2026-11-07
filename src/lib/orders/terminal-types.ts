@@ -38,6 +38,7 @@ export type TerminalOrder = {
 export type TerminalLocation = { brandId: string; brandName: string; locationId: string; locationName: string };
 export type TerminalView = 'board' | 'history' | 'preorders';
 export type TerminalQuery = {
+  includePreorders?: '1';
   brandId?: string;
   locationId?: string;
   view?: TerminalView;
@@ -48,6 +49,9 @@ export type TerminalQuery = {
   dateTo?: string;
 };
 export type TerminalReadResult = {
+  kitchenSettings?: import('./kds-settings').KdsSettings;
+  kitchenSettingsRevision?: number;
+  openingHours?: import('./kds-settings').KitchenHours;
   orders: TerminalOrder[];
   locations: TerminalLocation[];
   selectedBrandId: string | null;

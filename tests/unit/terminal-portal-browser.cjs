@@ -121,3 +121,11 @@ test('uncertain committed payment reconciles Paid without sending a second write
  state=newState();const c=await context(t),page=await c.newPage();await login(page);const card=page.getByRole('article',{name:'Ordre ORD-PORTAL'});
  state.paymentUnavailable=true;state.commitUncertain=true;await card.getByRole('button',{name:'Registrér betaling',exact:true}).click();await card.getByRole('button',{name:'Bekræft betaling modtaget',exact:true}).click();await card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true}).click();await expect(card.getByRole('button',{name:'Kontrollér betalingsstatus',exact:true})).toHaveCount(0);await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeEnabled();assert.equal(state.paymentCalls,1);
 });
+
+test('manual KDS pauses dedicated session renewal and restores it when enabled',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await page.clock.install({time:new Date('2026-10-25T17:00:00Z')});await login(page);
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Automatisk opdatering',{exact:true}).uncheck();await expect(page.getByText('Manuel opdatering',{exact:true})).toBeVisible();
+ const before=state.renewCalls;await page.clock.runFor(301000);await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'));});await page.waitForTimeout(50);assert.equal(state.renewCalls,before);
+ await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();assert.equal(state.renewCalls,before);
+ await page.getByLabel('Automatisk opdatering',{exact:true}).check();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>state.renewCalls).toBeGreaterThan(before);
+});

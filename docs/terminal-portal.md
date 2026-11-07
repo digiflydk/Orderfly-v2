@@ -191,3 +191,78 @@ an authenticated physical iPad session is not covered by these synthetic checks.
 
 References: [Firestore listener billing](https://firebase.google.com/docs/firestore/pricing),
 [App Hosting request limits](https://firebase.google.com/docs/app-hosting/product-comparison).
+
+### Manual updates, closing hours and preorder release (7 November 2026)
+
+Under Menu → Order settings, **Automatic updates on this device** can be disabled.
+The first page load and explicit user reads (Refresh, changing scope/view/date,
+settings saves and order actions) still fetch authorized data. Timers, focus,
+visibility, online events and SSE do not fetch while disabled. Dedicated-terminal
+periodic session renewal also pauses; initial login verification and explicit
+access failures remain checked. The preference persists locally. The last complete
+snapshot remains visible as **Manuel opdatering** with its update time, not a false
+connection error. Countdown/colour changes run locally and incur no API calls.
+The automatic date rollover waits until automatic updates resume or Refresh is
+pressed. Manual mode cannot discover new orders without a read.
+
+Location-wide settings are stored on the native location with a monotonic revision:
+
+| Setting | Default | Range |
+| --- | --- | --- |
+| Preorder release / print lead time Y | 30 minutes | 0–1440 |
+| Yellow warning before kitchen deadline Z | 5 minutes | 0–120 |
+| Red warning and sound after deadline A | 5 minutes | 0–120 |
+| Sleep outside opening hours | Enabled | On/off |
+
+Saving uses same-origin POST `/api/kds/orders/settings` or
+`/api/terminal/orders/settings`. Sources are fixed by each route. Employee KDS
+uses its host-bound location and live `orderfly.orders:edit` authority; dedicated
+terminals use their own freshly authorized scope. The transaction rechecks native
+brand ownership, expected revision and request identity and writes an audit entry.
+Identical uncertain retries are idempotent; stale or reused commands conflict.
+No authority is inferred from a UI checkbox. Location changes invalidate existing
+push channels and cause a freshly authorized settings read on other online KDS.
+
+**Nattilstand** closes KDS subscriptions and pauses background/session reads outside
+the location's `openingHours`, interpreted in Copenhagen time including overnight
+shifts. Unknown/invalid hours fail open. It retains the snapshot in memory, allows
+manual refresh, wakes at opening or one minute before a known preorder's release,
+and stays awake while Received, In Progress or Ready orders require attention.
+This is a pause in KDS communication, not a durable offline application or offline
+mutation queue. Other devices, checkout and the physical printer's own polling are
+independent. Orders arriving while asleep are discovered on wake/manual refresh.
+
+The KDS board requests `includePreorders=1` together with its service date. The
+server returns authorized active orders for that date plus future fulfillment,
+with the flag bound into cursors. The client partitions Received orders at
+`fulfillmentAt - Y minutes`; In Progress/Ready orders never return to preorders.
+This also handles same-day preorders and releases crossing midnight. Explicitly
+selected dates keep their date filter. Tabs show counts of unhandled Received
+orders. After the first complete snapshot, a newly discovered preorder plays the
+selected notification melody and shows **Forudbestilling modtaget** with a button
+to open preorders. Existing first-load orders are silent. Browser audio activation,
+mute and device volume still apply. Release happens locally without polling.
+
+New original print intents capture future `scheduledFulfillmentAt` in the existing
+canonical queue, retaining deterministic identity. Ordinary CloudPRNT dispatch
+skips held jobs until the same location lead time is reached, so a held job cannot
+block an immediate order. Unsent TTL starts at release, not purchase. Changing
+settings gives held jobs a fresh collection window. The existing five-minute
+unsent window, activation epoch, immutable content, one-download and explicit ACK
+safeguards remain. Already offered/downloaded/confirmed jobs are never rescheduled
+or reprinted; historical jobs without scheduling metadata retain their original
+policy. No migration or retrospective printing is performed. Automatic printer
+configuration must already be enabled for the restaurant.
+
+Received and In Progress primary actions and clocks pulse yellow from Z minutes
+before the kitchen deadline, then red from A minutes after it. Delay sound repeats
+at most once per minute until handled; an edited kitchen-ready time remains
+separate from customer fulfillment time. Inline customer/items/notes/total details
+start collapsed behind **Vis ordredetaljer**. Order number, large actions, clock,
+payment uncertainty and explicit payment controls remain visible.
+
+Validation uses local TypeScript/build and synthetic Node/Playwright tests for
+manual/closing-hour call counts, session renewal, settings authority/replay/conflict,
+preorder popup/audio/badges/release, collapsed details and both status warnings,
+plus original print waiting, expiry, queue ordering and exactly-once dispatch.
+No GitHub Actions or production data writes are part of the test process.

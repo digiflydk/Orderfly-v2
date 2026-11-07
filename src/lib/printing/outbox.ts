@@ -1,4 +1,5 @@
 import 'server-only';
+import { orderInstant } from '@/lib/orders/kds-settings';
 import { z } from 'zod';
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
@@ -240,7 +241,8 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
       if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
         throw new PrintOutboxError('job_conflict');
       }
-      return { jobId, created: !original, identity };
+      const scheduledFulfillmentAt = orderInstant(orders.find(row => row.id === c.orderId)?.data()?.fulfillmentAt);
+      return { jobId, created: !original, identity, scheduledFulfillmentAt: scheduledFulfillmentAt !== null && scheduledFulfillmentAt > now ? scheduledFulfillmentAt : undefined };
     });
     const additions = prepared.filter(p => p.created);
     const revision = current.success ? current.data.revision : 0;
@@ -266,9 +268,10 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
       applied = true;
       for (const plan of plans) {
         if (!plan.additions.length) continue;
-        for (const { identity, jobId } of plan.additions) {
+        for (const { identity, jobId, scheduledFulfillmentAt } of plan.additions) {
           tx.create(plan.jobs.doc(jobId), { schemaVersion: 1, ...identity, id: jobId,
             printerRevision: plan.printerRevision, state: 'queued', attempts: 0,
+            ...(scheduledFulfillmentAt !== undefined ? { scheduledFulfillmentAt } : {}),
             createdAt: plan.now, updatedAt: FieldValue.serverTimestamp(),
             ...(settlement?.automaticActivationId ? { automaticActivationId: settlement.automaticActivationId } : {}) });
         }
