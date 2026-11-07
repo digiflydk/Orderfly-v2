@@ -24,6 +24,7 @@ export type TerminalOrder = {
   notes: string;
   createdAt: string | null;
   fulfillmentAt: string | null;
+  kitchenReadyAt?: string | null;
   deliveryTime: string;
   deliveryType: 'Pickup' | 'Delivery';
   status: OrderStatus;
@@ -42,6 +43,7 @@ export type TerminalQuery = {
   view?: TerminalView;
   cursor?: string;
   search?: string;
+  serviceDate?: string;
   dateFrom?: string;
   dateTo?: string;
 };

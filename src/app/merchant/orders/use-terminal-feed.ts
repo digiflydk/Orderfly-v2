@@ -1,9 +1,11 @@
 'use client';
+import { TERMINAL_SOUNDS, isTerminalSound, type TerminalSound } from '@/lib/orders/terminal-sounds';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalQuery, TerminalReadResult } from '@/lib/orders/terminal-types';
 
 const POLL_MS = 15_000;
-const TIMEOUT_MS = 12_000;
+// Identity upstream can take 12s; allow its response plus scoped database work.
+const TIMEOUT_MS = 25_000;
 // Shared by this page's feed instances; unlike message text this records the
 // ordering of authorization evidence across foreground and background reads.
 let authorizationRevision = 0;
@@ -13,6 +15,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reconnecting, setReconnecting] = useState(false);
+  const lastSuccessful = useRef<number | null>(null);
+  const consecutiveFailures = useRef(0);
   const [deniedRevision, setDeniedRevision] = useState(0);
   const [authorizedRevision, setAuthorizedRevision] = useState(0);
   const [denialMessage, setDenialMessage] = useState('');
@@ -20,6 +25,8 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const [offline, setOffline] = useState(false);
   const [newOrders, setNewOrders] = useState(0);
   const [sound, setSound] = useState(true);
+  const [soundId, setSoundIdState] = useState<TerminalSound>('melody');
+  const soundIdRef = useRef<TerminalSound>('melody');
   const [volume, setVolumeState] = useState(80);
   const volumeRef = useRef(80);
   const [soundError, setSoundError] = useState('');
@@ -42,7 +49,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       oscillator.connect(gain); gain.connect(context.destination);
       // Eight notes with a soft attack/release: 3.6 seconds in total.
       const start = context.currentTime;
-      [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+      const preset = TERMINAL_SOUNDS[soundIdRef.current];
+      oscillator.type = preset.wave;
+      preset.notes.forEach((frequency, index) => {
         const at = start + index * 0.45;
         oscillator.frequency.setValueAtTime(frequency, at);
         gain.gain.setValueAtTime(0.001, at);
@@ -84,6 +93,11 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       soundEnabled.current = false; stopMelody.current?.(); setSound(false); setSoundError(''); saveSound(false);
     } else await testSound();
   }, [testSound]);
+  const setSoundId = useCallback((value: string) => {
+    if (!isTerminalSound(value)) return;
+    soundIdRef.current = value; setSoundIdState(value);
+    try { localStorage.setItem('orderfly.kds.soundId', value); } catch {}
+  }, []);
   const setVolume = useCallback((value: number) => {
     if (!Number.isFinite(value)) return;
     const level = Math.max(0, Math.min(100, Math.round(value)));
@@ -93,6 +107,8 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   useEffect(() => {
     if (!notifications) { soundEnabled.current = false; return; }
     try {
+      const savedSound = localStorage.getItem('orderfly.kds.soundId');
+      if (isTerminalSound(savedSound)) { soundIdRef.current = savedSound; setSoundIdState(savedSound); }
       const savedVolume = localStorage.getItem('orderfly.kds.volume');
       if (savedVolume !== null && Number.isFinite(Number(savedVolume))) {
         volumeRef.current = Math.max(0, Math.min(100, Number(savedVolume))); setVolumeState(volumeRef.current);
@@ -121,7 +137,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
     active.current?.abort(); active.current = null;
     seen.current = null; nextCursor.current = null;
     setAuthorizedRevision(0);
-    setData(null); setLastUpdated(null); setNewOrders(0); setError('');
+    setData(null); setLastUpdated(null); setNewOrders(0); setError(''); setReconnecting(false); lastSuccessful.current = null; consecutiveFailures.current = 0;
     if (!enabled) { setLoading(false); run.current = async () => {}; return; }
     let pendingRefresh = false;
     let disposed = false, timer: ReturnType<typeof setTimeout> | undefined;
@@ -136,6 +152,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       const controller = new AbortController(); active.current = controller;
       const startedAfterDenial = latestAuthorizationDenial;
       let timeout: ReturnType<typeof setTimeout> | undefined;
+      let accessRejected = false;
       setLoading(true);
       try {
         const board = query.view === 'board' || !query.view;
@@ -153,6 +170,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
           const response = await fetch(`${endpoint}?${params}`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
           if (disposed || generation.current !== current) return;
           if (response.status === 401 || response.status === 403) {
+            accessRejected = true;
             latestAuthorizationDenial = ++authorizationRevision;
             setDeniedRevision(latestAuthorizationDenial); setAuthorizedRevision(0);
             setDenialMessage(response.status === 401 ? 'Din session er udløbet. Log ind igen.' : 'Du har ikke adgang til disse ordrer.');
@@ -186,10 +204,15 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
         nextCursor.current = result.nextCursor;
         setData(previous => append && !board && previous ? { ...result, orders: [...new Map([...previous.orders, ...result.orders].map(order => [order.id, order])).values()] } : { ...result, orders: [...collected.values()] });
         setAuthorizedRevision(++authorizationRevision);
-        setLastUpdated(Date.now()); setOffline(false); setError('');
+        lastSuccessful.current = Date.now(); consecutiveFailures.current = 0;
+        setLastUpdated(lastSuccessful.current); setOffline(false); setError(''); setReconnecting(false);
       } catch (failure) {
         if (disposed || generation.current !== current) return;
         setOffline(!navigator.onLine);
+        consecutiveFailures.current++;
+        const retryFresh = !accessRejected && navigator.onLine && consecutiveFailures.current === 1 && lastSuccessful.current !== null && Date.now() - lastSuccessful.current < 45_000;
+        setReconnecting(retryFresh);
+        if (retryFresh) { pendingRefresh = true; return; }
         setError(failure instanceof Error && failure.name !== 'AbortError' ? failure.message : 'Forbindelsen tog for lang tid. Prøv igen.');
       } finally {
         clearTimeout(timeout);
@@ -215,7 +238,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   // Query is serialized so caller object identity does not restart the feed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, beep, enabled, endpoint]);
-  const stale = lastUpdated !== null && (Date.now() - lastUpdated > 45_000 || offline || !!error);
+  const stale = lastUpdated !== null && (((!query.view || query.view === 'board') && Date.now() - lastUpdated > 45_000) || offline || !!error);
   void tick;
-  return { data, loading, error, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume };
+  return { data, loading, error, reconnecting, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

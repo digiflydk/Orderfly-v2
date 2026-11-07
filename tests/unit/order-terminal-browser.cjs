@@ -59,9 +59,17 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
   }, {suspended: !!extra.suspendedAudio});
   const state = { orders: [order('ORD-NEW'), order('ORD-COOK', { status: 'In Progress' }), order('ORD-READY', { status: 'Ready' }), order('ORD-UNPAID', { status: 'Ready', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup' }), order('ORD-HISTORY', { status: 'Completed' }), order('ORD-FUTURE', { fulfillmentAt: '2026-10-26T12:15:00.000Z' })], readStatus: 200, statusError: null, canEdit: true, emptyPage: false, ...extra };
   await page.exposeFunction('__registerPayment', async (id, method) => { calls.push({ kind: 'payment', id, method }); state.orders.find(o => o.id === id).paymentStatus = 'Paid'; return { success: true, message: 'Betalingen er registreret.' }; });
-  if (extra.kds) await page.addInitScript(() => { window.__kdsProps = { initialLocations:[{brandId:'brand-a',locationId:'loc-a',brandName:'Esmeralda',locationName:'Amager'}], apiBase:'/api/kds/orders', actionApiBase:'/api/merchant/orders' }; });
+  if (extra.kitchenMode) await page.addInitScript(() => { window.__kitchenMode = true; });
+  if (extra.kds) await page.addInitScript(({kitchenMode}) => { window.__kdsProps = { kitchenMode, initialLocations:[{brandId:'brand-a',locationId:'loc-a',brandName:'Esmeralda',locationName:'Amager'}], apiBase:'/api/kds/orders', actionApiBase:'/api/merchant/orders' }; }, {kitchenMode: !!extra.kitchenMode});
   await page.route(/\/api\/(merchant|kds)\/orders/,  async route => {
     const req = route.request(), url = new URL(req.url());
+    if (url.pathname === '/api/merchant/orders/ready-time') {
+      const command = req.postDataJSON(); calls.push({kind:'ready-time',command});
+      const row = state.orders.find(o => o.id === command.orderId);
+      if (state.timeError) return route.fulfill({status:409,json:{success:false,message:'Ordren eller tiden er ændret. Opdater og prøv igen.'}});
+      assert.equal(command.expectedReadyAt,row.kitchenReadyAt ?? null);row.kitchenReadyAt=command.readyAt;
+      return route.fulfill({json:{success:true,readyAt:command.readyAt}});
+    }
     if (url.pathname === '/api/merchant/orders/status') {
       const command = req.postDataJSON(); calls.push({ kind: 'status', command });
       if (state.statusError) return route.fulfill({ status: state.statusError.status, json: { success: false, error: state.statusError.error, message: state.statusError.message } });
@@ -76,13 +84,15 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     calls.push({ kind: 'read', path:url.pathname, query: Object.fromEntries(url.searchParams) });
     if (state.historyReadStatus && url.searchParams.get('view') === 'history') return route.fulfill({status:state.historyReadStatus,json:{error:'terminal_unavailable'}});
     if (state.boardReadStatus && url.searchParams.get('view') === 'board') return route.fulfill({status:state.boardReadStatus,json:{error:'forbidden'}});
+    if (state.failOnce) {state.failOnce=false;return route.fulfill({status:503,json:{error:'terminal_unavailable'}});}
     if (state.readStatus !== 200) return route.fulfill({ status: state.readStatus, json: { error: state.readStatus === 401 ? 'unauthorized' : 'terminal_unavailable', message: 'Ordrene kunne ikke hentes.' } });
     if (state.initialRevoked && url.searchParams.get('brandId') === 'brand-a') return route.fulfill({status:403,json:{error:'forbidden'}});
     const locationId = url.searchParams.get('locationId') || (state.initialRevoked ? 'loc-b' : 'loc-a'), scope = locations.find(l => l.locationId === locationId), view = url.searchParams.get('view') || 'board';
     let rows = state.orders.filter(o => o.locationId === locationId);
+    const serviceDate=url.searchParams.get('serviceDate');if(serviceDate) rows=rows.filter(o=>(o.fulfillmentAt || o.createdAt).slice(0,10)===serviceDate);
     rows = rows.filter(o => view === 'history' ? (['Completed','Delivered','Canceled'].includes(o.status) || o.managedDeliveryTracking?.deliveryStatus === 'delivered') : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && o.fulfillmentAt < '2026-10-25T23:00:00.000Z');
     const hasMore = state.emptyPage && !url.searchParams.has('cursor');
-    const result = { orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: now, hasMore, nextCursor: hasMore ? 'fixture-next' : null };
+    const result = { orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: state.dynamicTime ? await page.evaluate(()=>new Date().toISOString()) : now, hasMore, nextCursor: hasMore ? 'fixture-next' : null };
     if (state.holdHistory && view === 'history') { state.heldHistory = {route,result}; return; }
     return route.fulfill({ json: result });
   });
@@ -382,4 +392,52 @@ test('new orders play automatically by default, volume zero and mute suppress al
  state.orders.push(order('AUTO-TWO'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('button',{name:'Åbn ordre AUTO-TWO',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),1);
  await page.getByRole('slider',{name:'Lydstyrke'}).fill('80');await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();
  state.orders.push(order('AUTO-THREE'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(page.getByRole('button',{name:'Åbn ordre AUTO-THREE',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),1);
+});
+test('kitchen cards show all details and large progress buttons without dialogs; today filter excludes old active orders',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
+ const card=page.getByRole('article',{name:'Ordre ORD-NEW',exact:true});await expect(card).toBeVisible();
+ await expect(card.getByText('15:00',{exact:true})).toBeVisible();await expect(page.getByRole('dialog')).toHaveCount(0);
+ const button=card.getByRole('button',{name:'Start tilberedning',exact:true});assert.ok((await button.boundingBox()).height>=56);await button.click();await expect(card.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();await card.getByRole('button',{name:'Markér klar',exact:true}).click();await expect(card.getByRole('button',{name:'Markér afhentet',exact:true})).toBeVisible();
+ state.orders.push(order('OLD-ACTIVE',{fulfillmentAt:'2026-10-24T12:00:00.000Z'}));await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre OLD-ACTIVE',exact:true})).toHaveCount(0);
+ await expect(page.getByLabel('Ordredato',{exact:true})).toHaveValue('2026-10-25');await page.getByLabel('Ordredato',{exact:true}).fill('2026-10-24');await expect(page.getByRole('article',{name:'Ordre OLD-ACTIVE',exact:true})).toBeVisible();await expect(card).toHaveCount(0);
+ assert.equal(calls.filter(c=>c.kind==='read').at(-1).query.serviceDate,'2026-10-24');await page.getByRole('button',{name:'I dag',exact:true}).click();await expect(card).toBeVisible();
+ await page.screenshot({path:'/tmp/kds-kitchen-preview.png',fullPage:true});
+});
+test('kitchen menu selects and persists sounds, threshold and volume',async t=>{
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
+ await expect(page.getByLabel('Vælg lyd',{exact:true})).not.toBeVisible();await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();
+ await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByLabel('Alarm efter minutter',{exact:true}).fill('8');await page.getByRole('slider',{name:'Lydstyrke'}).fill('60');
+ await page.getByRole('button',{name:'Test lyd',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__audioNotes[0]?.value)).toBe(392);
+ await page.reload();await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveValue('marimba');await expect(page.getByLabel('Alarm efter minutter',{exact:true})).toHaveValue('8');await expect(page.getByRole('slider',{name:'Lydstyrke'})).toHaveValue('60');
+});
+test('clock edits are inline, save server time and preserve customer fulfillment time',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
+ const card=page.getByRole('article',{name:'Ordre ORD-NEW',exact:true});await card.getByRole('button',{name:'Ændr klartid for ORD-NEW',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);
+ await card.getByLabel('Klar om minutter for ORD-NEW',{exact:true}).fill('40');await card.getByRole('button',{name:'Gem klartid',exact:true}).click();await expect.poll(()=>calls.filter(c=>c.kind==='ready-time').length).toBe(1);
+ await expect(card.getByText('40:00',{exact:true})).toBeVisible();assert.equal(state.orders.find(o=>o.id==='ORD-NEW').fulfillmentAt,'2026-10-25T12:15:00.000Z');
+ state.timeError=true;await card.getByRole('button',{name:'Ændr klartid for ORD-NEW',exact:true}).click();await card.getByLabel('Klar om minutter for ORD-NEW',{exact:true}).fill('50');await card.getByRole('button',{name:'Gem klartid',exact:true}).click();await expect(card.getByRole('alert')).toContainText('tiden er ændret');
+});
+test('overdue clock is negative and sounds alarm, marking ready stops repeated alarms',async t=>{
+ const late=order('LATE',{fulfillmentAt:'2026-10-25T11:54:00.000Z'});
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,orders:[late]});const card=page.getByRole('article',{name:'Ordre LATE',exact:true});
+ await expect(card.getByText('−6:00',{exact:true})).toBeVisible();await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await card.getByRole('button',{name:'Start tilberedning',exact:true}).click();await expect(card.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();await card.getByRole('button',{name:'Markér klar',exact:true}).click();await expect(card.getByText('Klar ✓',{exact:true})).toBeVisible();
+ await page.clock.runFor(61_000);await expect(card.getByText('Klar ✓',{exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),1);
+});
+test('immersive kitchen persists through scroll and native exit until its close button',async t=>{
+ const {page}=await fixture(t,768,1024,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
+ const screen=page.locator('[data-kds-fullscreen]');await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.mouse.wheel(0,600);await page.evaluate(async()=>{if(document.fullscreenElement)await document.exitFullscreen();});await expect(screen).toHaveAttribute('data-kds-fullscreen','true');
+ assert.equal(await screen.evaluate(el=>getComputedStyle(el).overscrollBehavior),'none');await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','false');
+});
+test('history remains connected after 45 seconds and one transient refresh retries without a false error banner',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();await page.clock.runFor(61_000);
+ await expect(page.getByText('Forbindelsen skal kontrolleres',{exact:true})).toHaveCount(0);await expect(page.getByRole('alert')).toHaveCount(0);
+ const before=calls.filter(c=>c.kind==='read').length;state.failOnce=true;await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect.poll(()=>calls.filter(c=>c.kind==='read').length).toBeGreaterThan(before+1);await expect(page.getByRole('alert')).toHaveCount(0);
+});
+test('overdue threshold is configurable and alarm repeats at most once a minute',async t=>{
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,orders:[order('LATE',{fulfillmentAt:'2026-10-25T11:56:00.000Z'})]});
+ await expect(page.getByRole('article',{name:'Ordre LATE',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
+ await page.getByText(/Menu · Lyd og køkkenindstillinger/).click();await page.getByLabel('Alarm efter minutter',{exact:true}).fill('3');await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await page.clock.runFor(59_000);assert.equal(await page.evaluate(()=>window.__audioStarts),1);await page.clock.runFor(2_000);await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
+ await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.clock.runFor(61_000);assert.equal(await page.evaluate(()=>window.__audioStarts),2);
 });
