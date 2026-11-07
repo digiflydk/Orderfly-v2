@@ -23,6 +23,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const [soundError, setSoundError] = useState('');
   const [tick, setTick] = useState(0);
   const audio = useRef<AudioContext | null>(null), soundEnabled = useRef(false);
+  const stopMelody = useRef<(() => void) | null>(null);
   const seen = useRef<Set<string> | null>(null), active = useRef<AbortController | null>(null);
   const generation = useRef(0), nextCursor = useRef<string | null>(null);
   const run = useRef<(append?: boolean) => Promise<void>>(async () => {});
@@ -34,15 +35,30 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
     if (!soundEnabled.current || !context) return;
     if (context.state !== 'running') { setSoundError('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.'); return; }
     try {
+      stopMelody.current?.();
       const oscillator = context.createOscillator(), gain = context.createGain();
       oscillator.connect(gain); gain.connect(context.destination);
-      oscillator.frequency.value = 880; gain.gain.setValueAtTime(0.12, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.5);
-      oscillator.start(); oscillator.stop(context.currentTime + 0.5);
+      // Eight notes with a soft attack/release: 3.6 seconds in total.
+      const start = context.currentTime;
+      [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+        const at = start + index * 0.45;
+        oscillator.frequency.setValueAtTime(frequency, at);
+        gain.gain.setValueAtTime(0.001, at);
+        gain.gain.exponentialRampToValueAtTime(0.12, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, at + 0.42);
+      });
+      let stopped = false;
+      const stop = () => { if (!stopped) { stopped = true; oscillator.stop(); } };
+      stopMelody.current = stop;
+      oscillator.onended = () => {
+        stopped = true; oscillator.disconnect(); gain.disconnect();
+        if (stopMelody.current === stop) stopMelody.current = null;
+      };
+      oscillator.start(start); oscillator.stop(start + 3.6);
     } catch { setSoundError('Lyden kunne ikke afspilles. Nye ordrer vises stadig på skærmen.'); }
   }, []);
   const toggleSound = useCallback(async () => {
-    if (soundEnabled.current && !soundError) { soundEnabled.current = false; setSound(false); return; }
+    if (soundEnabled.current && !soundError) { soundEnabled.current = false; stopMelody.current?.(); setSound(false); return; }
     try {
       const Audio = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!Audio) throw new Error('unsupported');
@@ -54,7 +70,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   }, [beep, soundError]);
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 5_000);
-    return () => { clearInterval(timer); void audio.current?.close(); };
+    return () => { clearInterval(timer); stopMelody.current?.(); void audio.current?.close(); };
   }, []);
   useEffect(() => {
     const current = ++generation.current;

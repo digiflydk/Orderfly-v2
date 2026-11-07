@@ -1,5 +1,5 @@
-import { TerminalPortal } from '@/app/terminal/orders/terminal-portal';
+import { redirect } from 'next/navigation';
 
-export default function MerchantAppPage() {
-  return <TerminalPortal loginHref="/mapp/login" />;
+export default function LegacyMerchantAppPage() {
+  redirect('/kds');
 }

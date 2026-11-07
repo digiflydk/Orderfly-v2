@@ -49,12 +49,12 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
   const page = await context.newPage(), calls = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(() => {
-    window.__audioStarts = 0;
+    window.__audioStarts = 0; window.__audioNotes = []; window.__audioStops = [];
     window.AudioContext = class {
       state = 'running'; currentTime = 0; destination = {};
       async resume() {} async close() {}
-      createOscillator() { return { frequency: { value: 0 }, connect() {}, start() { window.__audioStarts++; }, stop() {} }; }
-      createGain() { return { connect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
+      createOscillator() { return { frequency: { setValueAtTime(value, at) { window.__audioNotes.push({value, at}); } }, connect() {}, start() { window.__audioStarts++; }, stop(at) { window.__audioStops.push(at); }, disconnect() {} }; }
+      createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} } }; }
     };
   });
   const state = { orders: [order('ORD-NEW'), order('ORD-COOK', { status: 'In Progress' }), order('ORD-READY', { status: 'Ready' }), order('ORD-UNPAID', { status: 'Ready', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup' }), order('ORD-HISTORY', { status: 'Completed' }), order('ORD-FUTURE', { fulfillmentAt: '2026-10-26T12:15:00.000Z' })], readStatus: 200, statusError: null, canEdit: true, emptyPage: false, ...extra };
@@ -191,6 +191,9 @@ test('first load is silent; new board orders alert once even while history is op
   assert.equal(await page.evaluate(()=>window.__audioStarts),0);
   await page.getByRole('button',{name:'Slå lyd til',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1,'explicit sound test');
+  assert.equal(await page.evaluate(()=>window.__audioNotes.length),8);
+  assert.ok(await page.evaluate(()=>new Set(window.__audioNotes.map(n=>n.value)).size)>1);
+  assert.equal(await page.evaluate(()=>window.__audioStops[0]),3.6);
   await page.getByRole('button',{name:'Historik',exact:true}).click();
   await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
   state.orders.push(order('ORD-NEW-LATER'));

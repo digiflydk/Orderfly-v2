@@ -16,7 +16,7 @@ test('#12 slugs are suggested from brand names with Danish letters spelled out',
 test('#12 invalid, too short/long and reserved slugs are rejected with a reason', () => {
   assert.equal(lib.brandSlugError('esmeralda'), null);
   for (const bad of ['E', 'Esmeralda', '-esmeralda', 'esmeralda-', 'esme_ralda', 'esmé', 'a'.repeat(41)]) assert.ok(lib.brandSlugError(bad), bad);
-  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant', 'terminal', 'login', 'kasse', 'm3pizza']) assert.match(lib.brandSlugError(reserved), /reserveret/);
+  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant', 'terminal', 'kds', 'login', 'kasse', 'm3pizza']) assert.match(lib.brandSlugError(reserved), /reserveret/);
 });
 
 test('#12 duplicate slugs get free alternatives', () => {
@@ -40,7 +40,7 @@ test('#12 subdomain paths are scoped to that brand; app-wide paths pass through'
   assert.equal(lib.brandSubdomainRewrite('/esmeralda/esmeralda-pizza-amager', 'esmeralda'), null);
   // Another brand's path never escapes this brand's scope.
   assert.equal(lib.brandSubdomainRewrite('/other-brand/amager', 'esmeralda'), '/esmeralda/other-brand/amager');
-  for (const path of ['/_next/static/x.js', '/fonts/inter/inter-latin-wght-normal.woff2', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/login', '/kasse', '/terminal/login', '/terminal/orders', '/robots.txt', '/icon.png'])
+  for (const path of ['/_next/static/x.js', '/fonts/inter/inter-latin-wght-normal.woff2', '/api/checkout/session', '/feedback', '/games/esmeralda', '/superadmin', '/login', '/kasse', '/terminal/login', '/terminal/orders', '/kds', '/kds/login', '/robots.txt', '/icon.png'])
     assert.equal(lib.brandSubdomainRewrite(path, 'esmeralda'), null, path);
 });
 
@@ -89,7 +89,7 @@ test('#12 middleware rewrites brand subdomains and keeps the apex and www behavi
 test('#658 Merchant app and its same-origin APIs bypass storefront routing', () => {
   const { run } = middlewareFor();
   for (const host of ['esmeralda.orderfly.dk', 'other-brand.orderfly.dk', 'orderfly.dk']) {
-    for (const path of ['/mapp', '/mapp/login', '/api/terminal/auth/session', '/api/terminal/orders']) {
+    for (const path of ['/mapp', '/mapp/login', '/kds', '/kds/login', '/api/terminal/auth/session', '/api/terminal/orders']) {
       assert.deepEqual(run(`https://${host}${path}`), { kind: 'next' }, `${host}${path}`);
     }
   }
@@ -368,4 +368,13 @@ test('Esmeralda server layout passes the scoped consent text and request-cookie 
   for(const raw of [undefined,'invalid',JSON.stringify({consent_version:'old'}),JSON.stringify({consent_version:texts.consent_version})])await render(raw);
   assert.deepEqual(seen.map(value=>value.show),[true,true,true,false]);
   assert.ok(seen.every(value=>value.texts===texts));
+});
+
+ test('legacy merchant app routes redirect to KDS without changing host', () => {
+  for (const [file, destination] of [['src/app/mapp/page.tsx', '/kds'], ['src/app/mapp/login/page.tsx', '/kds/login']]) {
+    const redirects = [];
+    loadTs(file, { 'next/navigation': { redirect: path => redirects.push(path) } }).default();
+    assert.deepEqual(redirects, [destination]);
+  }
+  assert.equal(lib.brandSubdomainRewrite('/kds-special', 'esmeralda'), '/esmeralda/kds-special');
 });
