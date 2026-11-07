@@ -301,7 +301,7 @@ test('#71 a hanging recommendation request cannot delay checkout navigation',asy
  const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=hang');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();await page.getByRole('button',{name:/Se kurv/}).click();
- const cta=page.getByRole('dialog').getByRole('button',{name:'Til kassen'});await expect(cta).toBeVisible();const started=Date.now();await cta.click();await page.waitForURL('**/fixture/restaurant/checkout');assert.ok(Date.now()-started<1500,'navigation does not wait for the 2s optional timeout');
+ const cta=page.getByRole('dialog').getByRole('button',{name:'Til kassen'});await expect(cta).toBeVisible({timeout:12000});const started=Date.now();await cta.click();await page.waitForURL('**/fixture/restaurant/checkout');assert.ok(Date.now()-started<1500,'checkout navigation does not wait for recommendations');
 });
 
 
@@ -703,4 +703,41 @@ test('failed upsell service opens the cart without losing items',async t=>{
  await page.getByRole('button',{name:/Se kurv/}).click();
  await expect(page.getByRole('dialog').getByRole('heading',{name:/Din kurv/})).toBeVisible();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1);
+});
+
+for (const prefetch of [false,true]) test(`slow upsell response is shown (prefetch=${prefetch})`,async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&upsell=active&v2');
+ let reads=0;
+ await page.route('**/api/public/upsell',async route=>{
+  reads++;
+  await new Promise(resolve=>setTimeout(resolve,3000));
+  await route.fulfill({contentType:'application/json',body:JSON.stringify({upsell:{id:'slow',upsellName:'Langsomt tilbud',discountType:'none'},products:[{id:'drink'}]})});
+ });
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ if(prefetch) { await expect.poll(()=>reads).toBe(1); await page.waitForTimeout(3200); }
+ await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ await expect(page.getByRole('dialog',{name:'Langsomt tilbud'})).toBeVisible({timeout:5000});
+ assert.equal(reads,1,'opening cart reuses the in-flight or completed lookup');
+ await page.getByRole('button',{name:'Fortsæt til kurven'}).click();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
+});
+
+test('changing pizza quantity discards the previous prepared offer',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ const quantities=[];
+ await page.route('**/api/public/upsell',async route=>{
+  const q=route.request().postDataJSON().cartItems.reduce((n,i)=>n+i.quantity,0);quantities.push(q);
+  await route.fulfill({contentType:'application/json',body:JSON.stringify({upsell:{id:'quantity-'+q,upsellName:'Til '+q+' pizzaer',discountType:'none'},products:[{id:'drink'}]})});
+ });
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ for(const quantity of [1,2]) {
+  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+  await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+  await expect.poll(()=>quantities.includes(quantity)).toBe(true);
+ }
+ await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ await expect(page.getByRole('dialog',{name:'Til 2 pizzaer'})).toBeVisible();
+ await expect(page.getByRole('dialog',{name:'Til 1 pizzaer'})).toHaveCount(0);
 });

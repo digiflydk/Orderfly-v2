@@ -23,19 +23,51 @@ export function StorefrontCatalog({ products, combos, children }: {
   const { brand, location, deliveryType, cartItems, cartReady } = useCart();
   const [popup, setPopup] = useState<StorefrontUpsell | null>(null);
   const [cartOpening, setCartOpening] = useState(false);
+  const opening = useRef(0);
   const pending = useRef(false), continuation = useRef<(() => void) | null>(null);
   const request = useRef<AbortController | null>(null);
+  const prepared = useRef<{key: string; expires: number; promise: Promise<unknown>} | null>(null);
   const scope = `${brand?.id}/${location?.id}/${deliveryType}`;
   const cartKey = JSON.stringify([scope, cartItems]);
   const latestKey = useRef(cartKey); latestKey.current = cartKey;
   const latestScope = useRef(scope); latestScope.current = scope;
+  const payload = JSON.stringify({brandId:brand?.id, locationId:location?.id, deliveryType, cartTotal:0, excludedUpsellIds:handledUpsells(),
+    cartItems:cartItems.map(item => ({id:item.id, itemType:item.itemType, quantity:item.quantity,
+      totalPrice:lineMoney(item.price, item.quantity, item.toppings.map(t=>t.price)),
+      toppingIds:item.toppings.map(t=>t.id).filter(Boolean).slice(0,50),
+      includedProductIds:item.comboSelections?.flatMap(g=>g.products.map(p=>p.id)),
+      comboSelections:item.comboSelections?.map(g=>({groupId:g.groupId,groupName:g.groupName,products:g.products.map(p=>({id:p.id}))})),
+    }))});
+  const prepare = () => {
+    if (prepared.current?.key === payload && prepared.current.expires > Date.now()) return prepared.current.promise;
+    request.current?.abort();
+    const controller = new AbortController(); request.current = controller;
+    const timer = setTimeout(() => controller.abort(), 15000);
+    const entry = {key:payload, expires:Date.now()+30000, promise:Promise.resolve(null) as Promise<unknown>};
+    entry.promise = fetch('/api/public/upsell', {method:'POST', headers:{'Content-Type':'application/json'},
+      cache:'no-store', signal:controller.signal, body:payload})
+      .then(async response => { if (!response.ok) throw new Error('Upsell unavailable'); return response.json(); })
+      .catch(() => { entry.expires = 0; return null; })
+      .finally(() => clearTimeout(timer));
+    prepared.current = entry;
+    return entry.promise;
+  };
   useEffect(() => () => {
-    request.current?.abort(); continuation.current = null; pending.current = false;
+    opening.current++; request.current?.abort(); continuation.current = null; pending.current = false;
   }, []);
   useEffect(() => {
-    request.current?.abort(); continuation.current = null; pending.current = false;
+    opening.current++; request.current?.abort(); prepared.current = null; continuation.current = null; pending.current = false;
     setPopup(null); setCartOpening(false);
   }, [scope]);
+
+  useEffect(() => {
+    if (!cartReady || !brand || !location || !deliveryType || !cartItems.length) return;
+    // Coalesce quick quantity changes; opening the basket reuses this request.
+    const timer = setTimeout(() => { void prepare(); }, 250);
+    return () => { clearTimeout(timer); request.current?.abort(); prepared.current = null; };
+    // payload includes the complete cart, restaurant, channel and handled offers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payload, cartReady]);
 
   const finish = () => {
     if (!continuation.current) return;
@@ -48,19 +80,16 @@ export function StorefrontCatalog({ products, combos, children }: {
     if (pending.current || !cartReady) return;
     if (!brand || !location || !deliveryType || !cartItems.length) { proceed(); return; }
     pending.current = true; setCartOpening(true); continuation.current = proceed;
-    const controller = new AbortController(); request.current = controller;
-    const timer = setTimeout(() => controller.abort(), 2000);
+    const attempt = ++opening.current;
+    const lookup = prepare();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     let selected: StorefrontUpsell | null = null;
     try {
-      const response = await fetch('/api/public/upsell', {method:'POST', headers:{'Content-Type':'application/json'}, cache:'no-store', signal:controller.signal,
-        body:JSON.stringify({brandId:brand.id, locationId:location.id, deliveryType, cartTotal:0, excludedUpsellIds:handledUpsells(),
-          cartItems:cartItems.map(item => ({id:item.id, itemType:item.itemType, quantity:item.quantity,
-            totalPrice:lineMoney(item.price, item.quantity, item.toppings.map(t=>t.price)),
-            toppingIds:item.toppings.map(t=>t.id).filter(Boolean).slice(0,50),
-            includedProductIds:item.comboSelections?.flatMap(g=>g.products.map(p=>p.id)),
-            comboSelections:item.comboSelections?.map(g=>({groupId:g.groupId,groupName:g.groupName,products:g.products.map(p=>({id:p.id}))})),
-          }))})});
-      const data = response.ok ? await response.json() : null;
+      // Prefetched offers are immediate. A first click still tolerates a slow
+      // cold request, but an unavailable service can never trap the customer.
+      const data: any = await Promise.race([lookup, new Promise<null>(resolve => {
+        timer = setTimeout(() => resolve(null), 10000);
+      })]);
       if (data && Array.isArray(data.products) && typeof data.upsell?.id === 'string' && typeof data.upsell?.upsellName === 'string'
         && !handledUpsells().includes(data.upsell.id) && ['none','percentage','fixed_amount'].includes(data.upsell.discountType)
         && (data.upsell.discountType === 'none' || Number.isFinite(data.upsell.discountValue) && data.upsell.discountValue > 0)) {
@@ -70,7 +99,7 @@ export function StorefrontCatalog({ products, combos, children }: {
     } catch { /* Optional upsell must never block the basket. */ }
     finally { clearTimeout(timer); }
     // An obsolete restaurant request must not open another restaurant's basket.
-    if (request.current !== controller || latestScope.current !== scope || !continuation.current) return;
+    if (opening.current !== attempt || latestScope.current !== scope || !continuation.current) return;
     setCartOpening(false);
     if (selected && latestKey.current === cartKey) setPopup(selected);
     else { const next = continuation.current; continuation.current = null; pending.current = false; next(); }

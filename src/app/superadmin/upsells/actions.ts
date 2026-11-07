@@ -1,5 +1,6 @@
 
 'use server';
+import { publicMenuProducts } from '@/lib/server/menu-products';
 import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
 import { upsellTriggered, compareUpsells, upsellExcluded, upsellHeading } from '@/lib/upsell-rules';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
@@ -17,7 +18,6 @@ import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { Upsell, Product, Category, CartItem, ProductForMenu, Brand, Location } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
-import { getProductsByIds } from '../products/actions';
 
 function toDate(value: unknown): Date | undefined {
   if (!value) return undefined;
@@ -328,13 +328,23 @@ export async function getActiveUpsellForCart({
   
   if (activeNowUpsells.length === 0) return null;
 
-  // Linked add-ons only suppress repeat recommendations; they never activate offers.
-  const linkedIds = await linkedCartProductIds(db, brandId, locationId, cartItems, getProductsByIds);
-  const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || []), ...(item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || [])]), ...linkedIds]);
+  // One authoritative, request-local public catalog snapshot. Avoid repeating
+  // location/brand/product reads for triggers, exclusions and offered products.
   const scope = {brandId, locationId, deliveryType};
-  const context = await upsellCart(db, cartItems, scope, getProductsByIds, await getActiveStandardDiscounts(scope));
-  const exclusionProducts = activeNowUpsells.some(u => u.excludeProductIds?.length || u.excludeCategoryIds?.length)
-    ? (await Promise.all(Array.from({length:Math.ceil(currentCartProductIds.size/500)}, (_, i) => getProductsByIds([...currentCartProductIds].slice(i*500,(i+1)*500), brandId, locationId)))).flat() : [];
+  const [catalog, discounts] = await Promise.all([
+    publicMenuProducts(locationId, undefined, brandId),
+    getActiveStandardDiscounts(scope),
+  ]);
+  const readProducts = async (ids: string[]) => {
+    const wanted = new Set(ids);
+    return catalog.filter(product => wanted.has(product.id));
+  };
+  const [linkedIds, context] = await Promise.all([
+    linkedCartProductIds(db, brandId, locationId, cartItems, readProducts),
+    upsellCart(db, cartItems, scope, readProducts, discounts),
+  ]);
+  const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || []), ...(item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || [])]), ...linkedIds]);
+  const exclusionProducts = catalog.filter(product => currentCartProductIds.has(product.id));
   const comboIds = context.catalog.filter(p => p.isCombo).map(p => p.id);
   for (const upsell of activeNowUpsells) {
       if (upsellExcluded(upsell, exclusionProducts, comboIds)) continue;
@@ -344,9 +354,7 @@ export async function getActiveUpsellForCart({
           if (upsell.offerType === 'product') {
               offeredProductIds = upsell.offerProductIds;
           } else { // offerType is 'category'
-              const catProductsQuery = db.collection('products').where('brandId', '==', brandId).where('categoryId', 'in', upsell.offerCategoryIds.slice(0,30));
-              const catProductsSnapshot = await catProductsQuery.get();
-              offeredProductIds = catProductsSnapshot.docs.map(doc => doc.id);
+              offeredProductIds = catalog.filter(product => upsell.offerCategoryIds.includes(product.categoryId)).map(product => product.id);
           }
           
           // 5. Suppression Logic: Filter out products already in the cart
@@ -356,7 +364,7 @@ export async function getActiveUpsellForCart({
               // Fetch full product details
               // Only return products that are currently public at this restaurant.
               // If an old offer has no valid products, continue to the next offer.
-              const products = (await getProductsByIds(finalProductIds, brandId, locationId)).filter(product => product.comboOnly !== true);
+              const products = (await readProducts(finalProductIds)).filter(product => product.comboOnly !== true);
               
               if (products.length > 0) {
                   // Read only. UI telemetry records impressions when actually visible.
