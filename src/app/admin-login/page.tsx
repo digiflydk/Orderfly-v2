@@ -8,6 +8,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 function AdminLoginForm() {
   const pathname=usePathname();
   const next=useSearchParams().get('next');
+  const kdsLogin=pathname==='/kds/login';
   const counterLogin=next==='/merchant/stamp-card';
   const merchantLogin=pathname==='/login'||next==='/merchant'||counterLogin;
   const [method,setMethod]=useState<'opsfly'|'firebase'>('opsfly');
@@ -20,8 +21,8 @@ function AdminLoginForm() {
         <p className="mb-2 text-2xl font-bold tracking-tight text-[#087f9f]">Orderfly</p>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#087f9f]">ORDER MANAGEMENT</p>
       </header>
-      <h1 id="admin-login-heading" className="text-[28px] font-bold leading-tight tracking-tight text-[#19232d] sm:text-4xl">{merchantLogin?'RESTAURANT LOGIN':'ADMINISTRATION'}</h1>
-      <p className="mt-3 text-sm leading-5 text-[#5b6d7d]">{method==='opsfly'?'Ét login til Orderflys administrationsmodul.':'Log ind med din Orderfly-konto.'}</p>
+      <h1 id="admin-login-heading" className="text-[28px] font-bold leading-tight tracking-tight text-[#19232d] sm:text-4xl">{kdsLogin?'KDS LOGIN':merchantLogin?'RESTAURANT LOGIN':'ADMINISTRATION'}</h1>
+      <p className="mt-3 text-sm leading-5 text-[#5b6d7d]">{method==='opsfly'?(kdsLogin?'Brug dit medarbejdernavn og din 6-cifrede PIN.':'Ét login til Orderflys administrationsmodul.'):'Log ind med din Orderfly-konto.'}</p>
       <form className="mt-5 space-y-4" onSubmit={async event=>{
       event.preventDefault();if(!ready||pending)return;
       const data=new FormData(event.currentTarget);setPending(true);setError('');
@@ -46,7 +47,7 @@ function AdminLoginForm() {
         const body=await response.json().catch(()=>({}));
         // A new login restarts the counter view's idle timer (see merchant/stamp-card).
         try{sessionStorage.setItem('orderfly.counter.fresh-login','1');}catch{/* Private mode. */}
-        await clearFirebase?.();window.location.assign(body?.home==='/merchant/stamp-card'||counterLogin?'/merchant/stamp-card':merchantLogin?'/merchant':'/superadmin/sales/orders');
+        await clearFirebase?.();window.location.assign(kdsLogin?'/kds':body?.home==='/merchant/stamp-card'||counterLogin?'/merchant/stamp-card':merchantLogin?'/merchant':'/superadmin/sales/orders');
       } catch {setError('Kunne ikke logge ind. Prøv igen.');}
       finally {await clearFirebase?.().catch(()=>{});setPending(false);}
     }}>
@@ -55,6 +56,7 @@ function AdminLoginForm() {
       <div className="space-y-2"><Label htmlFor="password" className="text-sm font-normal text-[#5b6d7d]">{method==='opsfly'?'6-cifret PIN':'Adgangskode'}</Label><Input key={method+'-password'} id="password" name="password" type="password" autoComplete="current-password" inputMode={method==='opsfly'?'numeric':undefined} pattern={method==='opsfly'?'[0-9]{6}':undefined} minLength={method==='opsfly'?6:undefined} maxLength={method==='opsfly'?6:undefined} required disabled={!ready||pending} className="border-[#b7c8d4] bg-[#e8f1ff] text-sm focus-visible:ring-[#087f9f]"/></div>
       <Button className="mt-1 w-full rounded-md bg-[#087f9f] font-bold text-white hover:bg-[#076d89]" disabled={!ready||pending}>{pending?'LOGGER IND…':'LOG IND'}</Button>
     </form>
+      {kdsLogin && <a href="/kds/login/terminal" className="mt-4 block py-3 text-center text-sm underline">Brug restaurantens terminal-login</a>}
       <div className="mt-4 text-center">
         <Button type="button" variant="link" className="h-auto max-w-full whitespace-normal px-0 text-sm text-[#087f9f]" disabled={!ready||pending} onClick={()=>{setMethod(method==='opsfly'?'firebase':'opsfly');setError('');}}>{method==='opsfly'?'Log ind med en separat Orderfly-konto':'Log ind med Opsfly'}</Button>
       </div>

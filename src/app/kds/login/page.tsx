@@ -1,5 +1,2 @@
-import { TerminalLogin } from '@/app/terminal/login/terminal-login';
-
-export default function KitchenDisplayLoginPage() {
-  return <TerminalLogin ordersHref="/kds" />;
-}
+// Reuse the established employee name/PIN and Orderfly account login.
+export { default } from '@/app/admin-login/page';

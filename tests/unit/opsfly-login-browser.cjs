@@ -11,7 +11,7 @@ function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'opsfly-login-browser-'));
  // Match Next's real search-parameter context; the login uses it to choose its destination.
- const entry=file('entry',`import React from 'react';import{createRoot}from'react-dom/client';import{SearchParamsContext,PathnameContext}from'next/dist/shared/lib/hooks-client-context.shared-runtime';import Login from ${JSON.stringify(path.join(root,'src/app/admin-login/page.tsx'))};import{LogoutButton}from ${JSON.stringify(path.join(root,'src/components/superadmin/logout-button.tsx'))};createRoot(document.getElementById('root')).render(<PathnameContext.Provider value={location.pathname}><SearchParamsContext.Provider value={new URLSearchParams(location.search)}>{location.pathname.startsWith('/superadmin')?<><h1>Administration</h1><a href="/superadmin/feedback">Feedback</a><LogoutButton/></>:<Login/>}</SearchParamsContext.Provider></PathnameContext.Provider>);`);
+ const entry=file('entry',`import React from 'react';import{createRoot}from'react-dom/client';import{SearchParamsContext,PathnameContext}from'next/dist/shared/lib/hooks-client-context.shared-runtime';import Login from ${JSON.stringify(path.join(root,'src/app/admin-login/page.tsx'))};import{LogoutButton}from ${JSON.stringify(path.join(root,'src/components/superadmin/logout-button.tsx'))};createRoot(document.getElementById('root')).render(<PathnameContext.Provider value={location.pathname}><SearchParamsContext.Provider value={new URLSearchParams(location.search)}>{location.pathname==='/kds'?<><h1>KDS fixture</h1><LogoutButton loginHref="/kds/login"/></>:location.pathname.startsWith('/superadmin')?<><h1>Administration</h1><a href="/superadmin/feedback">Feedback</a><LogoutButton/></>:<Login/>}</SearchParamsContext.Provider></PathnameContext.Provider>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},plugins:[new webpackModule.webpack.optimize.LimitChunkCountPlugin({maxChunks:1})],resolve:{alias:{'@/lib/firebase':file('firebase-config','window.firebaseLoaded=(window.firebaseLoaded||0)+1;'),'@':path.join(root,'src')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.[jt]sx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  let granted=true;
@@ -77,4 +77,25 @@ for(const entry of ['/login','/login?next=https://example.invalid','/login?next=
  await page.getByRole('heading',{name:'RESTAURANT LOGIN',exact:true}).waitFor();
  await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
  await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL(origin+(entry.includes('%2Fstamp-card')?'/merchant/stamp-card':'/merchant'));await page.close();
+});
+
+test('KDS accepts the existing employee login and logs out back to KDS login',async()=>{
+ const page=await browser.newPage();await page.goto(origin+'/kds/login');
+ await page.getByRole('heading',{name:'KDS LOGIN',exact:true}).waitFor();
+ assert.equal(await page.getByRole('link',{name:'Brug restaurantens terminal-login'}).getAttribute('href'),'/kds/login/terminal');
+ await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
+ await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL(origin+'/kds');
+ await page.getByRole('heading',{name:'KDS fixture'}).waitFor();
+ assert.equal(attempts.at(-1).identifier,'Fixture');
+ assert.ok((await page.context().cookies()).some(c=>c.name==='__session'));
+ await page.getByRole('button',{name:'Log ud',exact:true}).click();await page.waitForURL(origin+'/kds/login');
+ assert.equal((await page.context().cookies()).filter(c=>c.name==='__session').length,0);
+ await page.close();
+});
+test('KDS rejected employee credentials stay on KDS login',async()=>{
+ const page=await browser.newPage();await page.goto(origin+'/kds/login');
+ await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('000000');
+ await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.getByRole('alert').waitFor();
+ assert.equal(new URL(page.url()).pathname,'/kds/login');
+ assert.equal((await page.context().cookies()).filter(c=>c.name==='__session').length,0);await page.close();
 });
