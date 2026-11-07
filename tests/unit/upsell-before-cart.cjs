@@ -93,7 +93,7 @@ test('real offer lookup chooses the highest eligible campaign and ignores forged
   'server-only':{},'@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},'next/cache':{},'next/navigation':{},
   '@/lib/firebase-admin':{getAdminDb:()=>database,admin:{}},
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>[discount]},
-  '../products/actions':{getProductsByIds:async ids=>products.filter(p=>ids.includes(p.id))},
+  '@/lib/server/menu-products':{publicMenuProducts:async()=>products},
  });
  const input={...scope,cartTotal:99999,cartItems:[{id:'pizza',quantity:1,totalPrice:100,tags:['forged'],categoryId:'forged'}]};
  assert.equal((await api.getActiveUpsellForCart(input)).upsell.id,'low','higher priority fails the authoritative 80 DKK threshold');

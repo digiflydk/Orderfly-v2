@@ -63,3 +63,27 @@ extras; it cannot retain unvalidated options. V1 does not show product option
 configuration or apply paid defaults, unless editing an already configured combo.
 Regression tests cover required groups and paid defaults in the legacy path and
 empty explicit configurations remaining strict after serialization.
+
+
+### Slow upsell lookup correction (2026-11-07)
+
+An active two-pizza campaign returned correctly in production but took 8.45 seconds,
+exceeding the former 2-second cart-entry abort. The storefront now prepares the
+read-only offer after cart changes (250 ms debounce), reuses the in-flight request
+on cart entry and retains its result for at most 30 seconds. The key includes the
+restaurant, order channel, complete cart and handled campaign IDs. Changes discard
+the prepared result; prefetching does not mark an offer shown or handled.
+
+A request has a 15-second deadline; a cart-entry click waits at most 10 seconds,
+then continues without a popup. Errors also continue to the cart, and late results
+never open a popup after navigation. Checkout validation remains authoritative.
+
+The server resolves one request-local public catalog snapshot through the existing
+brand/location/product availability boundary. Trigger evaluation, suppression and
+offer selection reuse that snapshot. Standard discounts load concurrently, and
+native combos and selected topping links retain their existing scoped validation.
+No shared cross-request product cache or change to checkout pricing is introduced.
+
+Validation: typecheck; upsell rule/public catalog tests; Playwright synthetic mobile
+and desktop flows, slow responses with and without prefetch, quantity invalidation,
+failed service and bounded hanging-service fallback. No GitHub Actions are used.
