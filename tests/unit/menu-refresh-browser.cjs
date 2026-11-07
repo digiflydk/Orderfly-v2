@@ -308,3 +308,15 @@ test('V2 menu never generates hidden time slots; legacy menu retains its visible
  assert.ok(await legacy.evaluate(()=>window.fixtureSlotCalculationCount>0));
  await legacy.getByRole('button',{name:'Ændre tidspunkt',exact:true}).waitFor();
 });
+
+for(const width of [320,390,768,1280])test(`confirmation header omits overlapping menu link (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2');
+ await page.goto(origin+'/esmeralda/amager/checkout/confirmation?v2');
+ const header=page.locator('[data-storefront-header]');await header.waitFor();
+ assert.equal(await header.locator('.v2-header-back').count(),0);
+ assert.equal(await header.getByRole('link',{name:'Esmeralda Pizza',exact:true}).count(),1);
+ assert.equal(await header.getByRole('link',{name:'Log ind',exact:true}).count(),1);
+ await page.screenshot({path:path.join(dir,'confirmation-header-'+width+'.png')});
+ await page.goto(origin+'/esmeralda/amager/checkout?v2');
+ await page.locator('.v2-header-back').waitFor();
+});

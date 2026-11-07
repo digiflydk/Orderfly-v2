@@ -41,3 +41,7 @@ CART_CHROMIUM_PATH=/opt/pw-browsers/chromium node --test tests/unit/menu-refresh
 - the 168px desktop banner and its absence on mobile,
 - search to the right of the categories,
 - no horizontal overflow at 390px and 1280px.
+
+## Confirmation header (2026-11-07)
+
+The order confirmation page omits the header back-to-menu link, which overlapped the logo on mobile. The brand logo, Club and restaurant information remain available. The back link remains on checkout before confirmation.
