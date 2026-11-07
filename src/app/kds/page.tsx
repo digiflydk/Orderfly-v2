@@ -1,3 +1,4 @@
+import { resolveKdsScope } from '@/lib/orders/kds-scope';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { TerminalPortal } from '@/app/terminal/orders/terminal-portal';
@@ -17,14 +18,17 @@ export default async function KitchenDisplayPage({ searchParams }: {
   if (terminalMode || !(await cookies()).has('__session')) {
     return <TerminalPortal loginHref={terminalMode ? '/kds/login/terminal' : '/kds/login'} />;
   }
-  let session;
-  try { session = await orderflySession(); }
+  let session, scope;
+  try {
+    session = await orderflySession();
+    if (!canNavigate('/merchant/orders', session)) return <AccessDeniedPage />;
+    scope = await resolveKdsScope();
+  }
   catch (error) {
     if (error instanceof AuthorityError && error.status === 401) redirect('/kds/login');
     if (error instanceof AuthorityError && error.status === 403) return <AccessDeniedPage />;
     throw error;
   }
-  if (!canNavigate('/merchant/orders', session)) return <AccessDeniedPage />;
   // Employee reads/mutations keep their existing live, scoped permissions.
-  return <><LogoutButton loginHref="/kds/login" /><TerminalClient loginHref="/kds/login" /></>;
+  return <><LogoutButton loginHref="/kds/login" /><TerminalClient loginHref="/kds/login" initialLocations={scope.locations} apiBase="/api/kds/orders" actionApiBase="/api/merchant/orders" /></>;
 }

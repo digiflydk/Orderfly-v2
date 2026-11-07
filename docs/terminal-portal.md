@@ -40,3 +40,35 @@ Legacy `/mapp` and `/mapp/login` redirect to `/kds` and `/kds/login/terminal`. E
 `/kds/login` now uses the existing employee name/PIN login (`/api/admin/session`), with the optional existing Firebase account method. Successful login returns to `/kds`. A verified Orderfly session with `orderfly.orders:view` (or platform superuser access) opens the shared terminal using only `/api/merchant/orders` and its existing scoped read/edit, payment and print authorization. No username, employee ID, or brand permission is hard-coded, and this change creates no account or additional role grant. Omair can therefore use his existing employee/superadmin identity rather than separate terminal credentials.
 
 The separate restaurant credentials remain available at `/kds/login/terminal`, returning to `/kds?terminal=1`. That explicit mode uses only the terminal session and terminal APIs, including when an expired employee cookie remains on the device. Without an employee cookie, `/kds` can still reuse an existing terminal session. A rejected employee identity never silently falls back to terminal authority. Login failures, permission denial and service outages remain distinct; data APIs reauthorize each request. Employee logout returns to `/kds/login` and revokes only the employee session.
+
+## Brand-bound employee KDS and sound (2026-11-07)
+
+Employee `/kds` resolves the brand from the request hostname, then reads native
+locations and current access policy in a read-only transaction. On
+`esmeralda.orderfly.dk/kds`, Esmeralda is selected before the browser requests
+orders. A single permitted location is shown as a label immediately; multiple
+permitted locations within the same brand remain selectable. Unknown or ambiguous
+brands and revoked permissions fail closed, without selecting another brand.
+
+`GET /api/kds/orders` repeats hostname and permission resolution on every request.
+Its server-only scope context avoids discovering all of a superadmin's brands and
+repeating session checks. Query parameters cannot supply this context or escape
+its locations. Existing merchant status, payment and print authorization remains
+in use. Dedicated terminal login continues to use its separate terminal APIs.
+Status queries run concurrently and managed-delivery enrichment uses at most four
+concurrent transactions. Each tracking transaction still rechecks fresh ownership
+and permissions. Pagination, order limits and the 12-second client timeout remain.
+
+Sound defaults to on at 80% on a new device. The sound toggle and volume are saved
+in local storage, including an explicit muted preference. “Lydindstillinger” has a
+“Test lyd” button and a 0–100% slider. The test enables sound and plays the same
+3.6-second melody used for new orders; volume zero stays silent. Device volume
+still applies. No melody plays merely because the board opens. Browsers requiring
+a gesture show an activation message until “Test lyd” is pressed. The background
+history/preorder feed never owns a second notification audio context.
+
+Validation: local typecheck, production build, `kds-scope.cjs`,
+`kds-employee-access.cjs`, `terminal-read.cjs`, `order-terminal-browser.cjs`, and
+existing dedicated-terminal/login/status regression tests. No GitHub Actions.
+Authenticated production timing must be checked with an actual employee session;
+unauthenticated live checks alone do not establish that the timeout is resolved.
