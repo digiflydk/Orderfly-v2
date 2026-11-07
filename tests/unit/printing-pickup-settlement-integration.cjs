@@ -322,3 +322,32 @@ test('permanent mode payment for an accepted order never recreates originals aft
   assert.deepEqual(f.records.get(`orders/${f.orderId}/printIntents/original`),manifest);
  }finally{if(before===undefined)delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=before;}
 });
+
+
+test('pickup collection after disabling print preserves acceptance jobs without inventing a skip',async()=>{
+  const f=await acceptedFixture();
+  const skipPath='locations/l/automaticPrintSkips/'+f.orderId;
+  // Base paymentFixture originally accepts before printer setup; this test's
+  // actual acceptance above produced jobs, so discard that unrelated setup skip.
+  f.records.delete(skipPath);
+  const jobs=structuredClone(f.jobs()),manifest=structuredClone(f.records.get('orders/'+f.orderId+'/printIntents/original'));
+  assert.ok(jobs.length>0);
+  const now=Date.now();
+  f.records.set('brands/b/printSettings/automatic',{schemaVersion:1,brandId:'b',enabled:false,revision:3,enabledAt:null,activationId:null,updatedAt:now});
+  assert.equal(await f.settle(),true);
+  assert.equal(f.order().paymentStatus,'Paid');
+  assert.equal(f.records.has(skipPath),false);
+  assert.deepEqual(f.jobs(),jobs);
+  assert.deepEqual(f.records.get('orders/'+f.orderId+'/printIntents/original'),manifest);
+  assert.equal(await f.settle(),false);
+  assert.equal(f.records.has(skipPath),false);
+});
+
+test('pickup collection retains the original acceptance skip after policy changes',async()=>{
+  const f=await fixture(),path='locations/l/automaticPrintSkips/'+f.orderId;
+  const saved=structuredClone(f.records.get(path));assert.equal(saved.reason,'not_configured');
+  Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});
+  assert.equal(await f.settle(),true);
+  assert.deepEqual(f.records.get(path),saved);
+  assert.equal(f.jobs().length,0);
+});

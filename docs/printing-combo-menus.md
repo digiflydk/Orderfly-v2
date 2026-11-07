@@ -11,3 +11,13 @@ Original manifest hashes, immutable PNG payloads, one-shot downloads, authorizat
 Existing automatic routing limits still apply: 50 projected component/product lines, 8 saved modifiers per projected component/product (up to the checkout limit of 50 across a menu) and quantity 1–99. This change does not silently truncate oversized orders. Physical device acknowledgement and printed paper must be verified separately from synthetic PNG tests.
 
 Validation covers a two-menu Margherita/Pepsi/dip basket plus a separate gluten-free pizza, native component ownership/lifecycle, no-dip choices, repeated product identities, station-specific modifier filtering, historical labels, real PNG generation and replay/mutation rejection. No real orders or physical print jobs are created by the tests.
+
+## Canonical menu collection (#875)
+
+Native projection reads `comboMenus/{id}`, the same collection used by admin menu
+writes and checkout catalog reads. The earlier `combos/{id}` lookup could reject
+valid menu purchases as `invalid_catalog` before creating a job. Regression
+fixtures now use the canonical collection through projection, paid settlement
+and native PNG delivery. An unrelated `combos/{id}` document never substitutes
+for missing or foreign canonical menu data. Existing ownership and lifecycle
+checks remain enforced, and historical purchases are not replayed by deployment.

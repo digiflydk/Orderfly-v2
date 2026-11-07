@@ -148,7 +148,7 @@ test('quantity and removal snapshots retain parent count and option labels throu
 
 function menuFixture() {
  const f=fixture();
- f.rows.set('combos/menu',{brandId:'b1',locationIds:['l1'],isActive:true});
+ f.rows.set('comboMenus/menu',{brandId:'b1',locationIds:['l1'],isActive:true});
  for(const [id,categoryId] of [['cola','drink'],['dip','side']]){
   f.rows.set('products/'+id,{brandId:'b1',locationIds:['l1'],isActive:true,productName:id,categoryId});
   f.rows.set('categories/'+categoryId,{locationIds:['l1'],isActive:true});
@@ -170,7 +170,7 @@ test('menu projects scoped components and exact historical modifiers at menu qua
  assert.equal((await f.projectNativePrintCatalog(f.context,scope)).lines.at(-1).lineId,'line-0-group-3-product-0');
 });
 test('menu native ownership, deletion/activity and malformed or unbound modifier labels fail closed',async()=>{
- for(const [path,patch]of [['combos/menu',{brandId:'other'}],['combos/menu',{locationIds:['other']}],['combos/menu',{isActive:false}],['products/cola',{brandId:'other'}],['products/dip',{isActive:false}],['categories/drink',{locationIds:['other']}],['products/cola',{deleted:true}]]){
+ for(const [path,patch]of [['comboMenus/menu',{brandId:'other'}],['comboMenus/menu',{locationIds:['other']}],['comboMenus/menu',{isActive:false}],['products/cola',{brandId:'other'}],['products/dip',{isActive:false}],['categories/drink',{locationIds:['other']}],['products/cola',{deleted:true}]]){
   const f=menuFixture();Object.assign(f.rows.get(path),patch);await rejected(f,'invalid_catalog');
  }
  const missing=menuFixture();missing.rows.delete('products/dip');await rejected(missing,'invalid_catalog');
@@ -192,4 +192,18 @@ test('menu aggregate modifiers can exceed eight while every component stays with
  assert.equal(result.lines[1].modifiers[0],'Margherita: Option 5');
  product.modifiers=Array.from({length:9},(_,i)=>({id:'choice'+i,quantity:1}));
  await rejected(f,'invalid_order');
+});
+
+// Checkout/admin persist menus in comboMenus. A same-ID record in an unrelated
+// collection must neither be required nor substitute for native menu ownership.
+test('menu projection reads the canonical checkout menu collection only',async()=>{
+ const f=menuFixture();
+ f.rows.set('combos/menu',{brandId:'foreign',locationIds:['other'],isActive:false});
+ const result=await f.projectNativePrintCatalog(f.context,scope);
+ assert.equal(result.lines.length,3);
+ assert.ok(f.reads.includes('comboMenus/menu'));
+ assert.equal(f.reads.includes('combos/menu'),false);
+ f.rows.delete('comboMenus/menu');
+ f.rows.set('combos/menu',{brandId:'b1',locationIds:['l1'],isActive:true});
+ await rejected(f,'invalid_catalog');
 });

@@ -109,3 +109,4 @@ test('late print failure rolls back native acceptance and confirmation',async()=
 test('forged acceptance capability cannot authorize original jobs',async()=>{
  const f=await fixture();assert.throws(()=>f.settlement.readManagedDeliveryAcceptanceCapability(f.context(),{},true),/unverified/);
 });
+test('managed acceptance records disabled print once without jobs or replay backfill',async()=>{const f=await fixture();f.records.delete('locations/l/automaticPrintSkips/'+f.orderId);Object.assign(f.records.get(policyPath),{enabled:false,targets:[]});assert.equal(await f.settle(),true);const path='locations/l/automaticPrintSkips/'+f.orderId,saved=structuredClone(f.records.get(path));assert.equal(saved.reason,'disabled',JSON.stringify({saved,policy:f.records.get(policyPath),scope:f.order().locationId}));assert.equal(f.jobs().length,0);assert.equal(await f.settle(),false);assert.deepEqual(f.records.get(path),saved);});

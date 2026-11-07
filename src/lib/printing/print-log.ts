@@ -1,3 +1,4 @@
+import { automaticPrintSkipSchema, automaticPrintSkipLabels } from './automatic-print-skip';
 import { z } from 'zod';
 
 export const printLogId = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -15,7 +16,7 @@ export type PrintLogScope = { brandId: string; locationId: string; printerId: st
 export type PrintLogItem = {
   id: string; brandId: string; locationId: string; locationName: string; printerId: string; printerName: string;
   orderId: string; kind: 'kitchen' | 'customer' | 'packing'; source: 'automatic' | 'manual';
-  status: z.infer<typeof state>; createdAt: number; updatedAt: number; error: string | null;
+  status: z.infer<typeof state> | 'skipped'; createdAt: number; updatedAt: number; error: string | null;
 };
 export class PrintLogError extends Error {
   constructor(public code: 'print_log_invalid' | 'print_log_unavailable' | 'print_log_scope_too_large', public status = 503) { super(code); }
@@ -64,8 +65,15 @@ export function projectPrintLog(source: PrintLogSource, id: string, raw: unknown
     createdAt: row.createdAt, updatedAt, error };
 }
 
+export function projectSkippedPrintLog(id: string, raw: unknown, expected: { brandId: string; locationId: string; locationName: string }): PrintLogItem {
+  const parsed = automaticPrintSkipSchema.safeParse(raw);
+  if (!parsed.success || parsed.data.orderId !== id || parsed.data.brandId !== expected.brandId || parsed.data.locationId !== expected.locationId) throw new PrintLogError('print_log_unavailable');
+  return { id: `${expected.locationId}/automaticPrintSkips/${id}`, ...expected, printerId: 'unassigned', printerName: 'Ikke sendt til printer',
+    orderId: id, kind: 'kitchen', source: 'automatic', status: 'skipped', createdAt: parsed.data.createdAt, updatedAt: parsed.data.createdAt, error: automaticPrintSkipLabels[parsed.data.reason] };
+}
+
 const cursorSchema = z.object({ v: z.literal(1), brandId: printLogId, at: instant,
-  path: z.string().regex(/^locations\/[A-Za-z0-9_-]{1,128}\/printers\/[A-Za-z0-9_-]{1,128}\/(?:jobs|ordinaryDispatches|manualPrintRequests|expiredPrintJobs)\/[A-Za-z0-9_-]{1,128}$/) }).strict();
+  path: z.string().regex(/^locations\/[A-Za-z0-9_-]{1,128}\/(?:printers\/[A-Za-z0-9_-]{1,128}\/(?:jobs|ordinaryDispatches|manualPrintRequests|expiredPrintJobs)|automaticPrintSkips)\/[A-Za-z0-9_-]{1,128}$/) }).strict();
 export type PrintLogCursor = z.infer<typeof cursorSchema>;
 export function decodePrintLogCursor(value: string | undefined, brandId: string): PrintLogCursor | null {
   if (!value) return null;

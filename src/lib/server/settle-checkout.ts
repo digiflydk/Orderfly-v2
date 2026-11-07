@@ -1,3 +1,4 @@
+import { prepareAutomaticPrintSkip } from '@/lib/printing/automatic-print-skip-native';
 import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
 import { managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/stripe-authority';
 import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
@@ -390,10 +391,16 @@ async function settleOrder(proof: PaymentProof) {
         ? await preparePickupSettlementPrintIntents(context, prepared.pickupCapability, intentInput)
         : await prepareStripeSettlementPrintIntents(context, prepared.capability!, intentInput);
     }
+    // Pickup's original print decision belongs to acceptance, never payment
+    // collection. A later policy change must not invent a contradictory skip.
+    const skipPlan = proof.kind === 'stripe' && prepared.fulfilled && policy?.skipReason && !printPlan
+      ? await prepareAutomaticPrintSkip(context, metadata, policy.skipReason) : undefined;
+    if (prepared.writeCount + (skipPlan?.writeCount ?? 0) > 500) throw new Error('Settlement write budget exceeded');
     // Every native read is complete before either plan writes. The outbox's
     // intrinsic capability check requires this exact financial plan to apply.
     prepared.apply();
     printPlan?.apply();
+    skipPlan?.apply();
     return prepared.fulfilled;
   });
   if (dispatchAfterCommit) {

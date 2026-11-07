@@ -78,7 +78,7 @@ export function AutomaticPrintSettings({ brandId, brandName }: { brandId: string
           onChange={event => { setEnabled(event.target.checked); setNotice(''); }} />Automatisk print
       </label>
       <p className="text-sm text-muted-foreground">Gælder nye ordrer på brandets lokationer med en aktiv printer og opsat printerrute. Eksisterende ordrer genprintes ikke.</p>
-      <p className="text-sm text-muted-foreground">Automatisk print understøtter almindelige produkter. Ordrer med menuer eller kombinationer skal fortsat genprintes manuelt fra salgsordren.</p>
+      <p className="text-sm text-muted-foreground">Automatisk print understøtter produkter, menuer og kombinationer med deres gemte valg. Se Print log, hvis en ordre ikke bliver udskrevet.</p>
     </>}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm">{notice}</p>}

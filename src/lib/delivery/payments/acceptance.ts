@@ -1,3 +1,4 @@
+import { prepareAutomaticPrintSkip } from '@/lib/printing/automatic-print-skip-native';
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -88,9 +89,12 @@ export async function completeManagedDeliveryAcceptance(input:unknown):Promise<b
         ...(policy.automaticActivationId?{automaticActivationId:policy.automaticActivationId}:{}),policyRevision:policy.policyRevision,routingRevision:saved.revision,
         rulesHash:hash(saved.rules),catalogHash:hash(catalog),targets}});
     }
+    const skipPlan=policy?.skipReason&&!printPlan?await prepareAutomaticPrintSkip(context,scope,policy.skipReason):undefined;
+    if(writes.length+(skipPlan?.writeCount??0)>500)throw new Error('Delivery acceptance write budget exceeded');
     for(const write of writes)write();
     if(capability)capabilities.get(capability)!.applied=true;
     printPlan?.apply();
+    skipPlan?.apply();
     return true;
   });
 }

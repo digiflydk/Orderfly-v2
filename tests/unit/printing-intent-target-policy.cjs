@@ -67,7 +67,7 @@ test('missing and explicit OFF policy return no targets, no printer scans and ne
   for (const saved of [undefined, policy({ enabled: false, targets: [] })]) {
     const f = fixture(); f.rows.set('locations/l1/printIntentPolicies/original', saved);
     const result = await f.read();
-    assert.deepEqual(result, { ...scope, policyRevision: saved ? 2 : null, enabled: false, dispatchAuthorized: false, targets: [] });
+    assert.deepEqual(result, { ...scope, policyRevision: saved ? 2 : null, enabled: false, skipReason: saved ? 'disabled' : 'not_configured', dispatchAuthorized: false, targets: [] });
     assert.equal(f.reads.length, 4); assert.equal(f.reads.some(path => path.includes('/printers')), false);
     assert.deepEqual(f.writes, []); assert.ok(Object.isFrozen(result) && Object.isFrozen(result.targets));
   }

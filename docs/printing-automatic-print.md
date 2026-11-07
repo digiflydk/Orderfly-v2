@@ -5,8 +5,8 @@ for platform superadmins. Save is separate from the brand form. The setting
 applies to new supported orders across the brand's locations using their saved
 kitchen-printer routing. Enabled automatic printing has no 60-minute window.
 It requires active Star CloudPRNT HTTP printers and current device credentials.
-Ordinary products are supported; unsupported menus/combinations still require
-an explicit manual kitchen reprint. A completed checkout does not guarantee
+Products, menus and combinations are supported, including saved component
+choices and modifiers. Each component follows the saved printer routing. A completed checkout does not guarantee
 that an automatic job was eligible or physically printed.
 
 ## Activation and access
@@ -47,7 +47,7 @@ and archives the job without retrying it. Downloaded or ambiguous work remains
 protected against automatic replay. Archived original identities also prevent
 checkout retries from recreating the expired job.
 
-Print log remains a job log: an order suppressed before job creation has no row.
+Print log includes stored policy skip decisions for new orders (see [print log](printing-log.md)); historical missing decisions are not backfilled. Failed native transactions and process-level OFF are outside this committed decision log.
 Enabling the setting does not backfill ORD-668367 or other historical orders.
 
 ## Validation and release
