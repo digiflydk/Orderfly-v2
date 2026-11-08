@@ -1,6 +1,7 @@
 'use client';
 import { useKdsLanguage } from './kds-language';
 
+import { Eye, Printer } from 'lucide-react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 import { formatPrice } from '@/lib/storefront-format';
@@ -32,13 +33,18 @@ export function TerminalPreorders({ orders, loading = false, error, onRetry, onS
     {!orders.length && !loading && !error && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{hasMore ? t("Ingen forudbestillinger i denne del. Hent flere for at fortsætte.") : t("Ingen ventende forudbestillinger.")}</p>}
     {[...groups.entries()].map(([day, dayOrders]) => <section key={day} aria-label={terminalDateHeading(dayOrders[0].fulfillmentAt, language)} className="space-y-3">
       <h3 className="text-lg font-semibold capitalize">{terminalDateHeading(dayOrders[0].fulfillmentAt, language)} <span className="ml-1 text-sm font-normal text-muted-foreground">({dayOrders.length})</span></h3>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{dayOrders.map(order => <article key={order.id} aria-label={`${t("Forudbestilling")} ${order.id}`} className="min-w-0 rounded-xl border bg-background p-4">
-        <div className="flex items-start justify-between gap-3"><button type="button" onClick={() => onSelectOrder(order)} className="min-h-12 break-all text-left font-semibold underline underline-offset-4" aria-label={`${t("Vis ordre")} ${order.id}`}>{order.id}</button><span className="shrink-0 pt-3 font-semibold">{formatPrice(order.totalAmount)}</span></div>
-        <p className="break-words font-medium">{order.customerName || t("Kunde")}</p><p className="mt-1 text-sm text-muted-foreground">{order.locationName || order.brandName}</p>
-        <p className="mt-4 font-semibold">{order.deliveryType === 'Pickup' ? t("Afhentning") : t("Levering")}: {terminalDateTime(order.fulfillmentAt, language)}</p>
-        <p className="mt-2 text-sm">{t(ORDER_STATUS_LABELS[order.status])} · {order.paymentStatus === 'Paid' ? t("Betalt") : t("Ikke betalt")}</p>
-        {onReprint && <button type="button" disabled={loading || !!error} onClick={() => onReprint(order)} className="mt-4 min-h-12 w-full rounded-lg border px-4 font-semibold disabled:opacity-50" aria-label={`${t("Genprint ordre")} ${order.id}`}>{' '}{t("Genprint")}{' '}</button>}
-      </article>)}</div>
+      <div className="overflow-x-auto rounded-xl border bg-background"><table className="w-full whitespace-nowrap text-left text-sm">
+        <caption className="sr-only">{t("Forudbestillinger")} · {terminalDateHeading(dayOrders[0].fulfillmentAt, language)}</caption>
+        <thead className="bg-slate-50 text-slate-500"><tr>{[t("Klar til"), t("Ordre / kunde"), t("Type"), t("Beløb"), 'Status', t("Handlinger")].map(label => <th key={label} scope="col" className="p-4">{label}</th>)}</tr></thead>
+        <tbody className="divide-y">{dayOrders.map(order => <tr key={order.id} aria-label={`${t("Forudbestilling")} ${order.id}`}>
+          <td className="p-4 font-semibold">{terminalDateTime(order.fulfillmentAt, language)}</td>
+          <td className="p-4"><span className="font-semibold">{order.id.replace(/^ORD[-\s]*/i, '')}</span> / {order.customerName || t("Kunde")}</td>
+          <td className="p-4">{order.deliveryType === 'Pickup' ? t("Afhentning") : t("Levering")}</td>
+          <td className="p-4 font-semibold">{formatPrice(order.totalAmount)}</td>
+          <td className="p-4">{t(ORDER_STATUS_LABELS[order.status])} / {order.paymentStatus === 'Paid' ? t("Betalt") : order.paymentStatus === 'Failed' ? t("Betaling fejlet") : t("Ikke betalt")}</td>
+          <td className="p-4"><div className="flex gap-2"><button type="button" onClick={() => onSelectOrder(order)} aria-label={`${t("Vis ordre")} ${order.id}`} title={t("Vis ordre")} className="min-h-12 min-w-12 rounded-lg border p-3"><Eye aria-hidden="true" className="h-5 w-5" /></button>{onReprint && <button type="button" disabled={loading || !!error} onClick={() => onReprint(order)} aria-label={`${t("Genprint ordre")} ${order.id}`} title={t("Genprint")} className="min-h-12 min-w-12 rounded-lg border p-3 disabled:opacity-50"><Printer aria-hidden="true" className="h-5 w-5" /></button>}</div></td>
+        </tr>)}</tbody>
+      </table></div>
     </section>)}
     {hasMore && onLoadMore && <button type="button" onClick={onLoadMore} disabled={loading || !!error} className="min-h-12 w-full rounded-lg border bg-background px-5 font-semibold disabled:opacity-50">{loading ? t("Henter…") : t("Hent flere forudbestillinger")}</button>}
     <p className="text-xs text-muted-foreground">{' '}{t("Tidspunkter vises i dansk tid. Visning af en ordre ændrer ikke dens status.")}{' '}</p>

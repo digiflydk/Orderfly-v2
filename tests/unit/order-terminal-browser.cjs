@@ -110,7 +110,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     const locationId = url.searchParams.get('locationId') || (state.initialRevoked ? 'loc-b' : 'loc-a'), scope = locations.find(l => l.locationId === locationId), view = url.searchParams.get('view') || 'board';
     let rows = state.orders.filter(o => o.locationId === locationId);
     const serviceDate=url.searchParams.get('serviceDate');if(serviceDate) rows=rows.filter(o=>(o.fulfillmentAt || o.createdAt).slice(0,10)===serviceDate || url.searchParams.has('includePreorders') && o.fulfillmentAt > now);
-    rows = rows.filter(o => view === 'history' ? (['Completed','Delivered','Canceled'].includes(o.status) || o.managedDeliveryTracking?.deliveryStatus === 'delivered') : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && (url.searchParams.has('includePreorders') || o.fulfillmentAt < '2026-10-25T23:00:00.000Z'));
+    rows = rows.filter(o => view === 'history' ? (state.historyAllStatuses || ['Completed','Delivered','Canceled'].includes(o.status) || o.managedDeliveryTracking?.deliveryStatus === 'delivered') : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && (url.searchParams.has('includePreorders') || o.fulfillmentAt < '2026-10-25T23:00:00.000Z'));
     const hasMore = state.emptyPage && !url.searchParams.has('cursor');
     const result = { kitchenSettings:state.kitchenSettings,kitchenSettingsRevision:state.kitchenSettingsRevision,openingHours:state.openingHours,orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: state.dynamicTime ? await page.evaluate(()=>new Date().toISOString()) : now, hasMore, nextCursor: hasMore ? 'fixture-next' : null };
     if (state.holdHistory && view === 'history') { state.heldHistory = {route,result}; return; }
@@ -150,12 +150,12 @@ test('terminal progresses a paid pickup through authoritative status API', async
 });
 test('history and preorders are separate views; context switch clears old restaurant', async t => {
   const { page, calls } = await fixture(t);
-  await page.getByRole('button', { name: 'Historik', exact: true }).click(); await expect(page.getByText('ORD-HISTORY', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Historik', exact: true }).click(); await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   await expect(page.getByText('ORD-NEW', { exact: true })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Forudbestillinger', exact: true }).click(); await expect(page.getByText('ORD-FUTURE', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Forudbestillinger', exact: true }).click(); await expect(page.getByRole('button',{name:'Vis ordre ORD-FUTURE',exact:true}).first()).toBeVisible();
   await page.getByRole('combobox', { name: 'Restaurant', exact: true }).selectOption('brand-b/loc-b');
   await expect.poll(() => calls.filter(c=>c.kind==='read').at(-1).query.locationId).toBe('loc-b');
-  await expect(page.getByText('ORD-FUTURE', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-FUTURE',exact:true})).toHaveCount(0);
 });
 test('failed refresh is visible and explicit refresh recovers', async t => {
   const { page, state } = await fixture(t);
@@ -228,7 +228,7 @@ test('first load is silent; new board orders alert once even while history is op
   assert.ok(await page.evaluate(()=>new Set(window.__audioNotes.map(n=>n.value)).size)>1);
   assert.equal(await page.evaluate(()=>window.__audioStops[0]),3.6);
   await page.getByRole('button',{name:'Historik',exact:true}).click();
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   state.orders.push(order('ORD-NEW-LATER'));
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
@@ -241,18 +241,18 @@ test('first load is silent; new board orders alert once even while history is op
 test('background board access revocation hides historical customer data without a history refresh', async t => {
   const { page, state, calls } = await fixture(t);
   await page.getByRole('button',{name:'Historik',exact:true}).click();
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   const historyReads = calls.filter(c=>c.kind==='read'&&c.query.view==='history').length;
   state.boardReadStatus=403;
   await expect(page.getByRole('alert').first()).toContainText('adgang',{timeout:20000});
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'only background poll detected revocation');
 });
 test('initial automatic restaurant is pinned when its grant is revoked and another remains', async t => {
   const { page, state, calls } = await fixture(t);
   await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Historik',exact:true}).click();
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   const historyReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history').length;
   const before=calls.length;
   state.initialRevoked=true;
@@ -263,7 +263,7 @@ test('initial automatic restaurant is pinned when its grant is revoked and anoth
   assert.equal(boardRead.query.brandId,'brand-a','initial resolution must become explicit authority context');
   assert.equal(boardRead.query.locationId,'loc-a');
   await expect(page.getByRole('alert').first()).toContainText('adgang');
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'no history refresh hides the bug');
 });
 test('native fullscreen includes the actual Radix order dialog and its controls', async t => {
@@ -285,14 +285,14 @@ test('background denial remains latched across transient failures until authoriz
   const { page, state, calls } = await fixture(t,1024,768,{fakeClock:true});
   await expect(page.getByRole('button',{name:'Opdater',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Historik',exact:true}).click();
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   await page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).click();
   await expect(page.getByRole('dialog')).toContainText('Syntetisk kunde');
   const historyReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history').length;
   state.boardReadStatus=403;
   await page.clock.fastForward(15001);
   await expect(page.getByRole('alert').first()).toContainText('adgang');
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   state.boardReadStatus=503;
   const transient = page.waitForResponse(response => response.url().includes('/api/merchant/orders?') && response.status() === 503);
@@ -301,13 +301,13 @@ test('background denial remains latched across transient failures until authoriz
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('alert').first()).toContainText('adgang');
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'transient board failure must not reveal cached history');
   // Only a new successful authorization/read can recover the terminal.
   state.boardReadStatus=0;
   await page.getByRole('button',{name:'Opdater',exact:true}).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   assert.ok(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length>historyReads,'recovery must re-read history');
 });
@@ -315,12 +315,12 @@ test('a history read started before denial cannot authorize cached data after bo
   const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true});
   await expect(page.getByRole('button',{name:'Opdater',exact:true})).toBeEnabled();
   await page.getByRole('button',{name:'Historik',exact:true}).click();
-  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();
   state.holdHistory=true; state.boardReadStatus=403;
   await page.getByRole('button',{name:'Opdater',exact:true}).click();
   await expect.poll(()=>!!state.heldHistory).toBe(true);
   await expect(page.getByRole('alert').first()).toContainText('adgang');
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   await page.evaluate(()=>{
     window.__piiReturned=false;
     new MutationObserver(()=>{if(document.body.textContent.includes('ORD-HISTORY'))window.__piiReturned=true;}).observe(document.body,{childList:true,subtree:true,characterData:true});
@@ -334,7 +334,7 @@ test('a history read started before denial cannot authorize cached data after bo
   await state.heldHistory.route.fulfill({json:state.heldHistory.result});
   await (await historyFailure).finished();
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
-  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true})).toHaveCount(0);
   assert.equal(await page.evaluate(()=>window.__piiReturned),false,'old in-flight success must never restore historical PII');
   assert.ok(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length>=3,'history requires a new post-denial read');
 });
@@ -360,7 +360,7 @@ test('managed delivered refresh removes ready card while history remains accessi
  await expect(page.getByText(/^Samlet beløb:/)).toHaveCount(0);
  await page.getByRole('button',{name:'Beregn samlet beløb for alle ordrer',exact:true}).click();
  await expect.poll(()=>calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length).toBeGreaterThan(0);
- await expect(page.getByText('ORD-DONE',{exact:true}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:'Vis ordre ORD-DONE',exact:true}).first()).toBeVisible();
  await expect(page.getByText(/^Samlet beløb:/)).toBeVisible();
  const cursorReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length;
  await page.getByRole('button',{name:'Opdater',exact:true}).click();
@@ -436,9 +436,9 @@ test('kitchen cards show all details and large progress buttons without dialogs;
 test('kitchen menu selects and persists sounds, threshold and volume',async t=>{
  const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
  await expect(page.getByLabel('Vælg lyd',{exact:true})).not.toBeVisible();await page.getByRole('button',{name:'Menu',exact:true}).click();
- await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Rød advarsel og lyd efter klartid (minutter)',{exact:true}).fill('8');await page.getByRole('button',{name:'Gem ordreindstillinger',exact:true}).click();await expect(page.getByText('Indstillingerne er gemt.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('slider',{name:'Lydstyrke'}).fill('60');
+ await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Rød advarsel og lyd efter klartid (minutter)',{exact:true}).fill('8');await page.getByRole('button',{name:'Gem ordreindstillinger',exact:true}).click();await expect(page.getByText('Indstillingerne er gemt.',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('slider',{name:'Lydstyrke'}).fill('60');
  await page.getByRole('button',{name:'Test lyd',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__audioNotes[0]?.value)).toBe(392);
- await page.reload();await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveValue('marimba');await expect(page.getByRole('slider',{name:'Lydstyrke'})).toHaveValue('60');await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await expect(page.getByLabel('Rød advarsel og lyd efter klartid (minutter)',{exact:true})).toHaveValue('8');
+ await page.reload();await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveValue('marimba');await expect(page.getByRole('slider',{name:'Lydstyrke'})).toHaveValue('60');await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await expect(page.getByLabel('Rød advarsel og lyd efter klartid (minutter)',{exact:true})).toHaveValue('8');
 });
 test('clock edits are inline, save server time and preserve customer fulfillment time',async t=>{
  const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});
@@ -457,10 +457,10 @@ test('overdue clock is negative and sounds alarm, marking ready stops repeated a
 test('immersive kitchen persists through scroll and native exit until its close button',async t=>{
  const {page}=await fixture(t,768,1024,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
  const screen=page.locator('[data-kds-fullscreen]');await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.mouse.wheel(0,600);await page.evaluate(async()=>{if(document.fullscreenElement)await document.exitFullscreen();});await expect(screen).toHaveAttribute('data-kds-fullscreen','true');
- assert.equal(await screen.evaluate(el=>getComputedStyle(el).overscrollBehavior),'none');await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','false');
+ assert.equal(await screen.evaluate(el=>getComputedStyle(el).overscrollBehavior),'none');await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('dialog',{name:'Indstillinger',exact:true})).toBeVisible();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Luk menu',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','false');
 });
 test('history remains connected after 45 seconds and one transient refresh retries without a false error banner',async t=>{
- const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();await page.clock.runFor(61_000);
+ const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();await page.clock.runFor(61_000);
  await expect(page.getByText('Forbindelsen skal kontrolleres',{exact:true})).toHaveCount(0);await expect(page.getByRole('alert')).toHaveCount(0);
  const before=calls.filter(c=>c.kind==='read').length;state.failHistoryOnce=true;await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect.poll(()=>calls.filter(c=>c.kind==='read').length).toBeGreaterThan(before+1);await expect(page.getByRole('alert')).toHaveCount(0);
 });
@@ -469,7 +469,7 @@ test('overdue threshold is configurable and alarm repeats at most once a minute'
  await expect(page.getByRole('article',{name:'Ordre LATE',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
  await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await page.getByLabel('Rød advarsel og lyd efter klartid (minutter)',{exact:true}).fill('3');await page.getByRole('button',{name:'Gem ordreindstillinger',exact:true}).click();await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
  await page.clock.runFor(59_000);assert.equal(await page.evaluate(()=>window.__audioStarts),1);await page.clock.runFor(2_000);await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
- await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.clock.runFor(61_000);assert.equal(await page.evaluate(()=>window.__audioStarts),2);
+ await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();await page.clock.runFor(61_000);assert.equal(await page.evaluate(()=>window.__audioStarts),2);
 });
 
 test('KDS stays fresh on heartbeats without polling, and changes fetch scoped orders',async t=>{
@@ -546,6 +546,22 @@ test('KDS language persists, compact toolbar follows history, location has no br
  const nav=page.getByRole('navigation',{name:'Ordrevisning'});await expect(nav.getByRole('button',{name:'Opdater',exact:true})).toBeVisible();await expect(nav.getByRole('button',{name:'Fuld skærm',exact:true})).toBeVisible();
  await nav.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByLabel('Bestillingsdato fra',{exact:true})).toHaveValue('2026-10-25');await expect(page.getByLabel('Bestillingsdato til',{exact:true})).toHaveValue('2026-10-25');await expect(page.getByText(/Samlet beløb:.*150,50/)).toBeVisible();
  assert.deepEqual(await page.getByRole('columnheader').allTextContents(),['Dato / tid','Ordre / kunde','Beløb','Status','Handlinger']);await expect(page.getByRole('button',{name:'Vis ordre H1',exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByLabel('Sprog',{exact:true}).selectOption('en');await expect(page.getByRole('heading',{name:"Today's orders",exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Order settings',exact:true})).toBeVisible();await expect(page.getByText(/Total amount:.*150,50/)).toBeVisible();
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Sprog',exact:true}).click();await page.getByRole('combobox',{name:'Sprog',exact:true}).selectOption('en');await page.getByRole('button',{name:'Back to menu',exact:true}).click();await expect(page.getByRole('button',{name:'Order settings',exact:true})).toBeVisible();await page.getByRole('button',{name:'Close menu',exact:true}).click();await expect(page.getByRole('heading',{name:"Today's orders",exact:true})).toBeVisible();await expect(page.getByText(/Total amount:.*150,50/)).toBeVisible();
  await page.reload();await expect(page.getByRole('heading',{name:"Today's orders",exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>localStorage.getItem('orderfly.kds.language')),'en');
+});
+
+test('KDS drawer has separate pages, traps focus, restores trigger, and tables keep compact one-line cells',async t=>{
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,historyAllStatuses:true,orders:[order('ORD-420704',{customerName:'Omair Khan',status:'Received',fulfillmentAt:'2026-10-26T17:00:00Z'})]});
+ await page.getByRole('button',{name:'Menu',exact:true}).click();
+ const drawer=page.getByRole('dialog',{name:'Indstillinger',exact:true});await expect(drawer).toBeVisible();
+ await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await expect(page.getByRole('dialog',{name:'Lydindstillinger',exact:true})).toBeVisible();await expect(page.getByLabel('Vælg lyd',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Tilbage til menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();await expect(page.getByLabel('Automatisk opdatering',{exact:true})).toBeVisible();await expect(page.getByLabel('Vælg lyd',{exact:true})).toHaveCount(0);
+ for(let i=0;i<15;i++)await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>!!document.activeElement.closest('[role="dialog"]')),true);
+ await page.keyboard.press('Escape');await expect(page.getByRole('dialog')).toHaveCount(0);await expect(page.getByRole('button',{name:'Menu',exact:true})).toBeFocused();
+ await page.getByRole('button',{name:'Forudbestillinger 1',exact:true}).click();await expect(page.getByRole('table')).toBeVisible();
+ const row=page.getByRole('row',{name:'Forudbestilling ORD-420704',exact:true});await expect(row.getByRole('cell').nth(1)).toHaveText('420704 / Omair Khan');await expect(row.getByRole('cell').nth(4)).toHaveText('Modtaget / Betalt');await expect(page.getByRole('article')).toHaveCount(0);
+ await page.screenshot({path:'/tmp/kds-preorders-table.png',fullPage:true});
+ await page.getByRole('button',{name:'Historik',exact:true}).click();const cells=page.getByRole('table').getByRole('row').nth(1).getByRole('cell');await expect(cells.nth(1)).toHaveText('420704 / Omair Khan');await expect(cells.nth(3)).toHaveText('Modtaget / Betalt');assert.equal(await cells.nth(1).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
+ await page.screenshot({path:'/tmp/kds-history-compact.png',fullPage:true});await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(drawer).toBeVisible();await page.screenshot({path:'/tmp/kds-settings-drawer.png',fullPage:true});
 });
