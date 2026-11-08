@@ -165,6 +165,14 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     {kitchenMode ? <KdsMenu open={menuOpen} onOpenChange={setMenuOpen} openingHours={boardFeed.data?.openingHours}
       mobileNavigation={<div className="space-y-4">
         <p className="flex items-center gap-2 text-lg font-bold"><Store aria-hidden="true" className="h-6 w-6" />{mobileLocationName}</p>
+        {!fixedScope && !pinnedLocation && locations.length > 1 && <label className="block text-sm font-semibold">{t('Lokation')}
+          <select aria-label={t('Lokation')} value={selectedScope} className="mt-2 min-h-12 w-full rounded-xl border bg-white p-3"
+            onChange={event => { const location = locations.find(row => `${row.brandId}/${row.locationId}` === event.target.value); if (location) {
+              setScope({brandId:location.brandId,locationId:location.locationId}); setSelected(null); setPreorderNotice([]); setMenuOpen(false);
+            } }}>
+            {locations.map(row => <option key={`${row.brandId}/${row.locationId}`} value={`${row.brandId}/${row.locationId}`}>{row.locationName}</option>)}
+          </select>
+        </label>}
         <nav aria-label={t('Mobil navigation')} className="space-y-2">
           {([
             { label: t('Aktive ordrer'), select: () => { selectMobileStage('received'); setMenuOpen(false); } },
