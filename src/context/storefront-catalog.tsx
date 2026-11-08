@@ -1,12 +1,16 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { ComboMenu, ProductForMenu, Upsell } from '@/types';
+import { useAnalytics } from '@/context/analytics-context';
 import { useCart } from '@/context/cart-context';
 import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import { lineMoney } from '@/lib/money';
 import { relevantUpsellProducts } from '@/lib/relevant-upsell-products';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
 export type StorefrontUpsell = {
+  badges?: Record<string, 'popular'|'recommended'|'none'>;
+  step?: number;
+  badgeSources?: Record<string,string>;
   upsell: Pick<Upsell, 'id' | 'displayHeading' | 'upsellName' | 'description' | 'discountType' | 'discountValue'>;
   products: ProductForMenu[];
 };
@@ -20,7 +24,10 @@ export const useStorefrontCatalog = () => useContext(Catalog);
 export function StorefrontCatalog({ products, combos, children }: {
   products: ProductForMenu[]; combos: ComboMenu[]; children: ReactNode;
 }) {
+  const {trackEvent,sessionId} = useAnalytics();
   const { brand, location, deliveryType, cartItems, cartReady } = useCart();
+  const [previousUpsellId,setPreviousUpsellId] = useState<string | undefined>();
+  const followupPending = useRef(false);
   const [popup, setPopup] = useState<StorefrontUpsell | null>(null);
   const [cartOpening, setCartOpening] = useState(false);
   const opening = useRef(0);
@@ -31,8 +38,8 @@ export function StorefrontCatalog({ products, combos, children }: {
   const cartKey = JSON.stringify([scope, cartItems]);
   const latestKey = useRef(cartKey); latestKey.current = cartKey;
   const latestScope = useRef(scope); latestScope.current = scope;
-  const payload = JSON.stringify({brandId:brand?.id, locationId:location?.id, deliveryType, cartTotal:0, excludedUpsellIds:handledUpsells(),
-    cartItems:cartItems.map(item => ({id:item.id, itemType:item.itemType, quantity:item.quantity,
+  const payload = JSON.stringify({previousUpsellId,brandId:brand?.id, locationId:location?.id, deliveryType, cartTotal:0, excludedUpsellIds:handledUpsells(),
+    cartItems:cartItems.map(item => ({id:item.id, upsellId:item.upsellId, itemType:item.itemType, quantity:item.quantity,
       totalPrice:lineMoney(item.price, item.quantity, item.toppings.map(t=>t.price)),
       toppingIds:item.toppings.map(t=>t.id).filter(Boolean).slice(0,50),
       includedProductIds:item.comboSelections?.flatMap(g=>g.products.map(p=>p.id)),
@@ -57,6 +64,7 @@ export function StorefrontCatalog({ products, combos, children }: {
   }, []);
   useEffect(() => {
     opening.current++; request.current?.abort(); prepared.current = null; continuation.current = null; pending.current = false;
+    setPreviousUpsellId(undefined); followupPending.current=false;
     setPopup(null); setCartOpening(false);
   }, [scope]);
 
@@ -69,9 +77,24 @@ export function StorefrontCatalog({ products, combos, children }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [payload, cartReady]);
 
-  const finish = () => {
+  useEffect(() => {
+    if (!followupPending.current || !previousUpsellId || !continuation.current) return;
+    followupPending.current=false;
+    const next=continuation.current;
+    pending.current=false;
+    void openCart(next);
+    // Run after the accepted product has committed to cart state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previousUpsellId,cartKey]);
+  const finish = (accepted = false) => {
     if (!continuation.current) return;
+    if (accepted && popup && !previousUpsellId) {
+      markUpsellHandled(popup.upsell.id);
+      followupPending.current=true;
+      setPreviousUpsellId(popup.upsell.id); setPopup(null); return;
+    }
     const proceed = continuation.current; continuation.current = null;
+    setPreviousUpsellId(undefined);
     if (popup) markUpsellHandled(popup.upsell.id);
     setPopup(null); pending.current = false; setCartOpening(false);
     proceed();
@@ -94,15 +117,22 @@ export function StorefrontCatalog({ products, combos, children }: {
         && !handledUpsells().includes(data.upsell.id) && ['none','percentage','fixed_amount'].includes(data.upsell.discountType)
         && (data.upsell.discountType === 'none' || Number.isFinite(data.upsell.discountValue) && data.upsell.discountValue > 0)) {
         const available = relevantUpsellProducts(data.products, products, cartItems);
-        if (available.length) selected = {upsell:data.upsell, products:available};
+        if (available.length) selected = {upsell:data.upsell, products:available,badges:data.badges,step:data.step,badgeSources:data.badgeSources};
       }
     } catch { /* Optional upsell must never block the basket. */ }
     finally { clearTimeout(timer); }
     // An obsolete restaurant request must not open another restaurant's basket.
     if (opening.current !== attempt || latestScope.current !== scope || !continuation.current) return;
     setCartOpening(false);
+    if (selected && latestKey.current === cartKey && !previousUpsellId && sessionId) {
+      let hash=2166136261;
+      for(const char of `${scope}/${sessionId}/${selected.upsell.id}`) hash=Math.imul(hash ^ char.charCodeAt(0),16777619);
+      const control=(hash>>>0)%100 < Math.max(0,Math.min(50,Number((await lookup as any)?.controlPercent)||0));
+      trackEvent('upsell_eligible', {upsellId:selected.upsell.id,locationId:location.id,experimentGroup:control?'control':'treatment'});
+      if(control) selected=null;
+    }
     if (selected && latestKey.current === cartKey) setPopup(selected);
-    else { const next = continuation.current; continuation.current = null; pending.current = false; next(); }
+    else { const next = continuation.current; continuation.current = null; pending.current = false; setPreviousUpsellId(undefined); next(); }
   };
   return <Catalog.Provider value={{products, combos, openCart, cartOpening}}>
     {children}

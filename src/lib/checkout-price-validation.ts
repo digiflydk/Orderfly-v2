@@ -1,4 +1,4 @@
-import { upsellTriggered } from './upsell-rules';
+import { upsellTriggered, upsellParentEligible } from './upsell-rules';
 import { discountedUnit, ore } from './money';
 import type { MinimalCartItem, StandardDiscount, Upsell } from '@/types';
 import { restaurantClock } from './promotion-rules';
@@ -34,7 +34,7 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
         !Number.isFinite(item.unitPrice) || item.unitPrice < 0 || !Number.isFinite(item.totalPrice) || item.totalPrice < 0) throw new Error('Invalid basket price or quantity.');
     let minimum = standardPrices[index];
     if (!line.isCombo) for (const upsell of upsells) {
-      if (!active(upsell)) continue;
+      if (!active(upsell) || !upsellParentEligible(upsell, upsells.filter(active), items, catalog, standardPrices)) continue;
       const offered = upsell.offerType === 'product' ? upsell.offerProductIds.includes(line.id) : !!line.categoryId && upsell.offerCategoryIds.includes(line.categoryId);
       if (!offered) continue;
       const triggered = upsellTriggered(upsell, line.id, items, catalog, standardPrices);

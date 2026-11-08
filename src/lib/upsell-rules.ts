@@ -28,3 +28,11 @@ export function compareUpsells(a: Upsell, b: Upsell) {
 export function upsellExcluded(upsell: Pick<Upsell, 'excludeProductIds' | 'excludeCategoryIds' | 'excludeComboIds'>, products: {id:string; categoryId?:string}[], comboIds: string[]): boolean {
   return products.some(p => upsell.excludeProductIds?.includes(p.id) || (p.categoryId && upsell.excludeCategoryIds?.includes(p.categoryId))) || comboIds.some(id => upsell.excludeComboIds?.includes(id));
 }
+
+/** Follow-up discounts require a qualifying accepted parent line still in this basket. */
+export function upsellParentEligible(offer: Upsell, campaigns: Upsell[], items: (Pick<MinimalCartItem,'quantity'|'totalPrice'> & {upsellId?:string})[], catalog: CatalogPriceLine[], standardPrices: number[]): boolean {
+  if (!offer.afterUpsellId) return true;
+  const parent=campaigns.find(c=>c.id===offer.afterUpsellId && !c.afterUpsellId && c.brandId===offer.brandId);
+  if (!parent) return false;
+  return catalog.some((line,i)=>!line.isCombo && items[i].upsellId===parent.id && (parent.offerType==='product'?parent.offerProductIds.includes(line.id):!!line.categoryId && parent.offerCategoryIds.includes(line.categoryId)) && upsellTriggered(parent,line.id,items,catalog,standardPrices));
+}

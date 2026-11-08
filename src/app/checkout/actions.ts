@@ -663,7 +663,13 @@ async function resolveAuthoritativeCheckoutPricing(input: {
       vatAmount: money(totalAmount * ((brand.vatPercentage ?? 25) / (100 + (brand.vatPercentage ?? 25)))),
     };
 
-  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,
+  const upsellMeasurement = [...verifiedUpsellLines].map(index=>{
+    const item=cartItems[index], campaign=upsells.find(c=>c.id===item.upsellId)!;
+    const catalogPrice=resolvedLines[index].price;
+    return {productId:item.id,upsellId:campaign.id,step:campaign.afterUpsellId?2:1,quantity:item.quantity,
+      amount:money(item.totalPrice),itemDiscount:money(Math.max(0,catalogPrice-item.unitPrice)*item.quantity)};
+  });
+  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,
     appliedDiscountIdForOrder,cartDiscountTotal,serverPaymentDetails,totalAmount,subtotalAfterDiscount,
     freeDeliveryCampaignIds:activeStandardDiscounts.filter(d=>d.discountType==='free_delivery'&&subtotalAfterDiscount>=(d.minOrderValue||0)).map(d=>d.id).sort()};
 }
@@ -780,7 +786,7 @@ export async function createStripeCheckoutSessionAction(
     let fulfillmentAt = managedDeliveryAcceptance ? '' : resolveFulfillmentTime(location, deliveryType, deliveryTime);
     const priced = await resolveAuthoritativeCheckoutPricing({cartItems,customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId,enforceLegacyDeliveryMinimum:!managedDeliveryAcceptance});
     cartItems=priced.cartItems;
-    const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,appliedDiscountIdForOrder,
+    const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,appliedDiscountIdForOrder,
       cartDiscountTotal,serverPaymentDetails}=priced;
     let totalAmount=priced.totalAmount;
     if(managedDeliveryAcceptance){
@@ -848,6 +854,7 @@ export async function createStripeCheckoutSessionAction(
         locationId,
         productItems: cartItems,
         verifiedUpsellIds,
+        upsellMeasurement,
         totalAmount,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,

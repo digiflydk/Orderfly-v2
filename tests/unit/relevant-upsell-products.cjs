@@ -10,9 +10,9 @@ test('standalone and combo selections already in cart are not recommended again'
  const cart=[{id:'drink',itemType:'product'},{id:'combo',itemType:'combo',comboSelections:[{products:[{id:'dessert'}]}]}];
  assert.deepEqual(relevantUpsellProducts(catalog,catalog,cart),[catalog[1]]);
 });
-test('at most three distinct configured recommendations are displayed',()=>{
+test('all configured recommendations remain available for scrolling',()=>{
  const many=Array.from({length:10},(_,i)=>({id:String(i),isActive:true}));
- assert.equal(relevantUpsellProducts(many,many,[]).length,3);
+ assert.equal(relevantUpsellProducts(many,many,[]).length,10);
 });
 const {productPriceData}=loadTs('src/lib/product-price.ts');
 test('offer and standard discount compete on channel base price and never stack',()=>{

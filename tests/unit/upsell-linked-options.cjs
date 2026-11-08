@@ -27,7 +27,7 @@ test('only selected active local links are resolved through authoritative scoped
 });
 test('public upsell DTO accepts bounded native ids and rejects overlarge lists',async()=>{
  let input;
- const {POST}=loadTs('src/app/api/public/upsell/route.ts',{'@/lib/url':{getOrigin:async()=> 'https://shop.test'},'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({exists:true,data:()=>({brandId:'brand',isActive:true,deliveryTypes:['pickup']})})})})})},'@/app/superadmin/upsells/actions':{getActiveUpsellForCart:async(data)=>{input=data;return null}}});
+ const {POST}=loadTs('src/app/api/public/upsell/route.ts',{'@/lib/server/upsell-sales':{upsellSales:async()=>({})},'@/lib/url':{getOrigin:async()=> 'https://shop.test'},'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({exists:true,data:()=>({brandId:'brand',isActive:true,deliveryTypes:['pickup']})})})})})},'@/app/superadmin/upsells/actions':{getActiveUpsellForCart:async(data)=>{input=data;return null}}});
  const send=ids=>POST(new Request('https://shop.test/api/public/upsell',{method:'POST',headers:{origin:'https://shop.test'},body:JSON.stringify({brandId:'brand',locationId:'shop',deliveryType:'pickup',cartItems:[{id:'pizza',toppingIds:ids}],cartTotal:79})}));
  assert.equal((await send(['native'])).status,200);assert.deepEqual(input.cartItems[0].toppingIds,['native']);
  assert.equal((await send(Array(51).fill('native'))).status,400);assert.equal((await send(['../bad'])).status,400);

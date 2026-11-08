@@ -1,7 +1,7 @@
 import type { CartItem, ProductForMenu } from '@/types';
 
 /** Keep configured offer order and authoritative menu records; never invent recommendations. */
-export function relevantUpsellProducts(offered: ProductForMenu[], catalog: ProductForMenu[], cart: CartItem[], limit = 3): ProductForMenu[] {
+export function relevantUpsellProducts(offered: ProductForMenu[], catalog: ProductForMenu[], cart: CartItem[], limit = Infinity): ProductForMenu[] {
   const included = new Set(cart.flatMap(item => item.itemType === 'product'
     ? [item.id]
     : (item.comboSelections || []).flatMap(group => group.products.map(product => product.id))));

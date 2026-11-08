@@ -5,7 +5,7 @@ const ts=require('typescript');
 function load(path,mocks={}) {
   const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name==='@/lib/server/upsell-linked-options'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-linked-options.ts'):name==='@/lib/server/upsell-cart'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-cart.ts'):name==='@/lib/upsell-rules'?require('../helpers/load-ts.cjs').loadTs('src/lib/upsell-rules.ts'):name==='@/app/superadmin/standard-discounts/actions'?{getActiveStandardDiscounts:async()=>[]}:name.includes('promotion-timestamp')?require('../helpers/load-ts.cjs').loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}}):name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
+  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name==='@/lib/server/menu-products'?{}:name==='@/lib/server/upsell-linked-options'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-linked-options.ts'):name==='@/lib/server/upsell-cart'?require('../helpers/load-ts.cjs').loadTs('src/lib/server/upsell-cart.ts'):name==='@/lib/upsell-rules'?require('../helpers/load-ts.cjs').loadTs('src/lib/upsell-rules.ts'):name==='@/app/superadmin/standard-discounts/actions'?{getActiveStandardDiscounts:async()=>[]}:name.includes('promotion-timestamp')?require('../helpers/load-ts.cjs').loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}}):name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
   return mod.exports;
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');
@@ -19,12 +19,15 @@ test('controlled create values satisfy the real server parser and persist native
     '@/lib/upsell-serialization':serialization,
     '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>({provider:'firebase',subject:'actor'})},
     '@/lib/access/location-catalog':{},
-    '@/lib/access/scoped-data':{mutateScopedDocument:async(collection,id,permission,scope,update)=>{assert.equal(collection,'upsells');assert.equal(permission,'orderfly.catalog:create');assert.equal(scope,'locations');saved=await update(null);const check=v=>{assert.notEqual(v,undefined);if(v&&typeof v==='object')Object.values(v).forEach(check);};check(saved);}},
+    '@/lib/access/scoped-data':{getScopedDocument:async(_,id)=>({data:()=>({brandId:id==='foreign'?'other':'brand-cph',locationIds:['location-m3']})}),mutateScopedDocument:async(collection,id,permission,scope,update)=>{assert.equal(collection,'upsells');assert.equal(permission,'orderfly.catalog:create');assert.equal(scope,'locations');saved=await update(null);const check=v=>{assert.notEqual(v,undefined);if(v&&typeof v==='object')Object.values(v).forEach(check);};check(saved);}},
     '@/lib/promotion-rules':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},'../products/actions':{},
     '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d.toISOString()}}},getAdminDb:()=>({collection:()=>({doc:()=>({id:'new-upsell',set:async data=>{const check=v=>{assert.notEqual(v,undefined,'Firestore rejects undefined');if(v && typeof v==='object')Object.values(v).forEach(check);};check(data);saved=data;}})})})},
   });
   await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values)),/REDIRECT/);
   assert.equal(saved.brandId,'brand-cph');
+  await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData({...values,afterUpsellId:'parent',controlPercent:15,automaticBadges:false,badgeOverrides:{p1:'none',p2:'recommended'}})),/REDIRECT/);
+  assert.equal(saved.afterUpsellId,'parent');assert.equal(saved.controlPercent,15);assert.equal(saved.automaticBadges,false);assert.deepEqual(saved.badgeOverrides,{p1:'none',p2:'recommended'});
+  const prior=saved;const invalidParent=await api.createOrUpdateUpsell(null,upsellFormData({...values,afterUpsellId:'foreign'}));assert.equal(invalidParent.error,true);assert.equal(saved,prior);
   for(const k of ['excludeProductIds','excludeCategoryIds','excludeComboIds'])assert.deepEqual(saved[k],values[k]);
   assert.deepEqual(saved.locationIds,['location-m3']);
   assert.deepEqual(saved.offerProductIds,['p1','p2']);

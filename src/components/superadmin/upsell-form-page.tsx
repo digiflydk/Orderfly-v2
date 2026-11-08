@@ -13,7 +13,7 @@ import { UpsellValidationFeedback } from './upsell-validation-feedback';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
-import { getCategoriesForBrand, getProductsForBrand, getCombosForUpsellBrand } from '@/app/superadmin/upsells/actions';
+import { getUpsells, getCategoriesForBrand, getProductsForBrand, getCombosForUpsellBrand } from '@/app/superadmin/upsells/actions';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
@@ -47,6 +47,10 @@ const triggerConditionSchema = z.object({
 }).refine(v=>!v.maxQuantity || v.maxQuantity >= (v.minQuantity ?? 1),{message:'Maksimum skal være mindst minimum.',path:['maxQuantity']});
 
 const upsellSchema = z.object({
+ afterUpsellId: z.string().max(160).optional().default(''),
+ automaticBadges: z.boolean().optional().default(true),
+ badgeOverrides: z.record(z.enum(['popular','recommended','none'])).optional().default({}),
+ controlPercent: z.coerce.number().int().min(0).max(50).optional().default(10),
 	id: z.string().optional(),
 	brandId: z.string().min(1, 'A brand must be selected.'),
 	locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
@@ -182,6 +186,9 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
 
 
 export function UpsellFormPage({ upsell, brands, locations, products, categories }: UpsellFormPageProps) {
+ const [campaigns,setCampaigns] = useState<Upsell[]>([]);
+ useEffect(()=>{getUpsells().then(setCampaigns).catch(()=>{});},[]);
+
 	const { toast } = useToast();
 	const [state, formAction, isPending] = useActionState(createOrUpdateUpsell, null);
 	const [, startTransition] = useTransition();
@@ -196,6 +203,9 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 		resolver: zodResolver(upsellSchema),
 		defaultValues: upsell ? {
 			...upsell,
+            controlPercent: upsell.controlPercent ?? 0,
+            automaticBadges: upsell.automaticBadges ?? true,
+            badgeOverrides: upsell.badgeOverrides ?? {},
             excludeProductIds: upsell.excludeProductIds ?? [],
             excludeCategoryIds: upsell.excludeCategoryIds ?? [],
             excludeComboIds: upsell.excludeComboIds ?? [],
@@ -241,6 +251,8 @@ excludeProductIds: [], excludeCategoryIds: [], excludeComboIds: [],
 
 	const selectedBrandId = watch('brandId');
 	const offerType = watch('offerType');
+ const selectedOfferProducts = watch('offerProductIds') || [];
+ const selectedOfferCategories = watch('offerCategoryIds') || [];
 	const discountType = watch('discountType');
 	const imageUrl = watch('imageUrl');
 
@@ -457,7 +469,13 @@ setValue('excludeProductIds', []); setValue('excludeCategoryIds', []); setValue(
 						</Card>
 
 						<Card><CardHeader><CardTitle>Vis ikke tilbuddet, hvis kurven indeholder …</CardTitle><CardDescription>Tilbuddet springes over, hvis mindst ét valg findes i kurven, også i en menu eller som tilvalg. Uden valg vises tilbuddet efter de normale betingelser.</CardDescription></CardHeader><CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4"><FormField control={control} name="excludeProductIds" render={({field}) => (<FormItem><FormLabel>Produkter</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandProducts.map(p => ({id:p.id, name:p.productName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /><FormField control={control} name="excludeCategoryIds" render={({field}) => (<FormItem><FormLabel>Kategorier</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandCategories.map(p => ({id:p.id, name:p.categoryName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /><FormField control={control} name="excludeComboIds" render={({field}) => (<FormItem><FormLabel>Menuer</FormLabel><ScrollArea className="h-48 rounded-md border"><div className="p-3 space-y-2">{brandCombos.map(p => ({id:p.id, name:p.comboName})).sort((a,b)=>a.name.localeCompare(b.name)).map(p => (<label key={p.id} className="flex items-center gap-2 text-sm"><Checkbox checked={(field.value ?? []).includes(p.id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value ?? []),p.id] : (field.value ?? []).filter(id=>id!==p.id))} />{p.name}</label>))}</div></ScrollArea><FormMessage /></FormItem>)} /></CardContent></Card>
-<Card>
+<Card><CardHeader><CardTitle>Opfølgende tilbud og badges</CardTitle></CardHeader><CardContent className="space-y-4">
+ <FormField control={control} name="afterUpsellId" render={({field})=><FormItem><FormLabel>Vis efter accepteret kampagne</FormLabel><FormControl><select className="w-full border rounded p-2" {...field} value={field.value || ''}><option value="">Første tilbud</option>{campaigns.filter(c=>c.brandId===selectedBrandId && c.id!==upsell?.id && !c.afterUpsellId).map(c=><option key={c.id} value={c.id}>{c.upsellName}</option>)}</select></FormControl><FormDescription>Trin 2 bruger rabatten og betingelserne på denne kampagne. Højst to trin.</FormDescription></FormItem>}/>
+ <FormField control={control} name="controlPercent" render={({field})=><FormItem><FormLabel>Kontrolgruppe (%)</FormLabel><FormControl><Input type="number" min={0} max={50} {...field} value={field.value ?? 10}/></FormControl><FormDescription>Andel af målbare sessioner, der ikke ser første tilbud. Gælder kun trin 1.</FormDescription><FormMessage/></FormItem>}/>
+ <FormField control={control} name="automaticBadges" render={({field})=><FormItem><FormLabel>Automatiske badges</FormLabel><FormControl><Switch checked={field.value ?? true} onCheckedChange={field.onChange}/></FormControl><FormDescription>Mest solgte de sidste 30 dage på restauranten. Manuel indstilling vinder.</FormDescription></FormItem>}/>
+ {brandProducts.filter(p=>offerType === 'product' ? selectedOfferProducts.includes(p.id) : selectedOfferCategories.includes(p.categoryId)).map(p=><FormField key={p.id} control={control} name="badgeOverrides" render={({field})=><FormItem><FormLabel>{p.productName}</FormLabel><FormControl><select className="w-full border rounded p-2" value={field.value?.[p.id] || 'auto'} onChange={e=>{const badges={...field.value};if(e.target.value==='auto')delete badges[p.id];else badges[p.id]=e.target.value as 'popular'|'recommended'|'none';field.onChange(badges);}}><option value="auto">Automatisk</option><option value="popular">Populær</option><option value="recommended">Vi anbefaler</option><option value="none">Ingen badge</option></select></FormControl></FormItem>}/>) }
+ </CardContent></Card>
+ <Card>
 							<CardHeader><CardTitle>Trigger Conditions</CardTitle><CardDescription>Define when this upsell offer should be shown. The offer triggers if ANY of these conditions are met.</CardDescription></CardHeader>
 							<CardContent className="space-y-4">
 								<UpsellValidationFeedback state={clientValidation ?? state} field="triggerConditions" />
