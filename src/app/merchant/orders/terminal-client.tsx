@@ -50,6 +50,15 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
   useEffect(() => { if (!immersive) return; const overflow = document.body.style.overflow, overscroll = document.body.style.overscrollBehavior; document.body.style.overflow = 'hidden'; document.body.style.overscrollBehavior = 'none'; return () => { document.body.style.overflow = overflow; document.body.style.overscrollBehavior = overscroll; }; }, [immersive]);
   const [view, setView] = useState<TerminalView>('board');
   const [mobileStage, setMobileStage] = useState<MobileKdsStage>('received');
+  const [mobileViewport, setMobileViewport] = useState(false);
+  useEffect(() => {
+    if (!kitchenMode) return;
+    const query = window.matchMedia('(max-width: 1023px)');
+    const update = () => setMobileViewport(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, [kitchenMode]);
   const [mobileReadyLane, setMobileReadyLane] = useState<MobileReadyLane>('waiting');
   const [scope, setScope] = useState<{ brandId?: string; locationId?: string }>(fixedScope ?? (initialLocations?.[0] ? { brandId: initialLocations[0].brandId, locationId: initialLocations[0].locationId } : {}));
   const [filters, setFilters] = useState(() => ({ search: '', dateFrom: kitchenMode ? kitchenDay(Date.now()) : '', dateTo: kitchenMode ? kitchenDay(Date.now()) : '' }));
@@ -138,7 +147,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
       : 'min-h-[80dvh] space-y-5 bg-white p-1 text-slate-900 sm:p-3'}
     style={immersive ? { touchAction: 'pan-y', overscrollBehavior: 'none' } : undefined}>
     {immersive && <button aria-label={t("Luk fuld skærm")} className="sticky top-0 z-20 ml-auto block min-h-14 min-w-14 rounded-xl border-2 bg-white text-3xl font-bold" onClick={() => { setImmersive(false); if (document.fullscreenElement) void document.exitFullscreen(); }}>×</button>}
-    {kitchenMode && <div className="lg:hidden">
+    {kitchenMode && <div className="sticky top-0 z-30 lg:hidden">
       {(boardFeed.soundError || !boardFeed.sound) && <aside role="status" className="flex items-start gap-3 bg-amber-50 px-4 py-3 text-sm text-slate-900">
         <VolumeX aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-orange-600" />
         <div className="min-w-0 flex-1"><strong className="block font-semibold">{boardFeed.sound ? t('KDS-lyden skal aktiveres') : t('KDS-lyden er slået fra')}</strong>
@@ -223,12 +232,12 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     {connectionError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4"><p>{t(connectionError)}</p><p className="mt-1 text-sm">{' '}{t("Viste ordrer kan være forældede. Ingen ændring er bekræftet af denne fejl.")}{' '}</p><button className="mt-2 min-h-11 rounded-lg border bg-white px-4" disabled={feed.loading} onClick={refresh}>{' '}{t("Prøv igen")}{' '}</button>{connectionError.includes('Log ind') && <a href={loginHref} className="ml-4 underline">{' '}{t("Log ind igen")}{' '}</a>}</div>}
 
     {kitchenMode && !authorizationPending && preorderNotice.length > 0 && <section role="alertdialog" aria-label={t("Forudbestilling modtaget")} className="fixed inset-x-4 top-20 z-[120] mx-auto max-w-lg space-y-4 rounded-2xl border-4 border-blue-600 bg-white p-6 shadow-2xl"><h2 className="text-2xl font-bold">{' '}{t("Forudbestilling modtaget")}{' '}</h2><p>{preorderNotice.join(', ')}</p><button className="min-h-14 rounded-xl bg-slate-900 px-6 text-lg font-semibold text-white" onClick={() => { setView('preorders'); setPreorderNotice([]); boardFeed.clearNewOrders(); }}>{' '}{t("Vis forudbestillinger")}{' '}</button><button className="ml-3 min-h-14 rounded-xl border px-6" onClick={() => setPreorderNotice([])}>{' '}{t("Luk")}{' '}</button></section>}
-    {view === 'board' && kitchenMode && <MobileKdsBoard orders={data ? activeKitchenOrders : []}
+    {view === 'board' && kitchenMode && mobileViewport && <MobileKdsBoard orders={data ? activeKitchenOrders : []}
       stage={mobileStage} readyLane={mobileReadyLane} onReadyLaneChange={setMobileReadyLane}
       renderOrder={row => renderKitchenOrder(row, true)} loading={feed.loading}
       unavailable={authorizationPending || !!connectionError || !data}
       hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
-    {view === 'board' && <div className={kitchenMode ? 'hidden lg:block' : undefined}><TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={kitchenMode ? (data ? activeKitchenOrders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} /></div>}
+    {view === 'board' && (!kitchenMode || !mobileViewport) && <div className={kitchenMode ? 'hidden lg:block' : undefined}><TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={kitchenMode ? (data ? activeKitchenOrders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} /></div>}
     {view === 'history' && <TerminalHistory error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} onLoadAll={feed.loadAllHistory} />}
     {view === 'preorders' && <TerminalPreorders error={connectionError || undefined} onRetry={refresh} orders={kitchenMode ? (data ? preorders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} onReprint={!kitchenMode && data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} serverTime={data?.serverTime} />}
     {data && order && kitchenMode && <div><button className="min-h-12 rounded-lg border px-4" onClick={() => setSelected(null)}>{' '}{t("Luk ordrevisning")}{' '}</button>{renderKitchenOrder(order)}</div>}
