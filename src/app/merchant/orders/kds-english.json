@@ -196,5 +196,12 @@
   "Åbn ordre": "Open order",
   "Forudbestilling": "Preorder",
   "Hent alle matchende ordrer for at se det samlede beløb.": "Load all matching orders to see the total amount.",
-  "Beregn samlet beløb for alle ordrer": "Calculate total for all orders"
+  "Beregn samlet beløb for alle ordrer": "Calculate total for all orders",
+  "Sprog": "Language",
+  "Klar til": "Ready by",
+  "Type": "Type",
+  "Tilbage til menu": "Back to menu",
+  "Lyd, lydstyrke og test": "Sound, volume and test",
+  "Opdatering, forudbestillinger og alarmer": "Updates, preorders and alerts",
+  "Sproget gemmes på denne enhed.": "The language is saved on this device."
 }

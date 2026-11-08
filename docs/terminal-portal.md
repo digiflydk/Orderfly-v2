@@ -293,3 +293,17 @@ introduces no index dependency or production migration. This is the sum of order
 not net revenue; refunds remain separately visible. Columns are Date/time,
 Order/customer, Amount, Status and Actions. View/reprint actions use labeled icon
 buttons and retain the existing authorization and explicit print-confirmation flow.
+
+### KDS tables and settings drawer (8 November 2026)
+
+Preorders use date-grouped tables with ready time, order/customer, fulfillment type,
+amount, combined order/payment status and labeled icon actions. History keeps
+order/customer and order/payment status on single lines; the `ORD-` prefix is hidden
+only in display text. Canonical IDs, API requests and accessible action labels are
+unchanged. Tables scroll horizontally on narrow screens rather than wrapping rows.
+
+The KDS menu slides in from the left, with separate Sound, Order settings and
+Language pages and a Back control. Logout remains on its settings home page.
+The modal traps keyboard focus, closes on Escape/outside click, restores focus to
+the menu trigger and sits above immersive fullscreen. Reduced-motion preferences
+suppress the slide animation. Opening settings does not reload or mutate orders.

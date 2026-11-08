@@ -49,13 +49,13 @@ export function TerminalHistory({ orders, filters, onFiltersChange, loading = fa
     {loading && <p role="status" className="text-sm text-muted-foreground">{' '}{t("Henter ordrehistorik…")}{' '}</p>}
     {!orders.length && !loading && !error && <p className="rounded-xl border border-dashed p-8 text-center text-muted-foreground">{hasMore ? t("Ingen match på denne del af historikken. Hent flere for at fortsætte søgningen.") : t("Ingen ordrer matcher din søgning.")}</p>}
     {!!orders.length && <div className="overflow-x-auto rounded-xl border bg-background">
-      <table className="w-full text-left text-sm"><caption className="sr-only">{' '}{t("Ordrehistorik for den valgte restaurant. Alle tidspunkter er dansk tid.")}{' '}</caption>
+      <table className="w-full whitespace-nowrap text-left text-sm"><caption className="sr-only">{' '}{t("Ordrehistorik for den valgte restaurant. Alle tidspunkter er dansk tid.")}{' '}</caption>
         <thead className="bg-muted/50 text-muted-foreground"><tr>{[t("Dato / tid"),t("Ordre / kunde"),t("Beløb"),'Status',t("Handlinger")].map(label=><th key={label} scope="col" className="p-4">{label}</th>)}</tr></thead>
         <tbody className="divide-y">{orders.map(order=><tr key={order.id}>
           <td className="p-4 align-top">{terminalDateTime(order.createdAt, language)}</td>
-          <td className="p-4 align-top"><p className="font-semibold">{order.id}</p><p>{order.customerName || t("Kunde")}</p></td>
-          <td className="p-4 align-top font-semibold">{formatPrice(order.totalAmount)}{order.refundedAmountOre>0 && <p className="text-xs font-normal">{' '}{t("Refunderet:")}{' '}{formatPrice(order.refundedAmountOre/100)}</p>}</td>
-          <td className="p-4 align-top"><p>{t(ORDER_STATUS_LABELS[order.status])}</p><p className="text-xs">{order.paymentStatus==='Paid'?t("Betalt"):order.paymentStatus==='Failed'?t("Betaling fejlet"):t("Ikke betalt")}</p></td>
+          <td className="p-4 align-top"><span className="font-semibold">{order.id.replace(/^ORD[-\s]*/i, '')}</span> / {order.customerName || t("Kunde")}</td>
+          <td className="p-4 align-top font-semibold">{formatPrice(order.totalAmount)}{order.refundedAmountOre>0 && <span className="ml-2 text-xs font-normal">{' '}{t("Refunderet:")}{' '}{formatPrice(order.refundedAmountOre/100)}</span>}</td>
+          <td className="p-4 align-top"><span>{t(ORDER_STATUS_LABELS[order.status])}</span> / <span>{order.paymentStatus==='Paid'?t("Betalt"):order.paymentStatus==='Failed'?t("Betaling fejlet"):t("Ikke betalt")}</span></td>
           <td className="p-4 align-top"><div className="flex gap-2"><button type="button" aria-label={`${t("Vis ordre")} ${order.id}`} title={t("Vis ordre")} className="min-h-12 min-w-12 rounded-lg border p-3" onClick={()=>onSelectOrder(order)}><Eye aria-hidden="true" className="h-5 w-5" /></button>{onReprint && <button type="button" aria-label={`${t("Genprint ordre")} ${order.id}`} title={t("Genprint")} disabled={loading||!!error} className="min-h-12 min-w-12 rounded-lg border p-3 disabled:opacity-50" onClick={()=>onReprint(order)}><Printer aria-hidden="true" className="h-5 w-5" /></button>}</div></td>
         </tr>)}</tbody>
       </table>
