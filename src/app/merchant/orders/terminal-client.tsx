@@ -226,6 +226,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     {view === 'board' && kitchenMode && <MobileKdsBoard orders={data ? activeKitchenOrders : []}
       stage={mobileStage} readyLane={mobileReadyLane} onReadyLaneChange={setMobileReadyLane}
       renderOrder={row => renderKitchenOrder(row, true)} loading={feed.loading}
+      unavailable={authorizationPending || !!connectionError || !data}
       hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
     {view === 'board' && <div className={kitchenMode ? 'hidden lg:block' : undefined}><TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={kitchenMode ? (data ? activeKitchenOrders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} /></div>}
     {view === 'history' && <TerminalHistory error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} onLoadAll={feed.loadAllHistory} />}
