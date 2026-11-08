@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { CheckCheck, ChefHat, Layers3, Sparkles, Truck } from 'lucide-react';
+import { AlertTriangle, CheckCheck, ChefHat, Layers3, Sparkles, Truck } from 'lucide-react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { mobileKdsCounts, mobileKdsOrders, type MobileKdsStage, type MobileReadyLane } from '@/lib/orders/mobile-kds';
 import { useKdsLanguage } from './kds-language';
@@ -20,7 +20,7 @@ export function MobileKdsBoard({ orders, stage, readyLane, onReadyLaneChange, re
   const { t } = useKdsLanguage();
   const counts = mobileKdsCounts(orders);
   const rows = mobileKdsOrders(orders, stage, readyLane);
-  const empty = unavailable ? { title: t('Ordrer er ikke tilgængelige'), description: t('Kontrollér forbindelsen, og opdatér køkkenoversigten.'), icon: CheckCheck }
+  const empty = unavailable ? { title: t('Ordrer er ikke tilgængelige'), description: t('Kontrollér forbindelsen, og opdatér køkkenoversigten.'), icon: AlertTriangle }
     : stage === 'received'
     ? { title: t('Ingen nye bestillinger'), description: t('Nye bestillinger vil blive vist her automatisk.'), icon: Sparkles }
     : stage === 'progress'
