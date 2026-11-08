@@ -11,7 +11,7 @@ function matchingUpsellQuantities(upsell: Upsell, offeredProductId: string, item
   return upsell.triggerConditions.flatMap(t => {
     if(t.type === 'cart_value_over') {
       const threshold = Number(t.referenceId);
-      if (!Number.isFinite(threshold) || threshold < 0) return [];
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > Number.MAX_SAFE_INTEGER / 100) return [];
       // Recommendation and checkout use this one rule. Options do not inflate
       // eligibility; each line is capped by standard-discounted unit price.
       const eligibleOre = others.reduce((sum,{i}) => sum + Math.min(
