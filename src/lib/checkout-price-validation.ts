@@ -60,7 +60,7 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
     // Round a unit once, before quantity. Eligibility never bypasses this floor.
     if (ore(item.unitPrice) < ore(minimum) ||
         ore(item.totalPrice) < ore(item.unitPrice) * item.quantity) {
-      throw new Error('Basket prices have changed. Please refresh your basket.');
+      throw new Error('Priser eller tilbud er ændret. Opdatér kurven, før du fortsætter.');
     }
   });
   return [...verifiedUpsellIds];
