@@ -32,8 +32,10 @@ a native Wolt app.
   `KitchenClock` ready-time save are reused. They still call the same
   authorized, audited and idempotent APIs. Payment is not bypassed.
 - The mobile drawer exposes Active orders, Preorders, History, location
-  selector when several locations are authorized, service-date selector,
-  Refresh and the existing Sound, Order settings and Language sections.
+  selector when several locations are authorized, and a separate Settings page.
+  Settings uses divided rows for Sound, Order settings, Language and account
+  logout. Navigation uses icons and highlights the selected view; it has no
+  date controls or large settings cards. Refresh remains in the main header.
   `Butik` displays existing opening hours read-only. Editing hours, holiday
   exceptions, menu items or closing a location are **not** implemented by
   this KDS layout change.
@@ -90,3 +92,21 @@ create synthetic paid production orders during unattended verification.
 
 No changes to Firestore schema/indexes, campaign settings, terminal credentials,
 financial settlement, device print queues or production configuration.
+
+## Mobile menu and history refinement
+
+History has an immediate single-day date picker, defaults to today in Danish
+time, and a Today shortcut. Orders appear as divided rows grouped by order
+date, with number, customer, time, status/payment and amount. There is no items
+filter. Desktop keeps its search/date-range form and compact table. Existing
+authorization, pagination, totals and reprint callbacks are reused.
+
+Settings provides an opt-in repeat-new-order alarm, saved on this device. It
+plays every 30 seconds while a Received order is released to the kitchen and
+data is fresh, audio is enabled and the kitchen is awake. Starting preparation
+stops this reminder; muted, zero-volume, blocked-audio and stale states suppress
+it. It adds no server requests. Existing delayed-order alerts remain separate.
+
+Browser coverage includes compact mobile navigation, nested settings/back
+navigation, history date API parameters, repeat-alarm persistence and stopping
+after preparation. Physical iOS sound output still requires a device check.
