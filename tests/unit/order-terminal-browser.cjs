@@ -633,3 +633,12 @@ test('mobile KDS shows a sound activation hint, not an invented iOS silent-mode 
   await page.getByRole('button',{name:'Test lyd',exact:true}).click();
   await expect(page.getByText('KDS-lyden skal aktiveres',{exact:true})).toHaveCount(0);
 });
+
+
+test('mobile KDS shows connection errors rather than claiming there are no orders',async t=>{
+  const {page}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    readStatus:503,orders:[]});
+  await expect(page.getByText('Ordrer er ikke tilgængelige',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Ingen nye bestillinger',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('alert')).toBeVisible();
+});
