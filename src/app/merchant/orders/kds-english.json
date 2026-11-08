@@ -231,5 +231,7 @@
   "Åbningstider er ikke tilgængelige.": "Opening hours are unavailable.",
   "Åbningstider ændres i restaurantens administration.": "Opening hours are managed in the restaurant admin.",
   "Aktive ordrer": "Active orders",
-  "Mobil navigation": "Mobile navigation"
+  "Mobil navigation": "Mobile navigation",
+  "Ordrer er ikke tilgængelige": "Orders are unavailable",
+  "Kontrollér forbindelsen, og opdatér køkkenoversigten.": "Check your connection and refresh the kitchen board."
 }
