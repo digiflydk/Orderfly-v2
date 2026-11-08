@@ -60,7 +60,7 @@ export function UpsellDialog({ upsellData, onContinue, destination = 'cart' }: {
           const basePrice = money(deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price);
           const price = discountedUnit(basePrice, upsell.discountType, upsell.discountValue);
           return <div key={product.id} data-upsell-product={product.id}><ProductCard badgeOverride={upsellBadgeLabels[upsellData.badges?.[product.id] || 'none'] || null} product={{...product, price, basePrice} as typeof product} activeDiscounts={standardDiscounts}
-            upsellId={upsell.id} upsellInteractionId={interactionId.current} onProductAdded={() => finish(true, product.id)} compact /></div>;
+            upsellId={upsell.id} upsellInteractionId={interactionId.current} onProductAdded={directAdd => finish(true, directAdd ? product.id : undefined)} compact /></div>;
         })}
       </div>
       <Button variant="outline" className="min-h-12 w-full shrink-0" onClick={() => finish(false)}>{destination === 'checkout' ? 'Fortsæt til checkout' : 'Fortsæt til kurven'}</Button>

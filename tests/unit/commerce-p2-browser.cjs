@@ -923,3 +923,22 @@ for(const width of [390,1280])test(`prepared second offer switches without a req
  await expect(page.getByRole('dialog',{name:'Henter dit næste tilbud'})).toHaveCount(0);
  await expect(page.getByRole('dialog',{name:'Fixture Soda',exact:true})).toHaveCount(0);
 });
+
+test('prepared one-unit branch is not reused after changing quantity in product details',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ const requests=[];
+ await page.route('**/api/public/upsell',route=>{
+  const input=route.request().postDataJSON();requests.push(input);
+  const child={upsell:{id:'child',upsellName:'Til to drikke',discountType:'none'},products:[{id:'water'}]};
+  return route.fulfill({json:input.previousUpsellId?child:{upsell:{id:'first',upsellName:'Drikke',discountType:'none'},products:[{id:'drink'}],followups:{drink:null}}});
+ });
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ await page.getByRole('dialog',{name:'Drikke',exact:true}).getByRole('button',{name:'Se Fixture Soda',exact:true}).click();
+ const details=page.getByRole('dialog',{name:'Fixture Soda',exact:true});
+ await details.getByRole('button',{name:'Øg antal',exact:true}).click();
+ await details.getByRole('button',{name:/Læg i pose/}).click();
+ await expect(page.getByRole('dialog',{name:'Til to drikke'})).toBeVisible();
+ assert.ok(requests.some(r=>r.previousUpsellId==='first' && r.cartItems.some(i=>i.id==='drink' && i.quantity===2)));
+});
