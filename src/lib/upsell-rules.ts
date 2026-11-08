@@ -10,6 +10,7 @@ function matchingUpsellQuantities(upsell: Upsell, offeredProductId: string, item
   const others = catalog.map((record,i)=>({record,i})).filter(x=>x.record.id !== offeredProductId);
   return upsell.triggerConditions.flatMap(t => {
     if(t.type === 'cart_value_over') {
+      if (typeof t.referenceId !== 'string' || !t.referenceId.trim()) return [];
       const threshold = Number(t.referenceId);
       if (!Number.isFinite(threshold) || threshold < 0 || threshold > Number.MAX_SAFE_INTEGER / 100) return [];
       // Recommendation and checkout use this one rule. Options do not inflate
