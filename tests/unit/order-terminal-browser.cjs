@@ -591,6 +591,11 @@ test('mobile KDS shows three bottom stages, courier lane and accessible drawer w
   await page.getByRole('tab',{name:'I levering (1)'}).click();
   await expect(page.getByRole('article',{name:'Ordre ORD-COURIER',exact:true})).toBeVisible();
   await expect(page.getByRole('article',{name:'Ordre ORD-PICKUP',exact:true})).toHaveCount(0);
+  // Mobile and portrait iPad must retain the pre-existing immersive controls.
+  await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
+  await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','true');
+  await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();
+  await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','false');
   await page.getByRole('button',{name:'Åbn menu',exact:true}).click();
   const drawer=page.getByRole('dialog',{name:'Indstillinger',exact:true});
   await expect(drawer).toBeVisible();
