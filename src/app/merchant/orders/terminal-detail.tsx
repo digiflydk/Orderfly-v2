@@ -80,7 +80,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <strong className="rounded-lg bg-slate-100 px-3 py-2 text-xl font-bold">#{order.id.replace(/^ORD[-\\s]*/i, '')}</strong>
+            <strong className="rounded-lg bg-slate-100 px-3 py-2 text-xl font-bold">#{order.id.replace(/^ORD[-\s]*/i, '')}</strong>
             <span className="min-w-0 break-words text-lg font-bold">{order.customerName || t("Kunde")}</span>
           </div>
           <span className="inline-flex max-w-full items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold">
