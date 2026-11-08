@@ -246,24 +246,24 @@ for (const width of [360,390,768,820,1023,1280]) test(`#71 cart is reachable and
  await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
  assert.equal(await page.getByRole('dialog').count(),0,'simple plus adds without an options step');
- await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
- const surface=page.getByRole('dialog');
+ if(width<1024)await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ const surface=width>=1024?page.getByRole('complementary',{name:'Din kurv'}):page.getByRole('dialog');
  await surface.getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).waitFor();
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1,'draft is not written before save');
  await page.keyboard.press('Escape');
- await expect(page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Soda',exact:true})).toBeVisible();
- await (page.getByRole('dialog')).getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
+ await expect(surface.getByRole('button',{name:'Rediger Fixture Soda',exact:true})).toBeVisible();
+ await surface.getByRole('button',{name:'Rediger Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Øg antal',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Gem ændringer/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].quantity,2);
- await expect(page.getByRole('dialog').getByRole('button',{name:'Til kassen',exact:true})).toBeVisible();
- const cta=(page.getByRole('dialog')).getByRole('button',{name:'Til kassen',exact:true});
+ await expect(surface.getByRole('button',{name:'Til kassen',exact:true})).toBeVisible();
+ const cta=surface.getByRole('button',{name:'Til kassen',exact:true});
  assert.ok(await cta.isVisible());assert.ok((await cta.boundingBox()).height>=55);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'no horizontal page overflow');
- await (page.getByRole('dialog')).evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
+ await surface.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
  const ctaBounds=await cta.boundingBox();assert.ok(ctaBounds.y>=0 && ctaBounds.y+ctaBounds.height<=900,'checkout CTA is inside the viewport');
  if(process.env.UI71_SCREENSHOTS)await page.screenshot({path:process.env.UI71_SCREENSHOTS+'/cart-'+width+'.png'});
 });
@@ -668,7 +668,7 @@ for(const width of [390,1280])test(`#780 V2 upgrade retains selected ingredients
  assert.equal(stored.choices.length,1);assert.equal(stored.choices[0].comboSelections[0].products[0].id,'p');
 });
 
-for (const width of [390,1280]) test(`pre-cart popup is optional and shared on V2 (${width})`,async t=>{
+for (const width of [390]) test(`mobile pre-cart popup is optional on V2 (${width})`,async t=>{
  const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup&upsell=active&v2');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
@@ -686,7 +686,6 @@ for (const width of [390,1280]) test(`pre-cart popup is optional and shared on V
  fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:`test-results/upsell-before-cart-${width}.png`});
  if(width===390){
   await popup.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
-  await page.getByRole('dialog',{name:'Fixture Soda',exact:true}).getByRole('button',{name:/Læg i pose/}).click();
   await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
  }else await popup.getByRole('button',{name:'Luk',exact:true}).click();
  await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
@@ -758,12 +757,10 @@ for(const acceptSecond of [false,true])test(`accepted first offer opens a releva
  await expect(page.getByRole('dialog',{name:'Noget at drikke'})).toBeVisible();
  await expect(page.getByText('Populær',{exact:true})).toBeVisible();
  await page.getByRole('dialog').getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
- await page.getByRole('dialog',{name:'Fixture Soda',exact:true}).getByRole('button',{name:/Læg i pose/}).click();
  await expect(page.getByRole('dialog',{name:'En ekstra mulighed'})).toBeVisible({timeout:8000});
  assert.ok(requests.some(r=>r.previousUpsellId==='first' && r.cartItems.some(i=>i.id==='drink' && i.upsellId==='first')));
  if(acceptSecond) {
   await page.getByRole('dialog').getByRole('button',{name:'Tilføj Fixture Water',exact:true}).click();
-  await page.getByRole('dialog',{name:'Fixture Water',exact:true}).getByRole('button',{name:/Læg i pose/}).click();
  } else await page.getByRole('button',{name:'Fortsæt til kurven',exact:true}).click();
  await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
  const cart=JSON.parse(await page.locator('#cart-state').textContent());
@@ -783,7 +780,8 @@ for(const width of [390,1280])test(`all upsell choices scroll with a visible con
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
- await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ if(width===1280) await page.route('**/checkout',route=>route.fulfill({contentType:'text/html',body:'<h1>Checkout</h1>'}));
+ await page.getByRole('button',{name:width===1280?'Gå til checkout':/Se kurv/}).filter({visible:true}).first().click();
  const dialog=page.getByRole('dialog',{name:'Alle drikkevarer'}),list=dialog.getByLabel('Tilbud til din ordre');
  await expect(dialog).toBeVisible();
  assert.equal(await list.locator('[data-upsell-product]').count(),8);
@@ -793,14 +791,15 @@ for(const width of [390,1280])test(`all upsell choices scroll with a visible con
  await expect.poll(async()=>(await events()).filter(e=>e.name==='upsell_product_shown').length).toBeGreaterThan(0);
  assert.equal((await events()).filter(e=>e.name==='upsell_product_shown'&&e.params.productId==='extra-7').length,0);
  await dialog.evaluate(async el=>{await Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{})));});
- await expect(dialog.getByRole('button',{name:'Fortsæt til kurven'})).toBeInViewport();
- const before=await dialog.getByRole('button',{name:'Fortsæt til kurven'}).boundingBox();
+ await expect(dialog.getByRole('button',{name:width===1280?'Fortsæt til checkout':'Fortsæt til kurven'})).toBeInViewport();
+ const before=await dialog.getByRole('button',{name:width===1280?'Fortsæt til checkout':'Fortsæt til kurven'}).boundingBox();
  await list.evaluate(el=>{el.scrollTop=el.scrollHeight;});
  await expect.poll(async()=>(await events()).filter(e=>e.name==='upsell_product_shown'&&e.params.productId==='extra-7').length).toBe(1);
- const after=await dialog.getByRole('button',{name:'Fortsæt til kurven'}).boundingBox();
+ const after=await dialog.getByRole('button',{name:width===1280?'Fortsæt til checkout':'Fortsæt til kurven'}).boundingBox();
  assert.equal(Math.round(before.y),Math.round(after.y));
- await dialog.getByRole('button',{name:'Fortsæt til kurven'}).click();
- await expect(page.getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
+ await dialog.getByRole('button',{name:width===1280?'Fortsæt til checkout':'Fortsæt til kurven'}).click();
+ if(width===1280) await page.waitForURL('**/checkout');
+ else await expect(page.getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
  assert.ok(!requests.some(r=>r.previousUpsellId));
 });
 test('control assignment skips the popup and remains stable when reopening the cart',async t=>{
@@ -823,4 +822,84 @@ test('control assignment skips the popup and remains stable when reopening the c
  const events=await page.locator('#funnel-events').evaluate(el=>JSON.parse(el.textContent));
  assert.equal(events.filter(e=>e.name==='upsell_eligible'&&e.params.experimentGroup==='control').length,2);
  assert.equal(events.filter(e=>e.name==='upsell_offer_shown').length,0);
+});
+
+for (const width of [390,1280]) test(`V2 simple products add directly and desktop basket is inline (${width})`,async t=>{
+ const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
+ if(width===1280) {
+  const basket=page.getByRole('complementary',{name:'Din kurv'});
+  await expect(basket.getByRole('heading',{name:'Fixture Soda',exact:true})).toBeVisible();
+  await expect(basket.getByRole('button',{name:/Se kurv/})).toHaveCount(0);
+  await basket.getByRole('button',{name:'Tilføj én Fixture Soda',exact:true}).click();
+  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
+  await expect(basket.getByRole('button',{name:'Gå til checkout'})).toBeVisible();
+  assert.ok(await basket.evaluate(el=>el.scrollWidth<=el.clientWidth),'basket controls fit the desktop column');
+  fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/upsell-inline-desktop.png'});
+ }
+});
+for (const slow of [false,true]) test(`desktop checkout shows both upsells with direct add (slow follow-up=${slow})`,async t=>{
+ const page=await setup(t,1280,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ await page.route('**/checkout',route=>route.fulfill({contentType:'text/html',body:'<h1>Checkout</h1>'}));
+ const requests=[],analytics=[];
+ page.on('request',r=>{if(r.url().endsWith('/api/analytics/collect'))analytics.push(r.postDataJSON());});
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await page.route('**/api/public/upsell',async route=>{
+  const input=route.request().postDataJSON();requests.push(input);
+  const second=input.previousUpsellId==='first';
+  if(second && slow)await new Promise(resolve=>setTimeout(resolve,11000));
+  await route.fulfill({json:{step:second?2:1,upsell:{id:second?'second':'first',upsellName:second?'Dessert med rabat':'Drikke til pizza',discountType:second?'percentage':'none',discountValue:20},products:[{id:second?'water':'drink'}]}});
+ });
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ await page.getByRole('complementary',{name:'Din kurv'}).getByRole('button',{name:'Gå til checkout'}).click();
+ await page.getByRole('dialog',{name:'Drikke til pizza'}).getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'Fixture Soda',exact:true})).toHaveCount(0);
+ if(slow)await expect(page.getByRole('dialog',{name:'Henter dit næste tilbud'})).toBeVisible();
+ const dessert=page.getByRole('dialog',{name:'Dessert med rabat'});
+ await expect(dessert).toBeVisible({timeout:15000});
+ await expect(dessert.getByText('20,00 kr.',{exact:true})).toBeVisible();
+ assert.ok(requests.some(r=>r.previousUpsellId==='first' && r.cartItems.some(i=>i.id==='drink' && i.upsellId==='first')));
+ await dessert.getByRole('button',{name:'Tilføj Fixture Water',exact:true}).click();
+ await page.waitForURL('**/checkout');
+ const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')));
+ assert.equal(saved.choices.find(i=>i.id==='drink').upsellId,'first');
+ assert.equal(saved.choices.find(i=>i.id==='water').upsellId,'second');
+ assert.ok(!requests.some(r=>r.previousUpsellId==='second'));
+ const checkout=analytics.filter(e=>e.name==='start_checkout');
+ assert.equal(checkout.length,1);assert.equal(checkout[0].params.itemsCount,3);assert.equal(checkout[0].params.cartValue,129);
+});
+test('customer can skip a pending follow-up and a late response cannot reopen it',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ let release;const held=new Promise(resolve=>release=resolve);
+ await page.route('**/api/public/upsell',async route=>{
+  const second=route.request().postDataJSON().previousUpsellId==='first';
+  if(second)await held;
+  await route.fulfill({json:{upsell:{id:second?'second':'first',upsellName:second?'Late dessert':'Drikke',discountType:'none'},products:[{id:second?'water':'drink'}]}}).catch(()=>{});
+ });
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ await page.getByRole('button',{name:/Se kurv/}).filter({visible:true}).first().click();
+ await page.getByRole('dialog',{name:'Drikke',exact:true}).getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await page.getByRole('dialog',{name:'Henter dit næste tilbud'}).getByRole('button',{name:'Fortsæt til kurven'}).click();
+ release();
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Din kurv',exact:true})).toBeVisible();
+ await page.waitForTimeout(300);
+ await expect(page.getByRole('dialog',{name:'Late dessert'})).toHaveCount(0);
+});
+
+test('desktop rejects first offer and continues straight to checkout without offering step two',async t=>{
+ const page=await setup(t,1280,'/fixture/restaurant?deliveryMethod=pickup&upsell=active&v2');
+ await page.route('**/checkout',route=>route.fulfill({contentType:'text/html',body:'<h1>Checkout</h1>'}));
+ const requests=[];page.on('request',r=>{if(r.url().endsWith('/api/public/upsell'))requests.push(r.postDataJSON());});
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ await page.getByRole('complementary',{name:'Din kurv'}).getByRole('button',{name:'Gå til checkout'}).click();
+ await page.getByRole('dialog',{name:'Til din pizza'}).getByRole('button',{name:'Fortsæt til checkout'}).click();
+ await page.waitForURL('**/checkout');
+ assert.ok(!requests.some(r=>r.previousUpsellId));
 });

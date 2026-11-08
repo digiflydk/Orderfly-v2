@@ -155,7 +155,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
             <Button type="button" aria-label={`Tilføj ${product.productName}`} aria-busy={isPending} disabled={isPending || !cartReady} onClick={event => {
               event.stopPropagation();
               if(upsellId && upsellAdded.current)return;
-              if (isV2 || product.toppingGroupIds?.length) {void handleCardClick(); return;}
+              if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
               if (addToCart(product,1,[],basePrice,finalPrice,undefined,upsellId) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
               trackEvent('add_to_cart', {productId: product.id, locationId: location?.id, itemsCount: 1, cartValue: finalPrice, deliveryType});
               onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
