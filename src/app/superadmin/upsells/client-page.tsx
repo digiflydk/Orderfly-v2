@@ -101,7 +101,7 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Upsell Promotions</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Upsell Promotions</h1><Link href="/superadmin/upsells/report" className="underline">Se upsell-effekt</Link>
           <p className="text-muted-foreground">
             Create, view, and manage all upsell campaigns across all brands.
           </p>

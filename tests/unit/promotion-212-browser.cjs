@@ -13,7 +13,7 @@ before(async()=>{
  const code={...common,applicationType:'code',code:'QA212',discountType:'percentage',discountValue:10,assignedToCustomerId:'customer'};
  const standard={...common,discountName:'QA tiers',discountType:'product',referenceIds:['p'],discountMethod:'quantity_tiers',timeSlotValidationType:'orderTime',quantityTiers:[{minQuantity:2,method:'percentage',value:10}]};
  const upsell={...common,upsellName:'QA upsell',offerType:'product',offerProductIds:['p'],discountType:'percentage',discountValue:10,triggerConditions:[{id:'t',type:'cart_value_over',referenceId:'100'}]};createRoot(document.getElementById('root')).render(location.pathname==='/upsell'?<UpsellFormPage {...props} upsell={upsell}/>:location.pathname==='/tiers'?<StandardDiscountFormPage {...props} discount={standard}/>:<DiscountFormPage {...props} discount={code}/>);`);
- const actions=file('actions',`export async function getDiscountCustomers(){return [{id:'customer',name:'QA customer',email:'okh@digifly.dk'}];}export async function getNewsletterSetup(){return null;}export async function createOrUpdateDiscount(_,form){return (await fetch('/save',{method:'POST',body:form})).json();}export const createOrUpdateStandardDiscount=createOrUpdateDiscount;export const createOrUpdateUpsell=createOrUpdateDiscount;export async function getProductsForBrand(){return [{id:'p',brandId:'b',productName:'Pepsi',categoryId:'c',price:20}];}export async function getCategoriesForBrand(){return [{id:'c',categoryName:'Drikkevarer'}];}export async function getCombosForUpsellBrand(){return [{id:'menu',comboName:'Pizzamenu'}];}`);
+ const actions=file('actions',`export const getUpsells=async()=>[{id:'first',brandId:'b',upsellName:'Sodavand først'},{id:'nested',brandId:'b',afterUpsellId:'first',upsellName:'Allerede trin 2'},{id:'foreign',brandId:'other',upsellName:'Andet brand'}];export async function getDiscountCustomers(){return [{id:'customer',name:'QA customer',email:'okh@digifly.dk'}];}export async function getNewsletterSetup(){return null;}export async function createOrUpdateDiscount(_,form){return (await fetch('/save',{method:'POST',body:form})).json();}export const createOrUpdateStandardDiscount=createOrUpdateDiscount;export const createOrUpdateUpsell=createOrUpdateDiscount;export async function getProductsForBrand(){return [{id:'p',brandId:'b',productName:'Pepsi',categoryId:'c',price:20}];}export async function getCategoriesForBrand(){return [{id:'c',categoryName:'Drikkevarer'}];}export async function getCombosForUpsellBrand(){return [{id:'menu',comboName:'Pizzamenu'}];}`);
  const loader=file('loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const alias={'@/app/superadmin/discounts/actions':actions,'@/app/superadmin/upsells/actions':actions,'@/app/superadmin/standard-discounts/actions':actions,'@/components/superadmin/admin-link':file('link',"import React from 'react';export default React.forwardRef((props,ref)=><a {...props} ref={ref}/>);"),'@/hooks/use-toast':file('toast','const toast=()=>{};export const useToast=()=>({toast});'),'@':path.join(root,'src')};
  for(const name of ['react','react/jsx-runtime','react-dom','react-dom/client'])alias[name+'$']=require.resolve('next/dist/compiled/'+name);
@@ -78,4 +78,27 @@ test('quantity ranges and dynamic heading templates survive the actual form',asy
  await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect(page.locator('p').filter({hasText:/^Maksimum skal være mindst minimum\.$/})).toBeVisible();assert.equal(saved,undefined);
  await page.getByLabel('Højst antal',{exact:true}).fill('5');await page.getByRole('button',{name:'Save Changes',exact:true}).click();await expect.poll(()=>!!saved).toBe(true);
  assert.equal(saved.get('headingPlural'),'Noget koldt til dine {antal} pizzaer?');assert.equal(JSON.parse(saved.get('triggerConditions'))[0].minQuantity,3);
+});
+
+test('admin saves follow-up campaign, control group and manual badge overrides',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(5000);
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
+ let saved;
+ await page.route('**/save',async route=>{
+  const data=await new Request('http://fixture/save',{method:'POST',headers:{'content-type':route.request().headers()['content-type']},body:route.request().postDataBuffer()}).formData();
+  saved=Object.fromEntries(data);await route.fulfill({json:{error:false,message:'Saved'}});
+ });
+ await page.goto(origin+'/upsell');
+ const parent=page.getByLabel('Vis efter accepteret kampagne',{exact:true});
+ await expect(parent.locator('option')).toHaveCount(2);await parent.selectOption('first');
+ const badge=page.getByRole('combobox',{name:'Pepsi',exact:true});
+ await expect(badge).toBeVisible();await badge.selectOption('recommended');
+ await page.getByLabel('Kontrolgruppe (%)',{exact:true}).fill('15');
+ await page.getByRole('switch',{name:'Automatiske badges',exact:true}).click();
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect.poll(()=>saved?.afterUpsellId).toBe('first');
+ assert.equal(saved.discountValue,'10');assert.equal(saved.controlPercent,'15');assert.equal(saved.automaticBadges,'false');
+ assert.deepEqual(JSON.parse(saved.badgeOverrides),{p:'recommended'});
+ await badge.selectOption('none');await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect.poll(()=>JSON.parse(saved.badgeOverrides).p).toBe('none');
 });

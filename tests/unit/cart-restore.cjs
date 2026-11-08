@@ -71,3 +71,19 @@ test('restore action verifies native restaurant ownership and bounds selectors b
   await assert.rejects(restoreCartAction({ ...f.scope, brandId: '../other', choices: [] }));
   assert.equal(reads, 2);
 });
+
+test('follow-up discount survives refresh and requires the accepted parent to remain', () => {
+ const catalog=f.catalog();
+ catalog.products.push({...f.product,id:'soda',price:20,toppingGroupIds:[]},{...f.product,id:'dessert',price:50,toppingGroupIds:[]});
+ const parent={...f.discount,id:'first',offerType:'product',offerProductIds:['soda'],discountType:'none',triggerConditions:[{type:'product_in_cart',referenceId:'pizza'}]};
+ catalog.upsells=[parent,{...parent,id:'second',afterUpsellId:'first',offerProductIds:['dessert'],discountType:'percentage',discountValue:20,triggerConditions:[{type:'product_in_cart',referenceId:'soda'}]}];
+ const soda={...f.choice,id:'soda',cartItemId:'soda-line',upsellId:'first',offered:true};
+ const dessert={...f.choice,id:'dessert',cartItemId:'dessert-line',upsellId:'second',offered:true};
+ const first=restore([f.choice,soda,dessert],catalog);
+ assert.equal(first.items[2].price,40);
+ assert.equal(restore(f.cartChoices(first.items),catalog).items[2].price,40);
+ assert.equal(restore([f.choice,dessert],catalog).items[1].price,50);
+ assert.equal(restore([f.choice,{...soda,upsellId:undefined},dessert],catalog).items[2].price,50);
+ catalog.upsells[0].isActive=false;
+ assert.equal(restore([f.choice,soda,dessert],catalog).items[2].price,50);
+});

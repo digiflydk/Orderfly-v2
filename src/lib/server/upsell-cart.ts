@@ -6,6 +6,7 @@ import { minimumCheckoutPrices, type CatalogPriceLine } from '@/lib/checkout-pri
 import { money } from '@/lib/money';
 
 export type UpsellCartItem = {
+  upsellId?: string;
   id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[];
   includedProductIds?: string[]; toppingIds?: string[]; quantity?: number; totalPrice?: number;
   comboSelections?: { groupId?: string; groupName: string; products: {id: string}[] }[];
@@ -36,7 +37,7 @@ export async function upsellCart(db: Firestore, input: UpsellCartItem[], scope: 
     if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 999 || !Number.isFinite(price) || price < 0) continue;
     catalog.push({id:item.id, isCombo:!!combo, price, categoryId:product?.categoryId,
       tags:product ? [...(product.isPopular ? ['Popular'] : []), ...(product.isFeatured ? ['Recommended'] : []), ...(product.isNew ? ['Campaign'] : [])] : []});
-    items.push({id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.max(0, Math.min(item.totalPrice ?? 0, price * quantity))});
+    items.push({upsellId:item.upsellId,id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.max(0, Math.min(item.totalPrice ?? 0, price * quantity))});
   }
   return {items, catalog, standardPrices: minimumCheckoutPrices(items, catalog, discounts, [], scope)};
 }

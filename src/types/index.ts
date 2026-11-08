@@ -604,6 +604,10 @@ export type TriggerCondition = {
  * @collection upsells
  */
 export type Upsell = {
+  afterUpsellId?: string;
+  automaticBadges?: boolean;
+  badgeOverrides?: Record<string, 'popular' | 'recommended' | 'none'>;
+  controlPercent?: number;
   id: string;
   brandId: string;
   locationIds: string[];
@@ -879,6 +883,8 @@ export type AnalyticsEventName =
   | 'payment_session_created' 
   | 'payment_succeeded' 
   | 'order_confirmed_view' 
+  | 'upsell_eligible'
+  | 'upsell_product_shown'
   | 'upsell_offer_shown' 
   | 'upsell_accepted' 
   | 'upsell_rejected'

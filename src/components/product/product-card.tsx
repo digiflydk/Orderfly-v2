@@ -27,6 +27,7 @@ interface ProductCardProps {
   upsellId?: string;
   upsellInteractionId?: string;
   compact?: boolean;
+  badgeOverride?: string | null;
   onProductAdded?: () => void;
 }
 
@@ -48,7 +49,7 @@ export function ProductCardSkeleton() {
 }
 
 
-export const ProductCard = memo(function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false, onProductAdded }: ProductCardProps) {
+export const ProductCard = memo(function ProductCard({ product, activeDiscounts, upsellId, upsellInteractionId, compact = false, onProductAdded, badgeOverride }: ProductCardProps) {
   const isV2 = useStorefrontV2();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
@@ -77,6 +78,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
   }), [product, finalPrice, basePrice, hasOffer]);
 
   const getBadgeText = () => {
+    if (badgeOverride !== undefined) return badgeOverride;
     if (hasOffer) return "Tilbud";
     const quantityOffer = activeDiscounts.find(d => isQuantityMethod(d.discountMethod) &&
       ((d.discountType === 'product' && d.referenceIds.includes(product.id)) ||

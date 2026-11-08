@@ -2,7 +2,7 @@
 'use server';
 import { publicMenuProducts } from '@/lib/server/menu-products';
 import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
-import { upsellTriggered, compareUpsells, upsellExcluded, upsellHeading } from '@/lib/upsell-rules';
+import { upsellTriggered, upsellParentEligible, compareUpsells, upsellExcluded, upsellHeading } from '@/lib/upsell-rules';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { linkedCartProductIds } from '@/lib/server/upsell-linked-options';
 import { promotionBoundary } from '@/lib/promotion-calendar';
@@ -49,6 +49,10 @@ const triggerConditionSchema = z.object({
 }).refine(v => !v.maxQuantity || v.maxQuantity >= (v.minQuantity ?? 1), {message:'Maksimum skal være mindst minimum.',path:['maxQuantity']});
 
 const upsellSchema = z.object({
+ afterUpsellId: z.string().max(160).optional().default(''),
+ automaticBadges: z.boolean().optional().default(true),
+ badgeOverrides: z.record(z.enum(['popular','recommended','none'])).optional().default({}),
+ controlPercent: z.coerce.number().int().min(0).max(50).optional().default(10),
     id: z.string().optional(),
     brandId: z.string().min(1, 'A brand must be selected.'),
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
@@ -119,6 +123,10 @@ export async function createOrUpdateUpsell(
     };
 
     const rawData: Record<string, any> = {
+      afterUpsellId: formData.get('afterUpsellId') || '',
+      automaticBadges: formData.get('automaticBadges') !== 'false',
+      badgeOverrides: JSON.parse(String(formData.get('badgeOverrides') || '{}')),
+      controlPercent: Number(formData.get('controlPercent') ?? 10),
       brandId: formData.get('brandId'),
       excludeProductIds: formData.getAll('excludeProductIds'),
       excludeCategoryIds: formData.getAll('excludeCategoryIds'),
@@ -207,10 +215,19 @@ export async function createOrUpdateUpsell(
     if (endDate) dataToSave.endDate = admin.firestore.Timestamp.fromDate(endDate);
     if (!id) dataToSave.createdAt = admin.firestore.Timestamp.now();
 
+    if(dataToSave.afterUpsellId){
+      if(dataToSave.afterUpsellId===id)throw Error('En kampagne kan ikke følge efter sig selv.');
+      const parent=await getScopedDocument('upsells',dataToSave.afterUpsellId,'orderfly.catalog:view','locations',true);
+      if(!parent || parent.data()?.brandId!==dataToSave.brandId || parent.data()?.afterUpsellId)throw Error('Vælg en første kampagne fra samme brand.');
+      if(!dataToSave.locationIds.every((locationId:string)=>parent.data()?.locationIds?.includes(locationId)))throw Error('Første kampagne skal gælde de samme restauranter.');
+    }
     const upsellRef = id ? db.collection('upsells').doc(id) : db.collection('upsells').doc();
     
     const writeData = Object.fromEntries(Object.entries({ ...dataToSave, id: upsellRef.id }).filter(([, value]) => value !== undefined));
     await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>{
+      if (id && formData.get('sequenceSubmitted') !== '1') {
+        for (const key of ['afterUpsellId','automaticBadges','badgeOverrides','controlPercent']) delete writeData[key];
+      }
       if (id && formData.get('exclusionsSubmitted') !== '1') {
         for (const key of ['excludeProductIds', 'excludeCategoryIds', 'excludeComboIds']) delete writeData[key];
       }
@@ -276,6 +293,7 @@ type GetActiveUpsellParams = {
   cartItems: UpsellCartItem[];
   cartTotal: number;
   excludedUpsellIds?: string[];
+  previousUpsellId?: string;
 };
 export async function getActiveUpsellForCart({
   brandId,
@@ -283,6 +301,7 @@ export async function getActiveUpsellForCart({
   deliveryType,
   cartItems,
   excludedUpsellIds = [],
+  previousUpsellId,
 }: GetActiveUpsellParams): Promise<{
   upsell: Upsell;
   products: ProductForMenu[];
@@ -309,7 +328,7 @@ export async function getActiveUpsellForCart({
   
   // 2. Filter by date, day, and time in code
   const activeNowUpsells = allUpsells.sort(compareUpsells).filter(upsell => {
-      if (excludedUpsellIds.includes(upsell.id)) return false;
+
       if (!(upsell.orderTypes || []).includes(deliveryType)) return false;
       const startDate = toDate(upsell.startDate) ?? null;
       const endDate = toDate(upsell.endDate) ?? null;
@@ -337,7 +356,7 @@ export async function getActiveUpsellForCart({
   ]);
   const readProducts = async (ids: string[]) => {
     const wanted = new Set(ids);
-    return catalog.filter(product => wanted.has(product.id));
+    return [...wanted].flatMap(id=>{const product=catalog.find(p=>p.id===id);return product?[product]:[];});
   };
   const [linkedIds, context] = await Promise.all([
     linkedCartProductIds(db, brandId, locationId, cartItems, readProducts),
@@ -347,6 +366,9 @@ export async function getActiveUpsellForCart({
   const exclusionProducts = catalog.filter(product => currentCartProductIds.has(product.id));
   const comboIds = context.catalog.filter(p => p.isCombo).map(p => p.id);
   for (const upsell of activeNowUpsells) {
+      if (excludedUpsellIds.includes(upsell.id)) continue;
+      if ((upsell.afterUpsellId || undefined) !== previousUpsellId) continue;
+      if (!upsellParentEligible(upsell, activeNowUpsells, context.items, context.catalog, context.standardPrices)) continue;
       if (upsellExcluded(upsell, exclusionProducts, comboIds)) continue;
       // Candidates are checked individually below; no offered item can qualify itself.
           let offeredProductIds: string[] = [];
