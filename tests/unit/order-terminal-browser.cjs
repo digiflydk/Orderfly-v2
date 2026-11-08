@@ -41,7 +41,7 @@ before(async () => {
     res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body class="admin-shell"><main class="p-4"><div id="root"></div></main><script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port;
-  browser = await chromium.launch({ headless: true, executablePath: process.env.CART_CHROMIUM_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CART_CHROMIUM_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage', '--autoplay-policy=document-user-activation-required'] });
 });
 after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 async function fixture(t, width = 1024, height = 768, extra = {}) {
@@ -58,6 +58,22 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
       createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime(value) { window.__audioGains.push(value); } } }; }
     };
   }, {suspended: !!extra.suspendedAudio});
+  if (extra.mediaAudio) await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'platform', {get: () => 'MacIntel'});
+    Object.defineProperty(navigator, 'maxTouchPoints', {get: () => 5});
+    const NativeAudio = window.Audio;
+    window.__mediaPlayers = []; window.__mediaPlays = 0;
+    window.Audio = function(...args) {
+      const player = new NativeAudio(...args), play = player.play.bind(player);
+      window.__mediaPlayers.push(player);
+      player.play = () => {
+        window.__mediaPlays++;
+        if (window.__blockMedia) return Promise.reject(new DOMException('Test rejection', 'NotAllowedError'));
+        return play(); // Real media decoding/playback, not a successful mock.
+      };
+      return player;
+    };
+  });
   await page.addInitScript(() => {
     const original = window.fetch;
     window.__pushConnections = 0; window.__pushSend = () => {};
@@ -854,4 +870,56 @@ test('uncertain kitchen reprint retains its UUID across history tablet rotation'
  await page.getByRole('button',{name:'Genprint ordre ORD-ROTATE',exact:true}).click();
  await expect(page.getByText('Printeren har meldt bonen udskrevet.',{exact:true})).toBeVisible();
  assert.equal(calls.filter(c=>c.kind==='print'&&c.method==='POST').length,2);
+});
+
+
+test('iPad media element plays real WAV after Test and a new order without another gesture',async t=>{
+ const {page,state}=await fixture(t,1024,768,{kds:true,kitchenMode:true,mediaAudio:true,orders:[]});
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0]?.currentTime)).toBeGreaterThan(0.1);
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers[0].duration),3.6);
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0].ended),{timeout:6000}).toBe(true);
+ state.orders.push(order('ORD-MEDIA'));await page.evaluate(()=>window.__pushSend('change'));
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlays)).toBe(2);
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0].currentTime)).toBeGreaterThan(0.1);
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers.length),1);
+ assert.equal(await page.evaluate(()=>window.__audioContexts.length),0);
+ await page.getByRole('button',{name:'Slå lyd fra',exact:true}).click();
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers[0].paused),true);
+ state.orders.push(order('ORD-MEDIA-MUTED'));await page.evaluate(()=>window.__pushSend('change'));
+ await expect(page.getByText('Der er kommet 2 nye ordrer',{exact:true})).toBeVisible();
+ assert.equal(await page.evaluate(()=>window.__mediaPlays),2);
+});
+
+test('iPad delayed test uses real playback after ten seconds and reports blocked playback',async t=>{
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,mediaAudio:true,orders:[]});
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0]?.ended),{timeout:6000}).toBe(true);
+ await page.getByRole('button',{name:'Test ordrelyd om 10 sekunder',exact:true}).click();
+ await expect(page.getByText('Lydtest om 10 sekunder. Vent uden at trykke igen.',{exact:true})).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlays),{timeout:12000}).toBe(2);
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0].currentTime)).toBeGreaterThan(0.1);
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers.length),1);
+ await page.evaluate(()=>{window.__blockMedia=true;});
+ await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect(page.getByRole('dialog').getByText('Ordrelyden er blokeret på denne enhed. Tryk på Test lyd, og prøv den forsinkede lydtest.',{exact:true})).toBeVisible();
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers[0].paused),true);
+});
+
+test('iPad media volume is encoded in WAV and sound changes reuse the unlocked element',async t=>{
+ const {page}=await fixture(t,1024,768,{kds:true,kitchenMode:true,mediaAudio:true,orders:[]});
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0]?.currentTime)).toBeGreaterThan(0.1);
+ const peak=()=>page.evaluate(async()=>{const b=await(await fetch(window.__mediaPlayers[0].src)).arrayBuffer(),v=new DataView(b);let max=0;for(let i=44;i<b.byteLength;i+=2)max=Math.max(max,Math.abs(v.getInt16(i,true)));return max;});
+ const loud=await peak();
+ await page.getByLabel('Lydstyrke',{exact:true}).fill('40');await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0].currentTime)).toBeGreaterThan(0.1);
+ const quiet=await peak();assert.ok(Math.abs(loud/quiet-2)<0.01);
+ await page.getByLabel('Vælg lyd',{exact:true}).selectOption('marimba');await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__mediaPlayers[0].currentTime)).toBeGreaterThan(0.1);
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers.length),1);
+ await page.getByLabel('Lydstyrke',{exact:true}).fill('0');await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect(page.getByRole('dialog').getByText('Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.',{exact:true})).toBeVisible();
+ assert.equal(await page.evaluate(()=>window.__mediaPlayers[0].paused),true);
+ assert.equal(await page.evaluate(()=>window.__mediaPlays),3);
 });

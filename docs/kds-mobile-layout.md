@@ -137,3 +137,32 @@ after preparation. Physical iOS sound output still requires a device check.
   allows another deliberate copy. No print polling runs in the background.
   History uses the same direct kitchen action; generic merchant/admin receipt
   controls retain their existing choices and confirmations.
+
+### iPad media alert playback, 2026-11-08
+
+When Test sound succeeds but automatic order alerts remain silent, the iOS path
+now uses a single reusable HTMLAudioElement for both actions. iPad desktop mode
+is included. The operator's Test sound click calls play synchronously; later
+order/preorder/delay alerts reuse that element rather than a separate Web Audio
+context. Other platforms retain the existing Web Audio implementation.
+
+The selected 3.6-second melody is generated locally as a PCM WAV. The volume is
+encoded into the waveform, since iOS element.volume cannot be relied upon.
+Changing sound or volume replaces the source, not the element. Muting stops
+playback immediately; unmount stops playback and revokes the Blob URL. A rejected
+or stalled play promise shows an activation error instead of silently failing.
+No audio download or additional server polling is introduced.
+
+Settings also offers **Test ordrelyd om 10 sekunder**. After Test sound, use this
+button and wait without touching the screen. This exercises the same background
+playback path without creating an order. Danish and English labels are included.
+Keep KDS foregrounded; a successful play promise cannot prove speaker output or
+promise playback while iOS backgrounds the page.
+
+Browser acceptance uses actual Chromium media decoding/playback with a strict
+user-activation policy, selecting the iPad path via its desktop-mode identity.
+It checks playback after a pushed order and a ten-second delay, one shared audio
+element, WAV duration and volume, changing sound, mute/zero volume, and rejected
+playback. These are not physical Safari/iPad speaker tests. Hardware acceptance
+owner: Omair; after deployment reload KDS, tap Test sound once, then run the
+10-second test and confirm a real new-order alert on the restaurant's iPad.

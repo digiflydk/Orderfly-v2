@@ -219,6 +219,8 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
         <label className="flex items-center gap-3">{' '}{t("Lyd")}{' '}<select aria-label={t("Vælg lyd")} className="min-h-12 rounded-lg border bg-white p-3" value={boardFeed.soundId} onChange={event => boardFeed.setSoundId(event.target.value)}>{Object.entries(TERMINAL_SOUNDS).map(([id, value]) => <option key={id} value={id}>{t(value.name)}</option>)}</select></label>
         <button className="min-h-12 rounded-xl border bg-white px-4 font-medium" onClick={() => void boardFeed.testSound()}>{' '}{t("Test lyd")}{' '}</button>
 
+        <button className="min-h-12 rounded-xl border bg-white px-4 font-medium" onClick={boardFeed.testDelayedSound}>{t('Test ordrelyd om 10 sekunder')}</button>
+        {boardFeed.delayedSoundMessage && <p role="status" className="text-sm">{t(boardFeed.delayedSoundMessage)}</p>}
         <label className="flex items-center gap-3">{' '}{t("Lydstyrke")}{' '}<input aria-label={t("Lydstyrke")} type="range" min="0" max="100" step="5" value={boardFeed.volume} onChange={event => boardFeed.setVolume(Number(event.target.value))} />
           <output>{boardFeed.volume}%</output>
         </label>
@@ -230,6 +232,8 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
       <div className="flex flex-wrap items-center gap-4 pt-2">
         <label className="flex items-center gap-3">{' '}{t("Lyd")}{' '}<select aria-label={t("Vælg lyd")} className="min-h-12 rounded-lg border bg-white p-3" value={boardFeed.soundId} onChange={event => boardFeed.setSoundId(event.target.value)}>{Object.entries(TERMINAL_SOUNDS).map(([id, value]) => <option key={id} value={id}>{t(value.name)}</option>)}</select></label>
         <button className="min-h-12 rounded-xl border bg-white px-4 font-medium" onClick={() => void boardFeed.testSound()}>{' '}{t("Test lyd")}{' '}</button>
+        <button className="min-h-12 rounded-xl border bg-white px-4 font-medium" onClick={boardFeed.testDelayedSound}>{t('Test ordrelyd om 10 sekunder')}</button>
+        {boardFeed.delayedSoundMessage && <p role="status" className="text-sm">{t(boardFeed.delayedSoundMessage)}</p>}
         <label className="flex items-center gap-3">{' '}{t("Lydstyrke")}{' '}<input aria-label={t("Lydstyrke")} type="range" min="0" max="100" step="5" value={boardFeed.volume} onChange={event => boardFeed.setVolume(Number(event.target.value))} />
           <output>{boardFeed.volume}%</output>
         </label>
