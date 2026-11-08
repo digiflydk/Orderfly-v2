@@ -53,3 +53,9 @@ Attributed upsell revenue is not causal incremental revenue. Badge comparisons a
 Local typecheck, production build, unit tests for rules/prices/refunds/serialization/popularity and real-component Playwright tests cover the first/second popup, discounts, skipping, mobile/desktop scroll, viewport impressions, stable controls and admin fields. Synthetic fixtures only; no production mutations.
 
 Use a feature PR with `[skip ci]`; GitHub Actions are not used per PM instruction. Implementation remains separate from merge/deploy approval. After an authorized release, verify the deployed health SHA and a read-only storefront/admin flow. Configure real follow-up campaigns deliberately after release; this change does not create or activate them.
+
+## Prepared follow-up branches
+
+The public response now includes a follow-up per offered product without option groups. Each hypothetical acceptance is evaluated on the server with its native channel price and campaign discount. Campaign, catalog, standard-discount, linked-option and combo reads are deduplicated within this one request only. No shared cross-request cart or tenant cache is introduced. The first offer and its prepared branches arrive together, so accepting a simple drink switches directly to the matching second offer without a network round trip or loading dialog. Null branches continue immediately.
+
+The prepared branch is used only for the unchanged source basket. Products requiring option selection and legacy responses retain the validated fallback lookup, because the actual selection may change eligibility. Final checkout still verifies prices and parent eligibility. First-load network latency remains; this change removes the additional request between prepared steps rather than guaranteeing zero network latency.

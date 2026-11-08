@@ -1,3 +1,5 @@
+import { withUpsellReads } from '@/lib/server/upsell-request-cache';
+import { discountedUnit } from '@/lib/money';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { upsellSales } from '@/lib/server/upsell-sales';
 import { upsellBadges } from '@/lib/upsell-badges';
@@ -50,13 +52,32 @@ export async function POST(request: Request) {
         const location = await getAdminDb().collection('locations').doc(input.data.locationId).get();
         if (!location.exists || location.data()?.brandId !== input.data.brandId || !location.data()?.isActive || !location.data()?.deliveryTypes?.includes(input.data.deliveryType))
             return Response.json(null, { status: 404 });
+        return await withUpsellReads(async () => {
         const offer = await getActiveUpsellForCart(input.data);
         // Return only display terms and native product IDs; never expose admin
         // conditions, counters or internal records through a public endpoint.
         const sales = offer?.upsell.automaticBadges === false ? {} : offer ? await optionalCheckoutValue(()=>upsellSales(input.data.brandId,input.data.locationId),{} as Record<string,number>,750) : {};
-        const badges = offer ? upsellBadges(offer.products.map(p=>p.id),sales,offer.upsell.badgeOverrides) : {};
-        const publicOffer = offer ? { upsell: { id: offer.upsell.id, upsellName: offer.upsell.upsellName, displayHeading: offer.upsell.displayHeading ?? offer.upsell.upsellName, description: offer.upsell.description ?? null, discountType: offer.upsell.discountType, ...(offer.upsell.discountValue !== undefined ? { discountValue: offer.upsell.discountValue } : {}) }, controlPercent: offer.upsell.controlPercent ?? 0, badges, badgeSources:Object.fromEntries(offer.products.map(p=>[p.id,offer.upsell.badgeOverrides?.[p.id]?'manual':badges[p.id]==='none'?'none':'auto'])), step: input.data.previousUpsellId ? 2 : 1, products: offer.products.map(product => ({ id: product.id })) } : null;
+        const serialize = (offer: Awaited<ReturnType<typeof getActiveUpsellForCart>>, step: number) => offer ? { upsell: { id: offer.upsell.id, upsellName: offer.upsell.upsellName, displayHeading: offer.upsell.displayHeading ?? offer.upsell.upsellName, description: offer.upsell.description ?? null, discountType: offer.upsell.discountType, ...(offer.upsell.discountValue !== undefined ? { discountValue: offer.upsell.discountValue } : {}) }, controlPercent: offer.upsell.controlPercent ?? 0, badges: upsellBadges(offer.products.map(p=>p.id),offer.upsell.automaticBadges === false ? {} : sales,offer.upsell.badgeOverrides), badgeSources:Object.fromEntries(offer.products.map(p=>[p.id,offer.upsell.badgeOverrides?.[p.id]?'manual':upsellBadges(offer.products.map(p=>p.id),offer.upsell.automaticBadges === false ? {} : sales,offer.upsell.badgeOverrides)[p.id]==='none'?'none':'auto'])), step, products: offer.products.map(product => ({ id: product.id })) } : null;
+        const publicOffer = serialize(offer, input.data.previousUpsellId ? 2 : 1);
+        if (publicOffer && offer && !input.data.previousUpsellId) {
+            // Prepare simple one-click branches using native prices. Shared catalog,
+            // campaigns and discounts are read once, never once per product.
+            const followups: Record<string, ReturnType<typeof serialize>> = {};
+            for (const product of offer.products) {
+                if (product.toppingGroupIds?.length) continue;
+                const base = input.data.deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price;
+                const child = await getActiveUpsellForCart({...input.data,
+                    previousUpsellId: offer.upsell.id,
+                    excludedUpsellIds: [...(input.data.excludedUpsellIds || []), offer.upsell.id],
+                    cartItems: [...input.data.cartItems, {id: product.id, itemType: 'product', quantity: 1,
+                        upsellId: offer.upsell.id, totalPrice: discountedUnit(base, offer.upsell.discountType, offer.upsell.discountValue)}],
+                });
+                followups[product.id] = serialize(child, 2);
+            }
+            Object.assign(publicOffer, {followups});
+        }
         return Response.json(publicOffer, { headers: { 'Cache-Control': 'no-store' } });
+        });
     }
     catch {
         return Response.json(null, { status: 503 });

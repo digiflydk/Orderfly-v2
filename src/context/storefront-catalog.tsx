@@ -10,6 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
 export type StorefrontUpsell = {
+  preparedCartKey?: string;
+  followups?: Record<string, StorefrontUpsell | null>;
   badges?: Record<string, 'popular'|'recommended'|'none'>;
   step?: number;
   badgeSources?: Record<string,string>;
@@ -72,7 +74,7 @@ export function StorefrontCatalog({ products, combos, children }: {
   }, [scope]);
 
   useEffect(() => {
-    if (!cartReady || !brand || !location || !deliveryType || !cartItems.length) return;
+    if (!cartReady || !brand || !location || !deliveryType || !cartItems.length || (previousUpsellId && popup)) return;
     // Coalesce quick quantity changes; opening the basket reuses this request.
     const timer = setTimeout(() => { void prepare(); }, 250);
     return () => { clearTimeout(timer); request.current?.abort(); prepared.current = null; };
@@ -89,10 +91,19 @@ export function StorefrontCatalog({ products, combos, children }: {
     // Run after the accepted product has committed to cart state.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [previousUpsellId,cartKey]);
-  const finish = (accepted = false) => {
+  const finish = (accepted = false, productId?: string) => {
     if (!continuation.current) return;
     if (accepted && popup && !previousUpsellId) {
       markUpsellHandled(popup.upsell.id);
+      if (productId && popup.preparedCartKey === cartKey && popup.followups && Object.hasOwn(popup.followups, productId)) {
+        const child = popup.followups[productId];
+        const available = child ? relevantUpsellProducts(child.products, products, cartItems) : [];
+        if (child && available.length && !handledUpsells().includes(child.upsell.id)) {
+          setPreviousUpsellId(popup.upsell.id); setPopup({...child, products: available}); return;
+        }
+        const proceed = continuation.current; continuation.current = null;
+        setPopup(null); pending.current = false; setCartOpening(false); proceed(); return;
+      }
       followupPending.current=true;
       setPreviousUpsellId(popup.upsell.id); setPopup(null); return;
     }
@@ -121,7 +132,7 @@ export function StorefrontCatalog({ products, combos, children }: {
         && !handledUpsells().includes(data.upsell.id) && ['none','percentage','fixed_amount'].includes(data.upsell.discountType)
         && (data.upsell.discountType === 'none' || Number.isFinite(data.upsell.discountValue) && data.upsell.discountValue > 0)) {
         const available = relevantUpsellProducts(data.products, products, cartItems);
-        if (available.length) selected = {upsell:data.upsell, products:available,badges:data.badges,step:data.step,badgeSources:data.badgeSources};
+        if (available.length) selected = {preparedCartKey:cartKey, followups:data.followups, upsell:data.upsell, products:available,badges:data.badges,step:data.step,badgeSources:data.badgeSources};
       }
     } catch { /* Optional upsell must never block the basket. */ }
     finally { clearTimeout(timer); }

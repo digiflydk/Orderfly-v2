@@ -1,5 +1,6 @@
 
 'use server';
+import { upsellRead } from '@/lib/server/upsell-request-cache';
 import { publicMenuProducts } from '@/lib/server/menu-products';
 import { upsellCart, type UpsellCartItem } from '@/lib/server/upsell-cart';
 import { upsellTriggered, upsellParentEligible, compareUpsells, upsellExcluded, upsellHeading } from '@/lib/upsell-rules';
@@ -316,7 +317,7 @@ export async function getActiveUpsellForCart({
     .where('locationIds', 'array-contains', locationId)
     .where('isActive', '==', true);
   
-  const snapshot = await q.get();
+  const snapshot = await upsellRead(`campaigns/${brandId}/${locationId}`, () => q.get());
   
   const allUpsells = snapshot.docs.map(doc => {
     const data = doc.data() as Omit<Upsell, 'id'>;
@@ -351,15 +352,15 @@ export async function getActiveUpsellForCart({
   // location/brand/product reads for triggers, exclusions and offered products.
   const scope = {brandId, locationId, deliveryType};
   const [catalog, discounts] = await Promise.all([
-    publicMenuProducts(locationId, undefined, brandId),
-    getActiveStandardDiscounts(scope),
+    upsellRead(`products/${brandId}/${locationId}`, () => publicMenuProducts(locationId, undefined, brandId)),
+    upsellRead(`discounts/${brandId}/${locationId}/${deliveryType}`, () => getActiveStandardDiscounts(scope)),
   ]);
   const readProducts = async (ids: string[]) => {
     const wanted = new Set(ids);
     return [...wanted].flatMap(id=>{const product=catalog.find(p=>p.id===id);return product?[product]:[];});
   };
   const [linkedIds, context] = await Promise.all([
-    linkedCartProductIds(db, brandId, locationId, cartItems, readProducts),
+    upsellRead(`links/${brandId}/${locationId}/${JSON.stringify(cartItems.flatMap(i=>i.toppingIds || []))}`, () => linkedCartProductIds(db, brandId, locationId, cartItems, readProducts)),
     upsellCart(db, cartItems, scope, readProducts, discounts),
   ]);
   const currentCartProductIds = new Set([...cartItems.flatMap(item => [item.id, ...(item.includedProductIds || []), ...(item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || [])]), ...linkedIds]);

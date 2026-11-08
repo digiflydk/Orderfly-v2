@@ -1,3 +1,4 @@
+import { upsellRead } from './upsell-request-cache';
 import type { Firestore } from 'firebase-admin/firestore';
 import type { ComboMenu, ComboSelection, ProductForMenu, StandardDiscount, MinimalCartItem } from '@/types';
 import { comboSelectionAdjustments } from '@/lib/combo-pricing';
@@ -18,7 +19,7 @@ export async function upsellCart(db: Firestore, input: UpsellCartItem[], scope: 
   const comboIds = [...new Set(input.filter(item => item.itemType === 'combo').map(item => item.id))];
   const [products, comboRows] = await Promise.all([
     getProducts(input.filter(item => item.itemType !== 'combo').map(item => item.id), scope.brandId, scope.locationId),
-    comboIds.length ? db.getAll(...comboIds.map(id => db.collection('comboMenus').doc(id))) : [],
+    comboIds.length ? upsellRead(`combos/${scope.brandId}/${scope.locationId}/${JSON.stringify(comboIds)}`, () => db.getAll(...comboIds.map(id => db.collection('comboMenus').doc(id)))) : [],
   ]);
   const catalog: CatalogPriceLine[] = [], items: MinimalCartItem[] = [];
   for (const item of input) {

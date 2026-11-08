@@ -28,7 +28,7 @@ interface ProductCardProps {
   upsellInteractionId?: string;
   compact?: boolean;
   badgeOverride?: string | null;
-  onProductAdded?: () => void;
+  onProductAdded?: (directAdd: boolean) => void;
 }
 
 export function ProductCardSkeleton() {
@@ -64,7 +64,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
   const { deliveryType, location, cartReady, cartItems, addToCart } = useCart();
   const {trackEvent} = useAnalytics();
   const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
-  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id}); onProductAdded?.();};
+  const onAdded = (directAdd = false) => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id}); onProductAdded?.(directAdd);};
 
   const priceData = useMemo(() => productPriceData(product, activeDiscounts, deliveryType), [product, activeDiscounts, deliveryType]);
 
@@ -158,7 +158,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
               if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
               if (addToCart(product,1,[],basePrice,finalPrice,undefined,upsellId) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
               trackEvent('add_to_cart', {productId: product.id, locationId: location?.id, itemsCount: 1, cartValue: finalPrice, deliveryType});
-              onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
+              onAdded(true); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
             }} size={isV2 ? "default" : "icon"} className={cn("h-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0", isV2 ? "px-4" : "w-11")}>
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : isV2 ? "Tilføj" : <Plus className="h-5 w-5"/>}
             </Button>
