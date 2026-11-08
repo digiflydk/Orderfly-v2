@@ -1,6 +1,7 @@
 'use client';
 import { isKitchenPreorder, parseKdsSettings } from '@/lib/orders/kds-settings';
 import { subscribeTerminalEvents } from './terminal-events-client';
+import { needsTerminalMediaAudio, terminalSoundWav } from '@/lib/orders/terminal-media-audio';
 import { TERMINAL_SOUNDS, isTerminalSound, type TerminalSound } from '@/lib/orders/terminal-sounds';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TerminalQuery, TerminalReadResult } from '@/lib/orders/terminal-types';
@@ -47,8 +48,46 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const loadMore = useCallback(() => { void run.current(true); }, []);
   const loadAllHistory = useCallback(() => { void run.current(false, true); }, []);
   const clearNewOrders = useCallback(() => setNewOrders(0), []);
+  const media = useRef<HTMLAudioElement | null>(null);
+  const mediaSource = useRef<{ key: string; url: string } | null>(null);
+  const mediaAttempt = useRef(0);
+  const delayedSound = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [delayedSoundMessage, setDelayedSoundMessage] = useState('');
+  const stopMedia = useCallback(() => { ++mediaAttempt.current; media.current?.pause(); }, []);
   const resumingAudio = useRef(false);
   const beep = useCallback(async () => {
+    if (!soundEnabled.current || volumeRef.current === 0) return;
+    if (needsTerminalMediaAudio()) {
+      const attempt = ++mediaAttempt.current;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        // Reuse the element unlocked by Test lyd. Calling play synchronously
+        // within that button's gesture also authorizes subsequent order alerts.
+        const player = media.current ??= new Audio();
+        player.preload = 'auto'; player.setAttribute('playsinline', ''); player.muted = false;
+        const key = `${soundIdRef.current}/${volumeRef.current}`;
+        if (mediaSource.current?.key !== key) {
+          player.pause();
+          if (mediaSource.current) URL.revokeObjectURL(mediaSource.current.url);
+          const url = URL.createObjectURL(terminalSoundWav(soundIdRef.current, volumeRef.current));
+          mediaSource.current = { key, url }; player.src = url;
+        }
+        player.currentTime = 0;
+        const playback = player.play();
+        await Promise.race([playback, new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('media_audio_timeout')), 3000);
+        })]);
+        if (attempt !== mediaAttempt.current || !soundEnabled.current) return;
+        if (player.paused) throw new Error('media_audio_paused');
+        setSoundError('');
+      } catch {
+        if (attempt === mediaAttempt.current && soundEnabled.current) {
+          media.current?.pause();
+          setSoundError('Ordrelyden er blokeret på denne enhed. Tryk på Test lyd, og prøv den forsinkede lydtest.');
+        }
+      } finally { clearTimeout(timeout); }
+      return;
+    }
     const context = audio.current;
     if (!soundEnabled.current || !context || volumeRef.current === 0) return;
     if (context.state !== 'running') {
@@ -113,6 +152,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       setSoundError('Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.');
       return;
     }
+    if (needsTerminalMediaAudio()) { await beep(); return; }
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       // Recreate synchronously inside the tap, including apparently running but
@@ -136,20 +176,26 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   }, [beep, prepareAudio]);
   const toggleSound = useCallback(async () => {
     if (soundEnabled.current) {
-      soundEnabled.current = false; stopMelody.current?.(); setSound(false); setSoundError(''); saveSound(false);
+      soundEnabled.current = false; stopMedia(); stopMelody.current?.(); setSound(false); setSoundError(''); saveSound(false);
     } else await testSound();
-  }, [testSound]);
+  }, [testSound, stopMedia]);
   const setSoundId = useCallback((value: string) => {
     if (!isTerminalSound(value)) return;
+    stopMedia();
     soundIdRef.current = value; setSoundIdState(value);
     try { localStorage.setItem('orderfly.kds.soundId', value); } catch {}
-  }, []);
+  }, [stopMedia]);
   const setVolume = useCallback((value: number) => {
     if (!Number.isFinite(value)) return;
     const level = Math.max(0, Math.min(100, Math.round(value)));
-    volumeRef.current = level; setVolumeState(level); stopMelody.current?.();
+    volumeRef.current = level; setVolumeState(level); stopMedia(); stopMelody.current?.();
     try { localStorage.setItem('orderfly.kds.volume', String(level)); } catch {}
-  }, []);
+  }, [stopMedia]);
+  const testDelayedSound = useCallback(() => {
+    if (delayedSound.current) clearTimeout(delayedSound.current);
+    setDelayedSoundMessage('Lydtest om 10 sekunder. Vent uden at trykke igen.');
+    delayedSound.current = setTimeout(() => { setDelayedSoundMessage(''); void beep(); }, 10000);
+  }, [beep]);
   useEffect(() => {
     if (!notifications) { soundEnabled.current = false; return; }
     try {
@@ -163,6 +209,10 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       setSound(soundEnabled.current);
     } catch {}
     if (!soundEnabled.current) return;
+    if (needsTerminalMediaAudio()) {
+      setSoundError('Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
+      return;
+    }
     try {
       const context = prepareAudio();
       if (context.state !== 'running') setSoundError('Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
@@ -176,7 +226,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   }, [notifications, prepareAudio]);
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 5_000);
-    return () => { clearInterval(timer); soundEnabled.current = false; stopMelody.current?.(); void audio.current?.close(); audio.current = null; };
+    return () => { clearInterval(timer); if (delayedSound.current) clearTimeout(delayedSound.current); soundEnabled.current = false; stopMedia(); if (mediaSource.current) URL.revokeObjectURL(mediaSource.current.url); mediaSource.current = null; media.current = null; stopMelody.current?.(); void audio.current?.close(); audio.current = null; };
   }, []);
   useEffect(() => {
     const current = ++generation.current;
@@ -307,5 +357,5 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const ageStale = automatic && (!query.view || query.view === 'board') && lastUpdated !== null && !freshForAlerts;
   const stale = lastUpdated !== null && (ageStale || offline || !!error);
   void tick;
-  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, freshForAlerts, newOrders, sound, soundError, refresh, loadMore, loadAllHistory, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
+  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, freshForAlerts, newOrders, sound, soundError, refresh, loadMore, loadAllHistory, clearNewOrders, toggleSound, testSound, testDelayedSound, delayedSoundMessage, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

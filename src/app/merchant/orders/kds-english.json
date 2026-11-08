@@ -242,5 +242,8 @@
   "Gentag alarm ved nye ordrer": "Repeat new order alert",
   "Hvert 30. sekund, indtil tilberedningen er startet. Kræver friske data.": "Every 30 seconds until preparation starts. Requires fresh data.",
   "Flere printere er tilknyttet. Administratoren skal konfigurere én printer til direkte køkkenprint.": "Multiple printers are assigned. An administrator must configure one printer for direct kitchen printing.",
-  "Genprint kunne ikke bekræftes. Prøv igen med samme genprint.": "Reprint could not be confirmed. Retry the same reprint."
+  "Genprint kunne ikke bekræftes. Prøv igen med samme genprint.": "Reprint could not be confirmed. Retry the same reprint.",
+  "Test ordrelyd om 10 sekunder": "Test order sound in 10 seconds",
+  "Lydtest om 10 sekunder. Vent uden at trykke igen.": "Sound test in 10 seconds. Wait without tapping again.",
+  "Ordrelyden er blokeret på denne enhed. Tryk på Test lyd, og prøv den forsinkede lydtest.": "Order audio is blocked on this device. Tap Test sound, then try the delayed sound test."
 }
