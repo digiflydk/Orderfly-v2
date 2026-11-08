@@ -594,7 +594,14 @@ test('mobile KDS shows three bottom stages, courier lane and accessible drawer w
   // Mobile and portrait iPad must retain the pre-existing immersive controls.
   await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
   await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','true');
-  await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();
+  // The persistent close control must remain above the sticky mobile header.
+  const exit=page.getByRole('button',{name:'Luk fuld skærm',exact:true});
+  const exitZ=await exit.evaluate(element=>Number(getComputedStyle(element).zIndex));
+  const headerZ=await page.locator('header.sticky').first().evaluate(element=>Number(getComputedStyle(element).zIndex));
+  assert.ok(exitZ>headerZ,'fullscreen exit stays above sticky mobile chrome');
+  await page.mouse.wheel(0,600);
+  await expect(exit).toBeVisible();
+  await exit.click();
   await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','false');
   await page.getByRole('button',{name:'Åbn menu',exact:true}).click();
   const drawer=page.getByRole('dialog',{name:'Indstillinger',exact:true});
@@ -647,4 +654,21 @@ test('mobile KDS shows connection errors rather than claiming there are no order
   await expect(page.getByText('Ordrer er ikke tilgængelige',{exact:true})).toBeVisible();
   await expect(page.getByRole('heading',{name:'Ingen nye bestillinger',exact:true})).toHaveCount(0);
   await expect(page.getByRole('alert')).toBeVisible();
+});
+
+test('mobile new-order banner switches back to the Received tab from In progress',async t=>{
+  const {page,state,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-INITIAL'),order('ORD-COOK',{status:'In Progress'})]});
+  const nav=page.getByRole('navigation',{name:'Køkkenstatus'});
+  await nav.getByRole('button',{name:/I gang/}).click();
+  await expect(page.getByRole('heading',{name:'I gang',exact:true})).toBeVisible();
+  state.orders.push(order('ORD-PUSHED'));
+  await page.evaluate(()=>window.__pushSend('change'));
+  await expect(page.getByRole('button',{name:'Vis nye ordrer',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PUSHED',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Vis nye ordrer',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Nye bestillinger',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PUSHED',exact:true})).toBeVisible();
+  await expect(nav.getByRole('button',{name:/Nye bestillinger/})).toHaveAttribute('aria-current','page');
+  assert.deepEqual(errors,[]);
 });
