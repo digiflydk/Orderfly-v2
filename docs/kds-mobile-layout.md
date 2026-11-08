@@ -41,6 +41,10 @@ a native Wolt app.
   cannot inspect an iOS device's hardware silent switch or notification
   volume. `Test lyd` requires user interaction and keeps the existing
   browser sound activation flow.
+- The existing new-order alert explicitly selects the **Nye bestillinger**
+  mobile stage before clearing its notice, even when the operator is viewing
+  **I gang** or **Klar**. Enter-fullscreen remains available from the mobile
+  header, and its exit control stacks above the sticky header while scrolling.
 - Network/authorization failures are differentiated from empty orders.
   Unknown/revoked scope never displays cached customer data.
 - The actual order board is mounted once per device: `TerminalBoard` at or
