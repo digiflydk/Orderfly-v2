@@ -80,21 +80,43 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const prepareAudio = useCallback(() => {
     const Audio = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!Audio) throw new Error('unsupported');
-    if (!audio.current || audio.current.state === 'closed') audio.current = new Audio();
+    if (!audio.current || audio.current.state === 'closed') {
+      const context = new Audio();
+      audio.current = context;
+      context.onstatechange = () => {
+        if (audio.current === context && soundEnabled.current) setSoundError(context.state === 'running' ? '' : 'Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
+      };
+    }
     return audio.current;
   }, []);
+  const audioAttempt = useRef(0);
   const testSound = useCallback(async () => {
+    const attempt = ++audioAttempt.current;
     soundEnabled.current = true; setSound(true); saveSound(true);
+    if (volumeRef.current === 0) {
+      setSoundError('Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.');
+      return;
+    }
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
+      // Recreate synchronously inside the tap, including apparently running but
+      // stalled iOS contexts. Never wait for the old context to close first.
+      const previous = audio.current;
+      stopMelody.current?.(); audio.current = null;
+      if (previous) { previous.onstatechange = null; void previous.close().catch(() => {}); }
       const context = prepareAudio();
       // Safari may leave resume pending until a gesture. Always show the
       // activation state before awaiting it, including on unsupported devices.
       setSoundError('Tryk på “Test lyd” for at aktivere lyden på denne enhed.');
-      await context.resume();
-      if (!soundEnabled.current) return;
+      await Promise.race([
+        context.resume(),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error('audio_timeout')), 3000); }),
+      ]);
+      if (!soundEnabled.current || (audio.current as AudioContext | null) !== context) return;
       if (context.state !== 'running') throw new Error('suspended');
       setSoundError(''); beep();
-    } catch { setSoundError('Lyden kunne ikke aktiveres. Tryk på “Test lyd” for at prøve igen.'); }
+    } catch { if (attempt === audioAttempt.current && soundEnabled.current) setSoundError('Lyden kunne ikke aktiveres. Tryk på “Test lyd” for at prøve igen.'); }
+    finally { if (timeout) clearTimeout(timeout); }
   }, [beep, prepareAudio]);
   const toggleSound = useCallback(async () => {
     if (soundEnabled.current) {
