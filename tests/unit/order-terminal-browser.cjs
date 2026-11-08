@@ -580,6 +580,7 @@ test('mobile KDS shows three bottom stages, courier lane and accessible drawer w
   await expect(bottom.getByRole('button',{name:/I gang/})).toBeVisible();
   await expect(bottom.getByRole('button',{name:/Klar/})).toBeVisible();
   await expect(page.getByRole('article',{name:'Ordre ORD-NEW',exact:true})).toBeVisible();
+  assert.equal(await page.evaluate(()=>document.querySelectorAll('article[aria-label="Ordre ORD-NEW"]').length),1,'only one responsive order card mounted');
   await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toHaveCount(0);
   await bottom.getByRole('button',{name:/I gang/}).click();
   await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toBeVisible();
