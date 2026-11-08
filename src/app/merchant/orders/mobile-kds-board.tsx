@@ -6,20 +6,22 @@ import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { mobileKdsCounts, mobileKdsOrders, type MobileKdsStage, type MobileReadyLane } from '@/lib/orders/mobile-kds';
 import { useKdsLanguage } from './kds-language';
 
-export function MobileKdsBoard({ orders, stage, readyLane, onReadyLaneChange, renderOrder, loading, hasMore, onLoadMore }: {
+export function MobileKdsBoard({ orders, stage, readyLane, onReadyLaneChange, renderOrder, loading, unavailable = false, hasMore, onLoadMore }: {
   orders: TerminalOrder[];
   stage: MobileKdsStage;
   readyLane: MobileReadyLane;
   onReadyLaneChange: (value: MobileReadyLane) => void;
   renderOrder: (order: TerminalOrder) => ReactNode;
   loading?: boolean;
+  unavailable?: boolean;
   hasMore?: boolean;
   onLoadMore?: () => void;
 }) {
   const { t } = useKdsLanguage();
   const counts = mobileKdsCounts(orders);
   const rows = mobileKdsOrders(orders, stage, readyLane);
-  const empty = stage === 'received'
+  const empty = unavailable ? { title: t('Ordrer er ikke tilgængelige'), description: t('Kontrollér forbindelsen, og opdatér køkkenoversigten.'), icon: CheckCheck }
+    : stage === 'received'
     ? { title: t('Ingen nye bestillinger'), description: t('Nye bestillinger vil blive vist her automatisk.'), icon: Sparkles }
     : stage === 'progress'
     ? { title: t('Ingen ordrer i gang'), description: t('Ordrer under tilberedning vises her.'), icon: ChefHat }
