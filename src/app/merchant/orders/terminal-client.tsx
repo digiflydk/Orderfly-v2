@@ -161,6 +161,10 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
           <Menu aria-hidden="true" className="h-6 w-6" />
         </button>
         <h1 className="min-w-0 flex-1 truncate text-2xl font-extrabold tracking-tight">{mobileTitle}</h1>
+        <button type="button" aria-label={t("Fuld skærm")} title={t("Fuld skærm")}
+          onClick={() => void fullscreen()} className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border" >
+          <Maximize aria-hidden="true" className="h-5 w-5" />
+        </button>
         <span role="status" aria-label={status} title={status} className="flex h-12 shrink-0 items-center gap-2 rounded-xl border px-3">
           <span className={`h-3 w-3 rounded-full ${disconnected || outdated || !!connectionError ? 'bg-amber-500' : !live ? 'bg-slate-400' : 'bg-green-500'}`} />
           <Store aria-hidden="true" className="h-5 w-5" />
