@@ -744,3 +744,19 @@ test('optional repeating new-order alarm persists and stops after preparation st
   await page.clock.runFor(61000);
   assert.equal(await page.evaluate(()=>window.__audioStarts),after,'no repeat after acknowledgement');
 });
+
+
+test('mobile manual mode can refresh an empty board without reopening settings',async t=>{
+ const {page,state,calls}=await fixture(t,390,844,{kds:true,kitchenMode:true,manual:true,fakeClock:true,dynamicTime:true,orders:[]});
+ const refresh=page.getByRole('button',{name:'Opdater',exact:true});
+ await expect(refresh).toBeVisible();await expect(refresh).toBeEnabled();
+ const count=calls.filter(c=>c.kind==='read').length;
+ state.orders.push(order('ORD-ARRIVED'));
+ await page.clock.runFor(61000);
+ assert.equal(calls.filter(c=>c.kind==='read').length,count);
+ await expect(page.getByRole('article',{name:'Ordre ORD-ARRIVED',exact:true})).toHaveCount(0);
+ await refresh.click();
+ await expect(page.getByRole('article',{name:'Ordre ORD-ARRIVED',exact:true})).toBeVisible();
+ assert.ok(calls.filter(c=>c.kind==='read').length>count);
+ assert.equal(await page.evaluate(()=>window.__pushConnections),0);
+});

@@ -173,10 +173,10 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
           onClick={() => void fullscreen()} className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border" >
           <Maximize aria-hidden="true" className="h-5 w-5" />
         </button>
-        <span role="status" aria-label={status} title={status} className="flex h-12 shrink-0 items-center gap-2 rounded-xl border px-3">
-          <span className={`h-3 w-3 rounded-full ${disconnected || outdated || !!connectionError ? 'bg-amber-500' : !live ? 'bg-slate-400' : 'bg-green-500'}`} />
-          <Store aria-hidden="true" className="h-5 w-5" />
-        </span>
+        <button type="button" aria-label={t('Opdater')} title={t('Opdater')} onClick={refresh} disabled={feed.loading} className="flex h-12 shrink-0 items-center gap-2 rounded-xl border px-3 disabled:opacity-50">
+          <span role="status" aria-label={status} title={status} className={`h-3 w-3 rounded-full ${disconnected || outdated || !!connectionError ? 'bg-amber-500' : !live ? 'bg-slate-400' : 'bg-green-500'}`} />
+          <RefreshCw aria-hidden="true" className="h-5 w-5" />
+        </button>
       </header>
     </div>}
     <header className={kitchenMode ? "hidden flex-wrap items-center justify-between gap-4 lg:flex" : "flex flex-wrap items-center justify-between gap-4"}><div className="flex items-center gap-3">{kitchenMode && <button id="kds-menu-trigger" aria-label="Menu" aria-expanded={menuOpen} aria-controls="kds-settings" className="min-h-12 min-w-12 rounded-xl border text-2xl" onClick={() => setMenuOpen(value => !value)}>☰</button>}<h1 className="text-2xl font-bold">{' '}{t("Dagens ordrer")}{' '}</h1></div>
