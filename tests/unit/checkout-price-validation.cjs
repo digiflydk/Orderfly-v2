@@ -66,7 +66,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
  });
  const api=load(path,mocks);
  async function run(line){identityCalls=0;return api.createStripeCheckoutSessionAction([line],{email:'test@example.test',name:'Test',phone:'12345678',subscribeToNewsletter:false,acceptTerms:true},'pickup','b','l',{subtotal:300,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location');}
- const bad=await run({...item,unitPrice:1,totalPrice:3});assert.equal(bad.success,false);assert.match(bad.error,/Basket prices/);assert.equal(identityCalls,1);assert.equal(writes,0);
+ const bad=await run({...item,unitPrice:1,totalPrice:3});assert.equal(bad.success,false);assert.match(bad.error,/Priser eller tilbud er ændret/);assert.equal(identityCalls,1);assert.equal(writes,0);
  // Customer persistence failures now return a safe public error rather than the
  // injected internal exception. Reaching the second lookup proves the valid
  // price passed validation, while no customer/order write was attempted.
