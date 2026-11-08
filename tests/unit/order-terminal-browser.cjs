@@ -49,10 +49,11 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
   const page = await context.newPage(), calls = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(({suspended}) => {
-    window.__audioGains = []; window.__audioStarts = 0; window.__audioNotes = []; window.__audioStops = [];
+    window.__audioContexts = []; window.__audioGains = []; window.__audioStarts = 0; window.__audioNotes = []; window.__audioStops = [];
     window.AudioContext = class {
+      constructor() { window.__audioContexts.push(this); }
       state = suspended ? 'suspended' : 'running'; currentTime = 0; destination = {};
-      async resume() { this.state = 'running'; } async close() {}
+      async resume() { if (this.stuck || window.__audioStuck) return new Promise(() => {}); this.state = 'running'; } async close() {}
       createOscillator() { return { frequency: { setValueAtTime(value, at) { window.__audioNotes.push({value, at}); } }, connect() {}, start() { window.__audioStarts++; }, stop(at) { window.__audioStops.push(at); }, disconnect() {} }; }
       createGain() { return { connect() {}, disconnect() {}, gain: { setValueAtTime() {}, exponentialRampToValueAtTime(value) { window.__audioGains.push(value); } } }; }
     };
@@ -672,3 +673,22 @@ test('mobile new-order banner switches back to the Received tab from In progress
   await expect(nav.getByRole('button',{name:/Nye bestillinger/})).toHaveAttribute('aria-current','page');
   assert.deepEqual(errors,[]);
 });
+
+ test('Test sound replaces an interrupted context and subsequent orders use the recovered engine', async t => {
+ const {page,state}=await fixture(t,1024,768,{suspendedAudio:true});
+ await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();
+ await page.evaluate(()=>{const c=window.__audioContexts[0];c.state='interrupted';c.stuck=true;});
+ await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ assert.equal(await page.evaluate(()=>window.__audioContexts.length),2);
+ state.orders.push(order('AUDIO-NEW'));await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
+ });
+ test('Test sound reports a stalled resume and zero volume instead of pretending playback succeeded', async t => {
+ const {page}=await fixture(t,1024,768,{suspendedAudio:true});
+ await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();
+ await page.evaluate(()=>window.__audioStuck=true);await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect(page.getByText('Lyden kunne ikke aktiveres. Tryk på “Test lyd” for at prøve igen.',{exact:true})).toBeVisible();
+ await page.getByRole('slider',{name:'Lydstyrke'}).fill('0');await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect(page.getByText('Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.',{exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),0);
+ });

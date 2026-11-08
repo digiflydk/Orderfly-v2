@@ -307,3 +307,13 @@ Language pages and a Back control. Logout remains on its settings home page.
 The modal traps keyboard focus, closes on Escape/outside click, restores focus to
 the menu trigger and sits above immersive fullscreen. Reduced-motion preferences
 suppress the slide animation. Opening settings does not reload or mutate orders.
+
+### Audio recovery (8 November 2026)
+
+Test sound recreates the Web Audio context synchronously inside the operator's
+click, without awaiting close on a potentially interrupted iOS context. Resume
+has a three-second timeout instead of leaving the activation UI pending forever.
+Subsequent order alerts use that recovered context. Zero device preference volume
+is explained explicitly; the test does not silently change the chosen volume.
+Physical iPad audio output remains a device check, separate from mocked browser
+coverage of interrupted contexts, timeout, and subsequent order notification.
