@@ -130,7 +130,9 @@ after preparation. Physical iOS sound output still requires a device check.
   Printer discovery happens on the tap, never for every card on render. Exactly
   one active authorized printer is required; ambiguous/missing configuration
   fails visibly rather than guessing a physical destination.
-- An uncertain print retains its request UUID for retry. A queued/unknown print
+- An uncertain print retains its request UUID for retry across board/history
+  selection and both responsive history layouts. Tablet rotation cannot create
+  a fresh request identity for an unresolved copy. A queued/unknown print
   offers status refresh, not another write; a confirmed/failed/expired result
   allows another deliberate copy. No print polling runs in the background.
   History uses the same direct kitchen action; generic merchant/admin receipt

@@ -837,3 +837,21 @@ test('history reprint is direct kitchen output and missing printers cannot send 
  await expect(page.getByText('Ingen printer er klar til genprint på denne lokation. Kontakt din administrator.',{exact:true})).toBeVisible();
  assert.equal(calls.filter(c=>c.kind==='print'&&c.method==='POST').length,1);
 });
+
+
+test('uncertain kitchen reprint retains its UUID across history tablet rotation',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,printUnavailable:true,orders:[order('ORD-ROTATE',{status:'Completed'})]});
+ await page.getByRole('button',{name:'Historik',exact:true}).click();
+ await page.getByRole('button',{name:'Genprint ordre ORD-ROTATE',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Genprint kunne ikke bekræftes');
+ const first=calls.find(c=>c.kind==='print'&&c.method==='POST').body;
+ await page.setViewportSize({width:768,height:1024});
+ state.printUnavailable=false;
+ await page.getByRole('button',{name:'Genprint ordre ORD-ROTATE',exact:true}).click();
+ await expect(page.getByText('Genprint er lagt i kø. Afventer printeren.',{exact:true})).toBeVisible();
+ assert.deepEqual(calls.filter(c=>c.kind==='print'&&c.method==='POST').map(c=>c.body.requestId),[first.requestId,first.requestId]);
+ await page.setViewportSize({width:1024,height:768});
+ await page.getByRole('button',{name:'Genprint ordre ORD-ROTATE',exact:true}).click();
+ await expect(page.getByText('Printeren har meldt bonen udskrevet.',{exact:true})).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='print'&&c.method==='POST').length,2);
+});

@@ -15,7 +15,7 @@ import { TerminalDetail } from './terminal-detail';
 import { TerminalHistory } from './terminal-history';
 import { TerminalPreorders } from './terminal-preorders';
 import { TerminalReprint } from './terminal-reprint';
-import { KitchenReprint } from './kitchen-reprint';
+import { KitchenReprint, createKitchenPrintIdentity } from './kitchen-reprint';
 import { useTerminalFeed } from './use-terminal-feed';
 
 const tabs: { value: TerminalView; label: string }[] = [{ value: 'board', label: 'Ordrer' }, { value: 'preorders', label: 'Forudbestillinger' }, { value: 'history', label: 'Historik' }];
@@ -35,6 +35,13 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
   const {t, language} = useKdsLanguage();
   useEffect(() => { restoreKdsLanguage(); }, []);
   const [now, setNow] = useState(Date.now());
+  const printIdentities = useRef(new Map<string, ReturnType<typeof createKitchenPrintIdentity>>());
+  const printIdentity = (row: TerminalOrder) => {
+    const key = JSON.stringify([actionApiBase, row.brandId, row.locationId, row.id]);
+    let identity = printIdentities.current.get(key);
+    if (!identity) { identity = createKitchenPrintIdentity(); printIdentities.current.set(key, identity); }
+    return identity;
+  };
   const [chosenDate, setChosenDate] = useState('');
   const [automaticDay, setAutomaticDay] = useState(() => kitchenDay(Date.now()));
   const [automatic, setAutomatic] = useState(false), [sleeping, setSleeping] = useState(false);
@@ -139,7 +146,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     if (!kitchenMode || !repeatNewOrders || !pending || sleeping || authorizationPending || !boardFeed.freshForAlerts || !boardFeed.sound || boardFeed.soundError || boardFeed.volume === 0) { lastNewOrderAlarm.current = now; return; }
     if (now - lastNewOrderAlarm.current >= 30_000) { boardFeed.alertSound(); lastNewOrderAlarm.current = now; }
   }, [now, kitchenMode, repeatNewOrders, sleeping, authorizationPending, settings, boardFeed.data, boardFeed.freshForAlerts, boardFeed.sound, boardFeed.soundError, boardFeed.volume, boardFeed.alertSound]);
-  const renderKitchenOrder = (row: TerminalOrder, mobileCard = false) => <TerminalDetail inline mobileCard={mobileCard} refreshRevision={feed.authorizedRevision} key={row.id} order={row} now={now} warningMinutes={settings.warningMinutes} overdueMinutes={settings.overdueMinutes} readyTimeEndpoint={`${actionApiBase}/ready-time`} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={(data?.canEdit ?? false) && !isKitchenPreorder(row, now, settings)} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit && !isKitchenPreorder(row, now, settings) ? <KitchenReprint disabled={disconnected || outdated || !!connectionError} onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} />;
+  const renderKitchenOrder = (row: TerminalOrder, mobileCard = false) => <TerminalDetail inline mobileCard={mobileCard} refreshRevision={feed.authorizedRevision} key={row.id} order={row} now={now} warningMinutes={settings.warningMinutes} overdueMinutes={settings.overdueMinutes} readyTimeEndpoint={`${actionApiBase}/ready-time`} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={(data?.canEdit ?? false) && !isKitchenPreorder(row, now, settings)} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit && !isKitchenPreorder(row, now, settings) ? <KitchenReprint identity={printIdentity(row)} disabled={disconnected || outdated || !!connectionError} onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} />;
   const choose = (row: TerminalOrder) => { boardFeed.clearNewOrders(); setSelected(row); };
   async function fullscreen() {
     setImmersive(true);
@@ -245,7 +252,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
       unavailable={authorizationPending || !!connectionError || !data}
       hasMore={data?.hasMore} onLoadMore={feed.loadMore} />}
     {view === 'board' && (!kitchenMode || !mobileViewport) && <div className={kitchenMode ? 'hidden lg:block' : undefined}><TerminalBoard renderOrder={kitchenMode ? renderKitchenOrder : undefined} orders={kitchenMode ? (data ? activeKitchenOrders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} hasMore={data?.hasMore} onLoadMore={feed.loadMore} /></div>}
-    {view === 'history' && <TerminalHistory mobileLayout={kitchenMode} error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={!kitchenMode && data?.canEdit ? choose : undefined} renderReprint={kitchenMode && data?.canEdit ? row => <KitchenReprint label={`${t("Genprint ordre")} ${row.id}`} disabled={feed.loading || disconnected || outdated || !!connectionError} onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} onLoadAll={feed.loadAllHistory} />}
+    {view === 'history' && <TerminalHistory mobileLayout={kitchenMode} error={connectionError || undefined} onRetry={refresh} orders={data?.orders ?? []} filters={filters} onFiltersChange={setFilters} loading={feed.loading} onSelectOrder={choose} onReprint={!kitchenMode && data?.canEdit ? choose : undefined} renderReprint={kitchenMode && data?.canEdit ? row => <KitchenReprint identity={printIdentity(row)} label={`${t("Genprint ordre")} ${row.id}`} disabled={feed.loading || disconnected || outdated || !!connectionError} onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={row.id} brandId={row.brandId} locationId={row.locationId} /> : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} onLoadAll={feed.loadAllHistory} />}
     {view === 'preorders' && <TerminalPreorders error={connectionError || undefined} onRetry={refresh} orders={kitchenMode ? (data ? preorders : []) : data?.orders ?? []} loading={feed.loading} onSelectOrder={choose} onReprint={!kitchenMode && data?.canEdit ? choose : undefined} hasMore={data?.hasMore} onLoadMore={feed.loadMore} serverTime={data?.serverTime} />}
     {data && order && kitchenMode && <div><button className="min-h-12 rounded-lg border px-4" onClick={() => setSelected(null)}>{' '}{t("Luk ordrevisning")}{' '}</button>{renderKitchenOrder(order)}</div>}
     {data && order && !kitchenMode && <TerminalDetail refreshRevision={feed.authorizedRevision} key={order.id} order={order} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <TerminalReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={order.id} brandId={order.brandId} locationId={order.locationId} /> : undefined} />}

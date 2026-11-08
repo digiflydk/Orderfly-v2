@@ -5,33 +5,42 @@ import { Printer } from 'lucide-react';
 import { manualPrintResultSchema, type ManualPrintCommand } from '@/lib/printing/manual-print-schema';
 import { useKdsLanguage } from './kds-language';
 
+export function createKitchenPrintIdentity() {
+  return { command: { current: null as ManualPrintCommand | null }, pending: { current: false },
+    retryWrite: { current: false }, owner: { current: null as AbortController | null } };
+}
+
 /** One deliberate tap creates a kitchen copy. An uncertain write keeps its ID. */
-export function KitchenReprint({ orderId, brandId, locationId, apiEndpoint = '/api/merchant/orders/reprint', onAccessDenied, disabled = false, label }: {
+export function KitchenReprint({ orderId, brandId, locationId, apiEndpoint = '/api/merchant/orders/reprint', onAccessDenied, disabled = false, label, identity }: {
   orderId: string; brandId: string; locationId: string; apiEndpoint?: string;
-  onAccessDenied?: () => void; disabled?: boolean; label?: string;
+  onAccessDenied?: () => void; disabled?: boolean; label?: string; identity?: ReturnType<typeof createKitchenPrintIdentity>;
 }) {
   const { t } = useKdsLanguage();
   const scope = JSON.stringify([apiEndpoint, orderId, brandId, locationId]);
   const currentScope = useRef(scope); currentScope.current = scope;
-  const command = useRef<ManualPrintCommand | null>(null);
+  const localIdentity = useRef(createKitchenPrintIdentity());
+  const { command, pending, retryWrite, owner } = identity ?? localIdentity.current;
   const mounted = useRef(false);
-  const pending = useRef(false), controller = useRef<AbortController | null>(null);
+  const controller = useRef<AbortController | null>(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
   const [state, setState] = useState(''), [denied, setDenied] = useState(false);
-  const retryWrite = useRef(false);
   useEffect(() => {
     mounted.current = true;
-    command.current = null; retryWrite.current = false; pending.current = false;
+    if (!identity) { command.current = null; retryWrite.current = false; pending.current = false; }
     setBusy(false); setMessage(''); setState(''); setDenied(false);
-    return () => { mounted.current = false; controller.current?.abort(); };
-  }, [scope]);
+    return () => {
+      mounted.current = false; controller.current?.abort();
+      // A replacement layout can safely retry the same UUID after an abort.
+      if (owner.current === controller.current) { pending.current = false; owner.current = null; }
+    };
+  }, [scope, identity]);
 
   async function print() {
     if (disabled || denied || pending.current) return;
     pending.current = true; setBusy(true); setMessage('');
-    const origin = scope, request = new AbortController(); controller.current = request;
+    const origin = scope, request = new AbortController(); controller.current = request; owner.current = request;
     const timeout = setTimeout(() => request.abort(), 25000);
-    const valid = () => mounted.current && currentScope.current === origin && controller.current === request;
+    const valid = () => mounted.current && currentScope.current === origin && controller.current === request && owner.current === request;
     async function read(url: string, init?: RequestInit) {
       const response = await fetch(url, { ...init, credentials: 'same-origin', cache: 'no-store', signal: request.signal });
       if (!response.ok) throw Error(String(response.status));
@@ -99,7 +108,7 @@ export function KitchenReprint({ orderId, brandId, locationId, apiEndpoint = '/a
     }
   }
   return <div className="space-y-2">
-    <button type="button" aria-label={label || t('Genprint')} disabled={disabled || denied || busy} onClick={() => void print()}
+    <button type="button" aria-label={label || t('Genprint')} disabled={disabled || denied || busy || pending.current} onClick={() => void print()}
       className="inline-flex min-h-12 items-center gap-2 rounded-xl border bg-white px-4 font-semibold disabled:opacity-50">
       <Printer aria-hidden="true" className="h-5 w-5" />{busy ? t('Arbejder…') : command.current && !retryWrite.current ? t('Opdater printstatus') : t('Genprint')}
     </button>
