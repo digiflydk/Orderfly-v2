@@ -43,8 +43,10 @@ a native Wolt app.
   browser sound activation flow.
 - Network/authorization failures are differentiated from empty orders.
   Unknown/revoked scope never displays cached customer data.
-- Desktop `TerminalBoard` remains rendered only on desktop via responsive
-  visibility. `MobileKdsBoard` is displayed only below 1024px.
+- The actual order board is mounted once per device: `TerminalBoard` at or
+  above 1024px and `MobileKdsBoard` below 1024px after the client media query
+  resolves. CSS also hides the irrelevant mobile/desktop chrome. This avoids
+  duplicated order component lifecycles, tracked delivery widgets and actions.
 
 ## Source map
 
