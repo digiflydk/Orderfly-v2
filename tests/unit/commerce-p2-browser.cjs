@@ -903,3 +903,23 @@ test('desktop rejects first offer and continues straight to checkout without off
  await page.waitForURL('**/checkout');
  assert.ok(!requests.some(r=>r.previousUpsellId));
 });
+
+for(const width of [390,1280])test(`prepared second offer switches without a request or loading screen (${width})`,async t=>{
+ const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup&v2');
+ let requests=0;
+ await page.route('**/api/public/upsell',route=>{
+  requests++;
+  return route.fulfill({json:{upsell:{id:'first',upsellName:'Drikke',discountType:'none'},products:[{id:'drink'}],followups:{drink:{step:2,upsell:{id:'second',upsellName:'Dessert klar',discountType:'percentage',discountValue:20},products:[{id:'water'}]}}}});
+ });
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Læg i pose/}).click();
+ await page.getByRole('button',{name:width===1280?'Gå til checkout':/Se kurv/}).filter({visible:true}).first().click();
+ await expect(page.getByRole('dialog',{name:'Drikke',exact:true})).toBeVisible();
+ const before=requests;
+ await page.getByRole('dialog',{name:'Drikke',exact:true}).getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect(page.getByRole('dialog',{name:'Dessert klar'})).toBeVisible({timeout:1000});
+ await page.waitForTimeout(400);
+ assert.equal(requests,before,'no request on accepting the first offer');
+ await expect(page.getByRole('dialog',{name:'Henter dit næste tilbud'})).toHaveCount(0);
+ await expect(page.getByRole('dialog',{name:'Fixture Soda',exact:true})).toHaveCount(0);
+});
