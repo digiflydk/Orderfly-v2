@@ -110,3 +110,30 @@ it. It adds no server requests. Existing delayed-order alerts remain separate.
 Browser coverage includes compact mobile navigation, nested settings/back
 navigation, history date API parameters, repeat-alarm persistence and stopping
 after preparation. Physical iOS sound output still requires a device check.
+
+
+## Device defaults, alert recovery and direct reprints (8 November)
+
+- Automatic refresh defaults off when there is no saved preference. An explicit
+  saved true/false choice remains respected. Initial load, manual Refresh and
+  own order actions still read data; idle timers/focus/push do not fetch in
+  manual mode. Newly discovered orders sound when the operator refreshes.
+- All inline order cards start collapsed, including Received and In Progress
+  on mobile. The existing expand button shows the details.
+- When an alert finds a suspended/interrupted AudioContext it tries resume,
+  bounded to three seconds, before playing. A blocked resume shows activation
+  guidance; it does not claim playback succeeded. Existing test/mute/volume
+  settings remain shared with automatic alerts. Physical iOS verification is
+  still necessary for actual speaker output and browser autoplay restrictions.
+- KDS Genprint directly requests a kitchen copy through the existing authorized
+  manual-print endpoint. No customer receipt selector or confirmation dialog.
+  Printer discovery happens on the tap, never for every card on render. Exactly
+  one active authorized printer is required; ambiguous/missing configuration
+  fails visibly rather than guessing a physical destination.
+- An uncertain print retains its request UUID for retry across board/history
+  selection and both responsive history layouts. Tablet rotation cannot create
+  a fresh request identity for an unresolved copy. A queued/unknown print
+  offers status refresh, not another write; a confirmed/failed/expired result
+  allows another deliberate copy. No print polling runs in the background.
+  History uses the same direct kitchen action; generic merchant/admin receipt
+  controls retain their existing choices and confirmations.

@@ -47,10 +47,26 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const loadMore = useCallback(() => { void run.current(true); }, []);
   const loadAllHistory = useCallback(() => { void run.current(false, true); }, []);
   const clearNewOrders = useCallback(() => setNewOrders(0), []);
-  const beep = useCallback(() => {
+  const resumingAudio = useRef(false);
+  const beep = useCallback(async () => {
     const context = audio.current;
     if (!soundEnabled.current || !context || volumeRef.current === 0) return;
-    if (context.state !== 'running') { setSoundError('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.'); return; }
+    if (context.state !== 'running') {
+      if (resumingAudio.current) return;
+      resumingAudio.current = true;
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      try {
+        await Promise.race([context.resume(), new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => reject(new Error('audio_resume_timeout')), 3000);
+        })]);
+      } catch {
+        if (audio.current === context && soundEnabled.current) setSoundError('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.');
+        return;
+      } finally { clearTimeout(timeout); resumingAudio.current = false; }
+      if (audio.current !== context || !soundEnabled.current || volumeRef.current === 0) return;
+      if ((context as AudioContext).state !== 'running') { setSoundError('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.'); return; }
+      setSoundError('');
+    }
     try {
       stopMelody.current?.();
       const oscillator = context.createOscillator(), gain = context.createGain();

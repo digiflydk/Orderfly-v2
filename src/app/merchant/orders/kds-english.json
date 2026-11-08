@@ -240,5 +240,7 @@
   "Dato": "Date",
   "Historikdato": "History date",
   "Gentag alarm ved nye ordrer": "Repeat new order alert",
-  "Hvert 30. sekund, indtil tilberedningen er startet. Kræver friske data.": "Every 30 seconds until preparation starts. Requires fresh data."
+  "Hvert 30. sekund, indtil tilberedningen er startet. Kræver friske data.": "Every 30 seconds until preparation starts. Requires fresh data.",
+  "Flere printere er tilknyttet. Administratoren skal konfigurere én printer til direkte køkkenprint.": "Multiple printers are assigned. An administrator must configure one printer for direct kitchen printing.",
+  "Genprint kunne ikke bekræftes. Prøv igen med samme genprint.": "Reprint could not be confirmed. Retry the same reprint."
 }

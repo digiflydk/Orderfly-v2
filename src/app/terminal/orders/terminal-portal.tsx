@@ -8,7 +8,7 @@ const validSession = (value: unknown): value is Session => !!value && typeof val
 
 export function TerminalPortal({ loginHref = '/terminal/login' }: { loginHref?: string }) {
   const router = useRouter();
-  const automatic = useRef(true);
+  const automatic = useRef(false);
   const [session, setSession] = useState<Session | null>(null), [message, setMessage] = useState('');
   const [checking, setChecking] = useState(true), [unavailable, setUnavailable] = useState(false);
   const [leaving, setLeaving] = useState(false), [logoutFailed, setLogoutFailed] = useState(false);
