@@ -48,7 +48,7 @@ before(async()=>{
  browser=await chromium.launch({executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox']});
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-async function context(t,storageState){const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:768,height:1024},...(storageState?{storageState}:{})});t.after(()=>c.close());return c;}
+async function context(t,storageState){const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1024,height:768},...(storageState?{storageState}:{})});t.after(()=>c.close());return c;}
 async function login(page){await page.goto(origin+'/terminal/login');await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();}
 
 test('failed login is generic; successful portal has dedicated scope and no admin navigation',async t=>{
@@ -128,4 +128,19 @@ test('manual KDS pauses dedicated session renewal and restores it when enabled',
  const before=state.renewCalls;await page.clock.runFor(301000);await page.evaluate(()=>{window.dispatchEvent(new Event('focus'));window.dispatchEvent(new Event('online'));document.dispatchEvent(new Event('visibilitychange'));});await page.waitForTimeout(50);assert.equal(state.renewCalls,before);
  await page.getByRole('button',{name:'Luk menu',exact:true}).click();await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();assert.equal(state.renewCalls,before);await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();
  await page.getByLabel('Automatisk opdatering',{exact:true}).check();await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>state.renewCalls).toBeGreaterThan(before);
+});
+
+
+test('mobile dedicated KDS logout remains in nested settings and revokes the cookie',async t=>{
+ state=newState();const c=await context(t),page=await c.newPage();await page.setViewportSize({width:390,height:844});
+ await page.goto(origin+'/kds/login/terminal');await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();
+ await expect(page).toHaveURL(origin+'/kds?terminal=1');
+ await page.getByRole('navigation',{name:'Køkkenstatus'}).getByRole('button',{name:/Klar/}).click();
+ await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();
+ await page.getByRole('button',{name:'Åbn menu',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Log ud',exact:true})).not.toBeVisible();
+ await page.getByRole('dialog').getByRole('button',{name:'Indstillinger',exact:true}).click();
+ await page.getByRole('button',{name:'Log ud',exact:true}).click();
+ await expect(page).toHaveURL(origin+'/kds/login/terminal');
+ assert.equal((await c.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);assert.equal(state.merchantCalls,0);
 });
