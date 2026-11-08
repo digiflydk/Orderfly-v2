@@ -88,7 +88,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
     });
   }
   const lines = items.map(item => ({ id: item.id, categoryId: item.categoryId, tags: item.tags || [], isCombo: item.itemType === 'combo', price: item.basePrice }));
-  const minimal = items.map(item => ({ name: item.productName, quantity: item.quantity, unitPrice: item.basePrice, totalPrice: item.basePrice * item.quantity }));
+  const minimal = items.map(item => ({ upsellId: item.upsellId, name: item.productName, quantity: item.quantity, unitPrice: item.basePrice, totalPrice: item.basePrice * item.quantity }));
   const standard = minimumCheckoutPrices(minimal, lines, catalog.discounts, [], scope);
   const offered = minimumCheckoutPrices(minimal.map((item, i) => ({ ...item, unitPrice: standard[i], totalPrice: standard[i] * item.quantity })), lines, catalog.discounts, catalog.upsells, scope);
   items.forEach((item, i) => {
