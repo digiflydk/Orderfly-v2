@@ -48,7 +48,7 @@ before(async()=>{
  browser=await chromium.launch({executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox']});
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-async function context(t,storageState){const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1024,height:768},...(storageState?{storageState}:{})});t.after(()=>c.close());return c;}
+async function context(t,storageState){const c=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1024,height:768},...(storageState?{storageState}:{})});await c.addInitScript(()=>localStorage.setItem('orderfly.kds.automatic','true'));t.after(()=>c.close());return c;}
 async function login(page){await page.goto(origin+'/terminal/login');await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();}
 
 test('failed login is generic; successful portal has dedicated scope and no admin navigation',async t=>{
@@ -58,7 +58,7 @@ test('failed login is generic; successful portal has dedicated scope and no admi
  await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();
  assert.equal(await page.locator('a[href^="/merchant"],a[href^="/superadmin"],a[href^="/admin-login"]').count(),0);assert.equal(await page.getByRole('combobox',{name:'Restaurant',exact:true}).count(),0);assert.equal(state.badScope,false);assert.equal(state.merchantCalls,0);
  if(process.env.TERMINAL_PORTAL_SCREENSHOTS)await page.screenshot({path:path.join(process.env.TERMINAL_PORTAL_SCREENSHOTS,'terminal-orders.png'),fullPage:true});
- assert.equal(await page.evaluate(()=>Object.keys(localStorage).length),0);assert.equal(await page.evaluate(()=>document.cookie.includes('__Host-orderfly_terminal')),false);
+ assert.deepEqual(await page.evaluate(()=>Object.keys(localStorage)),['orderfly.kds.automatic']);assert.equal(await page.evaluate(()=>document.cookie.includes('__Host-orderfly_terminal')),false);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
 });
 test('persistent HTTPS HttpOnly cookie survives context restart and renews on focus',async t=>{

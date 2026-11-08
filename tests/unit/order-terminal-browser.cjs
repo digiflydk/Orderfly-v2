@@ -45,7 +45,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 async function fixture(t, width = 1024, height = 768, extra = {}) {
-  const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+  const context = await browser.newContext({ viewport: { width, height } }); t.after(async () => { for (const openPage of context.pages()) await openPage.unrouteAll({behavior:'wait'}); await context.close(); });
   const page = await context.newPage(), calls = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript(({suspended}) => {
@@ -75,7 +75,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
       return Promise.resolve(new Response(stream, { headers: {'content-type':'text/event-stream'} }));
     };
   });
-  if (extra.manual) await page.addInitScript(() => localStorage.setItem('orderfly.kds.automatic','false'));
+  if (!extra.defaultManual) await page.addInitScript(value => localStorage.setItem('orderfly.kds.automatic',value), extra.manual ? 'false' : 'true');
   const state = { kitchenSettings:{preorderMinutes:30,warningMinutes:5,overdueMinutes:5,sleepWhenClosed:true}, kitchenSettingsRevision:0, orders: [order('ORD-NEW'), order('ORD-COOK', { status: 'In Progress' }), order('ORD-READY', { status: 'Ready' }), order('ORD-UNPAID', { status: 'Ready', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup' }), order('ORD-HISTORY', { status: 'Completed' }), order('ORD-FUTURE', { fulfillmentAt: '2026-10-26T12:15:00.000Z' })], readStatus: 200, statusError: null, canEdit: true, emptyPage: false, ...extra };
   await page.exposeFunction('__registerPayment', async (id, method) => { calls.push({ kind: 'payment', id, method }); state.orders.find(o => o.id === id).paymentStatus = 'Paid'; return { success: true, message: 'Betalingen er registreret.' }; });
   if (extra.kitchenMode) await page.addInitScript(() => { window.__kitchenMode = true; });
@@ -98,7 +98,16 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
       assert.equal(command.brandId, row.brandId); assert.equal(command.locationId, row.locationId); assert.equal(command.expectedStatus, row.status);
       row.status = command.status; return route.fulfill({ json: { success: true, changed: true, orderId: row.id, status: row.status } });
     }
-    if (url.pathname === '/api/merchant/orders/reprint') return route.fulfill({ status: 403, json: { error: 'forbidden' } });
+    if (url.pathname === '/api/merchant/orders/reprint') {
+      calls.push({kind:'print',method:req.method(),query:Object.fromEntries(url.searchParams),body:req.postDataJSON()});
+      if (req.method()==='POST') {
+        const command=req.postDataJSON();state.printCommand=command;
+        if(state.printUnavailable)return route.fulfill({status:503,json:{error:'unavailable'}});
+        return route.fulfill({json:{...command,jobId:command.requestId,state:'queued',createdAt:Date.now(),expiresAt:Date.now()+600000}});
+      }
+      if(url.searchParams.has('requestId'))return route.fulfill({json:{...state.printCommand,jobId:state.printCommand.requestId,state:'confirmed',createdAt:Date.now(),expiresAt:Date.now()+600000}});
+      return route.fulfill({json:{items:state.printPrinters ?? [{configuration:{id:'kitchen',name:'Kitchen',brandId:'brand-a',locationId:'loc-a',state:'active',transport:'cloudprnt-http'},revision:1,connection:{connected:true,endpoint:'live'}}],nextCursor:null}});
+    }
     if (url.pathname !== '/api/merchant/orders' && url.pathname !== '/api/kds/orders') throw Error('Unexpected fixture endpoint ' + url.pathname);
     if (state.readDelay) await new Promise(resolve=>setTimeout(resolve,state.readDelay));
     calls.push({ kind: 'read', path:url.pathname, query: Object.fromEntries(url.searchParams) });
@@ -759,4 +768,72 @@ test('mobile manual mode can refresh an empty board without reopening settings',
  await expect(page.getByRole('article',{name:'Ordre ORD-ARRIVED',exact:true})).toBeVisible();
  assert.ok(calls.filter(c=>c.kind==='read').length>count);
  assert.equal(await page.evaluate(()=>window.__pushConnections),0);
+});
+
+
+test('KDS defaults to manual reads, retains explicit opt-in and alerts on manual refresh',async t=>{
+ const {page,state,calls}=await fixture(t,390,844,{kds:true,kitchenMode:true,defaultManual:true,fakeClock:true,dynamicTime:true,orders:[]});
+ await expect(page.getByRole('button',{name:'Opdater',exact:true})).toBeEnabled();
+ const before=calls.filter(c=>c.kind==='read').length;
+ state.orders.push(order('ORD-MANUAL-NEW'));
+ await page.clock.runFor(61000);
+ assert.equal(calls.filter(c=>c.kind==='read').length,before);assert.equal(await page.evaluate(()=>window.__pushConnections),0);
+ await page.getByRole('button',{name:'Opdater',exact:true}).click();
+ await expect(page.getByRole('article',{name:'Ordre ORD-MANUAL-NEW',exact:true})).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await page.getByRole('button',{name:'Åbn menu',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'Indstillinger',exact:true}).click();await page.getByRole('button',{name:'Ordreindstillinger',exact:true}).click();
+ await expect(page.getByLabel('Automatisk opdatering',{exact:true})).not.toBeChecked();
+ await page.getByLabel('Automatisk opdatering',{exact:true}).check();
+ assert.equal(await page.evaluate(()=>localStorage.getItem('orderfly.kds.automatic')),'true');
+});
+
+test('new order resumes the tested audio context after the device suspends it',async t=>{
+ const {page,state}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,orders:[]});
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
+ await page.evaluate(()=>{window.__audioContexts.at(-1).state='suspended';});
+ state.orders.push(order('ORD-AUDIO-RESUME'));
+ await page.evaluate(()=>window.__pushSend('change'));
+ await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(2);
+ assert.equal(await page.evaluate(()=>window.__audioContexts.at(-1).state),'running');
+ await page.evaluate(()=>window.__pushSend('change'));await page.clock.runFor(1000);
+ assert.equal(await page.evaluate(()=>window.__audioStarts),2);
+ await page.evaluate(()=>{window.__audioContexts.at(-1).state='suspended';window.__audioStuck=true;});
+ state.orders.push(order('ORD-AUDIO-BLOCKED'));await page.evaluate(()=>window.__pushSend('change'));
+ await expect(page.getByText('Der er kommet 2 nye ordrer',{exact:true})).toBeVisible();
+ await page.clock.runFor(3001);
+ await expect(page.getByRole('dialog').getByText('Lyden er sat på pause. Tryk på lydknappen for at aktivere den igen.',{exact:true})).toBeVisible();
+ assert.equal(await page.evaluate(()=>window.__audioStarts),2);
+});
+
+test('KDS cards start collapsed and one reprint tap queues only a kitchen copy with safe retry',async t=>{
+ const {page,state,calls}=await fixture(t,390,844,{kds:true,kitchenMode:true,orders:[order('ORD-NEW')]});
+ const card=page.getByRole('article',{name:'Ordre ORD-NEW',exact:true});await expect(card).toBeVisible();
+ await expect(card.getByText('2× Pizza Italiana',{exact:true})).toHaveCount(0);
+ await card.locator('button[aria-expanded]').click();await expect(card.getByText('2× Pizza Italiana',{exact:true})).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='print').length,0);
+ let dialogs=0;page.on('dialog',async dialog=>{dialogs++;await dialog.dismiss();});
+ state.printUnavailable=true;await card.getByRole('button',{name:'Genprint',exact:true}).click();
+ await expect(card.getByRole('alert')).toContainText('Genprint kunne ikke bekræftes');
+ const first=calls.find(c=>c.kind==='print'&&c.method==='POST').body;
+ assert.equal(first.kind,'kitchen');assert.equal(first.orderId,'ORD-NEW');assert.equal(first.printerId,'kitchen');
+ state.printUnavailable=false;await card.getByRole('button',{name:'Genprint',exact:true}).click();
+ await expect(card.getByRole('status')).toContainText('lagt i kø');
+ assert.deepEqual(calls.filter(c=>c.kind==='print'&&c.method==='POST').map(c=>c.body.requestId),[first.requestId,first.requestId]);
+ assert.equal(dialogs,0);await expect(page.getByRole('combobox',{name:'Printer til genprint'})).toHaveCount(0);
+});
+
+test('history reprint is direct kitchen output and missing printers cannot send a job',async t=>{
+ const {page,state,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,orders:[order('ORD-DONE',{status:'Completed'})]});
+ await page.getByRole('button',{name:'Historik',exact:true}).click();
+ await page.getByRole('button',{name:'Genprint ordre ORD-DONE',exact:true}).click();
+ await expect(page.getByText('Genprint er lagt i kø. Afventer printeren.',{exact:true})).toBeVisible();
+ assert.equal(calls.find(c=>c.kind==='print'&&c.method==='POST').body.kind,'kitchen');
+ await expect(page.getByRole('article',{name:'Ordre ORD-DONE',exact:true})).toHaveCount(0);
+ await page.getByRole('button',{name:'Genprint ordre ORD-DONE',exact:true}).click();
+ await expect(page.getByText('Printeren har meldt bonen udskrevet.',{exact:true})).toBeVisible();
+ state.printPrinters=[];
+ await page.getByRole('button',{name:'Genprint ordre ORD-DONE',exact:true}).click();
+ await expect(page.getByText('Ingen printer er klar til genprint på denne lokation. Kontakt din administrator.',{exact:true})).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='print'&&c.method==='POST').length,1);
 });

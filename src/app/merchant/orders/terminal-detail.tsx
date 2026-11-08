@@ -19,7 +19,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
 }) {
   const {t, language} = useKdsLanguage();
   const [busy, setBusy] = useState(false), lock = useRef(false), command = useRef<Command | null>(null);
-  const [expanded, setExpanded] = useState(mobileCard && order.status !== 'Ready');
+  const [expanded, setExpanded] = useState(false);
   const deadline = kitchenDeadline(order), remaining = deadline ? Date.parse(deadline) - now : null;
   const attention = remaining !== null && ['Received','In Progress'].includes(order.status) ? remaining <= -overdueMinutes * 60_000 ? 'animate-pulse bg-red-600 text-white' : remaining <= warningMinutes * 60_000 ? 'animate-pulse bg-yellow-300 text-slate-950' : 'bg-slate-900 text-white' : 'bg-slate-900 text-white';
   const [message, setMessage] = useState(''), [failure, setFailure] = useState(false);
