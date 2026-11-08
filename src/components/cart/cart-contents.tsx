@@ -64,9 +64,9 @@ export function CartTotals({ onBrowse }: {
     {minimum > subtotal && <div><p role="status">Tilføj varer for {formatPrice(minimum - subtotal)} for at nå minimumsbestillingen til levering på {formatPrice(minimum)} før rabatter.</p><Button variant="outline" className="mt-2" onClick={() => { onBrowse?.(); window.scrollTo({ top: 0, behavior: 'auto' }); }}>Find flere varer</Button></div>}
   </div>;
 }
-export function CartCheckoutButton() {
+export function CartCheckoutButton({ offerUpsell = false }: { offerUpsell?: boolean } = {}) {
     const isV2 = useStorefrontV2();
-    const { isPending, handleCheckoutClick } = useMenuCheckout();
+    const { isPending, handleCheckoutClick } = useMenuCheckout({ offerUpsell });
     const { cartReady, itemCount, subtotal, deliveryType, location } = useCart();
     const belowMinimum = deliveryType === 'delivery' && subtotal < (location?.minOrder || 0);
     return <Button onClick={handleCheckoutClick} className="w-full h-[64.4px] font-bold" disabled={!cartReady || !itemCount || isPending || belowMinimum} aria-busy={isPending}>

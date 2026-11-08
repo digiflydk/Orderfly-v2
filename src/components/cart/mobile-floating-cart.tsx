@@ -39,7 +39,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
     </SheetTrigger>;
     return <>
     {floating && <div data-v2-cart-clearance={isV2 || undefined} className="h-20 lg:hidden" aria-hidden="true"/>}
-    <Sheet open={open} onOpenChange={next => next ? openCart(() => setOpen(true)) : setOpen(false)}>
+    <Sheet open={open} onOpenChange={next => next ? (window.matchMedia('(min-width: 1024px)').matches ? setOpen(true) : openCart(() => setOpen(true))) : setOpen(false)}>
       {isV2 && floating
         ? <div data-v2-cart-dock className="fixed inset-x-0 bottom-0 z-40 lg:hidden">{trigger}</div>
         : trigger}
@@ -49,7 +49,7 @@ export function MobileFloatingCart({ floating = true, compact = false }: {
           : <span>{brand?.name ?? 'ESMERALDA'}</span>}</div>}
         <SheetHeader className="p-4 pr-14 shrink-0"><SheetTitle>{isV2 ? 'Din kurv' : `Din kurv · ${itemCountLabel(itemCount)}`}</SheetTitle><SheetDescription>{isV2 ? `${deliveryType === 'delivery' ? 'Levering' : 'Afhentning'}${location?.name ? ` · ${location.name}` : ''}` : 'Rediger dine varer, eller gå videre til kassen.'}</SheetDescription></SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto"><CartContents onEdit={() => { returnAfterEdit.current = true; setOpen(false); }}/>{isV2 && <div className="px-4 pb-5"><Button variant="outline" className="v2-browse-more w-full" onClick={() => setOpen(false)}><Plus className="mr-2 size-4" />Tilføj flere retter</Button></div>}<CartTotals onBrowse={() => setOpen(false)}/></div>
-        <div className="shrink-0 border-t bg-background p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"><CartCheckoutButton /></div>
+        <div className="shrink-0 border-t bg-background p-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"><CartCheckoutButton offerUpsell={typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches} /></div>
       </SheetContent>
     </Sheet>
   </>;

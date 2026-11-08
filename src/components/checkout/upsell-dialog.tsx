@@ -10,8 +10,8 @@ import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import type { StorefrontUpsell } from '@/context/storefront-catalog';
 import { discountedUnit, money } from '@/lib/money';
 
-/** Offers open before the basket. ProductCard retains native required choices and pricing. */
-export function UpsellDialog({ upsellData, onContinue }: {upsellData: StorefrontUpsell; onContinue: (accepted: boolean) => void}) {
+/** Offers precede the mobile basket or desktop checkout; native choices and pricing remain intact. */
+export function UpsellDialog({ upsellData, onContinue, destination = 'cart' }: {upsellData: StorefrontUpsell; destination?: 'cart' | 'checkout'; onContinue: (accepted: boolean) => void}) {
   const {deliveryType, standardDiscounts, location} = useCart();
   const {trackEvent, measurementKey} = useAnalytics();
   const isV2 = useStorefrontV2();
@@ -53,7 +53,7 @@ export function UpsellDialog({ upsellData, onContinue }: {upsellData: Storefront
     <DialogContent data-storefront-version={isV2 ? '2' : undefined} data-commerce-panel="upsell" className="w-[calc(100%-2rem)] max-w-lg max-h-[85dvh] overflow-hidden flex flex-col gap-4 p-5 sm:p-6">
       <DialogHeader className="pr-8">
         <DialogTitle>{upsell.displayHeading || upsell.upsellName || 'Lidt ekstra til din ordre'}</DialogTitle>
-        <DialogDescription>{upsell.description || 'Vil du have lidt ekstra med, inden du går til kurven?'}</DialogDescription>
+        <DialogDescription>{upsell.description || (destination === 'checkout' ? 'Vil du have lidt ekstra med, inden du går til checkout?' : 'Vil du have lidt ekstra med, inden du går til kurven?')}</DialogDescription>
       </DialogHeader>
       <div ref={setList} aria-label="Tilbud til din ordre" className="min-h-0 overflow-y-auto">
         {products.map(product => {
@@ -63,7 +63,7 @@ export function UpsellDialog({ upsellData, onContinue }: {upsellData: Storefront
             upsellId={upsell.id} upsellInteractionId={interactionId.current} onProductAdded={() => finish(true)} compact /></div>;
         })}
       </div>
-      <Button variant="outline" className="min-h-12 w-full shrink-0" onClick={() => finish(false)}>Fortsæt til kurven</Button>
+      <Button variant="outline" className="min-h-12 w-full shrink-0" onClick={() => finish(false)}>{destination === 'checkout' ? 'Fortsæt til checkout' : 'Fortsæt til kurven'}</Button>
     </DialogContent>
   </Dialog>;
 }
