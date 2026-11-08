@@ -235,5 +235,10 @@
   "Ordrer er ikke tilgængelige": "Orders are unavailable",
   "Kontrollér forbindelsen, og opdatér køkkenoversigten.": "Check your connection and refresh the kitchen board.",
   "Restaurant": "Restaurant",
-  "Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.": "Volume is 0%. Turn it up and press Test sound again."
+  "Lydstyrken er 0 %. Skru op og tryk på Test lyd igen.": "Volume is 0%. Turn it up and press Test sound again.",
+  "Konto": "Account",
+  "Dato": "Date",
+  "Historikdato": "History date",
+  "Gentag alarm ved nye ordrer": "Repeat new order alert",
+  "Hvert 30. sekund, indtil tilberedningen er startet. Kræver friske data.": "Every 30 seconds until preparation starts. Requires fresh data."
 }
