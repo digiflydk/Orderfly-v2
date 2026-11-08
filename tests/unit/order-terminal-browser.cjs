@@ -413,7 +413,8 @@ test('suspended autoplay is visible and Test lyd unlocks the melody',async t=>{
  await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeVisible();
  await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
- await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toHaveCount(0);
+ // Mobile activation hint stays mounted but is hidden at desktop width.
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeHidden();
 });
 test('new orders play automatically by default, volume zero and mute suppress alerts',async t=>{
  const {page,state}=await fixture(t);await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
@@ -481,7 +482,8 @@ test('KDS stays fresh on heartbeats without polling, and changes fetch scoped or
  await page.clock.runFor(120_000);
  assert.equal(calls.filter(c=>c.kind==='read').length,before,'no timer-based order reads');
  await expect(page.getByRole('alert')).toHaveCount(0);
- await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toHaveCount(0);
+ // Mobile activation hint stays mounted but is hidden at desktop width.
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeHidden();
  await expect(page.getByText('Afhentnings-/leveringsdato · dansk tid',{exact:true})).toHaveCount(0);
  const date=await page.getByLabel('Ordredato',{exact:true}).boundingBox(),tabs=await page.getByRole('navigation',{name:'Ordrevisning'}).boundingBox();assert.ok(Math.abs(date.y-tabs.y)<15);assert.ok(tabs.x>date.x+date.width);
  const card=page.getByRole('article',{name:'Ordre ORD-NEW',exact:true});const button=await card.getByRole('button',{name:'Start tilberedning',exact:true}).boundingBox(),clock=await card.getByRole('button',{name:'Ændr klartid for ORD-NEW',exact:true}).boundingBox();assert.ok(button.y<clock.y);
@@ -610,7 +612,7 @@ test('mobile KDS shows three bottom stages, courier lane and accessible drawer w
   await drawer.getByRole('button',{name:'Butik',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Åbningstider'})).toBeVisible();
   await expect(page.getByText('10:30 – 21:45')).toBeVisible();
-  await drawer.getByRole('button',{name:'Tilbage til menu',exact:true}).click();
+  await page.getByRole('dialog',{name:'Butik',exact:true}).getByRole('button',{name:'Tilbage til menu',exact:true}).click();
   await drawer.getByRole('button',{name:'Historik',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Ordrehistorik'})).toBeVisible();
   await expect(bottom.getByRole('button',{name:/Klar/})).not.toHaveAttribute('aria-current','page');
