@@ -41,7 +41,7 @@ export async function upsellCart(db: Firestore, input: UpsellCartItem[], scope: 
     // may never increase the amount eligible for an upsell trigger.
     const submittedOre = ore(item.totalPrice ?? 0);
     const nativeOre = ore(price) * quantity;
-    items.push({upsellId:item.upsellId,id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.min(submittedOre, nativeOre) / 100});
+    items.push({upsellId:item.upsellId,id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.max(0,Math.min(submittedOre, nativeOre)) / 100});
   }
   return {items, catalog, standardPrices: minimumCheckoutPrices(items, catalog, discounts, [], scope)};
 }
