@@ -268,3 +268,28 @@ manual/closing-hour call counts, session renewal, settings authority/replay/conf
 preorder popup/audio/badges/release, collapsed details and both status warnings,
 plus original print waiting, expiry, queue ordering and exactly-once dispatch.
 No GitHub Actions or production data writes are part of the test process.
+
+### Compact bilingual KDS and history (8 November 2026)
+
+The KDS menu offers Danish and English, persisted per device without a server
+write. Operator labels change; customer names, item names and kitchen notes retain
+their original contents. Calendar dates remain in the restaurant's Copenhagen time.
+The header contains the title, location name only, and right-aligned connection
+status/update time. Full screen and Refresh follow History in the view toolbar;
+all five controls have icons, and icon-only actions have accessible names.
+Logout is inside Settings for both employee and dedicated terminal sessions.
+
+KDS history initially selects today's Copenhagen order-creation date. The history
+feed initially reads one bounded page. If this exhausts the result, the complete
+gross total appears immediately. Otherwise the operator can explicitly choose
+“Beregn samlet beløb for alle ordrer” to traverse every cursor, including empty
+filtered pages, and obtain the complete total/count. Date/search filters currently
+run after the existing scoped database query; automatic traversal would scan the
+whole archive, so it is never performed on view entry, push, focus or refresh.
+Refresh invalidates a prior complete total and again reads one bounded page.
+During loading, partial results or errors the UI never claims a complete total.
+A database-level date index is a separate performance improvement; this release
+introduces no index dependency or production migration. This is the sum of order amounts,
+not net revenue; refunds remain separately visible. Columns are Date/time,
+Order/customer, Amount, Status and Actions. View/reprint actions use labeled icon
+buttons and retain the existing authorization and explicit print-confirmation flow.

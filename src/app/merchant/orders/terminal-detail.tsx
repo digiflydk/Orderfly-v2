@@ -1,4 +1,5 @@
 'use client';
+import { useKdsLanguage } from './kds-language';
 import { kitchenDeadline } from '@/lib/orders/kitchen-clock';
 import { KitchenClock } from './kitchen-clock';
 import { ManagedDeliveryTracking } from '@/components/checkout/managed-delivery-tracking';
@@ -15,6 +16,7 @@ type Command = { orderId: string; brandId: string; locationId: string; expectedS
 export function TerminalDetail({ order, canEdit, disabled = false, onClose, onChanged, reprint, statusEndpoint = '/api/merchant/orders/status', paymentEndpoint, refreshRevision = 0, warningMinutes = 5, overdueMinutes = 5, inline = false, now = Date.now(), readyTimeEndpoint = '/api/merchant/orders/ready-time' }: {
   warningMinutes?: number; overdueMinutes?: number; refreshRevision?: number; inline?: boolean; now?: number; readyTimeEndpoint?: string; order: TerminalOrder; canEdit: boolean; disabled?: boolean; onClose: () => void; onChanged: () => void; reprint?: ReactNode; statusEndpoint?: string; paymentEndpoint?: string;
 }) {
+  const {t, language} = useKdsLanguage();
   const [busy, setBusy] = useState(false), lock = useRef(false), command = useRef<Command | null>(null);
   const [expanded, setExpanded] = useState(false);
   const deadline = kitchenDeadline(order), remaining = deadline ? Date.parse(deadline) - now : null;
@@ -27,7 +29,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
   useEffect(() => {
     if (!reconcilingPayment || !uncertainPayment || disabled || !canEdit || refreshRevision <= reconcileAfter.current) return;
     setReconcilingPayment(false); setUncertainPayment(false); setPaymentConfirm(false); setFailure(false);
-    setMessage(order.paymentStatus === 'Paid' ? 'Betalingen er registreret.' : 'Frisk status: betalingen er endnu ikke registreret. Bekræft kun igen, hvis beløbet er modtaget.');
+    setMessage(order.paymentStatus === 'Paid' ? t("Betalingen er registreret.") : t("Frisk status: betalingen er endnu ikke registreret. Bekræft kun igen, hvis beløbet er modtaget."));
   }, [refreshRevision, reconcilingPayment, uncertainPayment, disabled, canEdit, order.paymentStatus]);
   const next: OrderStatus | null = order.status === 'Received' ? 'In Progress' : order.status === 'In Progress' ? 'Ready' : order.status === 'Ready' ? (order.deliveryType === 'Delivery' ? (order.managedDelivery?null:'Delivered') : 'Completed') : null;
   const unpaidCompletion = next !== null && ['Completed', 'Delivered'].includes(next) && order.paymentStatus !== 'Paid';
@@ -41,11 +43,11 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
       const result = await response.json();
       if (!response.ok || !result.success) {
         if (response.status < 500) command.current = null;
-        setFailure(true); setMessage(typeof result.message === 'string' ? result.message : 'Ordren kunne ikke opdateres. Opdater overblikket og prøv igen.');
+        setFailure(true); setMessage(typeof result.message === 'string' ? result.message : t("Ordren kunne ikke opdateres. Opdater overblikket og prøv igen."));
         onChanged(); return;
       }
-      command.current = null; setMessage('Ordren er opdateret.'); onChanged();
-    } catch { setFailure(true); setMessage('Resultatet er ikke bekræftet. Prøv samme handling igen, eller opdater overblikket.'); }
+      command.current = null; setMessage(t("Ordren er opdateret.")); onChanged();
+    } catch { setFailure(true); setMessage(t("Resultatet er ikke bekræftet. Prøv samme handling igen, eller opdater overblikket.")); }
     finally { clearTimeout(timeout); lock.current = false; setBusy(false); }
   }
   async function terminalPayment(): Promise<{ success: boolean; message: string }> {
@@ -54,7 +56,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
       const response = await fetch(paymentEndpoint!, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, method: paymentMethod }), signal: controller.signal });
       const result = await response.json();
       if (response.status >= 500) throw new Error('uncertain_payment');
-      return { success: response.ok && result.success === true, message: typeof result.message === 'string' ? result.message : 'Betalingen kunne ikke registreres. Opdater og prøv igen.' };
+      return { success: response.ok && result.success === true, message: typeof result.message === 'string' ? result.message : t("Betalingen kunne ikke registreres. Opdater og prøv igen.") };
     } finally { clearTimeout(timeout); }
   }
   async function collectPayment() {
@@ -64,34 +66,34 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
       const result = paymentEndpoint ? await terminalPayment() : await registerPickupPayment(order.id, paymentMethod);
       setFailure(!result.success); setMessage(result.message);
       if (result.success) { setPaymentConfirm(false); onChanged(); } else if (paymentEndpoint) onChanged();
-    } catch { setUncertainPayment(true); setFailure(true); setMessage('Betalingen kunne ikke bekræftes. Opdater ordren og kontrollér betalingsstatus før du fortsætter.'); onChanged(); }
+    } catch { setUncertainPayment(true); setFailure(true); setMessage(t("Betalingen kunne ikke bekræftes. Opdater ordren og kontrollér betalingsstatus før du fortsætter.")); onChanged(); }
     finally { lock.current = false; setBusy(false); }
   }
-  const actionLabel = next === 'In Progress' ? 'Start tilberedning' : next === 'Ready' ? 'Markér klar' : next === 'Delivered' ? 'Markér leveret' : 'Markér afhentet';
+  const actionLabel = next === 'In Progress' ? t("Start tilberedning") : next === 'Ready' ? t("Markér klar") : next === 'Delivered' ? t("Markér leveret") : t("Markér afhentet");
   const content = <>
-    {inline ? <header><h3 className="break-all text-xl font-bold">Ordre {order.id}</h3><p className="text-sm text-slate-600">{ORDER_STATUS_LABELS[order.status]}</p></header> : <DialogHeader><DialogTitle className="break-all text-2xl">Ordre {order.id}</DialogTitle><DialogDescription>{order.brandName} · {order.locationName} · {ORDER_STATUS_LABELS[order.status]}</DialogDescription></DialogHeader>}
-    {inline && canEdit && next && <div className="space-y-2"><button className={`min-h-16 w-full rounded-xl px-6 py-4 text-lg font-semibold disabled:opacity-50 ${attention}`} disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? 'Gemmer…' : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">Registrér betalingen, før ordren markeres afhentet eller leveret.</p>}</div>}
+    {inline ? <header><h3 className="break-all text-xl font-bold">{' '}{t("Ordre")}{' '}{order.id}</h3><p className="text-sm text-slate-600">{t(ORDER_STATUS_LABELS[order.status])}</p></header> : <DialogHeader><DialogTitle className="break-all text-2xl">{' '}{t("Ordre")}{' '}{order.id}</DialogTitle><DialogDescription>{order.brandName} · {order.locationName} · {t(ORDER_STATUS_LABELS[order.status])}</DialogDescription></DialogHeader>}
+    {inline && canEdit && next && <div className="space-y-2"><button className={`min-h-16 w-full rounded-xl px-6 py-4 text-lg font-semibold disabled:opacity-50 ${attention}`} disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? t("Gemmer…") : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">{' '}{t("Registrér betalingen, før ordren markeres afhentet eller leveret.")}{' '}</p>}</div>}
     {inline && <KitchenClock alertClass={remaining !== null && remaining <= warningMinutes * 60_000 && ['Received','In Progress'].includes(order.status) ? attention : undefined} order={order} now={now} canEdit={canEdit} disabled={disabled} endpoint={readyTimeEndpoint} onChanged={onChanged} />}
-    {inline && <button aria-expanded={expanded} className="min-h-12 w-full rounded-lg border px-4 text-left font-semibold" onClick={() => setExpanded(value => !value)}>{expanded ? 'Skjul ordredetaljer' : 'Vis ordredetaljer'}</button>}
+    {inline && <button aria-expanded={expanded} className="min-h-12 w-full rounded-lg border px-4 text-left font-semibold" onClick={() => setExpanded(value => !value)}>{expanded ? t("Skjul ordredetaljer") : t("Vis ordredetaljer")}</button>}
     {(!inline || expanded) && <>
-    {inline ? <div className="text-sm"><p className="font-semibold">{order.customerName || 'Kunde'} · {order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p>{order.deliveryAddress && <p className="break-words">{order.deliveryAddress}</p>}{order.customerPhone && <a className="inline-block min-h-8 py-1 text-blue-700 underline" href={`tel:${order.customerPhone}`}>{order.customerPhone}</a>}</div> : <div className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><p className="text-sm text-slate-600">{order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</p><p className="text-3xl font-bold tabular-nums">{terminalTime(order)}</p>{order.fulfillmentAt && <p className="text-sm">{new Date(order.fulfillmentAt).toLocaleDateString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p>}</div><div className="text-right"><p className="font-semibold">{order.customerName || 'Kunde'}</p>{order.customerPhone && <a href={`tel:${order.customerPhone}`} className="block py-2 text-blue-700 underline">{order.customerPhone}</a>}<p className="text-sm">{order.deliveryAddress}</p></div></div>}
+    {inline ? <div className="text-sm"><p className="font-semibold">{order.customerName || t("Kunde")} · {order.deliveryType === 'Delivery' ? t("Levering") : t("Afhentning")}</p>{order.deliveryAddress && <p className="break-words">{order.deliveryAddress}</p>}{order.customerPhone && <a className="inline-block min-h-8 py-1 text-blue-700 underline" href={`tel:${order.customerPhone}`}>{order.customerPhone}</a>}</div> : <div className="flex flex-wrap justify-between gap-3 rounded-xl bg-slate-50 p-4"><div><p className="text-sm text-slate-600">{order.deliveryType === 'Delivery' ? t("Levering") : t("Afhentning")}</p><p className="text-3xl font-bold tabular-nums">{terminalTime(order)}</p>{order.fulfillmentAt && <p className="text-sm">{new Date(order.fulfillmentAt).toLocaleDateString('da-DK', { timeZone: 'Europe/Copenhagen' })}</p>}</div><div className="text-right"><p className="font-semibold">{order.customerName || t("Kunde")}</p>{order.customerPhone && <a href={`tel:${order.customerPhone}`} className="block py-2 text-blue-700 underline">{order.customerPhone}</a>}<p className="text-sm">{order.deliveryAddress}</p></div></div>}
     {order.managedDelivery&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking||null} variant="merchant" onRefresh={onChanged}/>}
-    {order.managedDelivery&&order.status==='Ready'&&<p className="rounded border p-3">Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.</p>}
+    {order.managedDelivery&&order.status==='Ready'&&<p className="rounded border p-3">{' '}{t("Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.")}{' '}</p>}
     <ul className="divide-y">{order.items.map((item, index) => <li key={index} className="flex justify-between gap-4 py-3"><div className="min-w-0"><p className="break-words font-semibold">{item.quantity}× {item.name}</p>{item.modifiers.map((modifier, i) => <p className="mt-1 break-words text-sm text-slate-600" key={i}>{modifier}</p>)}</div><span className="shrink-0">{formatPrice(item.totalPrice)}</span></li>)}</ul>
-    {order.notes && <div className="rounded-xl bg-amber-50 p-4"><p className="font-semibold">Bemærkning til ordren</p><p className="whitespace-pre-wrap break-words">{order.notes}</p></div>}
-    <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>I alt {formatPrice(order.totalAmount)}</strong><span className={order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? 'Betalt' : 'Betaling mangler'}</span></div>
+    {order.notes && <div className="rounded-xl bg-amber-50 p-4"><p className="font-semibold">{' '}{t("Bemærkning til ordren")}{' '}</p><p className="whitespace-pre-wrap break-words">{order.notes}</p></div>}
+    <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>{' '}{t("I alt")}{' '}{formatPrice(order.totalAmount)}</strong><span className={order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? t("Betalt") : t("Betaling mangler")}</span></div>
     </>}
     {canEdit && order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && ['Received', 'In Progress', 'Ready'].includes(order.status) && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-      <p className="font-semibold">Modtag {formatPrice(order.totalAmount)} ved afhentning</p>
-      {!paymentConfirm ? <button className="mt-3 min-h-12 rounded-lg border bg-white px-4 font-semibold" disabled={busy || disabled || uncertainPayment} onClick={() => setPaymentConfirm(true)}>Registrér betaling</button> : <div className="mt-3 space-y-3"><label className="block">Betalingsform<select className="ml-2 min-h-12 rounded-lg border bg-white px-3" aria-label="Betalingsform" value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cash' | 'card')} disabled={busy}><option value="cash">Kontant</option><option value="card">Kort i restaurant</option></select></label><p>Bekræft kun, når du har modtaget beløbet.</p><div className="flex flex-wrap gap-2"><button className="min-h-12 rounded-lg bg-slate-900 px-4 font-semibold text-white" disabled={busy || disabled || uncertainPayment} onClick={() => void collectPayment()}>Bekræft betaling modtaget</button><button className="min-h-12 rounded-lg border bg-white px-4" disabled={busy} onClick={() => setPaymentConfirm(false)}>Fortryd</button></div></div>}
+      <p className="font-semibold">{' '}{t("Modtag")}{' '}{formatPrice(order.totalAmount)} ved afhentning</p>
+      {!paymentConfirm ? <button className="mt-3 min-h-12 rounded-lg border bg-white px-4 font-semibold" disabled={busy || disabled || uncertainPayment} onClick={() => setPaymentConfirm(true)}>{' '}{t("Registrér betaling")}{' '}</button> : <div className="mt-3 space-y-3"><label className="block">{' '}{t("Betalingsform")}{' '}<select className="ml-2 min-h-12 rounded-lg border bg-white px-3" aria-label={t("Betalingsform")} value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as 'cash' | 'card')} disabled={busy}><option value="cash">{' '}{t("Kontant")}{' '}</option><option value="card">{' '}{t("Kort i restaurant")}{' '}</option></select></label><p>{' '}{t("Bekræft kun, når du har modtaget beløbet.")}{' '}</p><div className="flex flex-wrap gap-2"><button className="min-h-12 rounded-lg bg-slate-900 px-4 font-semibold text-white" disabled={busy || disabled || uncertainPayment} onClick={() => void collectPayment()}>{' '}{t("Bekræft betaling modtaget")}{' '}</button><button className="min-h-12 rounded-lg border bg-white px-4" disabled={busy} onClick={() => setPaymentConfirm(false)}>{' '}{t("Fortryd")}{' '}</button></div></div>}
     </section>}
-    {uncertainPayment && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3"><p className="text-sm">Kontrollér frisk betalingsstatus, før du prøver igen.</p><button className="mt-2 min-h-14 w-full rounded-lg border bg-white p-3 font-semibold" disabled={busy || !canEdit} onClick={() => { reconcileAfter.current = refreshRevision; setReconcilingPayment(true); onChanged(); }}>{reconcilingPayment ? 'Hent betalingsstatus igen' : 'Kontrollér betalingsstatus'}</button></div>}
-    {message && <p role={failure ? 'alert' : 'status'} className={`rounded-lg p-3 ${failure ? 'bg-red-50 text-red-900' : 'bg-emerald-50 text-emerald-900'}`}>{message}</p>}
-    {disabled && <p className="text-sm text-amber-900">Opdater forbindelsen, før du ændrer ordren.</p>}
-    {!inline && canEdit && next && <div className="space-y-2"><button className={`min-h-16 w-full rounded-xl px-6 py-4 text-lg font-semibold disabled:opacity-50 ${attention}`} disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? 'Gemmer…' : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">Registrér betalingen, før ordren markeres afhentet eller leveret.</p>}</div>}
-    {!canEdit && <p className="text-sm text-slate-600">Du har læseadgang. En medarbejder med ordreadgang kan ændre status.</p>}
+    {uncertainPayment && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3"><p className="text-sm">{' '}{t("Kontrollér frisk betalingsstatus, før du prøver igen.")}{' '}</p><button className="mt-2 min-h-14 w-full rounded-lg border bg-white p-3 font-semibold" disabled={busy || !canEdit} onClick={() => { reconcileAfter.current = refreshRevision; setReconcilingPayment(true); onChanged(); }}>{reconcilingPayment ? t("Hent betalingsstatus igen") : t("Kontrollér betalingsstatus")}</button></div>}
+    {message && <p role={failure ? 'alert' : 'status'} className={`rounded-lg p-3 ${failure ? 'bg-red-50 text-red-900' : 'bg-emerald-50 text-emerald-900'}`}>{t(message)}</p>}
+    {disabled && <p className="text-sm text-amber-900">{' '}{t("Opdater forbindelsen, før du ændrer ordren.")}{' '}</p>}
+    {!inline && canEdit && next && <div className="space-y-2"><button className={`min-h-16 w-full rounded-xl px-6 py-4 text-lg font-semibold disabled:opacity-50 ${attention}`} disabled={busy || disabled || unpaidCompletion} onClick={() => void advance()}>{busy ? t("Gemmer…") : actionLabel}</button>{unpaidCompletion && <p className="text-sm text-amber-900">{' '}{t("Registrér betalingen, før ordren markeres afhentet eller leveret.")}{' '}</p>}</div>}
+    {!canEdit && <p className="text-sm text-slate-600">{' '}{t("Du har læseadgang. En medarbejder med ordreadgang kan ændre status.")}{' '}</p>}
     {reprint}
   </>;
-  if (inline) return <article aria-label={`Ordre ${order.id}`} className="min-w-0 space-y-3 rounded-xl border bg-white p-4 shadow-sm">{content}</article>;
+  if (inline) return <article aria-label={`${t("Ordre")} ${order.id}`} className="min-w-0 space-y-3 rounded-xl border bg-white p-4 shadow-sm">{content}</article>;
   return <Dialog open onOpenChange={open => { if (!open && !busy) onClose(); }}><DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl" onEscapeKeyDown={event => { if (busy) event.preventDefault(); }} onPointerDownOutside={event => { if (busy) event.preventDefault(); }}>{content}</DialogContent></Dialog>;
 }

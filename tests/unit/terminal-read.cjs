@@ -156,7 +156,7 @@ test('scheduled managed delivery stays in preorder queue until target Copenhagen
   const ts = require('typescript'), fs = require('node:fs');
   const compiled = ts.transpileModule(fs.readFileSync('src/app/merchant/orders/terminal-board.tsx', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React } }).outputText;
   const mod = { exports: {} };
-  new Function('require', 'module', 'exports', compiled)(name => { assert.equal(name, '@/lib/storefront-format'); return { formatPrice: value => String(value) }; }, mod, mod.exports);
+  new Function('require', 'module', 'exports', compiled)(name => { if(name==='./kds-language')return {}; assert.equal(name, '@/lib/storefront-format'); return { formatPrice: value => String(value) }; }, mod, mod.exports);
   assert.equal(mod.exports.terminalTime(preorders[0]), '18.00');
   const tomorrow = new Date('2026-10-25T23:00:00Z'); // Copenhagen midnight after DST.
   assert.deepEqual((await f.readTerminalOrders({ view: 'preorders' }, tomorrow)).orders, []);
