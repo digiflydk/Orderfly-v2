@@ -225,7 +225,7 @@ export function TerminalClient({ kitchenMode = false, fixedScope, apiBase = '/ap
     {data && order && kitchenMode && <div><button className="min-h-12 rounded-lg border px-4" onClick={() => setSelected(null)}>{' '}{t("Luk ordrevisning")}{' '}</button>{renderKitchenOrder(order)}</div>}
     {data && order && !kitchenMode && <TerminalDetail refreshRevision={feed.authorizedRevision} key={order.id} order={order} statusEndpoint={`${actionApiBase}/status`} paymentEndpoint={fixedScope ? `${apiBase}/payment` : undefined} canEdit={data?.canEdit ?? false} disabled={disconnected || outdated || !!connectionError} onClose={() => setSelected(null)} onChanged={refresh} reprint={data?.canEdit ? <TerminalReprint onAccessDenied={onAccessDenied} apiEndpoint={`${actionApiBase}/reprint`} orderId={order.id} brandId={order.brandId} locationId={order.locationId} /> : undefined} />}
     {!kitchenMode && <p className="text-xs text-slate-500">Hold siden åben for nye ordrer. Lyden skal aktiveres med et tryk og kan sættes på pause, når iPad låses.</p>}
-    {kitchenMode && <MobileKdsBottomNav stage={view === 'board' ? mobileStage : null} orders={data ? activeKitchenOrders : []} onSelect={selectMobileStage} />}
+    {kitchenMode && <MobileKdsBottomNav stage={view === 'board' ? mobileStage : null} orders={authorizationPending ? [] : activeKitchenOrders} onSelect={selectMobileStage} />}
   </div>;
 }
 
