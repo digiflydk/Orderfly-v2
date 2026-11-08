@@ -54,7 +54,7 @@ export function MobileKdsBoard({ orders, stage, readyLane, onReadyLaneChange, re
 }
 
 export function MobileKdsBottomNav({ stage, orders, onSelect }: {
-  stage: MobileKdsStage;
+  stage: MobileKdsStage | null;
   orders: TerminalOrder[];
   onSelect: (stage: MobileKdsStage) => void;
 }) {
