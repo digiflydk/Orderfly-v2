@@ -3,8 +3,8 @@ import { useKdsLanguage } from './kds-language';
 import { useRef, useState } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { kitchenCountdown, kitchenDeadline } from '@/lib/orders/kitchen-clock';
-export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChanged, alertClass }: {
-  alertClass?: string; order: TerminalOrder; now: number; canEdit: boolean; disabled: boolean; endpoint: string; onChanged: () => void;
+export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChanged, alertClass, compact = false }: {
+  alertClass?: string; compact?: boolean; order: TerminalOrder; now: number; canEdit: boolean; disabled: boolean; endpoint: string; onChanged: () => void;
 }) {
   const {t, language} = useKdsLanguage();
   const deadline = kitchenDeadline(order), late = !!deadline && now > Date.parse(deadline);
@@ -13,6 +13,9 @@ export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChange
   const pending = useRef<{ orderId: string; brandId: string; locationId: string; expectedReadyAt: string | null; readyAt: string; requestId: string } | null>(null);
   const lock = useRef(false);
   const time = deadline ? new Date(deadline).toLocaleTimeString('da-DK', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit' }) : t("Ikke angivet");
+  const minutesLeft = deadline ? Math.ceil((Date.parse(deadline) - now) / 60_000) : null;
+  const degrees = Math.max(0, Math.min(360, Math.round(Math.max(0, minutesLeft ?? 0) / 30 * 360)));
+  const ringColor = minutesLeft !== null && minutesLeft < 0 ? '#dc2626' : minutesLeft !== null && minutesLeft <= 5 ? '#eab308' : '#16a34a';
   async function save() {
     if (lock.current || disabled || !canEdit || !active || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) return;
     lock.current = true; setBusy(true); setError('');
@@ -29,13 +32,21 @@ export function KitchenClock({ order, now, canEdit, disabled, endpoint, onChange
     } catch { setError(t("Tiden er ikke bekræftet. Prøv samme ændring igen eller opdater.")); }
     finally { clearTimeout(timer); lock.current = false; setBusy(false); }
   }
-  return <div className="my-3 space-y-2">
-    <button aria-label={`Ændr klartid for ${order.id}`} disabled={!canEdit || disabled || !active || busy} onClick={() => { setMinutes(Math.max(1, Math.ceil(((deadline ? Date.parse(deadline) : now + 30 * 60_000) - now) / 60_000))); setEditing(value => !value); }} className={`min-h-16 w-full rounded-xl border-2 p-3 text-left ${alertClass || (late && active ? 'border-red-600 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50')}`}>
-      <span className="block font-semibold">{' '}{t("Klar kl.")}{' '}{time}</span>
-      <strong className="block text-3xl tabular-nums">{active ? kitchenCountdown(deadline, now) : order.status === 'Ready' ? t("Klar ✓") : ['Completed', 'Delivered'].includes(order.status) ? t("Afsluttet") : t("Ikke aktiv")}</strong>
-      {canEdit && active && <span className="text-sm">{' '}{t("Tryk for at ændre køkkentiden")}{' '}</span>}
+  return <div className={compact ? "relative flex w-20 shrink-0 flex-col items-center gap-1" : "my-3 space-y-2"}>
+    <button aria-label={`Ændr klartid for ${order.id}`} disabled={!canEdit || disabled || !active || busy} onClick={() => { setMinutes(Math.max(1, Math.ceil(((deadline ? Date.parse(deadline) : now + 30 * 60_000) - now) / 60_000))); setEditing(value => !value); }}
+      style={compact ? { background: `conic-gradient(${ringColor} ${degrees}deg, #e5e7eb ${degrees}deg)` } : undefined}
+      className={compact ? "grid h-20 w-20 place-items-center rounded-full p-1 disabled:opacity-80" : `min-h-16 w-full rounded-xl border-2 p-3 text-left ${alertClass || (late && active ? 'border-red-600 bg-red-50 text-red-900' : 'border-slate-200 bg-slate-50')}`}>
+      {compact ? <span className="flex h-[68px] w-[68px] flex-col items-center justify-center rounded-full bg-white text-slate-900">
+        <strong className="text-2xl font-bold tabular-nums">{active && minutesLeft !== null ? Math.abs(minutesLeft) : order.status === 'Ready' ? '✓' : '–'}</strong>
+        <small className="text-[10px] font-semibold">{active && minutesLeft !== null ? minutesLeft < 0 ? t('Forsinket') : 'min' : t('Klar')}</small>
+      </span> : <>
+        <span className="block font-semibold">{' '}{t("Klar kl.")}{' '}{time}</span>
+        <strong className="block text-3xl tabular-nums">{active ? kitchenCountdown(deadline, now) : order.status === 'Ready' ? t("Klar ✓") : ['Completed', 'Delivered'].includes(order.status) ? t("Afsluttet") : t("Ikke aktiv")}</strong>
+        {canEdit && active && <span className="text-sm">{' '}{t("Tryk for at ændre køkkentiden")}{' '}</span>}
+      </>}
     </button>
-    {editing && <div className="space-y-3 rounded-xl border bg-slate-50 p-3">
+    {compact && <span className="text-sm font-semibold tabular-nums text-slate-700">{time}</span>}
+    {editing && <div className={compact ? "absolute right-0 top-full z-30 mt-2 w-[min(82vw,330px)] space-y-3 rounded-xl border bg-white p-3 text-left shadow-xl" : "space-y-3 rounded-xl border bg-slate-50 p-3"}>
       <label className="block font-semibold">{' '}{t("Klar om (minutter)")}{' '}<input aria-label={`Klar om minutter for ${order.id}`} type="number" min="1" max="1440" value={minutes} disabled={busy || !!pending.current} onChange={event => setMinutes(Number(event.target.value))} className="mt-1 min-h-14 w-full rounded-lg border p-3 text-xl" /></label>
       <div className="flex flex-wrap gap-2">{[5, 10, 15].map(value => <button key={value} className="min-h-14 rounded-lg border bg-white px-4 text-lg font-semibold" disabled={busy || !!pending.current} onClick={() => setMinutes(current => Math.min(1440, current + value))}>+{value} min</button>)}</div>
       <p className="text-sm">{' '}{t("Ændrer køkkenets klartid. Kundens aftale og kurérbooking ændres ikke.")}{' '}</p>

@@ -117,7 +117,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     return route.fulfill({ json: result });
   });
   if (state.fakeClock) await page.clock.install({time:new Date(now)});
-  await page.goto(origin); await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeVisible();
+  await page.goto(origin); if (extra.kds && extra.kitchenMode && width < 1024) await expect(page.getByRole('button', { name: 'Åbn menu', exact: true })).toBeVisible(); else await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeVisible();
   return { page, state, calls, errors };
 }
 for (const [width, height] of [[1024,768],[768,1024]]) {
@@ -457,7 +457,7 @@ test('overdue clock is negative and sounds alarm, marking ready stops repeated a
 test('immersive kitchen persists through scroll and native exit until its close button',async t=>{
  const {page}=await fixture(t,768,1024,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
  const screen=page.locator('[data-kds-fullscreen]');await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.mouse.wheel(0,600);await page.evaluate(async()=>{if(document.fullscreenElement)await document.exitFullscreen();});await expect(screen).toHaveAttribute('data-kds-fullscreen','true');
- assert.equal(await screen.evaluate(el=>getComputedStyle(el).overscrollBehavior),'none');await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(page.getByRole('dialog',{name:'Indstillinger',exact:true})).toBeVisible();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Luk menu',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','false');
+ assert.equal(await screen.evaluate(el=>getComputedStyle(el).overscrollBehavior),'none');await page.getByRole('button',{name:'Åbn menu',exact:true}).click();await expect(page.getByRole('dialog',{name:'Indstillinger',exact:true})).toBeVisible();await page.getByRole('button',{name:'Lydindstillinger',exact:true}).click();await expect(page.getByLabel('Vælg lyd',{exact:true})).toBeVisible();await page.getByRole('button',{name:'Luk menu',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','true');await page.getByRole('button',{name:'Luk fuld skærm',exact:true}).click();await expect(screen).toHaveAttribute('data-kds-fullscreen','false');
 });
 test('history remains connected after 45 seconds and one transient refresh retries without a false error banner',async t=>{
  const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true,dynamicTime:true});await page.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).first()).toBeVisible();await page.clock.runFor(61_000);
@@ -564,4 +564,111 @@ test('KDS drawer has separate pages, traps focus, restores trigger, and tables k
  await page.screenshot({path:'/tmp/kds-preorders-table.png',fullPage:true});
  await page.getByRole('button',{name:'Historik',exact:true}).click();const cells=page.getByRole('table').getByRole('row').nth(1).getByRole('cell');await expect(cells.nth(1)).toHaveText('420704 / Omair Khan');await expect(cells.nth(3)).toHaveText('Modtaget / Betalt');assert.equal(await cells.nth(1).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
  await page.screenshot({path:'/tmp/kds-history-compact.png',fullPage:true});await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(drawer).toBeVisible();await page.screenshot({path:'/tmp/kds-settings-drawer.png',fullPage:true});
+});
+
+
+test('mobile KDS shows three bottom stages, courier lane and accessible drawer without changing desktop',async t=>{
+  const courier=order('ORD-COURIER',{status:'Ready',deliveryType:'Delivery',managedDelivery:true,
+    managedDeliveryTracking:{orderId:'ORD-COURIER',bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'paid',
+      trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+  const {page,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-NEW'),order('ORD-COOK',{status:'In Progress'}),order('ORD-PICKUP',{status:'Ready'}),courier],
+    openingHours:{saturday:{isOpen:true,open:'10:30',close:'21:45'}}});
+  await expect(page.getByRole('heading',{name:'Nye bestillinger',exact:true})).toBeVisible();
+  const bottom=page.getByRole('navigation',{name:'Køkkenstatus'});
+  await expect(bottom.getByRole('button',{name:/Nye bestillinger/})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/I gang/})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/Klar/})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-NEW',exact:true})).toBeVisible();
+  assert.equal(await page.evaluate(()=>document.querySelectorAll('article[aria-label="Ordre ORD-NEW"]').length),1,'only one responsive order card mounted');
+  await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toHaveCount(0);
+  await bottom.getByRole('button',{name:/I gang/}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toBeVisible();
+  await bottom.getByRole('button',{name:/Klar/}).click();
+  await expect(page.getByRole('tab',{name:'Klar (1)'})).toBeVisible();
+  await expect(page.getByRole('tab',{name:'I levering (1)'})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PICKUP',exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'I levering (1)'}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-COURIER',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PICKUP',exact:true})).toHaveCount(0);
+  // Mobile and portrait iPad must retain the pre-existing immersive controls.
+  await page.getByRole('button',{name:'Fuld skærm',exact:true}).click();
+  await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','true');
+  // The persistent close control must remain above the sticky mobile header.
+  const exit=page.getByRole('button',{name:'Luk fuld skærm',exact:true});
+  const exitZ=await exit.evaluate(element=>Number(getComputedStyle(element).zIndex));
+  const headerZ=await page.locator('header.sticky').first().evaluate(element=>Number(getComputedStyle(element).zIndex));
+  assert.ok(exitZ>headerZ,'fullscreen exit stays above sticky mobile chrome');
+  await page.mouse.wheel(0,600);
+  await expect(exit).toBeVisible();
+  await exit.click();
+  await expect(page.locator('[data-kds-fullscreen]')).toHaveAttribute('data-kds-fullscreen','false');
+  await page.getByRole('button',{name:'Åbn menu',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Indstillinger',exact:true});
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('button',{name:'Butik',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Åbningstider'})).toBeVisible();
+  await expect(page.getByText('10:30 – 21:45')).toBeVisible();
+  await drawer.getByRole('button',{name:'Tilbage til menu',exact:true}).click();
+  await drawer.getByRole('button',{name:'Historik',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Ordrehistorik'})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/Klar/})).not.toHaveAttribute('aria-current','page');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),true,'mobile KDS stays within viewport');
+  assert.deepEqual(errors,[]);
+});
+
+test('mobile KDS uses original authorized progress, payment and editable timer actions',async t=>{
+  const {page,state,calls,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-MOBILE')]});
+  const bottom=page.getByRole('navigation',{name:'Køkkenstatus'});
+  const card=page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true});
+  await expect(card.getByRole('button',{name:'Start tilberedning',exact:true})).toBeVisible();
+  await card.getByRole('button',{name:'Start tilberedning',exact:true}).click();
+  await expect.poll(()=>state.orders.find(row=>row.id==='ORD-MOBILE').status).toBe('In Progress');
+  await bottom.getByRole('button',{name:/I gang/}).click();
+  const preparing=page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true});
+  await expect(preparing.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();
+  await preparing.getByRole('button',{name:'Ændr klartid for ORD-MOBILE',exact:true}).click();
+  await expect(preparing.getByLabel('Klar om minutter for ORD-MOBILE')).toBeVisible();
+  await preparing.getByRole('button',{name:'Gem klartid',exact:true}).click();
+  await expect.poll(()=>calls.filter(c=>c.kind==='ready-time').length).toBe(1);
+  await preparing.getByRole('button',{name:'Markér klar',exact:true}).click();
+  await expect.poll(()=>state.orders.find(row=>row.id==='ORD-MOBILE').status).toBe('Ready');
+  await bottom.getByRole('button',{name:/Klar/}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true})).toBeVisible();
+  assert.equal(calls.filter(c=>c.kind==='status').length,2);
+  assert.deepEqual(errors,[]);
+});
+
+test('mobile KDS shows a sound activation hint, not an invented iOS silent-mode reading',async t=>{
+  const {page}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,suspendedAudio:true,orders:[]});
+  await expect(page.getByText('KDS-lyden skal aktiveres',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+  await expect(page.getByText('KDS-lyden skal aktiveres',{exact:true})).toHaveCount(0);
+});
+
+
+test('mobile KDS shows connection errors rather than claiming there are no orders',async t=>{
+  const {page}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    readStatus:503,orders:[]});
+  await expect(page.getByText('Ordrer er ikke tilgængelige',{exact:true})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Ingen nye bestillinger',exact:true})).toHaveCount(0);
+  await expect(page.getByRole('alert')).toBeVisible();
+});
+
+test('mobile new-order banner switches back to the Received tab from In progress',async t=>{
+  const {page,state,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-INITIAL'),order('ORD-COOK',{status:'In Progress'})]});
+  const nav=page.getByRole('navigation',{name:'Køkkenstatus'});
+  await nav.getByRole('button',{name:/I gang/}).click();
+  await expect(page.getByRole('heading',{name:'I gang',exact:true})).toBeVisible();
+  state.orders.push(order('ORD-PUSHED'));
+  await page.evaluate(()=>window.__pushSend('change'));
+  await expect(page.getByRole('button',{name:'Vis nye ordrer',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PUSHED',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Vis nye ordrer',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Nye bestillinger',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PUSHED',exact:true})).toBeVisible();
+  await expect(nav.getByRole('button',{name:/Nye bestillinger/})).toHaveAttribute('aria-current','page');
+  assert.deepEqual(errors,[]);
 });
