@@ -19,16 +19,18 @@ export type TerminalHistoryProps = {
   onReprint?: (order: TerminalOrder) => void;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  onLoadAll?: () => void;
 };
 
-export function TerminalHistory({ orders, filters, onFiltersChange, loading = false, error, onRetry, onSelectOrder, onReprint, hasMore, onLoadMore }: TerminalHistoryProps) {
+export function TerminalHistory({ orders, filters, onFiltersChange, loading = false, error, onRetry, onSelectOrder, onReprint, hasMore, onLoadMore, onLoadAll }: TerminalHistoryProps) {
   const {t, language} = useKdsLanguage();
   const [draft, setDraft] = useState(filters);
   const [validation, setValidation] = useState<string | null>(null);
   useEffect(() => { setDraft(filters); setValidation(null); }, [filters.search, filters.dateFrom, filters.dateTo]);
   return <section aria-label={t("Ordrehistorik")} aria-busy={loading} className="space-y-5 min-w-0">
     <div><h2 className="text-2xl font-semibold">{' '}{t("Ordrehistorik")}{' '}</h2><p className="mt-1 text-sm text-muted-foreground">{' '}{t("Find tidligere ordrer, se detaljer og genprint en bon.")}{' '}</p></div>
-    <p role="status" className="text-xl font-semibold">{error ? (language === 'en' ? 'Total unavailable' : 'Samlet beløb ikke bekræftet') : loading || hasMore ? t("Beregner samlet beløb…") : `${language === 'en' ? 'Total amount' : 'Samlet beløb'}: ${formatPrice(orders.reduce((sum, order) => sum + Math.round(order.totalAmount * 100), 0) / 100)} · ${orders.length} ${language === 'en' ? 'orders' : 'ordrer'}`}</p>
+    <p role="status" className="text-xl font-semibold">{error ? (language === 'en' ? 'Total unavailable' : 'Samlet beløb ikke bekræftet') : loading ? t("Beregner samlet beløb…") : hasMore ? t("Hent alle matchende ordrer for at se det samlede beløb.") : `${language === 'en' ? 'Total amount' : 'Samlet beløb'}: ${formatPrice(orders.reduce((sum, order) => sum + Math.round(order.totalAmount * 100), 0) / 100)} · ${orders.length} ${language === 'en' ? 'orders' : 'ordrer'}`}</p>
+    {hasMore && onLoadAll && <button type="button" disabled={loading || !!error} onClick={onLoadAll} className="min-h-12 rounded-lg border px-5 font-semibold disabled:opacity-50">{t("Beregn samlet beløb for alle ordrer")}</button>}
     <form className="flex flex-wrap items-end gap-3 rounded-xl border bg-background p-4" onSubmit={event => {
       event.preventDefault(); const problem = historyFilterError(draft); setValidation(problem);
       if (!problem) onFiltersChange({ ...draft, search: draft.search.trim() });

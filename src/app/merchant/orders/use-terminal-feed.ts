@@ -42,9 +42,10 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const stopMelody = useRef<(() => void) | null>(null);
   const seen = useRef<Set<string> | null>(null), active = useRef<AbortController | null>(null);
   const generation = useRef(0), nextCursor = useRef<string | null>(null);
-  const run = useRef<(append?: boolean) => Promise<void>>(async () => {});
+  const run = useRef<(append?: boolean, completeHistory?: boolean) => Promise<void>>(async () => {});
   const refresh = useCallback(() => { void run.current(); }, []);
   const loadMore = useCallback(() => { void run.current(true); }, []);
+  const loadAllHistory = useCallback(() => { void run.current(false, true); }, []);
   const clearNewOrders = useCallback(() => setNewOrders(0), []);
   const beep = useCallback(() => {
     const context = audio.current;
@@ -156,7 +157,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
         if (!push || consecutiveFailures.current > 0) timer = setTimeout(() => void read(), push ? 60_000 : POLL_MS);
       }
     };
-    async function read(append = false) {
+    async function read(append = false, completeHistory = false) {
       if (disposed || (append && !nextCursor.current)) return;
       if (active.current) { if (!append) pendingRefresh = true; return; }
       if (!navigator.onLine) { setOffline(true); setLoading(false); schedule(); return; }
@@ -167,7 +168,8 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       setLoading(true);
       try {
         const board = query.view === 'board' || !query.view;
-        const complete = board || query.view === 'history';
+        // Archive traversal is an explicit operator action, never a refresh side effect.
+        const complete = board || (query.view === 'history' && completeHistory);
         const collected = new Map<string, TerminalReadResult['orders'][number]>();
         let cursor = append ? nextCursor.current : null;
         let result: TerminalReadResult;
@@ -267,5 +269,5 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
   const ageStale = automatic && (!query.view || query.view === 'board') && lastUpdated !== null && !freshForAlerts;
   const stale = lastUpdated !== null && (ageStale || offline || !!error);
   void tick;
-  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, freshForAlerts, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
+  return { data, loading, error, changeRevision, newPreorders, reconnecting: reconnecting || (automatic && push && !pushConnected), deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, freshForAlerts, newOrders, sound, soundError, refresh, loadMore, loadAllHistory, clearNewOrders, toggleSound, testSound, volume, setVolume, soundId, setSoundId, alertSound: beep };
 }

@@ -354,9 +354,19 @@ test('managed delivered refresh removes ready card while history remains accessi
  assert.ok(calls.filter(c=>c.kind==='read'&&c.query.cursor==='fixture-next').length>=2);
  assert.equal(state.orders[0].status,'Ready');
  await page.getByRole('button',{name:'Historik',exact:true}).click();
- // History traverses even an empty first page before publishing the total.
+ // Automatic history reads remain bounded, including empty filtered pages.
+ await expect(page.getByRole('button',{name:'Beregn samlet beløb for alle ordrer',exact:true})).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length,0);
+ await expect(page.getByText(/^Samlet beløb:/)).toHaveCount(0);
+ await page.getByRole('button',{name:'Beregn samlet beløb for alle ordrer',exact:true}).click();
  await expect.poll(()=>calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length).toBeGreaterThan(0);
  await expect(page.getByText('ORD-DONE',{exact:true}).first()).toBeVisible();
+ await expect(page.getByText(/^Samlet beløb:/)).toBeVisible();
+ const cursorReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length;
+ await page.getByRole('button',{name:'Opdater',exact:true}).click();
+ await expect(page.getByRole('button',{name:'Beregn samlet beløb for alle ordrer',exact:true})).toBeVisible();
+ assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length,cursorReads,'refresh must not repeat the full archive traversal');
+ await expect(page.getByText(/^Samlet beløb:/)).toHaveCount(0);
  assert.equal(calls.filter(c=>c.kind==='status').length,0);assert.deepEqual(errors,[]);
 });
 

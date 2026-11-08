@@ -194,5 +194,7 @@
   "Melodi": "Melody",
   "Klokke": "Bell",
   "Åbn ordre": "Open order",
-  "Forudbestilling": "Preorder"
+  "Forudbestilling": "Preorder",
+  "Hent alle matchende ordrer for at se det samlede beløb.": "Load all matching orders to see the total amount.",
+  "Beregn samlet beløb for alle ordrer": "Calculate total for all orders"
 }
