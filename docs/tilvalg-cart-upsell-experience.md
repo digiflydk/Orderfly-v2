@@ -108,7 +108,10 @@ server-side flow; do not restore that logic.
 
 Regression tests: `tests/unit/upsell-cart-value.cjs` compares reconstructed
 server offers with `validateCheckoutPrices` for options, discounted products,
-combos, quantities, precise thresholds, and exaggerated browser totals.
+combos and native supplements, pickup/delivery channel prices, quantities,
+precise thresholds, and exaggerated browser totals. Missing or understated
+browser totals fail closed; blank and malformed saved thresholds never unlock
+an offer.
 Run with checkout/upsell test suites, TypeScript check, production build and
 relevant storefront browser scenarios before release. GitHub Actions remain
 disabled by PM instruction. No campaign/data changes or migrations are needed.
