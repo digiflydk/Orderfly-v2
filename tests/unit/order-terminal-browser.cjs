@@ -413,8 +413,7 @@ test('suspended autoplay is visible and Test lyd unlocks the melody',async t=>{
  await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeVisible();
  await page.getByText('Lydindstillinger · Til · 80%',{exact:true}).click();await page.getByRole('button',{name:'Test lyd',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.__audioStarts)).toBe(1);
- // Mobile activation hint stays mounted but is hidden at desktop width.
- await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toBeHidden();
+ await expect(page.getByText('Tryk på “Test lyd” for at aktivere lyden på denne enhed.',{exact:true})).toHaveCount(0);
 });
 test('new orders play automatically by default, volume zero and mute suppress alerts',async t=>{
  const {page,state}=await fixture(t);await expect(page.getByRole('button',{name:'Åbn ordre ORD-NEW',exact:true})).toBeVisible();
