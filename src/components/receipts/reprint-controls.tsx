@@ -38,7 +38,7 @@ async function json(response: Response, limit: number): Promise<any> {
 
 /** Explicit physical reprints only. A retry retains the same request identity;
  * status polling cannot create jobs and an ambiguous write never resets it. */
-export function ReprintControls({ merchant = false, apiEndpoint, onAccessDenied, ...props }: Scope & { merchant?: boolean; apiEndpoint?: string; onAccessDenied?: () => void }) {
+export function ReprintControls({ translate = (value: string) => value, merchant = false, apiEndpoint, onAccessDenied, ...props }: Scope & { translate?: (value: string) => string; merchant?: boolean; apiEndpoint?: string; onAccessDenied?: () => void }) {
   const endpoint = apiEndpoint ?? (merchant ? '/api/merchant/orders/reprint' : adminEndpoint);
   const scopeKey = JSON.stringify([endpoint, props]);
   const [printers, setPrinters] = useState<Printer[]>([]), [selected, setSelected] = useState('');
@@ -138,27 +138,27 @@ export function ReprintControls({ merchant = false, apiEndpoint, onAccessDenied,
 
   const printer = printers.find(p => p.id === selected);
   const unresolved = !!command && !canRequestNewCopy(result?.state);
-  return <section aria-label="Genprint" className="space-y-3 rounded-lg border p-4">
+  return <section aria-label={translate("Genprint")} className="space-y-3 rounded-lg border p-4">
     <div className="flex flex-wrap items-end gap-3">
       <label className="grid gap-1 text-sm font-medium">Printer
-        <select aria-label="Printer til genprint" className="min-h-10 max-w-full rounded-md border bg-background px-3 py-2" value={selected}
+        <select aria-label={translate("Printer til genprint")} className="min-h-10 max-w-full rounded-md border bg-background px-3 py-2" value={selected}
           disabled={loading || busy || unresolved || sessionLost} onChange={event => setSelected(event.target.value)}>
-          <option value="">{loading ? 'Indlæser printere…' : printers.length ? 'Vælg printer' : 'Ingen aktive printere'}</option>
+          <option value="">{loading ? translate("Indlæser printere…") : printers.length ? translate("Vælg printer") : translate("Ingen aktive printere")}</option>
           {printers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
       <Button type="button" disabled={loading || busy || sessionLost || !printer || unresolved && !retry} onClick={submit}>
-        {busy ? 'Arbejder…' : retry ? 'Prøv samme genprint igen' : canRequestNewCopy(result?.state) ? 'Genprint igen' : props.kind === 'kitchen' ? 'Genprint køkkenbon' : 'Genprint kvittering'}
+        {busy ? translate("Arbejder…") : retry ? translate("Prøv samme genprint igen") : canRequestNewCopy(result?.state) ? translate("Genprint igen") : props.kind === 'kitchen' ? translate("Genprint køkkenbon") : translate("Genprint kvittering")}
       </Button>
-      {command && <Button type="button" variant="outline" disabled={busy || sessionLost} onClick={() => void perform('GET', command)}>Opdater printstatus</Button>}
-      {!command && !loading && !sessionLost && <Button type="button" variant="outline" onClick={() => setRefresh(value => value + 1)}>Opdater printere</Button>}
+      {command && <Button type="button" variant="outline" disabled={busy || sessionLost} onClick={() => void perform('GET', command)}>{translate("Opdater printstatus")}</Button>}
+      {!command && !loading && !sessionLost && <Button type="button" variant="outline" onClick={() => setRefresh(value => value + 1)}>{translate("Opdater printere")}</Button>}
     </div>
-    <p className="text-sm text-muted-foreground">Udskriver en ekstra kopi med det aktuelle bonlayout. Printeren skal have papir og bruge Live URL.</p>
+    <p className="text-sm text-muted-foreground">{translate("Udskriver en ekstra kopi med det aktuelle bonlayout. Printeren skal have papir og bruge Live URL.")}</p>
     {printer && (!printer.connected || printer.endpoint !== 'live') && <p className="text-sm">{printer.endpoint === 'test'
-      ? 'Printeren bruger Test URL. Skift til Live URL for at modtage genprint.'
-      : !printer.connected ? 'Printeren er ikke registreret som forbundet. Kontrollér forbindelsen.' : 'Der er endnu ikke registreret kontakt via Live URL.'}</p>}
-    {!loading && !printers.length && !listError && <p className="text-sm">{merchant ? 'Ingen printer er klar til genprint på denne lokation. Kontakt din administrator.' : 'Opret eller aktivér en printer på denne lokation under System → Printere.'}</p>}
-    {result && <p role="status">{states[result.state]}</p>}
-    {(listError || message) && <p role="alert">{listError || message}</p>}
+      ? translate("Printeren bruger Test URL. Skift til Live URL for at modtage genprint.")
+      : !printer.connected ? translate("Printeren er ikke registreret som forbundet. Kontrollér forbindelsen.") : translate("Der er endnu ikke registreret kontakt via Live URL.")}</p>}
+    {!loading && !printers.length && !listError && <p className="text-sm">{merchant ? translate("Ingen printer er klar til genprint på denne lokation. Kontakt din administrator.") : 'Opret eller aktivér en printer på denne lokation under System → Printere.'}</p>}
+    {result && <p role="status">{translate(states[result.state])}</p>}
+    {(listError || message) && <p role="alert">{translate(listError || message)}</p>}
   </section>;
 }

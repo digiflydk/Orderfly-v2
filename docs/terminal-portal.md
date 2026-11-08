@@ -268,3 +268,21 @@ manual/closing-hour call counts, session renewal, settings authority/replay/conf
 preorder popup/audio/badges/release, collapsed details and both status warnings,
 plus original print waiting, expiry, queue ordering and exactly-once dispatch.
 No GitHub Actions or production data writes are part of the test process.
+
+### Compact bilingual KDS and history (8 November 2026)
+
+The KDS menu offers Danish and English, persisted per device without a server
+write. Operator labels change; customer names, item names and kitchen notes retain
+their original contents. Calendar dates remain in the restaurant's Copenhagen time.
+The header contains the title, location name only, and right-aligned connection
+status/update time. Full screen and Refresh follow History in the view toolbar;
+all five controls have icons, and icon-only actions have accessible names.
+Logout is inside Settings for both employee and dedicated terminal sessions.
+
+KDS history initially selects today's Copenhagen order-creation date. The history
+feed traverses every cursor, including empty filtered pages, before presenting a
+complete gross order total and order count for the selected filters. During loading
+or errors, it does not claim a complete total. This is the sum of order amounts,
+not net revenue; refunds remain separately visible. Columns are Date/time,
+Order/customer, Amount, Status and Actions. View/reprint actions use labeled icon
+buttons and retain the existing authorization and explicit print-confirmation flow.

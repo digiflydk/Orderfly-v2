@@ -75,7 +75,7 @@ test('transient renewal masks cached orders without logging out; revocation redi
 });
 test('uncertain logout hides orders and pauses renewal until confirmed revocation',async t=>{
  state=newState();const c=await context(t),page=await c.newPage();await login(page);state.logoutStatus=503;
- await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Log ud kunne ikke bekræftes');assert.ok((await c.cookies()).some(x=>x.name===cookie));await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toHaveCount(0);
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('alert')).toContainText('Log ud kunne ikke bekræftes');assert.ok((await c.cookies()).some(x=>x.name===cookie));await expect(page.getByRole('article',{name:'Ordre ORD-PORTAL'})).toHaveCount(0);
  const before=state.renewCalls;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await page.waitForTimeout(50);assert.equal(state.renewCalls,before);
  state.logoutStatus=200;await page.getByRole('button',{name:'Prøv Log ud igen'}).click();await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await c.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
  await page.goto(origin+'/terminal/orders');await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();
@@ -89,7 +89,7 @@ test('dedicated detail payment and reprint reads never call merchant endpoints o
 test('logout wins over an already pending session renewal response',async t=>{
  state=newState();const c=await context(t),page=await c.newPage();await login(page);
  state.holdRenewal=true;await page.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect.poll(()=>!!state.heldRenewal).toBe(true);
- await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();
  state.holdRenewal=false;state.heldRenewal();assert.equal(state.valid.size,0);
  await page.goto(origin+'/terminal/orders');await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();await expect(page.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
 });
@@ -105,7 +105,7 @@ test('KDS keeps login, persistence, renewal, revocation and logout on /kds',asyn
  const second=await context(t,stored),next=await second.newPage(),logins=state.loginCalls;await next.goto(origin+'/kds?terminal=1');await expect(next.getByRole('article',{name:'Ordre ORD-PORTAL'})).toBeVisible();await expect(next).toHaveURL(origin+'/kds?terminal=1');assert.equal(state.loginCalls,logins);
  await expect.poll(async()=>((await second.cookies()).find(x=>x.name===cookie)?.expires||0)).toBeGreaterThan(Date.now()/1000+399*86400);
  state.valid.clear();await next.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(next).toHaveURL(origin+'/kds/login/terminal');await expect(next.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
- await next.getByLabel('Brugernavn',{exact:true}).fill('amager');await next.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await next.getByRole('button',{name:'Log ind',exact:true}).click();await expect(next).toHaveURL(origin+'/kds?terminal=1');await expect(next.getByRole('button',{name:'Log ud',exact:true})).toBeVisible();
+ await next.getByLabel('Brugernavn',{exact:true}).fill('amager');await next.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await next.getByRole('button',{name:'Log ind',exact:true}).click();await expect(next).toHaveURL(origin+'/kds?terminal=1');await next.getByRole('button',{name:'Menu',exact:true}).click();await expect(next.getByRole('button',{name:'Log ud',exact:true})).toBeVisible();
  await next.getByRole('button',{name:'Log ud',exact:true}).click();await expect(next).toHaveURL(origin+'/kds/login/terminal');await expect(next.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await second.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
  await next.goto(origin+'/kds?terminal=1');await expect(next).toHaveURL(origin+'/kds/login/terminal');assert.equal(state.merchantCalls,0);
 });

@@ -354,9 +354,8 @@ test('managed delivered refresh removes ready card while history remains accessi
  assert.ok(calls.filter(c=>c.kind==='read'&&c.query.cursor==='fixture-next').length>=2);
  assert.equal(state.orders[0].status,'Ready');
  await page.getByRole('button',{name:'Historik',exact:true}).click();
- // History pages are explicitly paged; the empty first scan retains its cursor.
- const more=page.getByRole('button',{name:'Hent flere ordrer',exact:true});
- await expect(more).toBeVisible();await more.click();
+ // History traverses even an empty first page before publishing the total.
+ await expect.poll(()=>calls.filter(c=>c.kind==='read'&&c.query.view==='history'&&c.query.cursor==='fixture-next').length).toBeGreaterThan(0);
  await expect(page.getByText('ORD-DONE',{exact:true}).first()).toBeVisible();
  assert.equal(calls.filter(c=>c.kind==='status').length,0);assert.deepEqual(errors,[]);
 });
@@ -377,7 +376,7 @@ test('terminal preserves quantity and removal labels without reversing exclusion
 });
 test('KDS shows Esmeralda before order response and uses scoped read with existing employee payment/status actions',async t=>{
  const {page,state,calls}=await fixture(t,1024,768,{kds:true,readDelay:1200});
- await expect(page.getByText('Esmeralda · Amager',{exact:true})).toBeVisible();await expect(page.getByRole('combobox',{name:'Restaurant'})).toHaveCount(0);
+ await expect(page.getByText('Amager',{exact:true})).toBeVisible();await expect(page.getByRole('combobox',{name:'Restaurant'})).toHaveCount(0);
  await expect(page.getByRole('link',{name:'Tilbage til oversigt'})).toHaveCount(0);
  await page.getByRole('button',{name:'Åbn ordre ORD-UNPAID',exact:true}).click();
  await page.getByRole('button',{name:'Registrér betaling',exact:true}).click();
@@ -529,4 +528,14 @@ test('manual mode retains old cards without sounding overdue alarms from an outd
  assert.equal(await page.evaluate(()=>window.__audioStarts),sounds);assert.equal(calls.filter(c=>c.kind==='read').length,reads);
  await expect(page.getByText('Manuel opdatering',{exact:true})).toBeVisible();await expect(page.getByRole('article',{name:'Ordre OLD',exact:true})).toBeVisible();await expect(page.getByRole('alert')).toHaveCount(0);
  await page.getByRole('button',{name:'Opdater',exact:true}).click();await expect(page.getByRole('button',{name:'Markér afhentet',exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>window.__audioStarts),sounds);
+});
+
+test('KDS language persists, compact toolbar follows history, location has no brand prefix, history defaults to today and totals all loaded orders',async t=>{
+ const {page,calls}=await fixture(t,1024,768,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,orders:[order('H1',{status:'Completed',totalAmount:100}),order('H2',{status:'Completed',totalAmount:50.5})]});
+ await expect(page.getByRole('heading',{name:'Dagens ordrer',exact:true})).toBeVisible();await expect(page.locator('header').getByText('Amager',{exact:true})).toBeVisible();await expect(page.locator('header').getByText('Restaurant',{exact:true})).toHaveCount(0);
+ const nav=page.getByRole('navigation',{name:'Ordrevisning'});await expect(nav.getByRole('button',{name:'Opdater',exact:true})).toBeVisible();await expect(nav.getByRole('button',{name:'Fuld skærm',exact:true})).toBeVisible();
+ await nav.getByRole('button',{name:'Historik',exact:true}).click();await expect(page.getByLabel('Bestillingsdato fra',{exact:true})).toHaveValue('2026-10-25');await expect(page.getByLabel('Bestillingsdato til',{exact:true})).toHaveValue('2026-10-25');await expect(page.getByText(/Samlet beløb:.*150,50/)).toBeVisible();
+ assert.deepEqual(await page.getByRole('columnheader').allTextContents(),['Dato / tid','Ordre / kunde','Beløb','Status','Handlinger']);await expect(page.getByRole('button',{name:'Vis ordre H1',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Menu',exact:true}).click();await page.getByLabel('Sprog',{exact:true}).selectOption('en');await expect(page.getByRole('heading',{name:"Today's orders",exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Order settings',exact:true})).toBeVisible();await expect(page.getByText(/Total amount:.*150,50/)).toBeVisible();
+ await page.reload();await expect(page.getByRole('heading',{name:"Today's orders",exact:true})).toBeVisible();assert.equal(await page.evaluate(()=>localStorage.getItem('orderfly.kds.language')),'en');
 });

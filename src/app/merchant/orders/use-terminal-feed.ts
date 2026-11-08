@@ -167,6 +167,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
       setLoading(true);
       try {
         const board = query.view === 'board' || !query.view;
+        const complete = board || query.view === 'history';
         const collected = new Map<string, TerminalReadResult['orders'][number]>();
         let cursor = append ? nextCursor.current : null;
         let result: TerminalReadResult;
@@ -194,11 +195,11 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true, endpoint =
           if (disposed || generation.current !== current) return;
           result.orders.forEach(order => collected.set(order.id, order));
           cursor = result.nextCursor;
-          if (board && cursor) {
+          if (complete && cursor) {
             // Show scan progress without dropping the previous complete snapshot.
             setData(previous => ({ ...result, orders: [...new Map([...(previous?.orders ?? []), ...collected.values()].map(order => [order.id, order])).values()], hasMore: true }));
           }
-        } while (board && cursor && !disposed);
+        } while (complete && cursor && !disposed);
         if (disposed || generation.current !== current) return;
         // A response started before another feed rejected access is not fresh
         // authorization evidence merely because it happened to finish later.

@@ -20,14 +20,14 @@ export function terminalDay(value: string | null | undefined): string | null {
   return `${part('year')}-${part('month')}-${part('day')}`;
 }
 
-export function terminalDateTime(value: string | null | undefined): string {
+export function terminalDateTime(value: string | null | undefined, language: 'da' | 'en' = 'da'): string {
   const date = validInstant(value);
-  return date ? new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date) : 'Tidspunkt mangler';
+  return date ? new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'da-DK', { timeZone: 'Europe/Copenhagen', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date) : 'Tidspunkt mangler';
 }
 
-export function terminalDateHeading(value: string | null | undefined): string {
+export function terminalDateHeading(value: string | null | undefined, language: 'da' | 'en' = 'da'): string {
   const date = validInstant(value);
-  return date ? new Intl.DateTimeFormat('da-DK', { timeZone: 'Europe/Copenhagen', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date) : 'Tidspunkt mangler';
+  return date ? new Intl.DateTimeFormat(language === 'en' ? 'en-GB' : 'da-DK', { timeZone: 'Europe/Copenhagen', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(date) : 'Tidspunkt mangler';
 }
 
 export function isFutureTerminalDay(order: Pick<TerminalOrder, 'fulfillmentAt'>, serverTime: string): boolean {
