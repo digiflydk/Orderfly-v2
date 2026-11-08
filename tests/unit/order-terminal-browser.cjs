@@ -565,3 +565,71 @@ test('KDS drawer has separate pages, traps focus, restores trigger, and tables k
  await page.getByRole('button',{name:'Historik',exact:true}).click();const cells=page.getByRole('table').getByRole('row').nth(1).getByRole('cell');await expect(cells.nth(1)).toHaveText('420704 / Omair Khan');await expect(cells.nth(3)).toHaveText('Modtaget / Betalt');assert.equal(await cells.nth(1).evaluate(el=>getComputedStyle(el).whiteSpace),'nowrap');
  await page.screenshot({path:'/tmp/kds-history-compact.png',fullPage:true});await page.getByRole('button',{name:'Menu',exact:true}).click();await expect(drawer).toBeVisible();await page.screenshot({path:'/tmp/kds-settings-drawer.png',fullPage:true});
 });
+
+
+test('mobile KDS shows three bottom stages, courier lane and accessible drawer without changing desktop',async t=>{
+  const courier=order('ORD-COURIER',{status:'Ready',deliveryType:'Delivery',managedDelivery:true,
+    managedDeliveryTracking:{orderId:'ORD-COURIER',bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'paid',
+      trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+  const {page,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-NEW'),order('ORD-COOK',{status:'In Progress'}),order('ORD-PICKUP',{status:'Ready'}),courier],
+    openingHours:{saturday:{isOpen:true,open:'10:30',close:'21:45'}}});
+  await expect(page.getByRole('heading',{name:'Nye bestillinger',exact:true})).toBeVisible();
+  const bottom=page.getByRole('navigation',{name:'Køkkenstatus'});
+  await expect(bottom.getByRole('button',{name:/Nye bestillinger/})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/I gang/})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/Klar/})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-NEW',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toHaveCount(0);
+  await bottom.getByRole('button',{name:/I gang/}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-COOK',exact:true})).toBeVisible();
+  await bottom.getByRole('button',{name:/Klar/}).click();
+  await expect(page.getByRole('tab',{name:'Klar (1)'})).toBeVisible();
+  await expect(page.getByRole('tab',{name:'I levering (1)'})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PICKUP',exact:true})).toBeVisible();
+  await page.getByRole('tab',{name:'I levering (1)'}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-COURIER',exact:true})).toBeVisible();
+  await expect(page.getByRole('article',{name:'Ordre ORD-PICKUP',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Åbn menu',exact:true}).click();
+  const drawer=page.getByRole('dialog',{name:'Indstillinger',exact:true});
+  await expect(drawer).toBeVisible();
+  await drawer.getByRole('button',{name:'Butik',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Åbningstider'})).toBeVisible();
+  await expect(page.getByText('10:30 – 21:45')).toBeVisible();
+  await drawer.getByRole('button',{name:'Tilbage til menu',exact:true}).click();
+  await drawer.getByRole('button',{name:'Historik',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Ordrehistorik'})).toBeVisible();
+  await expect(bottom.getByRole('button',{name:/Klar/})).not.toHaveAttribute('aria-current','page');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth),true,'mobile KDS stays within viewport');
+  assert.deepEqual(errors,[]);
+});
+
+test('mobile KDS uses original authorized progress, payment and editable timer actions',async t=>{
+  const {page,state,calls,errors}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,
+    orders:[order('ORD-MOBILE')]});
+  const bottom=page.getByRole('navigation',{name:'Køkkenstatus'});
+  const card=page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true});
+  await expect(card.getByRole('button',{name:'Start tilberedning',exact:true})).toBeVisible();
+  await card.getByRole('button',{name:'Start tilberedning',exact:true}).click();
+  await expect.poll(()=>state.orders.find(row=>row.id==='ORD-MOBILE').status).toBe('In Progress');
+  await bottom.getByRole('button',{name:/I gang/}).click();
+  const preparing=page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true});
+  await expect(preparing.getByRole('button',{name:'Markér klar',exact:true})).toBeVisible();
+  await preparing.getByRole('button',{name:'Ændr klartid for ORD-MOBILE',exact:true}).click();
+  await expect(preparing.getByLabel('Klar om minutter for ORD-MOBILE')).toBeVisible();
+  await preparing.getByRole('button',{name:'Gem klartid',exact:true}).click();
+  await expect.poll(()=>calls.filter(c=>c.kind==='ready-time').length).toBe(1);
+  await preparing.getByRole('button',{name:'Markér klar',exact:true}).click();
+  await expect.poll(()=>state.orders.find(row=>row.id==='ORD-MOBILE').status).toBe('Ready');
+  await bottom.getByRole('button',{name:/Klar/}).click();
+  await expect(page.getByRole('article',{name:'Ordre ORD-MOBILE',exact:true})).toBeVisible();
+  assert.equal(calls.filter(c=>c.kind==='status').length,2);
+  assert.deepEqual(errors,[]);
+});
+
+test('mobile KDS shows a sound activation hint, not an invented iOS silent-mode reading',async t=>{
+  const {page}=await fixture(t,390,844,{kds:true,kitchenMode:true,fakeClock:true,dynamicTime:true,suspendedAudio:true,orders:[]});
+  await expect(page.getByText('KDS-lyden skal aktiveres',{exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Test lyd',exact:true}).click();
+  await expect(page.getByText('KDS-lyden skal aktiveres',{exact:true})).toHaveCount(0);
+});
