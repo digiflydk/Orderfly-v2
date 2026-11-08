@@ -117,7 +117,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     return route.fulfill({ json: result });
   });
   if (state.fakeClock) await page.clock.install({time:new Date(now)});
-  await page.goto(origin); await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeVisible();
+  await page.goto(origin); if (extra.kds && extra.kitchenMode && width < 1024) await expect(page.getByRole('button', { name: 'Åbn menu', exact: true })).toBeVisible(); else await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeVisible();
   return { page, state, calls, errors };
 }
 for (const [width, height] of [[1024,768],[768,1024]]) {
