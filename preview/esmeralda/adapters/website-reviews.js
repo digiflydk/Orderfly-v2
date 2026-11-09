@@ -51,7 +51,7 @@
     return article;
   }
   function show(){var result=nextBatch(reviews.map(r=>r.id),state,matchMedia('(max-width: 767px)').matches?1:3,Math.random,Object.fromEntries(reviews.map(r=>[r.id,r.translated?1:!r.comment?2:0])));state=result.state;list.replaceChildren(...result.batch.map(id=>card(reviews.find(r=>r.id===id))));try{sessionStorage.setItem(key,JSON.stringify(state));}catch(_){} }
-  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !list.querySelector('details[open]') && !list.querySelector(':focus-visible'))timer=setInterval(show,8000);}
+  function schedule(){clearInterval(timer);if(inView && !paused && !document.hidden && !list.querySelector('details[open]') && !list.querySelector(':focus-visible'))timer=setInterval(show,4000);}
   next.addEventListener('click',function(){show();schedule();});
   section.addEventListener('focusin',schedule);section.addEventListener('focusout',()=>setTimeout(schedule,0));document.addEventListener('visibilitychange',schedule);
   fetch('/_reviews/customer-reviews.json',{credentials:'omit',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(data=>{
