@@ -59,4 +59,7 @@ The homepage subtitle is removed. Google reviews use the Google G mark; internal
 Reviews follow the Club benefits section headed LIDT MERE AT GLÆDE SIG TIL. Pointer hover (including sticky mobile hover) and focus on Next no longer suppress automatic rotation. Open source details and keyboard focus within a review card still pause it; closing/leaving resumes it. Hidden-page, offscreen and reduced-motion protections remain. The blue scalloped check icon opens source attribution, not Trustindex verification.
 
 ### Mobile autoplay correction
-Reviews change discretely every eight seconds, without sliding or fading, including when reduced motion is enabled. Touch focus remaining on a closed source badge no longer pauses autoplay; keyboard-visible focus and an open explanation still pause it. The script URL is versioned to invalidate previously cached clients.
+Reviews change discretely every four seconds, without sliding or fading, including when reduced motion is enabled. Touch focus remaining on a closed source badge no longer pauses autoplay; keyboard-visible focus and an open explanation still pause it. The script URL is versioned to invalidate previously cached clients.
+
+### Four-second rotation (9 November 2026)
+The automatic interval is four seconds on desktop and mobile. Existing no-repeat ordering and pause conditions are unchanged. Browser timing checks wait 4.5 seconds to detect regressions back to eight seconds.
