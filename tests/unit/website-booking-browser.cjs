@@ -27,6 +27,7 @@ for(const width of [390,1440])test(`booking URLs, VIP and uncertain recovery at 
    }
    if(url.origin!=='https://www.esmeraldapizza.dk'||req.method()!=='GET')return route.abort();
    const response=await server.webDesignPreviewResponse(new Request(req.url(),{headers:{host:url.host,'x-forwarded-proto':'https'}}));
+   assert.notEqual(response.status,308,'Resolve fixture redirects explicitly to keep the redirected request off the live site');
    return route.fulfill({status:response.status,headers:Object.fromEntries(response.headers),body:Buffer.from(await response.arrayBuffer())});
   });
   await page.goto('https://www.esmeraldapizza.dk/bordbooking?utm_campaign=synthetic-904');
@@ -69,7 +70,11 @@ for(const width of [390,1440])test(`booking URLs, VIP and uncertain recovery at 
   const complete=await page.evaluate(key=>JSON.parse(sessionStorage.getItem(key)),FLOW);
   assert.equal(complete.payload,null);assert.equal(complete.values,null);assert.equal(confirmations.length,1);
   const newTab=await context.newPage();
-  await newTab.goto('https://www.esmeraldapizza.dk/bordbooking/Bekr%C3%A6ftelse');
+  // Playwright routes only the first request in a redirect chain. Verify the
+  // real handler's alias response, then visit its target through interception.
+  const alias=await server.webDesignPreviewResponse(new Request('https://www.esmeraldapizza.dk/bordbooking/Bekr%C3%A6ftelse',{headers:{host:'www.esmeraldapizza.dk','x-forwarded-proto':'https'}}));
+  assert.equal(alias.status,308);assert.equal(alias.headers.get('location'),'/bordbooking/bekr%C3%A6ftelse');
+  await newTab.goto(new URL(alias.headers.get('location'),'https://www.esmeraldapizza.dk').href);
   await expect(newTab).toHaveURL('https://www.esmeraldapizza.dk/bordbooking');
   await expect(newTab.locator('#eb-success-step')).toBeHidden();
   assert.deepEqual(errors,[]);
