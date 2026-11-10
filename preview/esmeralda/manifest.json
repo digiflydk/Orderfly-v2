@@ -738,12 +738,12 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "ec3913f6dcca97d0044130160d1f8812e59bfc17f6c67c7034debb3e85ad4d37",
+  "payload_sha256": "1235327e23d268c1efc0c8e9b1582d0dbee081b9194024602e710eedca06834e",
   "routes": {
     "/": {
       "file": "index.html",
-      "size": 175940,
-      "sha256": "70f50f3a79e3d0333608d6195b77e026b10d3d36b3267a9cf3ba58acb741df74"
+      "size": 175872,
+      "sha256": "3a6e9f916e394555458114855dcfb5b107e495bf6f953aa52d8a7ec4342b6021"
     },
     "/_assets/013d8df1119a2bab0fef8d13.css": {
       "sha256": "f01cb0f3418cc744e15712bf50aafa27c5125f05e13ff9b5ca021c7e6c217685",
@@ -2616,9 +2616,9 @@
       "size": 5627
     },
     "/_assets/website-consent.js": {
-      "sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
+      "sha256": "8d73ccd92283adfb5032a6af7990a564f1a9fdf742c0fc5b1c642abc5857552c",
       "file": "_assets/website-consent.js",
-      "size": 10108
+      "size": 10040
     },
     "/_assets/9553e41a4710bdd1859d8a74.avif": {
       "sha256": "9553e41a4710bdd1859d8a74b4f3f7311451eea7e13b90db39190e3ef6062d06",
@@ -2779,7 +2779,7 @@
       "activation": "disabled"
     },
     "/_assets/website-consent.js": {
-      "sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
+      "sha256": "8d73ccd92283adfb5032a6af7990a564f1a9fdf742c0fc5b1c642abc5857552c",
       "source": "preview/esmeralda/adapters/website-consent.js",
       "upstream": "Esmeralda-Website#47",
       "activation": "consent-gated-production-hosts-only"
@@ -3319,7 +3319,7 @@
   "homepage_bootstrap": {
     "version": 1,
     "consent_route": "/_assets/website-consent.js",
-    "consent_sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
+    "consent_sha256": "8d73ccd92283adfb5032a6af7990a564f1a9fdf742c0fc5b1c642abc5857552c",
     "consent_placement": "first-synchronous-inline-script",
     "removed_original_hero_preloads": 2,
     "hero_semantics": "labelled-div-listitem"
@@ -3337,11 +3337,11 @@
     "scope": "native-keyboard-filter-and-no-inert-captcha"
   },
   "gtm_orderfly": {
-    "version": 1,
+    "version": 2,
     "container": "GTM-PK4J8ZFD",
-    "consent": "analytics_storage",
+    "consent": "analytics_storage+ad_storage",
     "retained_container": "GTM-52G3QF76",
     "previous_consent_sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
-    "consent_sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac"
+    "consent_sha256": "8d73ccd92283adfb5032a6af7990a564f1a9fdf742c0fc5b1c642abc5857552c"
   }
 }

@@ -34,9 +34,8 @@
   const allowedHost = ['https://www.esmeraldapizza.dk','https://esmeraldapizza.dk'].includes(location.origin);
   // Published GTM also initializes Google Ads. Until its categories are split,
   // loading it for analytics-only would request marketing resources too.
-  // 'analytics_only' is the Orderfly GTM container (GA4 only), loaded on statistics consent alone.
-  const granted = category => category === 'analytics_only' ? state.analytics_storage === 'granted'
-    : state[category] === 'granted' && (category !== 'analytics_storage' || state.ad_storage === 'granted');
+  // Both published GTM containers request Google Ads resources, so each needs statistics and marketing.
+  const granted = category => state[category] === 'granted' && (category !== 'analytics_storage' || state.ad_storage === 'granted');
   // Both containers share one dataLayer; one gtm.js event serves both, so page views are not doubled.
   let gtmStarted = false;
   const startGtm = () => {
@@ -58,7 +57,7 @@
       startGtm();
       script('google','https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76');
     });
-    schedule('google-orderfly','analytics_only',() => {
+    schedule('google-orderfly','analytics_storage',() => {
       startGtm();
       script('google-orderfly','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD');
     });

@@ -55,7 +55,7 @@ assert adapter_sha == 'eb6ec999568ddea7e312638f3c46bdc58672cbe6566fd1569ce856953
 entries[contact.ADAPTER_ROUTE] = {'data': base64.b64encode(adapter).decode(), 'sha256': adapter_sha, 'file': '_assets/website-contact-adapter.js', 'size': len(adapter)}
 consent_adapter = Path('preview/esmeralda/adapters/website-consent.js').read_bytes()
 consent_sha = hashlib.sha256(consent_adapter).hexdigest()
-assert consent_sha == 'e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac'
+assert consent_sha == '8d73ccd92283adfb5032a6af7990a564f1a9fdf742c0fc5b1c642abc5857552c'
 entries[consent.ADAPTER_ROUTE] = {'data': base64.b64encode(consent_adapter).decode(), 'sha256': consent_sha, 'file': '_assets/website-consent.js', 'size': len(consent_adapter)}
 payload = gzip.compress(json.dumps(entries, separators=(',',':')).encode(), mtime=0)
 dest.mkdir(parents=True, exist_ok=True)
