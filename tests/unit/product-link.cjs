@@ -11,6 +11,12 @@ test('an ambiguous or empty name falls back to the product id; combo-only produc
  const links=link.productLinkSlugs([{id:'a',productName:'Cola'},{id:'b',productName:'cola'},{id:'c',productName:'Fanta'},{id:'d',productName:''},{id:'e',productName:'Dip',comboOnly:true},{id:'c',productName:'Fanta'}]);
  assert.deepEqual([...links],[['a','a'],['b','b'],['c','fanta'],['d','d']]);
 });
+test('a name equal to another product id falls back to the id, so each link opens its own product',()=>{
+ const links=link.productLinkSlugs([{id:'p1',productName:'Cola'},{id:'cola',productName:'Fanta'},{id:'p3',productName:'Fanta'},{id:'sprite',productName:'Sprite'}]);
+ assert.deepEqual([...links],[['p1','p1'],['cola','cola'],['p3','p3'],['sprite','sprite']]);
+ assert.equal(new Set(links.values()).size,links.size,'every product has a distinct link');
+ for(const [id,value] of links)assert.equal(link.productIdForLink(links,value),id,value);
+});
 test('a link resolves only to its own product; unknown, oversized and stale values are rejected',()=>{
  const links=link.productLinkSlugs([{id:'p1',productName:'Margherita'},{id:'p2',productName:'Pepperoni'}]);
  assert.equal(link.productIdForLink(links,'pepperoni'),'p2');

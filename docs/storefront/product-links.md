@@ -7,7 +7,7 @@ Every dish on the storefront menu has its own address, so campaigns can link str
 `https://esmeralda.orderfly.dk/amager?produkt=1-margherita-v`
 
 - The value is made from the product name: lower case, Danish letters spelled out (`æ`→`ae`, `ø`→`oe`, `å`→`aa`), and every other character becomes a hyphen. `1. Margherita (V)` → `1-margherita-v`, which matches the dish addresses on www.esmeraldapizza.dk (`/dishes/1-margherita-v`).
-- Two different products with the same name, or a product without a name, would be ambiguous. They use their product id instead, so a link never opens a different product. A product id is also accepted for any product.
+- Two different products with the same name, a product without a name, or a name that equals another product's id would be ambiguous. Those products use their product id instead, so a link never opens a different product. A product id is also accepted for any product.
 - Other parameters are kept, for example `?deliveryMethod=pickup&utm_source=facebook&produkt=1-margherita-v`. With `deliveryMethod` in the link, the pickup or delivery question is skipped as on the menu.
 - Combo-only products have no link. Combos are not covered.
 - The long form works too: `https://orderfly.dk/esmeralda/amager?produkt=1-margherita-v`.

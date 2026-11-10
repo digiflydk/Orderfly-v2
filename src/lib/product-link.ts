@@ -16,9 +16,10 @@ export function productLinkSlug(name: string | undefined | null): string {
 type Linkable = { id: string; productName?: string | null; comboOnly?: boolean | null };
 
 /**
- * One link per product id. A name shared by two different products (or an
- * empty name) is ambiguous, so those products use their id instead; a link
- * therefore never opens a different product than the one it was made for.
+ * One link per product id. A name shared by two different products, an empty
+ * name, or a name equal to another product's id is ambiguous, so those
+ * products use their id instead; a link therefore never opens a different
+ * product than the one it was made for.
  */
 export function productLinkSlugs(products: Linkable[]): Map<string, string> {
   const byId = new Map<string, Linkable>();
@@ -33,7 +34,9 @@ export function productLinkSlugs(products: Linkable[]): Map<string, string> {
   const links = new Map<string, string>();
   for (const product of byId.values()) {
     const slug = productLinkSlug(product.productName);
-    links.set(product.id, slug && owners.get(slug)!.size === 1 ? slug : product.id);
+    // Ids are reserved: a slug that is another product's id would resolve to either product.
+    const unique = slug && owners.get(slug)!.size === 1 && (slug === product.id || !byId.has(slug));
+    links.set(product.id, unique ? slug : product.id);
   }
   return links;
 }
