@@ -1,3 +1,5 @@
+import { websiteBookingStep, websiteBookingPath } from '@/lib/website-booking-routes';
+import { insertWebsiteBooking } from '@/lib/website-booking-page';
 import { insertWebsiteReviews } from '@/lib/website-reviews-section';
 import { encodeWebsiteResponse } from '@/lib/website-response-encoding';
 import { readFile } from 'node:fs/promises';
@@ -35,7 +37,12 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     headers.set('Allow','GET, HEAD');
     return new Response('Method not allowed', {status:405, headers});
   }
-  const path = url.pathname;
+  const bookingStep = websiteBookingStep(url.pathname);
+  const path = bookingStep ? '/bordbooking' : url.pathname;
+  if (bookingStep) {
+    headers.set('Cache-Control', 'no-store');
+    if (bookingStep > 1) headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  }
   // Use the incoming handler URL without another parse/serialization of its query.
   // Next may already have normalized encoding; HTTP tests verify ordered decoded values.
   const rawSearch = request.url.includes('?') ? request.url.slice(request.url.indexOf('?')).split('#')[0] : '';
@@ -57,6 +64,16 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
       headers.set('Content-Length', String(Buffer.byteLength(body)));
       return new Response(request.method === 'HEAD' ? null : body, {headers});
     }
+  }
+  if (bookingStep && url.pathname !== websiteBookingPath(bookingStep)) {
+    headers.set('Location', websiteBookingPath(bookingStep) + rawSearch);
+    return new Response(null, {status:308,headers});
+  }
+  if (path === '/_booking/flow.js') {
+    const script = await readFile(join(process.cwd(), 'preview/esmeralda/adapters/website-booking.js'));
+    headers.set('Content-Type', 'application/javascript; charset=utf-8');
+    headers.set('Cache-Control', 'no-store');
+    return new Response(request.method === 'HEAD' ? null : script, {headers});
   }
   // Restore the source-owned legacy handoff instead of serving its inert mount.
   // A relative Location keeps the preview host; omitting a fragment lets browsers
@@ -82,6 +99,7 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     const expected = routes[path];
     let bytes = Buffer.from(entry.data,'base64');
     if (bytes.length !== expected.size || sha(bytes) !== expected.sha256) throw new Error('Preview entry integrity mismatch');
+    if(path==='/bordbooking') bytes=Buffer.from(insertWebsiteBooking(bytes.toString('utf8')));
     if(path==='/') bytes=Buffer.from(insertWebsiteReviews(bytes.toString('utf8')));
     headers.set('Content-Type', mime[expected.file.split('.').pop()!] ?? 'application/octet-stream');
     headers.set('Content-Length', String(bytes.length));

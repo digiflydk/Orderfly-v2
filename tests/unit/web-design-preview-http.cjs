@@ -34,7 +34,7 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
     assert.equal(r.headers.get('location'),'/bordbooking'+query);assert.equal(await r.text(),'');
     assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
     const target=await get(r.headers.get('location'));assert.equal(target.status,200);
-    assert.equal(crypto.createHash('sha256').update(Buffer.from(await target.arrayBuffer())).digest('hex'),manifest.routes['/bordbooking'].sha256);
+    assert.equal(crypto.createHash('sha256').update(Buffer.from(await target.arrayBuffer())).digest('hex'),expectedSha('/bordbooking'));
    }
   }
   for(const route of ['/','/menu','/dishes/1-margherita-v']) {
