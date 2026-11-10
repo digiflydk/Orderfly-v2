@@ -140,16 +140,20 @@ test('delayed webhook reconciliation reports paid only after shared settlement; 
 
 const storefront=loadTs('src/lib/brand-subdomain.ts');
 function hookFixture({analytics=()=>{},cart={}}={}) {
- const state=[];let index=0;const navigations=[];
- const hooks={useRef:value=>{const i=index++;return state[i]||=( {current:value});},useState:value=>{const i=index++;if(!(i in state))state[i]=value;return[state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]}};
+ const state=[];let index=0;const navigations=[],effects=[];
+ const hooks={useRef:value=>{const i=index++;return state[i]||=( {current:value});},useState:value=>{const i=index++;if(!(i in state))state[i]=value;return[state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]},
+  // Effects run after each render, as React does after commit; navigation now happens there (076a601).
+  useEffect:effect=>{effects.push(effect);}};
  const api=loadTs('src/hooks/use-menu-checkout.ts',{
   react:hooks,'next/navigation':{useRouter:()=>({push:path=>navigations.push(path)})},
   '@/context/cart-context':{useCart:()=>({brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},cartReady:true,deliveryType:'pickup',cartItems:[{...comboCart('p'),tags:[]}],checkoutTotal:100,itemCount:1,...cart})},
   '@/context/analytics-context':{useAnalytics:()=>({trackEvent:analytics})},
+  // No configured upsell: the catalog provider continues straight away.
+  '@/context/storefront-catalog':{useStorefrontCatalog:()=>({openCart:proceed=>proceed(),cartOpening:false})},
   // Browser host orderfly.dk; the subdomain form is covered in brand-subdomains-12.
   '@/hooks/use-storefront-path':{browserStorefrontPath:(slug,...segments)=>storefront.storefrontPath(slug,false,...segments)},
  });
- const render=()=>{index=0;return api.useMenuCheckout()};
+ const render=()=>{index=0;effects.length=0;const result=api.useMenuCheckout();for(const effect of effects)effect();return result;};
  return{first:render(),render,navigations};
 }
 test('menu checkout navigates immediately, ignores optional analytics failure and repeated clicks',()=>{
