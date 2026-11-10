@@ -18,7 +18,7 @@ Before a confirmation can be sent, the exact selected slot, form payload and UUI
 
 Completed state retains only the key and minimal booking summary, with guest values and the submission payload removed. Reload verifies the server result again, including cancellation or no-show status. A direct confirmation URL without matching state returns to step one. A new reservation requires the explicit new-booking action. Pending drafts expire after 32 days (longer than the present 30-day booking horizon), normal/completed state after one day. Closing the tab clears session storage; recovery is scoped to the same tab/session, not a cross-device booking-management link.
 
-VIP is an **optional request**, confirmed separately by staff. The existing Esmeralda/Amager field and option are disabled below six guests and revalidated on submit. The API and database independently enforce the same minimum. No table or room is automatically reserved by this option.
+VIP is an **optional request**, confirmed separately by staff. The existing Esmeralda/Amager field and option are disabled below six guests and revalidated on submit. The API and database independently enforce the same minimum. Reducing the guest count clears an ineligible VIP selection before disabling it, including checkbox, radio and select rendering, so an ordinary booking can still be submitted. No table or room is automatically reserved by this option.
 
 ## Coordinated release
 

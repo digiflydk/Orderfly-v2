@@ -40,6 +40,15 @@ for(const width of [390,1440])test(`booking URLs, VIP and uncertain recovery at 
   await page.locator('[data-booking-time]').first().click();
   await expect(page.locator(`input[value="${vip}"]`)).toBeEnabled();
   await page.locator(`input[value="${vip}"]`).check();
+  await page.locator('#eb-back').click();
+  await page.locator('#eb-party').selectOption('2');
+  await page.locator('[data-booking-time]').first().click();
+  await expect(page.locator(`input[value="${vip}"]`)).not.toBeChecked();
+  await expect(page.locator(`input[value="${vip}"]`)).toBeDisabled();
+  await page.locator('#eb-back').click();
+  await page.locator('#eb-party').selectOption('6');
+  await page.locator('[data-booking-time]').first().click();
+  await page.locator(`input[value="${vip}"]`).check();
   await page.locator('#eb-name').fill('Synthetic Guest');await page.locator('#eb-phone').fill('00000000');
   await page.locator('#eb-email').fill('synthetic@example.invalid');
   await page.reload();

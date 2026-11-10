@@ -240,7 +240,14 @@
         const visible = !field.parent_field_id || (!!parent && !parent.wrap.hidden && (field.condition_option_values || []).some(value => values(field.parent_field_id).includes(value)));
         item.wrap.hidden = !visible;
         for (const input of item.inputs) {
-          input.disabled = !visible || sending || uncertain || restoring || Number(input.dataset.minParty || 0) > (selected?.party_size || Number(party.value));
+          const guestCount = selected?.party_size || Number(party.value);
+          const editable = !sending && !uncertain && !restoring;
+          const ineligible = Number(input.dataset.minParty || 0) > guestCount;
+          if (input.tagName === 'SELECT') {
+            for (const option of input.options) option.disabled = Number(option.dataset.minParty || 0) > guestCount;
+            if (editable && input.selectedOptions[0]?.disabled) input.value = '';
+          } else if (editable && ineligible) input.checked = false;
+          input.disabled = !visible || !editable || ineligible;
           input.required = visible && field.is_required === true && field.field_type !== 'checkbox';
           input.setAttribute('aria-required', String(visible && field.is_required === true));
         }
@@ -277,13 +284,17 @@
           wrap.appendChild(input); inputs.push(input);
         }
         if (field.help_text) { const help = node('p', field.help_text, 'eb-help'); help.id = id + '-help'; wrap.appendChild(help); inputs.forEach(n => n.setAttribute('aria-describedby', help.id)); }
-        for (const input of inputs) {
-          const option = options.find(x => x.option_value === input.value);
-          const vip = base.organization_slug === 'esmeralda' && base.location_slug === 'amager' && input.value === vipValue;
-          input.dataset.minParty = String(option?.min_party_size || (vip ? 6 : 0));
+        const choices = isOptions ? inputs : field.field_type === 'select' ? [...inputs[0].options] : [];
+        for (const choice of choices) {
+          const option = options.find(x => x.option_value === choice.value);
+          const vip = base.organization_slug === 'esmeralda' && base.location_slug === 'amager' && choice.value === vipValue;
+          choice.dataset.minParty = String(option?.min_party_size || (vip ? 6 : 0));
           if (vip || option?.requires_staff_confirmation) {
-            input.parentElement.querySelector('span').textContent = 'Ønske om VIP-rum (mindst 6 gæster, bekræftes af personalet)';
+            const label = isOptions ? choice.parentElement.querySelector('span') : choice;
+            label.textContent = 'Ønske om VIP-rum (mindst 6 gæster, bekræftes af personalet)';
           }
+        }
+        for (const input of inputs) {
           const old = restoreValues?.get(field.id) || previous.get(field.id) || [];
           if (isOptions) input.checked = old.includes(input.value) || (!old.length && input.value === ''); else input.value = old[0] || '';
           input.addEventListener('change', conditions);

@@ -8,15 +8,15 @@ const field={id:'33333333-3333-4333-8333-333333333333',field_type:'checkbox',is_
 const acknowledgement={ok:true,found:true,booking_id:'synthetic-booking',booking_reference:'SYNTHETIC-001',starts_at:'2026-12-01T17:00:00Z',party_size:6,status:'confirmed',tracking_event_id:'synthetic-event',is_test:true};
 const wait=()=>new Promise(resolve=>setImmediate(resolve));
 async function settle(){for(let n=0;n<12;n++)await wait();}
-async function fixture({path='/bordbooking',saved,confirm,recover,storageFailure=false}={}){
+async function fixture({path='/bordbooking',saved,confirm,recover,storageFailure=false,customField=field}={}){
  const dom=new JSDOM(html,{url:'https://www.esmeraldapizza.dk'+path,runScripts:'outside-only'}),w=dom.window,calls=[];
  w.AbortController=AbortController;w.crypto.randomUUID=randomUUID;
  if(saved)w.sessionStorage.setItem(FLOW,saved);
  if(storageFailure)Object.defineProperty(w,'sessionStorage',{get(){throw Error('blocked')}});
  w.fetch=async(url,options)=>{assert.equal(url,'https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/booking-api');const body=JSON.parse(options.body);calls.push({body,key:options.headers['x-idempotency-key']});let data,status=200;
-  if(body.action==='fields')data={system_fields:[],fields:[field]};
+  if(body.action==='fields')data={system_fields:[],fields:[customField]};
   else if(body.action==='availability')data={slots:[{starts_at:body.date+'T17:00:00Z',local_time:'18:00',duration_minutes:120}]};
-  else if(body.action==='confirm'){const result=confirm?await confirm(body):{data:acknowledgement};data=result.data;status=result.status||200;}
+  else if(body.action==='confirm'){const result=confirm?await confirm(body):{data:{...acknowledgement,party_size:body.party_size,starts_at:body.starts_at}};data=result.data;status=result.status||200;}
   else if(body.action==='recover'){const result=recover?await recover(body):{data:acknowledgement};data=result.data;status=result.status||200;}
   else throw Error('Unexpected action '+body.action);
   return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json'}});
@@ -51,4 +51,18 @@ test('an unavailable completed booking retries only recovery, including keyboard
 });
 test('recovery reflects a subsequently cancelled booking without reserved copy',async()=>{
  let f=await fixture();try{await f.choose();f.fill();await f.submit();const saved=f.w.sessionStorage.getItem(FLOW);f.close();f=await fixture({saved,recover:async()=>({data:{...acknowledgement,status:'cancelled'}})});assert.equal(f.$('eb-success-step').hidden,false);assert.equal(f.$('eb-success-step').querySelector('.eb-eyebrow').textContent,'Bookingstatus');assert.match(f.$('eb-success-heading').textContent,/aflyst/);assert.equal(f.calls.filter(x=>x.body.action==='confirm').length,0);}finally{f.close()}
+});
+
+test('reducing guest count clears an ineligible VIP choice for radios, checkboxes and selects',async()=>{
+ for(const config of [{field_type:'checkbox',allow_multiple:false},{field_type:'checkbox',allow_multiple:true},{field_type:'select'}]){
+  const f=await fixture({customField:{...field,...config}});try{
+   await f.choose(6);const control=f.w.document.querySelector('[value="'+vip+'"]');
+   if(config.field_type==='select')control.parentElement.value=vip;else control.checked=true;
+   control.dispatchEvent(new f.w.Event('change',{bubbles:true}));
+   f.$('eb-back').click();await settle();await f.choose(2);
+   const updated=f.w.document.querySelector('[value="'+vip+'"]');assert.equal(updated.disabled,true);
+   if(config.field_type==='select')assert.equal(updated.parentElement.value,'');else assert.equal(updated.checked,false);
+   f.fill();await f.submit();const sent=f.calls.find(x=>x.body.action==='confirm');assert.ok(sent);assert.deepEqual(sent.body.custom_responses,[]);assert.equal(sent.body.party_size,2);assert.equal(f.$('eb-success-step').hidden,false);
+  }finally{f.close()}
+ }
 });
