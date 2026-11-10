@@ -35,7 +35,7 @@
 
   function card(r) {
     var article=node('article','es-review-card'), header=node('div','es-review-header'), avatar=node('span','es-review-avatar',(r.displayName||'G').slice(0,1));
-    if(r.photoUrl && /^https:\/\/(?:[a-z0-9-]+\.)*googleusercontent\.com\//i.test(r.photoUrl)) {var img=node('img','');img.src=r.photoUrl;img.alt='';img.width=48;img.height=48;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=function(){this.remove();};avatar.append(img);}
+    if(r.photoUrl && /^https:\/\/lh[3-6]\.googleusercontent\.com\//.test(r.photoUrl)) {var img=node('img','');img.src=r.photoUrl;img.alt='';img.width=48;img.height=48;img.loading='lazy';img.referrerPolicy='no-referrer';img.onerror=function(){this.remove();};avatar.append(img);}
     var who=node('div','es-review-who');who.append(node('h3','',r.displayName||'Anonym kunde'));
     if(r.receivedAt){var date=new Date(r.receivedAt);if(!isNaN(date)){var time=node('time','',(r.dateApproximate?'ca. ':'')+date.toLocaleDateString('da-DK'));time.dateTime=date.toISOString();who.append(time);}}
     header.append(avatar,who,sourceIcon(r.source==='google'));article.append(header);

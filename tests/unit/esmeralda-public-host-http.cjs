@@ -7,6 +7,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const manifest=require('../../preview/esmeralda/manifest.json');
 const discovery=require('../../preview/esmeralda/production-discovery.json');
+const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
 const mpanel=require('../../mpanel/esmeralda/manifest.json');
 async function withServer(enabled,fn){
  const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -24,7 +25,7 @@ test('actual HTTP production content, discovery, exact-host routing and mPanel i
  for(const [p,e]of Object.entries(manifest.routes)) {
   if(p==='/robots.txt'||p==='/book-bord')continue;
   const r=await get(p+'?path=/api/health');assert.equal(r.status,200,p);assert.equal(r.headers.get('x-robots-tag'),null,p);
-  assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),e.sha256,p);
+  assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),expectedSha(p),p);
  }
  const sitemap=await get('/sitemap.xml');assert.equal(sitemap.status,200);assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),discovery.public_urls);
  assert.match(await(await get('/robots.txt')).text(),/Allow: \/\n/);

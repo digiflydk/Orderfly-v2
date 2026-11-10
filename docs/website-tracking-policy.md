@@ -40,3 +40,9 @@ The combined consent repair is live at `7055f5a4`; the release switch is enabled
 Source responses were read on2026-10-28 without subscribing a contact. The public brand settings report push disabled. Existing consent gates still apply to the initial loader and withdrawal reload; CSP permissions do not themselves load resources. A real-SDK isolated Chromium check intercepts every request and supplies downloaded public SDK/config/form bodies, so it sends no external tracking or subscription. Relevant committed consent browser tests and policy tests must also pass. Live form rendering remains a post-deployment check; successful rendering does not establish submission, provider receipt or CAPTCHA acceptance. No subscription test is authorized.
 
 The earlier source inventory/release-gate notes describe the initial policy work. Google container access/category configuration, broader provider event delivery, and contact activation remain separate unresolved work.
+
+## Follow-up: homepage review avatars, 2026-11-10
+
+The homepage review section (#859) shows Google reviewer photos. Its earlier CSP addition `https://*.googleusercontent.com` was a wildcard, which this policy and `tests/unit/esmeralda-public-host.cjs` / `tests/unit/website-tracking-policy.cjs` forbid. It is replaced by the exact Google profile-photo hosts `lh3`–`lh6.googleusercontent.com` (`REVIEW_PHOTO_HOSTS` in `src/lib/esmeralda-public-host.ts`), still only on `/`. All live review photos read on 2026-11-10 use `lh3`. `preview/esmeralda/adapters/website-reviews.js` renders a photo only from these hosts; any other photo URL falls back to the initials avatar, so the page never requests a blocked image.
+
+Homepage hash checks: `/` is served with the review section inserted at response time, so `tests/helpers/website-served-sha.cjs` derives its expected bytes from the pinned manifest bytes plus `insertWebsiteReviews`. Every other route still compares directly with its manifest hash.

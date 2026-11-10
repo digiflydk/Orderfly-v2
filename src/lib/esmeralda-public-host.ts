@@ -18,6 +18,9 @@ export function esmeraldaCanonicalRedirect(url: URL, host: string | null, proto:
   return name !== 'www.esmeraldapizza.dk' || scheme !== 'https'
     ? ESMERALDA_PUBLIC_ORIGIN + url.pathname + (url.href.includes('?') ? url.href.slice(url.href.indexOf('?')).split('#')[0] : '') : null;
 }
+// Exact Google profile-photo hosts for homepage review avatars; no wildcard origin.
+// preview/esmeralda/adapters/website-reviews.js renders photos only from these hosts.
+export const REVIEW_PHOTO_HOSTS = ['https://lh3.googleusercontent.com', 'https://lh4.googleusercontent.com', 'https://lh5.googleusercontent.com', 'https://lh6.googleusercontent.com'];
 export function esmeraldaPublicHeaders(pathname: string): Record<string, string> {
   // Website-only provider sources verified against captured IDs, public SDKs and
   // Google's CSP guide; see docs/website-tracking-policy.md. This is not consent
@@ -35,6 +38,6 @@ export function esmeraldaPublicHeaders(pathname: string): Record<string, string>
     'Cache-Control': 'public, max-age=0, must-revalidate',
     'X-Content-Type-Options': 'nosniff',
     'Referrer-Policy': 'strict-origin-when-cross-origin',
-    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' " + trackingScripts + contactScript + "; style-src 'self' 'unsafe-inline' https://fonts.soundestlink.com/fonts/css/; img-src 'self' data: " + trackingImages + (pathname === '/' ? ' https://*.googleusercontent.com' : '') + "; font-src 'self' data: https://fonts.soundestlink.com/fonts/static/; connect-src 'self' " + trackingConnect + newsletterConnect + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' " + trackingScripts + contactScript + "; style-src 'self' 'unsafe-inline' https://fonts.soundestlink.com/fonts/css/; img-src 'self' data: " + trackingImages + (pathname === '/' ? ' ' + REVIEW_PHOTO_HOSTS.join(' ') : '') + "; font-src 'self' data: https://fonts.soundestlink.com/fonts/static/; connect-src 'self' " + trackingConnect + newsletterConnect + booking + contactConnect + "; form-action 'none'; frame-src 'self'" + map + contactFrame + "; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
   };
 }

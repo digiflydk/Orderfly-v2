@@ -104,7 +104,8 @@ for(const width of [320,390,1280])test(`V2 compact menu and product-to-cart geom
  assert.equal(await add.innerText(),'Tilføj');
  assert.ok(parseFloat(await add.evaluate(el=>getComputedStyle(el).borderRadius))<=10,'rectangular Add action');
  await take('menu');
- await add.click();
+ // Tilføj adds a dish without option groups directly (a2e08ce); the title still opens its details.
+ await page.getByRole('button',{name:'Se Margherita',exact:true}).click();
  const product=page.getByRole('dialog');await product.getByRole('heading',{name:'Margherita',exact:true}).waitFor();
  await product.getByRole('button',{name:/Læg i pose|Tilføj til kurv/}).click();
  await product.waitFor({state:'hidden'});
@@ -211,10 +212,10 @@ test('V2 header says Min Club and links to the portal when the browser is signed
 
 for(const width of [320,390,768])test(`V2 cart dock covers the viewport bottom while scrolling and resizing (${width}px)`,async t=>{
  const page=await setup(t,width,'&v2');
+ // A dish without option groups goes straight into the basket from Tilføj.
  await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
- await page.getByRole('dialog').getByRole('button',{name:/Læg i pose|Tilføj til kurv/}).click();
- await page.getByRole('dialog').waitFor({state:'hidden'});
  const dock=page.locator('[data-v2-cart-dock]');await dock.waitFor();
+ assert.equal(await page.getByRole('dialog').count(),0,'direct add opens no product dialog');
  // Chromium's native CSS environment override exercises the same env() values
  // used by Safari/standalone, without replacing application styles in the fixture.
  const cdp=await page.context().newCDPSession(page);
@@ -264,7 +265,7 @@ for(const width of [390,1280])test(`source-aware pizza image is contained in men
  const productCard=page.locator('[data-v2-product-card]').filter({has:page.getByRole('button',{name:'Se Margherita',exact:true})});
  await assertCutout(productCard.locator('img[data-pizza-cutout]'));
  await page.screenshot({path:path.join(dir,`pizza-cutout-menu-${width}.png`),fullPage:false});
- await productCard.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
+ await productCard.getByRole('button',{name:'Se Margherita',exact:true}).click();
  let dialog=page.getByRole('dialog');
  await assertCutout(dialog.locator('.v2-product-hero img[data-pizza-cutout]'),asset);
  assert.equal(await dialog.locator('.v2-product-hero').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 0, 0)','product hero has a true black background behind transparent images');
@@ -272,7 +273,7 @@ for(const width of [390,1280])test(`source-aware pizza image is contained in men
  await dialog.getByRole('button',{name:/Læg i pose/}).click();await dialog.waitFor({state:'hidden'});
  if(width<1024){await page.locator('[data-v2-cart-bar]').click();dialog=page.getByRole('dialog');await assertCutout(dialog.locator('[data-cart-line] img[data-pizza-cutout]'));await dialog.getByRole('button',{name:'Tilføj flere retter',exact:true}).click();await dialog.waitFor({state:'hidden'});}
  else await assertCutout(page.getByRole('complementary',{name:'Din kurv'}).locator('img[data-pizza-cutout]'));
- await productCard.getByRole('button',{name:'Tilføj Margherita',exact:true}).click();
+ await productCard.getByRole('button',{name:'Se Margherita',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Vælg menu/}).click();
  const combo=page.getByRole('dialog');await combo.locator('[data-pizza-cutout]').first().waitFor();
  for(const image of await combo.locator('img[data-pizza-cutout]').all())await assertCutout(image);

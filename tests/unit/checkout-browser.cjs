@@ -446,18 +446,28 @@ for(const width of [390,1280])for(const enabled of [false,true])test(`QA209 cart
  assert.equal(requests.get(scenario)?.length||0,0);
 });
 
-test('QA209 cart-only upsell offer price, add, remove and dismiss never start checkout',async t=>{
- const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
- const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
- await page.goto(origin+'/?case=upsell-qa209&view=menu');
- const offer=page.getByRole('region',{name:'Anbefalet til din ordre'}).first();
- await offer.getByText('18,00 kr.',{exact:true}).waitFor();
- await offer.getByRole('button',{name:'Tilføj Drink',exact:true}).click();
- const line=page.locator('[data-cart-line="drink"]').first();await line.waitFor();
- assert.match(await line.innerText(),/18,00 kr/);
- await line.getByRole('button',{name:'Fjern Drink',exact:true}).click();await line.waitFor({state:'detached'});
- await offer.getByRole('button',{name:'Skjul anbefaling',exact:true}).click();await offer.waitFor({state:'hidden'});
- assert.deepEqual(errors,[]);assert.equal(requests.get('upsell-qa209')?.length||0,0);
+test('QA209 cart-only upsell offer price, add and dismiss never start a payment',async t=>{
+ const errors=[];t.after(()=>assert.deepEqual(errors,[]));
+ // Offers are no longer rendered inside the basket (076a601). On desktop they open as a popup from the
+ // checkout button; adding or skipping continues to the checkout page, but never starts a payment.
+ for(const action of ['add','skip']){
+  // A handled campaign is remembered for the browser session, so each path starts in a fresh context.
+  const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
+  const page=await context.newPage();page.setDefaultTimeout(5000);page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(origin+'/?case=upsell-qa209&view=menu');
+  const basket=page.getByRole('complementary',{name:'Din kurv'});
+  await basket.getByRole('button',{name:'Til kassen',exact:true}).waitFor();
+  assert.equal(await basket.locator('[data-upsell-product]').count(),0,'no inline recommendation in the basket');
+  await basket.getByRole('button',{name:'Til kassen',exact:true}).click();
+  const offer=page.getByRole('dialog',{name:'Andre købte også'});
+  const drink=offer.locator('[data-upsell-product="drink"]');
+  await drink.getByText('18,00 kr.',{exact:true}).waitFor();
+  if(action==='add')await drink.getByRole('button',{name:'Tilføj Drink',exact:true}).click();
+  else await offer.getByRole('button',{name:'Fortsæt til checkout',exact:true}).click();
+  await page.waitForURL(/\/brand\/location\/checkout$/);
+  assert.equal(requests.get('upsell-qa209')?.length||0,0,action);
+ }
+ assert.deepEqual(errors,[]);
 });
 
 for (const width of ['desktop','mobile']) test(`Club signup ${width}: requires two unticked consents and discounts this order`,async t=>{
