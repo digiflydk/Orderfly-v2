@@ -1,3 +1,4 @@
+import { websiteBookingStep } from '@/lib/website-booking-routes';
 // Public website routing is additive to the existing merchant application.
 export const ESMERALDA_PUBLIC_ORIGIN = 'https://www.esmeraldapizza.dk';
 export function isEsmeraldaPublicHost(host: string | null): boolean {
@@ -29,7 +30,7 @@ export function esmeraldaPublicHeaders(pathname: string): Record<string, string>
   const trackingImages = 'https://www.facebook.com/tr https://www.facebook.com/tr/ https://www.googletagmanager.com https://www.google-analytics.com/g/collect https://region1.google-analytics.com/g/collect';
   const trackingConnect = 'https://www.facebook.com/tr/ https://www.googletagmanager.com https://www.google.com https://www.google-analytics.com/g/collect https://region1.google-analytics.com/g/collect';
   const newsletterConnect = ' https://wt.omnisendlink.com/REST/inShop/v1/getSettings https://forms.soundestlink.com/REST/forms/v1/renderedForms https://forms.soundestlink.com/REST/forms/v1/renderedForms/ https://forms.soundestlink.com/REST/forms/v2/subscribe';
-  const booking = pathname === '/bordbooking' ? ' https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/booking-api' : '';
+  const booking = websiteBookingStep(pathname) !== null ? ' https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/booking-api' : '';
   const map = pathname === '/kontakt' ? ' https://www.google.com/maps/embed' : '';
   const contactScript = pathname === '/kontakt' ? ' https://challenges.cloudflare.com/turnstile/v0/api.js' : '';
   const contactFrame = pathname === '/kontakt' ? ' https://challenges.cloudflare.com' : '';
