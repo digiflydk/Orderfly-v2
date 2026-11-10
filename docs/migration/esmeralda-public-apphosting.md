@@ -35,3 +35,13 @@ Rollback: restore the captured website DNS records to the unchanged Webflow site
 Redirects run in App Router server handlers, after exact-host and method gates. Next15 normalizes the incoming query before the handler: `%20` can become `+`, escape casing can change and a bare `?` disappears. Do not claim byte-exact URL serialization. The user requirement is preserving relevant query parameters, so the coordinator and independent reviewer accepted explicit functional tests of **ordered decoded entries**, including duplicate keys, empty values, literal plus `%2B`, literal percent `%252F`, nested callback URLs and opaque state. Fixed destination host/path is asserted separately; query parameters cannot choose the destination. The earlier Hosting double-encoding failure changed decoded values and would still fail these assertions. No signed-query dependency has been identified; any future signature over raw URL bytes needs separate handling/review. No global framework flags, private Next internals or custom server were introduced. The new internal mPanel route name is reserved from merchant slug creation.
 
 Omnisend account configuration was independently read and confirms the existing Esmeralda brand and embedded form are enabled ([Website#24 evidence](https://github.com/digiflydk/Esmeralda-Website/issues/24#issuecomment-6465202855)). This does not establish downstream CSP dependencies or delivery acceptance.
+
+## Website tests in CI (2026-11-10)
+
+The website tests now run in Orderfly CI (`.github/workflows/ui-tests.yml`) instead of only locally. They had drifted red on `main` unnoticed until PR #903:
+
+- **Esmeralda website payload, policy and consent regressions:** host/CSP policy, preview isolation, consent adapter, payload pins and every pinned repair baseline, the Python preview patch tests and `scripts/test-mpanel-host.cjs`.
+- **Esmeralda website browser regressions:** consent controls, footer label, homepage delivery, menu filter, performance and review rotation. All provider requests are intercepted.
+- **Esmeralda website HTTP regressions:** run after `npm run build` against the real standalone server on loopback.
+
+Pinned repair baselines reverse only their explicit, separately pinned later repairs. Examples: `tests/helpers/website-menu-filter-baseline.cjs` and `tests/helpers/website-gtm-orderfly-baseline.cjs`, which uses the pre-GTM adapter in `tests/fixtures/website-consent-before-gtm-orderfly.js`. A new payload patch must add the same kind of explicit reversal rather than repin a broad hash. `/` is compared with its manifest bytes plus the review section inserted at response time (`tests/helpers/website-served-sha.cjs`).

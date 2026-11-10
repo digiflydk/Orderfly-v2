@@ -14,7 +14,10 @@ function servedSha(manifest){
  const bookingSha=crypto.createHash('sha256').update(Buffer.from(insertWebsiteBooking(booking.toString('utf8')))).digest('hex');
  const home=Buffer.from(payload['/'].data,'base64');
  if(crypto.createHash('sha256').update(home).digest('hex')!==manifest.routes['/'].sha256)throw Error('Homepage payload does not match its manifest pin');
- const homeSha=crypto.createHash('sha256').update(Buffer.from(insertWebsiteReviews(home.toString('utf8')))).digest('hex');
- return route=>route==='/'?homeSha:route==='/bordbooking'?bookingSha:manifest.routes[route].sha256;
+ const servedHome=Buffer.from(insertWebsiteReviews(home.toString('utf8'))),servedBooking=Buffer.from(insertWebsiteBooking(booking.toString('utf8')));
+ const homeSha=crypto.createHash('sha256').update(servedHome).digest('hex');
+ const sha=route=>route==='/'?homeSha:route==='/bordbooking'?bookingSha:manifest.routes[route].sha256;
+ sha.size=route=>route==='/'?servedHome.length:route==='/bordbooking'?servedBooking.length:manifest.routes[route].size;
+ return sha;
 }
 module.exports={servedSha};
