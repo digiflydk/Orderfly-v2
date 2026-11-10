@@ -17,6 +17,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { deleteFeedback, updateFeedback } from '../actions';
 import { useRouter } from 'next/navigation';
+import type { ReplyThreadView } from '@/lib/feedback/replies';
+import { ReplyThread } from './reply-thread';
 
 type FullFeedback = Feedback & {
   brandName: string;
@@ -65,7 +67,7 @@ function renderAnswer(response: any) {
   return <p>{String(response?.answer ?? '')}</p>;
 }
 
-export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { initialFeedback: FullFeedback; canEdit?: boolean }) {
+export function FeedbackDetailClient({ initialFeedback, canEdit = true, replyThread = null }: { initialFeedback: FullFeedback; canEdit?: boolean; replyThread?: ReplyThreadView | null }) {
   const { toast } = useToast();
   const router = useRouter();
   const [feedback, setFeedback] = useState(initialFeedback);
@@ -126,6 +128,7 @@ export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { init
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
         <Card><CardHeader><CardTitle>Customer Responses</CardTitle></CardHeader><CardContent className="space-y-6">{Object.keys(responses).length ? Object.entries(responses).map(([id, response]: [string, any]) => <div key={id}><h4 className="mb-2 font-semibold">{response.questionLabel || id}</h4>{renderAnswer(response)}<Separator className="mt-4" /></div>) : <p className="text-muted-foreground">No responses found.</p>}</CardContent></Card>
+        {replyThread ? <ReplyThread feedbackId={feedback.id} initial={replyThread} canEdit={canEdit} /> : null}
         <Card><CardHeader><CardTitle>Moderation & Notes</CardTitle></CardHeader><CardContent className="space-y-3"><Label htmlFor="internalNote">Internal Note</Label><Textarea id="internalNote" value={feedback.internalNote || ''} onChange={(event) => setFeedback((current) => ({ ...current, internalNote: event.target.value }))} /><Button size="sm" onClick={saveNote} disabled={isPending || !canEdit}>Save Note</Button></CardContent></Card>
       </div>
 

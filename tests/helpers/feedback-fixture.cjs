@@ -33,7 +33,7 @@ function fixture(){
    reads.push({collection:name,filters});if(failure.read)throw Error('Synthetic read failure');
    let keys=[...records.keys()].filter(key=>key.startsWith(name+'/')&&filters.every(([field,op,value])=>{
     const actual=records.get(key)[field],a=scalar(actual),b=scalar(value);
-    return op==='array-contains'?actual?.includes(value):op==='>='?a>=b:op==='<'?a<b:op==='<='?a<=b:op==='>'?a>b:a===b;
+    return op==='array-contains'?actual?.includes(value):op==='in'?Array.isArray(value)&&value.includes(actual):op==='>='?a>=b:op==='<'?a<b:op==='<='?a<=b:op==='>'?a>b:a===b;
    }));
    if(sort)keys.sort((a,b)=>{const field=sort[0],av=field==='__name__'?a.split('/')[1]:scalar(records.get(a)[field]),bv=field==='__name__'?b.split('/')[1]:scalar(records.get(b)[field]);return(av<bv?-1:av>bv?1:0)*(sort[1]==='desc'?-1:1);});
    if(after)keys=keys.filter(key=>key.split('/')[1]>after);

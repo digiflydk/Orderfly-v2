@@ -12,6 +12,8 @@ import { getCustomerDetails } from '../actions';
 import { CustomerRecordActions } from './record-actions';
 import { CustomerHistory } from './customer-history';
 import { DullyPurchases } from './dully-purchases';
+import { ReplyHistory } from './reply-history';
+import { customerReplyHistory } from '@/lib/feedback/replies';
 import { getDullyPurchases } from '@/lib/customers/dully-purchases-server';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +33,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const history = await customerHistory(activity, customer, allOrders, feedbackEntries, feedbackAccess);
   // Authorized above by getCustomerDetails; the lookup is constrained to this record and brand.
   const dully = await getDullyPurchases(customer.id, customer.brandId);
+  // feedbackEntries is only non-empty for readers with feedback access for this brand.
+  const replyThreads = feedbackAccess && feedbackEntries.length ? await customerReplyHistory(customer.brandId, feedbackEntries.map(f => f.id)).catch(() => ({})) : {};
+  const threads = feedbackEntries.filter(f => (replyThreads as Record<string, unknown>)[f.id]).map(f => ({ feedbackId: f.id, comment: f.comment, messages: (replyThreads as Record<string, any>)[f.id] }));
   const extendedCustomer = customer as typeof customer & {
     emailAliases?: unknown;
     phoneAliases?: unknown;
@@ -87,6 +92,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     </div>
 
     <DullyPurchases {...dully} />
+
+    <ReplyHistory threads={threads} />
 
     <CustomerHistory {...history} />
   </div>;
