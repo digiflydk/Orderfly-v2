@@ -9,6 +9,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import type { Customer, OrderDetail } from '@/types';
 import { requireFeedbackAccess, canEditFeedbackBrand } from '@/lib/feedback/access';
 import { getDullyOrderDetails } from '@/lib/feedback/dully-details';
+import { getReplyThread } from '@/lib/feedback/replies';
 
 async function getCustomerName(customerId: string, brandId: string): Promise<string> {
     const snap = await getAdminDb().collection('customers').doc(customerId).get();
@@ -37,6 +38,7 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
         dullySourceId ? getDullyOrderDetails([dullySourceId], feedback.brandId) : Promise.resolve(new Map()),
     ]);
     const dullyOrder = dullyDetails.get(dullySourceId) ?? null;
+    const replyThread = await getReplyThread(feedback.id).catch(() => null);
 
     const fullFeedback = {
         ...feedback,
@@ -49,6 +51,6 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
     };
 
     return (
-        <FeedbackDetailClient initialFeedback={fullFeedback} canEdit={canEditFeedbackBrand(access, feedback.brandId)} />
+        <FeedbackDetailClient initialFeedback={fullFeedback} canEdit={canEditFeedbackBrand(access, feedback.brandId)} replyThread={replyThread} />
     );
 }
