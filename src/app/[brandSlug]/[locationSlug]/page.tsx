@@ -1,6 +1,8 @@
 import { headers } from 'next/headers';
 import { storefrontInstallHostAllowed } from '@/lib/storefront-home-screen';
-import { storefrontMenuMetadata } from '@/lib/storefront-seo';
+import { storefrontMenuMetadata, storefrontProductMetadata } from '@/lib/storefront-seo';
+import { PRODUCT_LINK_PARAM, productIdForLink, productLinkSlugs } from '@/lib/product-link';
+import { flattenMenu } from '@/lib/menu-display';
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
@@ -18,12 +20,24 @@ type BrandLocationParams = {
   locationSlug: string;
 };
 
-export async function generateMetadata({params}: AsyncPageProps<BrandLocationParams>) {
+export async function generateMetadata({params, searchParams}: AsyncPageProps<BrandLocationParams>) {
   const {brandSlug,locationSlug} = await resolveParams(params);
   const h = await headers();
   if (!storefrontInstallHostAllowed(brandSlug,h.get('x-forwarded-host') ?? h.get('host'))) return {robots:{index:false,follow:false}};
   const {brand,location,ok} = await getBrandAndLocation(brandSlug,locationSlug);
   if (!ok || !brand || !location || brand.status === 'suspended' || location.isActive === false) return {robots:{index:false,follow:false}};
+  const requested = (await searchParams)?.[PRODUCT_LINK_PARAM];
+  if (typeof requested === 'string' && requested) {
+    try {
+      // Same catalog and link rules as the menu, so the preview matches the product the link opens.
+      const menu = await getMenuForRender({brandId: brand.id, locationId: location.id}) as unknown as MenuData;
+      const products = flattenMenu(menu?.productsByCategory ?? {});
+      const links = productLinkSlugs(products);
+      const id = productIdForLink(links, requested);
+      const product = id ? products.find(item => item.id === id) : undefined;
+      if (product && id) return storefrontProductMetadata(brand, location, product, links.get(id)!);
+    } catch { /* The menu preview is a safe fallback. */ }
+  }
   return storefrontMenuMetadata(brand,location);
 }
 
