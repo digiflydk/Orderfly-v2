@@ -46,3 +46,22 @@ The earlier source inventory/release-gate notes describe the initial policy work
 The homepage review section (#859) shows Google reviewer photos. Its earlier CSP addition `https://*.googleusercontent.com` was a wildcard, which this policy and `tests/unit/esmeralda-public-host.cjs` / `tests/unit/website-tracking-policy.cjs` forbid. It is replaced by the exact Google profile-photo hosts `lh3`–`lh6.googleusercontent.com` (`REVIEW_PHOTO_HOSTS` in `src/lib/esmeralda-public-host.ts`), still only on `/`. All live review photos read on 2026-11-10 use `lh3`. `preview/esmeralda/adapters/website-reviews.js` renders a photo only from these hosts; any other photo URL falls back to the initials avatar, so the page never requests a blocked image.
 
 Homepage hash checks: `/` is served with the review section inserted at response time, so `tests/helpers/website-served-sha.cjs` derives its expected bytes from the pinned manifest bytes plus `insertWebsiteReviews`. Every other route still compares directly with its manifest hash.
+
+## Follow-up: Meta Event Setup Tool, 2026-11-10
+
+Esmeralda's Meta marketing manager could not use Meta's Event Setup Tool (Events Manager → Hændelsesadministrator) on www.esmeraldapizza.dk. The tool injects its own Meta scripts, an overlay iframe from `www.facebook.com`, and API calls. The policy above allowed only the pixel loader, its config path and the `/tr` beacon, with `frame-src 'self'`, so the tool was blocked.
+
+PO decision: allow the tool permanently. Meta is now allowed by exact origin instead of exact path, on every public page:
+
+| Directive | Meta sources |
+| --- | --- |
+| script-src | `https://connect.facebook.net`, `https://www.facebook.com` |
+| connect-src | `https://www.facebook.com`, `https://graph.facebook.com`, `https://connect.facebook.net` |
+| img-src | `https://www.facebook.com`, `https://static.xx.fbcdn.net` |
+| style-src | `https://static.xx.fbcdn.net` |
+| frame-src | `https://www.facebook.com` |
+
+- No wildcard and no other Facebook, Instagram or fbcdn host is added. Google Ads/DoubleClick stay blocked. `tests/unit/website-tracking-policy.cjs` pins the exact Meta origin set.
+- The exact endpoints the tool uses could not be observed from the build environment (Meta hosts are not reachable there), so this set is based on Meta's public hosts. If the tool still reports a block, the browser console lists the refused URL ("Refused to … because it violates the Content Security Policy"). Add only that host.
+- Consent is unchanged: the pixel and the tool's scripts load only after the visitor accepts marketing cookies. To use the tool, accept all cookies on the site first (or open the site in a window where that choice is saved), then start the tool from Events Manager.
+- Events created in the tool are stored in Meta's account and are not in this repository.
