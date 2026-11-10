@@ -34,7 +34,17 @@
   const allowedHost = ['https://www.esmeraldapizza.dk','https://esmeraldapizza.dk'].includes(location.origin);
   // Published GTM also initializes Google Ads. Until its categories are split,
   // loading it for analytics-only would request marketing resources too.
-  const granted = category => state[category] === 'granted' && (category !== 'analytics_storage' || state.ad_storage === 'granted');
+  // 'analytics_only' is the Orderfly GTM container (GA4 only), loaded on statistics consent alone.
+  const granted = category => category === 'analytics_only' ? state.analytics_storage === 'granted'
+    : state[category] === 'granted' && (category !== 'analytics_storage' || state.ad_storage === 'granted');
+  // Both containers share one dataLayer; one gtm.js event serves both, so page views are not doubled.
+  let gtmStarted = false;
+  const startGtm = () => {
+    if (gtmStarted) return;
+    gtmStarted = true;
+    gtag('js', new Date());
+    window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
+  };
   const schedule = (provider, category, load) => {
     if (!allowedHost || reloading || !granted(category) || loaded.has(provider) || pending.has(provider)) return;
     pending.set(provider, setTimeout(() => {
@@ -45,8 +55,12 @@
   };
   const services = () => {
     schedule('google','analytics_storage',() => {
-      window.dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});
+      startGtm();
       script('google','https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76');
+    });
+    schedule('google-orderfly','analytics_only',() => {
+      startGtm();
+      script('google-orderfly','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD');
     });
     schedule('meta','ad_storage',() => {
       const fbq = function() { fbq.callMethod ? fbq.callMethod.apply(fbq,arguments) : fbq.queue.push(arguments); };
@@ -107,7 +121,7 @@
     // Cancel work queued by a preceding accept, including accept/reject in one turn.
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
-    const revokedLoaded = (previous.ad_storage === 'granted' && state.ad_storage !== 'granted' && (loaded.has('meta') || loaded.has('omnisend') || loaded.has('google'))) || (previous.analytics_storage === 'granted' && state.analytics_storage !== 'granted' && loaded.has('google')) || (previous.personalization_storage === 'granted' && state.personalization_storage !== 'granted' && loaded.size > 0);
+    const revokedLoaded = (previous.ad_storage === 'granted' && state.ad_storage !== 'granted' && (loaded.has('meta') || loaded.has('omnisend') || loaded.has('google'))) || (previous.analytics_storage === 'granted' && state.analytics_storage !== 'granted' && (loaded.has('google') || loaded.has('google-orderfly'))) || (previous.personalization_storage === 'granted' && state.personalization_storage !== 'granted' && loaded.size > 0);
     if (previous.ad_storage === 'granted' && state.ad_storage !== 'granted' && typeof window.fbq === 'function') window.fbq('consent','revoke');
     sync(); newsletter();
     if (revokedLoaded) {

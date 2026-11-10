@@ -99,3 +99,34 @@ script requests mocked if necessary and record that equivalence gap. Real GTM/
 Meta/Omnisend event delivery, Ads/category policy, CSP provider configuration and
 account-side results remain distinct gates. No full tracking readiness, merge,
 deployment, DNS, secrets, provider writes or Actions are implied.
+
+## Orderfly GTM container GTM-PK4J8ZFD on the website (2026-11-10)
+
+PO decision: the website keeps the existing container **and** adds the Orderfly
+container `GTM-PK4J8ZFD`, loaded by the same consent owner (not an eager `<head>`
+snippet, which would bypass the cookie banner from #47).
+
+* `GTM-PK4J8ZFD` is loaded once statistics (`analytics_storage`) is granted, on
+  the exact public origins only. Per [tracking isolation](orderfly-tracking-isolation.md)
+  it holds GA4 `G-551JD0H72K` only, so it does not need marketing consent. If Ads or
+  other marketing tags are added to that container later, its consent condition
+  must be reviewed again.
+* `GTM-52G3QF76` (GA4 `G-F9XCDW2586` + Google Ads) keeps its condition:
+  statistics **and** marketing.
+* Both containers share one `dataLayer`. `gtag('js', new Date())` and the
+  `gtm.js` start event are pushed once per document, so a container loaded later
+  reads the same start event and page views are not doubled.
+* Revoking statistics after either container loaded persists denial and reloads.
+* The CSP already allows `https://www.googletagmanager.com` and GA4 `/g/collect`;
+  no new origin is added.
+
+Payload change: `scripts/preview-gtm-orderfly.cjs` (apply once; records
+`manifest.gtm_orderfly`) replaces `/_assets/website-consent.js` and the inline copy
+on `/`, and updates the pinned hashes. Tests: `tests/unit/website-consent.cjs`,
+`tests/unit/website-consent-browser.cjs`, `tests/unit/website-consent-payload.cjs`,
+`tests/unit/website-critical-bootstrap.cjs`.
+
+Live check after deployment (read-only): fresh visit loads no GTM; statistics only
+loads only `GTM-PK4J8ZFD`; accept all loads both once; GA4 realtime for
+`G-551JD0H72K` shows the visit. Website traffic will now appear in the Orderfly GA4
+property, alongside the webshop.

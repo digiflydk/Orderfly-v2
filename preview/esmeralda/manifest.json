@@ -738,12 +738,12 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "baf1a132dd9acc9435a64e9b52f69c68001759024afa53b457c4d37e8456ad8f",
+  "payload_sha256": "ec3913f6dcca97d0044130160d1f8812e59bfc17f6c67c7034debb3e85ad4d37",
   "routes": {
     "/": {
       "file": "index.html",
-      "size": 175300,
-      "sha256": "d6c9fe30a56b66f1173971da018e280aae4a2a47572a01d0e5953195c1ab0567"
+      "size": 175940,
+      "sha256": "70f50f3a79e3d0333608d6195b77e026b10d3d36b3267a9cf3ba58acb741df74"
     },
     "/_assets/013d8df1119a2bab0fef8d13.css": {
       "sha256": "f01cb0f3418cc744e15712bf50aafa27c5125f05e13ff9b5ca021c7e6c217685",
@@ -2616,9 +2616,9 @@
       "size": 5627
     },
     "/_assets/website-consent.js": {
-      "sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
+      "sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
       "file": "_assets/website-consent.js",
-      "size": 9468
+      "size": 10108
     },
     "/_assets/9553e41a4710bdd1859d8a74.avif": {
       "sha256": "9553e41a4710bdd1859d8a74b4f3f7311451eea7e13b90db39190e3ef6062d06",
@@ -2779,7 +2779,7 @@
       "activation": "disabled"
     },
     "/_assets/website-consent.js": {
-      "sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
+      "sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
       "source": "preview/esmeralda/adapters/website-consent.js",
       "upstream": "Esmeralda-Website#47",
       "activation": "consent-gated-production-hosts-only"
@@ -3319,7 +3319,7 @@
   "homepage_bootstrap": {
     "version": 1,
     "consent_route": "/_assets/website-consent.js",
-    "consent_sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
+    "consent_sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac",
     "consent_placement": "first-synchronous-inline-script",
     "removed_original_hero_preloads": 2,
     "hero_semantics": "labelled-div-listitem"
@@ -3335,5 +3335,13 @@
     "route": "/menu",
     "source_sha256": "6e2ad876a89f0e017838ab98c6048d39ad3da0c389084f19c4e9967e96efec59",
     "scope": "native-keyboard-filter-and-no-inert-captcha"
+  },
+  "gtm_orderfly": {
+    "version": 1,
+    "container": "GTM-PK4J8ZFD",
+    "consent": "analytics_storage",
+    "retained_container": "GTM-52G3QF76",
+    "previous_consent_sha256": "54f55fe8ea592f26e8fe43c0dedf5c5d6b3acd24c927a46cd6f322d49c35d1a4",
+    "consent_sha256": "e6e3c8e300abfced207dc1eaf6c6e116a5f509e36d41017d969b19d4a650f9ac"
   }
 }
