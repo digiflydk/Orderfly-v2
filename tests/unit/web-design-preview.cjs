@@ -4,6 +4,8 @@ const fs = require('node:fs');
 const crypto = require('node:crypto');
 const {loadTs} = require('../helpers/load-ts.cjs');
 const manifest = require('../../preview/esmeralda/manifest.json');
+// / is served with the review section inserted at response time (src/lib/website-reviews-section.ts).
+const expectedSha = require('../helpers/website-served-sha.cjs').servedSha(manifest);
 const lib = loadTs('src/lib/web-design-preview.ts');
 const server = loadTs('src/lib/web-design-preview-server.ts', {'../../preview/esmeralda/production-discovery.json':{default:require('../../preview/esmeralda/production-discovery.json')},'../../preview/esmeralda/manifest.json':{default:manifest}});
 function req(path, method='GET', host='web.orderfly.dk') {
@@ -50,10 +52,10 @@ test('103 served HTML and301 assets retain exact hashes, plus robots; legacy boo
       continue;
     }
     const r=await server.webDesignPreviewResponse(req(path));assert.equal(r.status,200,path);
-    const bytes=Buffer.from(await r.arrayBuffer());assert.equal(bytes.length,entry.size,path);
-    assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),entry.sha256,path);
+    const bytes=Buffer.from(await r.arrayBuffer());assert.equal(bytes.length,expectedSha.size(path),path);
+    assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),expectedSha(path),path);
     assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
-    const h=await server.webDesignPreviewResponse(req(path,'HEAD'));assert.equal(h.status,200);assert.equal(await h.text(),'');assert.equal(h.headers.get('content-length'),String(entry.size));assert.equal(h.headers.get('content-type'),r.headers.get('content-type'));
+    const h=await server.webDesignPreviewResponse(req(path,'HEAD'));assert.equal(h.status,200);assert.equal(await h.text(),'');assert.equal(h.headers.get('content-length'),String(expectedSha.size(path)));assert.equal(h.headers.get('content-type'),r.headers.get('content-type'));
     assert.notEqual(r.headers.get('content-type'),'application/octet-stream',entry.file);
   }
 });

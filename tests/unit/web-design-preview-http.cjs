@@ -6,6 +6,8 @@ const net=require('node:net');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const manifest=require('../../preview/esmeralda/manifest.json');
+// / is served with the review section inserted at response time (src/lib/website-reviews-section.ts).
+const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
 
 test('real Next middleware-to-handler flow serves pinned paths, never client path query',async()=>{
  const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -23,7 +25,7 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
     continue;
    }
    const r=await get(route);assert.equal(r.status,200,route);
-   const bytes=Buffer.from(await r.arrayBuffer());assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),entry.sha256,route);
+   const bytes=Buffer.from(await r.arrayBuffer());assert.equal(crypto.createHash('sha256').update(bytes).digest('hex'),expectedSha(route),route);
    assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow, noarchive');
   }
   for(const query of ['', '?utm_source=test&return=%2Fmenu%3Fx%3D1&literal=%252F', '?path=%2Fmpanel&next=https%3A%2F%2Fevil.example%2F']) {
@@ -37,7 +39,7 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
   }
   for(const route of ['/','/menu','/dishes/1-margherita-v']) {
    const r=await get(route+'?path=/unknown');assert.equal(r.status,200,route);
-   assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),manifest.routes[route].sha256);
+   assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),expectedSha(route),route);
    const h=await get(route,{method:'HEAD'});assert.equal(h.status,200);assert.equal(await h.text(),'');
   }
   for(const route of ['/api/health','/_next/image?url=https://example.com/x','/mpanel','/internal-web-preview?path=/','/unknown?path=/']) assert.equal((await get(route)).status,404,route);

@@ -296,6 +296,16 @@ jobs:
       - name: Esmeralda homepage Club promotion browser regressions
         run: node --test tests/unit/club-homepage-browser.cjs
 
+      # www.esmeraldapizza.dk is served from the pinned payload in preview/esmeralda.
+      - name: Esmeralda website payload, policy and consent regressions
+        run: |
+          node --test tests/unit/esmeralda-public-host.cjs tests/unit/web-design-preview.cjs tests/unit/website-tracking-policy.cjs tests/unit/website-consent.cjs tests/unit/website-consent-payload.cjs tests/unit/website-contact-payload.cjs tests/unit/website-critical-bootstrap.cjs tests/unit/website-footer-booking-label.cjs tests/unit/website-home-delivery.cjs tests/unit/website-menu-filter.cjs tests/unit/website-performance-payload.cjs tests/unit/website-response-encoding.cjs tests/unit/website-review-rotation.cjs
+          python3 -m unittest discover -s tests/unit -p 'test_preview_*.py'
+          node scripts/test-mpanel-host.cjs
+
+      - name: Esmeralda website browser regressions
+        run: node --test --test-concurrency=1 tests/unit/website-consent-browser.cjs tests/unit/website-footer-booking-label-browser.cjs tests/unit/website-home-delivery-browser.cjs tests/unit/website-menu-filter-browser.cjs tests/unit/website-performance-browser.cjs tests/unit/website-review-browser.cjs
+
       - name: Orderfly marketing landing browser regressions
         run: node --test tests/unit/orderfly-landing-browser.cjs tests/unit/root-order-entry.cjs
 
@@ -304,6 +314,10 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # Real standalone Next server on loopback: exact hosts, redirects, discovery and pinned bytes.
+      - name: Esmeralda website HTTP regressions
+        run: node --test --test-concurrency=1 tests/unit/esmeralda-public-host-http.cjs tests/unit/web-design-preview-http.cjs
 
       - name: Install Playwright browsers
         if: github.event_name == 'workflow_dispatch' && inputs.run_playwright

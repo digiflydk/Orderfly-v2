@@ -10,7 +10,10 @@ function servedSha(manifest){
  const payload=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`)))));
  const home=Buffer.from(payload['/'].data,'base64');
  if(crypto.createHash('sha256').update(home).digest('hex')!==manifest.routes['/'].sha256)throw Error('Homepage payload does not match its manifest pin');
- const homeSha=crypto.createHash('sha256').update(Buffer.from(insertWebsiteReviews(home.toString('utf8')))).digest('hex');
- return route=>route==='/'?homeSha:manifest.routes[route].sha256;
+ const served=Buffer.from(insertWebsiteReviews(home.toString('utf8')));
+ const homeSha=crypto.createHash('sha256').update(served).digest('hex');
+ const sha=route=>route==='/'?homeSha:manifest.routes[route].sha256;
+ sha.size=route=>route==='/'?served.length:manifest.routes[route].size;
+ return sha;
 }
 module.exports={servedSha};
