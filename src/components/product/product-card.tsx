@@ -20,6 +20,7 @@ import { Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import {formatPrice} from '@/lib/storefront-format';
 import {useAnalytics} from '@/context/analytics-context';
+import {useProductLink} from '@/context/product-link-context';
 
 interface ProductCardProps {
   product: ProductForMenu;
@@ -108,6 +109,21 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
     } catch { if (request === generation.current) setOptionError(true); }
     finally { if (request === generation.current) {pending.current = false; setIsPending(false);} }
   };
+
+  // Shareable product links (?produkt=): the menu opens the linked product once, and an open
+  // dialog keeps the address in sync. Upsell offers never take over or change the address.
+  const link = useProductLink();
+  useEffect(() => {
+    if (upsellId || !location || !cartReady || !link.claim(product.id)) return;
+    void handleCardClick();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [upsellId, location?.id, cartReady, product.id, link]);
+  const wasOpen = useRef(false);
+  useEffect(() => {
+    if (upsellId) return;
+    if (isDialogOpen) link.opened(product.id); else if (wasOpen.current) link.closed(product.id);
+    wasOpen.current = isDialogOpen;
+  }, [isDialogOpen, upsellId, product.id, link]);
 
 
   return (

@@ -321,3 +321,27 @@ for(const width of [320,390,768,1280])test(`confirmation header omits overlappin
  await page.goto(origin+'/esmeralda/amager/checkout?v2');
  await page.locator('.v2-header-back').waitFor();
 });
+
+for(const width of [390,1280])test(`product link opens the linked dish once and keeps the address shareable (${width}px)`,async t=>{
+ const page=await setup(t,width,'&v2');
+ const params=()=>page.evaluate(()=>Object.fromEntries(new URLSearchParams(location.search)));
+ // Direct campaign link: the dish opens instead of only the menu, and campaign parameters stay.
+ await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup&v2&utm_source=campaign&produkt=pepperoni');
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('heading',{name:'Pepperoni',exact:true}).waitFor();
+ assert.equal(await dialog.count(),1,'the linked dish opens exactly one dialog');
+ assert.equal((await params()).produkt,'pepperoni');
+ await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
+ assert.deepEqual(await params(),{deliveryMethod:'pickup',v2:'',utm_source:'campaign'},'closing removes only the product link');
+ // Opening a dish from the menu gives the address its own shareable link.
+ await page.getByRole('button',{name:'Se Hawaii',exact:true}).click();
+ await page.getByRole('dialog').getByRole('heading',{name:'Hawaii',exact:true}).waitFor();
+ assert.equal((await params()).produkt,'hawaii');
+ await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});
+ assert.equal((await params()).produkt,undefined);
+ // An unknown or removed dish leaves the customer on the menu without a stale link.
+ await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup&v2&produkt=findes-ikke');
+ await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor();
+ await page.waitForFunction(()=>!new URLSearchParams(location.search).has('produkt'));
+ assert.equal(await page.getByRole('dialog').count(),0);
+});

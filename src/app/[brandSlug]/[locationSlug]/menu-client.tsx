@@ -29,6 +29,7 @@ import { openDeliveryModal } from '@/lib/delivery-modal-state';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 import {StorefrontCatalog} from '@/context/storefront-catalog';
+import {ProductLinkProvider, requestedProductId} from '@/context/product-link-context';
 import {CartEditor} from '@/components/cart/cart-editor';
 import {formatPrice} from '@/lib/storefront-format';
 import { calculateTimeSlots } from '@/lib/time-slots';
@@ -67,7 +68,8 @@ export function MenuClient({
   useEffect(() => {
     try {
       const view = JSON.parse(sessionStorage.getItem(viewKey) || 'null');
-      if (view && typeof view.search === 'string') setSearch(view.search.slice(0,200));
+      // A product link must find its card, so a saved search is not restored over it.
+      if (view && typeof view.search === 'string' && !requestedProductId(initialProducts)) setSearch(view.search.slice(0,200));
       if (view && typeof view.scroll === 'number') requestAnimationFrame(() => window.scrollTo(0,view.scroll));
     } catch { /* Browsing still works without storage. */ }
     const save = () => {try {const view = JSON.parse(sessionStorage.getItem(viewKey)||'{}'); sessionStorage.setItem(viewKey,JSON.stringify({...view,scroll:window.scrollY}));} catch {}};
@@ -164,6 +166,7 @@ export function MenuClient({
   );
 
   return (
+    <ProductLinkProvider products={initialProducts}>
     <StorefrontCatalog products={initialProducts} combos={activeCombos}>
       {toolbarSlots && createPortal(<TimeSelector timeSlots={timeSlots} compact modeOnly={isV2} />, toolbarSlots.controls)}
       {toolbarSlots && createPortal(<MobileFloatingCart floating={false} compact />, toolbarSlots.cart)}
@@ -232,5 +235,6 @@ export function MenuClient({
       {itemCount > 0 && <MobileFloatingCart />}
       <CartEditor />
     </div></StorefrontCatalog>
+    </ProductLinkProvider>
   );
 }
