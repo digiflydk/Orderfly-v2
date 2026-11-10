@@ -69,14 +69,37 @@ test('commerce paths retain sanitized campaign parameters for both consent purpo
   assert.equal(url.searchParams.has('receipt_token'),false);
  }
 });
-test('GTM has exclusive GA events; Ads and Meta have one direct owner; foreign brands are rejected',()=>{
+test('GTM owns GA4 and Google Ads; Meta keeps one direct owner; foreign brands are rejected',()=>{
  const r=runtime({statistics:true,marketing:true},true);
  r.send({event:'purchase',brandId:'wrong',ecommerce:{transaction_id:'wrong'}});
  r.send({event:'purchase',brandId:'b',ecommerce:{transaction_id:'correct',value:20,currency:'DKK',items:[]}});
- assert.equal(r.context.dataLayer.filter(x=>x.event==='purchase').length,1);
- assert.equal(r.google().filter(x=>x[1]==='purchase').length,0);
- assert.equal(r.google().filter(x=>x[1]==='conversion').length,1);
+ const purchases=r.context.dataLayer.filter(x=>x.event==='purchase');
+ assert.equal(purchases.length,1);assert.equal(purchases[0].ecommerce.transaction_id,'correct');
+ assert.deepEqual({...purchases[0].orderfly_destinations},{statistics:true,marketing:true});
+ assert.equal(r.google().filter(x=>x[1]==='purchase').length,0,'no direct GA4 beside GTM');
+ assert.equal(r.google().filter(x=>x[1]==='conversion').length,0,'no direct Ads conversion beside GTM: GTM owns Ads');
+ assert.ok(!r.elements.some(x=>x.src?.includes('/gtag/js')),'no direct gtag runtime beside GTM');
+ assert.doesNotMatch(r.html,/AW-TEST/,'the Ads id is not handed to the frame when GTM owns Ads');
  assert.equal(r.meta().filter(x=>x[2]==='Purchase').length,1);
+});
+for(const [statistics,marketing] of [[true,false],[false,true],[true,true]])test(`GTM loads for either purpose with exact Consent Mode (statistics=${statistics}, marketing=${marketing})`,()=>{
+ const r=runtime({statistics,marketing},true);
+ assert.equal(r.elements.filter(x=>x.src?.includes('googletagmanager.com/gtm.js?id=GTM-TEST')).length,1);
+ const consent=r.context.dataLayer[0][2];
+ assert.equal(consent.analytics_storage,statistics?'granted':'denied');
+ for(const key of ['ad_storage','ad_user_data','ad_personalization'])assert.equal(consent[key],marketing?'granted':'denied',key);
+ r.send({event:'add_to_cart',brandId:'b',productId:'p',cartValue:20});
+ r.send({event:'purchase',brandId:'b',destinations:{statistics,marketing},ecommerce:{transaction_id:'o1',value:20,currency:'DKK',items:[]}});
+ const pushed=r.context.dataLayer.filter(x=>x.event==='purchase');
+ assert.equal(pushed.length,1);assert.deepEqual({...pushed[0].orderfly_destinations},{statistics,marketing});
+ assert.equal(r.context.dataLayer.filter(x=>x.event==='add_to_cart').length,1);
+ if(!marketing)assert.doesNotMatch(r.html,/click123/,'click ids stay out without marketing consent');
+});
+test('a purchase repeated after a later marketing grant reaches GTM for marketing only',()=>{
+ const r=runtime({statistics:true,marketing:true},true);
+ r.send({event:'purchase',brandId:'b',destinations:{statistics:false,marketing:true},ecommerce:{transaction_id:'o1',value:20,currency:'DKK',items:[]}});
+ r.send({event:'purchase',brandId:'b',destinations:{statistics:false,marketing:false},ecommerce:{transaction_id:'o1',value:20,currency:'DKK',items:[]}});
+ assert.deepEqual(Array.from(r.context.dataLayer).filter(x=>x.event==='purchase').map(x=>({...x.orderfly_destinations})),[{statistics:false,marketing:true}]);
 });
 test('purchase can wait for a runtime, deduplicates per purpose and never sends to a different brand',()=>{
  const old={window:global.window,document:global.document,sessionStorage:global.sessionStorage};

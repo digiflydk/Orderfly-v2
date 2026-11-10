@@ -65,3 +65,16 @@ PO decision: allow the tool permanently. Meta is now allowed by exact origin ins
 - The exact endpoints the tool uses could not be observed from the build environment (Meta hosts are not reachable there), so this set is based on Meta's public hosts. If the tool still reports a block, the browser console lists the refused URL ("Refused to … because it violates the Content Security Policy"). Add only that host.
 - Consent is unchanged: the pixel and the tool's scripts load only after the visitor accepts marketing cookies. To use the tool, accept all cookies on the site first (or open the site in a window where that choice is saved), then start the tool from Events Manager.
 - Events created in the tool are stored in Meta's account and are not in this repository.
+
+## Follow-up: Google Ads through GTM, 2026-11-10
+
+PO decision: GTM owns Google Ads. The website CSP therefore allows the Google Ads hosts from Google's tag-platform CSP guide for conversions and remarketing, plus `ad.doubleclick.net`, which the published GTM-PK4J8ZFD was observed to request. These hosts were blocked before. Exact hosts only, pinned by `tests/unit/website-tracking-policy.cjs`:
+
+| Directive | Google Ads sources |
+| --- | --- |
+| script-src | `https://www.googleadservices.com`, `https://googleads.g.doubleclick.net` |
+| img-src | `https://www.googleadservices.com`, `https://googleads.g.doubleclick.net`, `https://ad.doubleclick.net`, `https://pagead2.googlesyndication.com`, `https://google.com`, `https://www.google.dk`, `https://www.google.com` |
+| connect-src | the same Ads request hosts (`www.google.com` was already allowed) |
+| frame-src | `https://bid.g.doubleclick.net`, `https://td.doubleclick.net` |
+
+Google's guide could not be fetched from the build environment on this date, so the host list follows the guide's published Ads entries; `www.google.dk` stands in for the visitor's country domain. If the browser console reports a refused Google host after release, add only that host. `tagmanager.google.com` and Tag Assistant stay blocked. Consent gating is described in [website consent](website-consent.md).
