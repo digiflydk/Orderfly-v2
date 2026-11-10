@@ -1,16 +1,17 @@
-/* Apply once per version: ship the consent adapter that also loads Orderfly GTM-PK4J8ZFD after statistics and marketing consent. */
+/* Apply once per version: ship the consent adapter that loads both GTM containers after statistics or marketing consent. */
 const fs=require('node:fs'),zlib=require('node:zlib'),crypto=require('node:crypto');
 const dir='preview/esmeralda',hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const manifest=JSON.parse(fs.readFileSync(`${dir}/manifest.json`));
 const packed=Buffer.concat([0,1,2].map(i=>fs.readFileSync(`${dir}/payload.json.gz.part-00${i}`)));
 if(hash(packed)!==manifest.payload_sha256)throw Error('Input payload integrity mismatch');
-// Version 1 loaded GTM-PK4J8ZFD on statistics only; version 2 also requires marketing (the container requests Google Ads resources).
-const VERSION=2,CONSENT='analytics_storage+ad_storage';
+// Version 1 loaded GTM-PK4J8ZFD on statistics only; version 2 required statistics and marketing. Version 3
+// (PO decision 2026-11-10: GTM owns GA4 and Google Ads) loads both containers for either purpose and relies on Consent Mode.
+const VERSION=3,CONSENT='analytics_storage|ad_storage';
 if(manifest.gtm_orderfly?.version>=VERSION)throw Error('Orderfly GTM patch already applied');
 const route='/_assets/website-consent.js',payload=JSON.parse(zlib.gunzipSync(packed));
 const previous=Buffer.from(payload[route].data,'base64'),previousSha=hash(previous);
 if(previousSha!==manifest.added_assets[route].sha256||previousSha!==manifest.homepage_bootstrap.consent_sha256)throw Error('Unexpected previous consent adapter');
-if(manifest.gtm_orderfly&&previousSha!==manifest.gtm_orderfly.consent_sha256)throw Error('Unexpected version 1 consent adapter');
+if(manifest.gtm_orderfly&&previousSha!==manifest.gtm_orderfly.consent_sha256)throw Error('Unexpected previous version consent adapter');
 const originalSha=manifest.gtm_orderfly?.previous_consent_sha256??previousSha;
 const adapter=fs.readFileSync(`${dir}/adapters/website-consent.js`),sha=hash(adapter),code=adapter.toString('utf8');
 if(sha===previousSha)throw Error('Adapter unchanged');

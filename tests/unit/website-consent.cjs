@@ -22,20 +22,29 @@ test('initial denial, no optional providers, default Google consent before updat
 });
 test('reject-all ignores checked choices; selected preserves separate categories',()=>{
  const f=fixture();f.choices.forEach(n=>n.checked=true);f.click('reject-all');f.flush();assert.deepEqual(f.scripts,[]);assert.equal(f.jar['fa-consent-ad_storage'],'false');assert.equal(f.jar['fa-consent-analytics_storage'],'false');
- f.choices[0].checked=true;f.click('accept-selected');f.flush();assert.equal(f.scripts.length,2);assert.ok(f.scripts.some(s=>s.includes('facebook')));assert.ok(f.scripts.some(s=>s.includes('omnisnippet')));assert.ok(!f.scripts.some(s=>s.includes('googletagmanager')));
+ f.choices[0].checked=true;f.click('accept-selected');f.flush();assert.equal(f.scripts.length,4);assert.ok(f.scripts.some(s=>s.includes('facebook')));assert.ok(f.scripts.some(s=>s.includes('omnisnippet')));
+ // Marketing alone loads both GTM containers; Consent Mode keeps analytics_storage denied for their tags.
+ assert.equal(f.scripts.filter(s=>s.includes('googletagmanager')).length,2);assert.equal(f.window.dataLayer.filter(x=>x[0]==='consent').at(-1)[2].analytics_storage,'denied');
 });
-test('analytics-only stays saved but both Google containers stay blocked; they request Ads resources',()=>{
- const f=fixture();f.choices[1].checked=true;f.click('accept-selected');f.flush();assert.equal(f.jar['fa-consent-analytics_storage'],'true');assert.equal(f.jar['fa-consent-ad_storage'],'false');assert.deepEqual(f.scripts,[]);
- assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,0);
+test('analytics-only loads both GTM containers with Ads storage denied; Meta and Omnisend stay off',()=>{
+ const f=fixture();f.choices[1].checked=true;f.click('accept-selected');f.flush();assert.equal(f.jar['fa-consent-analytics_storage'],'true');assert.equal(f.jar['fa-consent-ad_storage'],'false');
+ assert.deepEqual(f.scripts.slice().sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
+ const update=f.window.dataLayer.filter(x=>x[0]==='consent').at(-1)[2];
+ assert.equal(update.analytics_storage,'granted');for(const key of ['ad_storage','ad_user_data','ad_personalization'])assert.equal(update[key],'denied',key);
+ assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,1);
 });
 test('statistics and marketing load both GTM containers once with one shared gtm.js and gtag js event',()=>{
  const f=fixture();f.choices[1].checked=true;f.click('accept-selected');f.flush();f.click('accept-all');f.flush();f.click('accept-all');f.flush();
  assert.deepEqual(f.scripts.filter(s=>s.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
  assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,1);assert.equal(f.window.dataLayer.filter(x=>x[0]==='js').length,1);assert.equal(f.reloads(),0);
 });
-test('revoking analytics after the Orderfly GTM loaded persists denial, reloads and stays denied',()=>{
+test('revoking analytics after GTM loaded persists denial and reloads; the next document runs GTM with analytics denied',()=>{
  const f=fixture();f.click('accept-all');f.flush();f.choices.forEach(n=>n.checked=true);f.choices[1].checked=false;f.click('accept-selected');f.flush();assert.equal(f.reloads(),1);assert.equal(f.jar['fa-consent-analytics_storage'],'false');
- const revisit=fixture(f.jar);revisit.flush();assert.ok(!revisit.scripts.some(s=>s.includes('googletagmanager')));
+ const revisit=fixture(f.jar);revisit.flush();assert.equal(revisit.scripts.filter(s=>s.includes('googletagmanager')).length,2);
+ assert.equal(revisit.window.dataLayer.filter(x=>x[0]==='consent').at(-1)[2].analytics_storage,'denied');
+});
+test('revoking marketing after the Orderfly GTM loaded reloads, even when only statistics remains',()=>{
+ const f=fixture();f.click('accept-all');f.flush();f.choices.forEach(n=>n.checked=true);f.choices[0].checked=false;f.click('accept-selected');f.flush();assert.equal(f.reloads(),1);assert.equal(f.jar['fa-consent-ad_storage'],'false');
 });
 test('accept-all loads each provider once and one Meta PageView despite repeated events/boot',()=>{
  const f=fixture();f.click('accept-all');f.click('accept-all');f.flush();f.rerun();f.click('accept-all');f.flush();assert.equal(f.scripts.length,4);assert.equal(new Set(f.scripts).size,4);

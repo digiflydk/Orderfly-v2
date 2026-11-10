@@ -71,7 +71,10 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    assert.equal(new URL(cart.get('dl')).searchParams.get('utm_source'),'vendor_fixture');
    assert.doesNotMatch(JSON.stringify(results[mode].metaState.prepared),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/);
    const suppression='[Meta Pixel] - [Meta pixel] Bot traffic detected and blocked - pixel_id: 1830622624963740';
-   const unexpected=results[mode].errors.filter(x=>x!==suppression&&!x.startsWith('An iframe which has both allow-scripts and allow-same-origin')&&x!=='www.google-analytics.com: net::ERR_ABORTED');
+   // GTM owns Google Ads (PO decision 2026-11-10). With marketing consent its Ads requests are expected;
+   // this fixture aborts them like every collection request, so they never leave the browser.
+   const interceptedAds=mode==='gtm-http'?['www.google.com','ad.doubleclick.net','googleads.g.doubleclick.net','www.googleadservices.com','pagead2.googlesyndication.com','www.google.dk','google.com'].map(host=>host+': net::ERR_ABORTED'):[];
+   const unexpected=results[mode].errors.filter(x=>x!==suppression&&!x.startsWith('An iframe which has both allow-scripts and allow-same-origin')&&x!=='www.google-analytics.com: net::ERR_ABORTED'&&!interceptedAds.includes(x));
    assert.deepEqual(unexpected,[],mode+' must have no unexpected runtime/vendor errors');
    if(results[mode].metaState.botBlocked){
     assert.ok(results[mode].errors.includes(suppression),'Meta must explicitly report actual bot suppression from its send handler');

@@ -32,8 +32,9 @@ for(const path of ['/','/nyhedsbrev'])for(const width of [390,1440]) test(`captu
   await page.locator('label').filter({has:page.locator('[flowappz-cookie-choice="marketing"]')}).click();
   assert.equal(await page.locator('[flowappz-cookie-choice="marketing"]').isChecked(),true);
   await page.locator('[flowappz-cookie-command="accept-selected"]').click();
-  await page.waitForFunction(()=>document.querySelectorAll('script[src^="https://connect.facebook.net"],script[src^="https://omnisnippet1.com"]').length===2);
-  assert.equal(providers.length,2);assert.ok(!providers.some(u=>u.includes('googletagmanager')));
+  await page.waitForFunction(()=>document.querySelectorAll('script[src^="https://connect.facebook.net"],script[src^="https://omnisnippet1.com"],script[src^="https://www.googletagmanager.com"]').length===4);
+  // Marketing alone loads Meta, Omnisend and both GTM containers (GTM owns Google Ads; Consent Mode gates its tags).
+  assert.equal(providers.length,4);assert.equal(providers.filter(u=>u.includes('googletagmanager')).length,2);
   if(path==='/nyhedsbrev')assert.equal(await page.locator('[data-newsletter-consent-fallback]').isVisible(),true);else assert.equal(await page.locator('[data-newsletter-consent-fallback]').count(),0);
   await page.locator('[flowappz-cookie-consent-sticky-cookie-button]').click();
   await page.locator('label').filter({has:page.locator('[flowappz-cookie-choice="marketing"]')}).click();
@@ -43,10 +44,11 @@ for(const path of ['/','/nyhedsbrev'])for(const width of [390,1440]) test(`captu
   await page.locator('[flowappz-cookie-consent-sticky-cookie-button]').click();
   await page.locator('[flowappz-cookie-command="accept-all"]').filter({visible:true}).click();
   await page.waitForFunction(()=>document.querySelectorAll('script[src^="https://www.googletagmanager.com"]').length===2);
-  assert.equal(providers.length,6);assert.deepEqual(providers.filter(u=>u.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
+  assert.equal(providers.length,8);// Each document loads each container once: the marketing-only document, then the accept-all one.
+  assert.deepEqual(providers.filter(u=>u.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
   await page.locator('[flowappz-cookie-consent-sticky-cookie-button]').click();
   await page.locator('[flowappz-cookie-command="accept-all"]').filter({visible:true}).click();
-  await page.waitForTimeout(100);assert.equal(providers.length,6);
+  await page.waitForTimeout(100);assert.equal(providers.length,8);
   assert.equal(await page.evaluate(()=>window.dataLayer.filter(x=>x.event==='gtm.js').length),1);
  }finally{await browser.close();}
 });

@@ -31,9 +31,11 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     if (attribution?.[field]) landing.searchParams.set(param, attribution[field]!);
   }
   const config = JSON.stringify({
-    origin: window.location.origin, brandId: brand.id, consent, gtm: consent.statistics ? brand.gtmContainerId : undefined, ga: consent.statistics ? brand.ga4MeasurementId : undefined,
-    ads: consent.marketing ? brand.googleAdsConversionId : undefined,
-    adsSendTo: consent.marketing && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel ? `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` : undefined,
+    // A brand GTM container owns GA4 and Google Ads (PO decision 2026-11-10). It loads for either
+    // purpose; Consent Mode tells its tags exactly what was granted. Direct Ads runs only without GTM.
+    origin: window.location.origin, brandId: brand.id, consent, gtm: brand.gtmContainerId || undefined, ga: consent.statistics ? brand.ga4MeasurementId : undefined,
+    ads: consent.marketing && !brand.gtmContainerId ? brand.googleAdsConversionId : undefined,
+    adsSendTo: consent.marketing && !brand.gtmContainerId && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel ? `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` : undefined,
     meta: consent.marketing ? brand.metaPixelId : undefined,
     pageLocation: landing.href,
     pageReferrer: attribution?.referrerHost ? `https://${attribution.referrerHost}/` : '',
@@ -59,7 +61,7 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     waiting.filter(value => value.brandId === brand.id).forEach(send);
     window.dispatchEvent(new Event('orderfly:tracking-ready'));
   };
-  const tracker = { brandId: brand.id, ready: false, statistics: consent.statistics && !!(brand.gtmContainerId || brand.ga4MeasurementId), marketing: consent.marketing && !!(brand.metaPixelId || brand.googleAdsConversionId && brand.googleAdsPurchaseLabel), emit(event: BrandTrackingEvent) {
+  const tracker = { brandId: brand.id, ready: false, statistics: consent.statistics && !!(brand.gtmContainerId || brand.ga4MeasurementId), marketing: consent.marketing && !!(brand.metaPixelId || brand.gtmContainerId || brand.googleAdsConversionId && brand.googleAdsPurchaseLabel), emit(event: BrandTrackingEvent) {
     if (stopped || event.brandId !== brand.id) return;
     if (ready) send(event); else if (pending.length < 50) pending.push(event);
   } };
@@ -94,7 +96,7 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
   gtag('set','ads_data_redaction',!config.consent.marketing);
   gtag('set',{page_location:config.pageLocation,page_referrer:config.pageReferrer});
   if(config.gtm){dataLayer.push({event:'orderfly_tracking_ready',brandId:config.brandId,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.attribution});dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});script('https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(config.gtm));}
-  // GTM owns GA4. Ads and Meta each have one explicit, consent-gated owner here.
+  // GTM owns GA4 and Google Ads when present. Without GTM, GA4 and Ads are direct. Meta has one direct owner.
   if((!config.gtm&&config.ga)||config.ads){script('https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(config.ads||config.ga));gtag('js',new Date());if(!config.gtm&&config.ga)gtag('config',config.ga,{send_page_view:true,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.campaign});if(config.ads)gtag('config',config.ads,{send_page_view:false,page_location:config.pageLocation});}
   if(config.meta){const fbq=function(){fbq.callMethod?fbq.callMethod.apply(fbq,arguments):fbq.queue.push(arguments)};fbq.queue=[];fbq.push=fbq;fbq.loaded=true;fbq.version='2.0';window.fbq=fbq;window._fbq=fbq;script('https://connect.facebook.net/en_US/fbevents.js');fbq('set','autoConfig',false,config.meta);fbq('init',config.meta);fbq('trackSingle',config.meta,'PageView',{referrer_host:referrerHost});}
   addEventListener('message',({source,origin,data})=>{
@@ -109,11 +111,12 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
     const pageLocation=eventPage.href;
     history.replaceState(null,'',pageLocation);
     const parameters={...ecommerce,brand_id:config.brandId,location_id:event.locationId||ecommerce.location_id,...config.campaign,page_location:pageLocation,page_referrer:config.pageReferrer};
-    if(config.consent.statistics&&event.destinations?.statistics!==false){
-      if(config.gtm){dataLayer.push({ecommerce:null});dataLayer.push({event:mapped[0],ecommerce,brand_id:config.brandId,location_id:parameters.location_id,page_location:pageLocation,page_referrer:config.pageReferrer});}
-      else if(config.ga)gtag('event',mapped[0],{...parameters,send_to:config.ga});
-    }
-    if(config.consent.marketing&&event.destinations?.marketing!==false){
+    const toStatistics=config.consent.statistics&&event.destinations?.statistics!==false,toMarketing=config.consent.marketing&&event.destinations?.marketing!==false;
+    // GTM gets one push per event; orderfly_destinations names the purposes it is for, so a purchase repeated
+    // after a later marketing grant can be limited to the Ads tag (Consent Mode still gates every tag).
+    if(config.gtm&&(toStatistics||toMarketing)){dataLayer.push({ecommerce:null});dataLayer.push({event:mapped[0],ecommerce,brand_id:config.brandId,location_id:parameters.location_id,page_location:pageLocation,page_referrer:config.pageReferrer,orderfly_destinations:{statistics:toStatistics,marketing:toMarketing}});}
+    else if(toStatistics&&config.ga)gtag('event',mapped[0],{...parameters,send_to:config.ga});
+    if(toMarketing){
       if(event.event==='purchase'&&config.adsSendTo)gtag('event','conversion',{send_to:config.adsSendTo,value:ecommerce.value,currency:ecommerce.currency,transaction_id:ecommerce.transaction_id,page_location:config.pageLocation});
       if(config.meta&&mapped[1])window.fbq('trackSingle',config.meta,mapped[1],{referrer_host:referrerHost,...(typeof ecommerce.value==='number'?{value:ecommerce.value}:{}),currency:ecommerce.currency,content_type:'product',...((ecommerce.items||[]).some(item=>item.item_name)?{content_name:(ecommerce.items||[]).map(item=>item.item_name).filter(Boolean).join(', ').slice(0,1000)}:{}),content_ids:(ecommerce.items||[]).map(item=>item.item_id),contents:(ecommerce.items||[]).map(item=>({id:item.item_id,quantity:item.quantity,item_price:item.price}))},{eventID:ecommerce.transaction_id||event.eventId});
     }

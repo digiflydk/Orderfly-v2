@@ -106,7 +106,7 @@ PO decision: the website keeps the existing container **and** adds the Orderfly
 container `GTM-PK4J8ZFD`, loaded by the same consent owner (not an eager `<head>`
 snippet, which would bypass the cookie banner from #47).
 
-* Both containers load only when statistics **and** marketing are granted, on the
+* (Superseded 2026-11-10, see "GTM owns GA4 and Google Ads" below.) Both containers loaded only when statistics **and** marketing were granted, on the
   exact public origins only. [Tracking isolation](orderfly-tracking-isolation.md)
   describes `GTM-PK4J8ZFD` as GA4 `G-551JD0H72K` only, but on 2026-11-10 the published
   container requested `ad.doubleclick.net` and `www.google.com` (Google Ads) in the
@@ -131,3 +131,15 @@ Live check after deployment (read-only): fresh visit loads no GTM; statistics on
 loads no GTM; accept all loads both once; GA4 realtime for
 `G-551JD0H72K` shows the visit. Website traffic will now appear in the Orderfly GA4
 property, alongside the webshop.
+
+## GTM owns GA4 and Google Ads (2026-11-10)
+
+PO decision: Google Ads is managed in GTM, on the website and in the webshop.
+
+* Both containers (`GTM-52G3QF76`, `GTM-PK4J8ZFD`) load when statistics **or** marketing is granted, once per document, on the exact public origins only. Nothing loads before a choice.
+* Consent Mode v2 tells their tags exactly what was granted: `analytics_storage` follows statistics; `ad_storage`, `ad_user_data` and `ad_personalization` follow marketing.
+* **The GTM configuration must enforce this.** GA4 tags require `analytics_storage`. Google Ads tags, remarketing and the conversion linker require `ad_storage` (GTM: Consent settings → Require additional consent). Without that, a statistics-only visitor can trigger Ads requests. This is configured by the Google consultant in GTM, not in this repository.
+* Revoking statistics or marketing after a container loaded persists the denial and reloads; the next document loads GTM again only if one purpose is still granted.
+* Analytics-only no longer stays saved-but-idle: it loads both containers with Ads storage denied. Marketing-only loads Meta, Omnisend and both containers with analytics storage denied.
+* The website CSP allows the Google Ads hosts from Google's CSP guide (see [tracking policy](website-tracking-policy.md)).
+* Payload: `scripts/preview-gtm-orderfly.cjs` version 3.

@@ -139,3 +139,13 @@ Review coverage: commerce pagePath changes retain the sanitized landing query, i
 Verified paid purchases include the saved order product name as GA4 `items[].item_name`, alongside item ID, quantity and unit price. Names are trimmed and limited to 200 characters; legacy lines without a name still send their ID and numeric values. Only the product name is selected, never customer notes or contact details. GTM forwards the ecommerce items unchanged. Meta receives names in `content_name`, and keeps product IDs, quantities and prices in its standard `content_ids`/`contents` fields. Consent, brand isolation and per-destination purchase deduplication are unchanged.
 
 Validation: `tracking-consent.cjs` tests purchase assembly and consent/deduplication; `brand-tracking-browser.cjs` checks named items reaching the GTM data layer and Meta payload in the isolated browser fixture. This does not prove vendor receipt in production. Existing historical purchases are not replayed.
+
+## GTM owns GA4 and Google Ads (2026-11-10)
+
+PO decision: a brand's GTM container (Esmeralda: `GTM-PK4J8ZFD`) owns both GA4 and Google Ads in the webshop.
+
+- `src/lib/brand-tracking-frame.ts` loads the brand GTM when statistics **or** marketing is granted. Consent Mode is set from the customer's exact choice (`analytics_storage` = statistics; `ad_storage`, `ad_user_data`, `ad_personalization` = marketing; `ads_data_redaction` without marketing).
+- With a GTM container, the webshop sends no direct Google Ads conversion and loads no direct gtag runtime, so a purchase is not counted twice. The brand's `googleAdsConversionId`/`googleAdsPurchaseLabel` are used only by brands without GTM. Meta stays direct.
+- Each commerce event (`view_item_list`, `view_item`, `add_to_cart`, `begin_checkout`, `purchase` with `transaction_id`, value, currency and items) is pushed to the dataLayer once, with `orderfly_destinations: {statistics, marketing}`. A purchase is repeated only when marketing is granted later, then with `{statistics:false, marketing:true}`; GA4 tags in GTM should ignore events whose `orderfly_destinations.statistics` is false, and both GA4 and Ads deduplicate on `transaction_id`.
+- **Required in GTM** (Google consultant): GA4 tags require `analytics_storage`; Ads conversion, remarketing and conversion linker tags require `ad_storage`. Otherwise a statistics-only customer can trigger Ads requests.
+- Tests: `tests/unit/tracking-consent.cjs` (GTM for either purpose, exact Consent Mode, no direct Ads beside GTM, destinations). `tests/unit/vendor-tracking-browser.cjs` loads the live published container and still expects GA-only traffic; it needs updating once the consultant has published the Ads setup.
