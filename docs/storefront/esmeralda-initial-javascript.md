@@ -51,3 +51,7 @@ The PM has authorized completing, merging and deploying tasks 3/4. Local tests r
 Release 2360940 passed the four-width production ordering and consent checks with no browser errors. Three identical Lighthouse 12.8.2 mobile runs measured score 80/78/32, LCP 2.82/2.96/5.97 seconds and TBT 268/314/5106 ms (median 78, 2.96 seconds, 314 ms). The slow third run is retained; no favorable-run selection is used. LCP and TBT targets remain open.
 
 The next small change preloads the existing Inter font only on the Esmeralda location menu. Its URL, font metrics, display policy and content are unchanged; the browser can start the existing font request before discovering it through CSS. The analytics provider now preserves its context object while its public values remain unchanged, avoiding redundant menu-wide consumer renders during internal consent initialization. Consent events, attribution, scope, event timing and tracking decisions are unchanged. Existing commerce/consent browser coverage and a clean production build/typecheck remain required before review and rollout.
+
+## Route content hydration (2026-11-10)
+
+An intermittent #418 on repeat visits was traced to route content suspending directly under the brand layout's host `Content` element. The vendored React 19.2 canary replays that element without resetting hydration. `BrandLayoutClient` now renders `children` through `RouteContent`. Details and the regression test are in [route-content-hydration-2026-11-10.md](route-content-hydration-2026-11-10.md).
