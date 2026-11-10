@@ -57,7 +57,9 @@ function view(doc: Record<string, any>): ReplyMessageView {
 async function messagesFor(db: FirebaseFirestore.Firestore, feedbackId: string, brandId: string) {
   // Sorted in memory: one equality filter needs no composite index.
   const docs = (await db.collection('feedbackReplyMessages').where('feedbackId', '==', feedbackId).get()).docs.map(d => ({ ...d.data(), id: d.id }) as Record<string, any>);
-  return docs.filter(d => d.brandId === brandId).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  // Order by when a message was actually sent or received, not when a draft was first created.
+  const at = (d: Record<string, any>) => Number(d.sentAt || d.receivedAt || d.updatedAt || d.createdAt) || 0;
+  return docs.filter(d => d.brandId === brandId).sort((a, b) => at(a) - at(b));
 }
 
 export async function getReplyThread(feedbackId: string): Promise<ReplyThreadView> {
@@ -93,14 +95,18 @@ export async function approveAndSendReply(input: { feedbackId: string; body: str
   if (!mail) throw new Error('Mail er ikke konfigureret for brandet.');
   const brand = (await s.db.collection('brands').doc(s.feedback.brandId).get()).data();
   const threadRef = s.db.collection('feedbackReplyThreads').doc(s.id);
-  const thread = (await threadRef.get()).data();
-  if (thread?.status === 'closed') throw new Error('Samtalen er lukket. Genåbn den for at svare.');
   const draft = (await messagesFor(s.db, s.id, s.feedback.brandId)).filter(m => m.state === 'draft').at(-1);
   const messageRef = s.db.collection('feedbackReplyMessages').doc(draft?.id || hex());
   const token = hex(), expiresAt = now + REPLY_TOKEN_DAYS * DAY;
-  const tokens = [...(Array.isArray(thread?.tokens) ? thread!.tokens : []), { hash: tokenHash(token), expiresAt }].filter(t => t.expiresAt > now).slice(-MAX_TOKENS);
-  await threadRef.set({ feedbackId: s.id, brandId: s.feedback.brandId, locationId: s.feedback.locationId || null, customerId: s.feedback.customerId || null,
-    status: 'open', tokens, tokenHashes: tokens.map(t => t.hash), createdAt: thread?.createdAt || now, updatedAt: now, lastMessageAt: now }, { merge: true });
+  // Status check and token append in one transaction: concurrent sends keep each other's links, and a
+  // concurrent close is never undone by an in-flight send.
+  await s.db.runTransaction(async tx => {
+    const thread = (await tx.get(threadRef)).data();
+    if (thread?.status === 'closed') throw new Error('Samtalen er lukket. Genåbn den for at svare.');
+    const tokens = [...(Array.isArray(thread?.tokens) ? thread!.tokens : []), { hash: tokenHash(token), expiresAt }].filter(t => t.expiresAt > now).slice(-MAX_TOKENS);
+    tx.set(threadRef, { ...(thread || {}), feedbackId: s.id, brandId: s.feedback.brandId, locationId: s.feedback.locationId || null, customerId: s.feedback.customerId || null,
+      status: 'open', tokens, tokenHashes: tokens.map(t => t.hash), createdAt: thread?.createdAt || now, updatedAt: now, lastMessageAt: now });
+  });
   await messageRef.set({ id: messageRef.id, feedbackId: s.id, brandId: s.feedback.brandId, locationId: s.feedback.locationId || null, customerId: s.feedback.customerId || null,
     direction: 'staff', body, origin: draft?.origin === 'assistant' ? 'assistant' : 'staff', draftedBy: draft?.draftedBy || s.access.uid,
     approvedBy: s.access.uid, state: 'sending', createdAt: draft?.createdAt || now, updatedAt: now });
@@ -124,9 +130,11 @@ export async function approveAndSendReply(input: { feedbackId: string; body: str
 
 export async function setReplyThreadStatus(feedbackId: string, status: 'open' | 'closed') {
   const s = await staffScope(feedbackId, true), ref = s.db.collection('feedbackReplyThreads').doc(s.id);
-  if (!(await ref.get()).exists) throw new Error('Der er ingen samtale endnu.');
-  // Closing revokes every guest link at once.
-  await ref.update({ status, updatedAt: Date.now(), ...(status === 'closed' ? { tokens: [], tokenHashes: [], closedBy: s.access.uid } : {}) });
+  await s.db.runTransaction(async tx => {
+    if (!(await tx.get(ref)).exists) throw new Error('Der er ingen samtale endnu.');
+    // Closing revokes every guest link at once.
+    tx.update(ref, { status, updatedAt: Date.now(), ...(status === 'closed' ? { tokens: [], tokenHashes: [], closedBy: s.access.uid } : {}) });
+  });
   return { ok: true as const };
 }
 
@@ -153,12 +161,18 @@ export async function submitGuestReply(input: { token: string; body: string }, r
   const body = z.string().trim().min(1, 'Skriv en besked.').max(2000, 'Beskeden må højst være 2000 tegn.').parse(input.body);
   const t = await guestThread(input.token, now).catch(() => null);
   if (!t) throw new Error('Linket er udløbet eller samtalen er lukket.');
-  const recent = (await messagesFor(t.db, t.data.feedbackId, t.data.brandId)).filter(m => m.direction === 'guest' && m.receivedAt > now - DAY);
-  if (recent.length >= GUEST_DAILY_LIMIT) throw new Error('Du har sendt mange beskeder i dag. Prøv igen i morgen.');
-  const ref = t.db.collection('feedbackReplyMessages').doc(hex());
-  await ref.create({ id: ref.id, feedbackId: t.data.feedbackId, brandId: t.data.brandId, locationId: t.data.locationId || null, customerId: t.data.customerId || null,
-    direction: 'guest', body, state: 'received', receivedAt: now, createdAt: now, updatedAt: now });
-  await t.ref.update({ lastMessageAt: now, lastGuestMessageAt: now, updatedAt: now });
+  const ref = t.db.collection('feedbackReplyMessages').doc(hex()), hash = tokenHash(input.token);
+  // Allowance, validity and the message itself commit together, so concurrent submissions cannot exceed the limit.
+  await t.db.runTransaction(async tx => {
+    const current = (await tx.get(t.ref)).data();
+    if (!current || current.status !== 'open' || !Array.isArray(current.tokens) || !current.tokens.some((x: any) => x.hash === hash && x.expiresAt > now))
+      throw new Error('Linket er udløbet eller samtalen er lukket.');
+    const recent = (Array.isArray(current.guestMessageTimes) ? current.guestMessageTimes : []).filter((at: number) => at > now - DAY);
+    if (recent.length >= GUEST_DAILY_LIMIT) throw new Error('Du har sendt mange beskeder i dag. Prøv igen i morgen.');
+    tx.create(ref, { id: ref.id, feedbackId: current.feedbackId, brandId: current.brandId, locationId: current.locationId || null, customerId: current.customerId || null,
+      direction: 'guest', body, state: 'received', receivedAt: now, createdAt: now, updatedAt: now });
+    tx.update(t.ref, { guestMessageTimes: [...recent, now], lastMessageAt: now, lastGuestMessageAt: now, updatedAt: now });
+  });
   // Best effort: the guest's message is stored even if the admin notice cannot be queued.
   const admin = feedbackAdminNotificationConfig(t.data.brandId);
   if (admin && /^[a-f0-9]{64}$/.test(t.data.feedbackId)) {

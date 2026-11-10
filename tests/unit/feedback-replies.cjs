@@ -102,3 +102,25 @@ test('customer history links Dully feedback by e-mail and lists the conversation
   f.records.set('customers/c2', { brandId: 'other', email: 'guest@example.test' });
   assert.deepEqual(await history.customerFeedbackHistory(BRAND, 'c2'), []);
 });
+
+test('concurrent guest messages cannot exceed the daily limit and concurrent sends keep each other\'s links', async t => {
+  const f = setup(t);
+  await Promise.all([f.lib.approveAndSendReply({ feedbackId: FEEDBACK, body: 'Svar A' }, f.request), f.lib.approveAndSendReply({ feedbackId: FEEDBACK, body: 'Svar B' }, f.request)]);
+  const tokens = f.sent.map(m => m.variables.reply_url.split('token=')[1]);
+  for (const token of tokens) assert.ok(await f.lib.loadGuestThread(token), 'each sent link stays valid');
+  const results = await Promise.allSettled(Array.from({ length: 15 }, (_, i) => f.lib.submitGuestReply({ token: tokens[0], body: 'samtidig ' + i }, f.request)));
+  assert.equal(results.filter(r => r.status === 'fulfilled').length, 10);
+  assert.equal(docs(f, 'feedbackReplyMessages').filter(m => m.direction === 'guest').length, 10);
+});
+
+test('a reply drafted before the guest answered is ordered by when it was sent', async t => {
+  const f = setup(t);
+  await f.lib.approveAndSendReply({ feedbackId: FEEDBACK, body: 'Første svar' }, f.request);
+  const token = f.sent[0].variables.reply_url.split('token=')[1];
+  const previous = Date.now; let clock = previous() + 1000; Date.now = () => clock; t.after(() => { Date.now = previous; });
+  await f.lib.saveReplyDraft({ feedbackId: FEEDBACK, body: 'Kladde skrevet tidligt' });
+  clock += 1000; await f.lib.submitGuestReply({ token, body: 'Kundens svar' }, f.request, clock);
+  clock += 1000; await f.lib.approveAndSendReply({ feedbackId: FEEDBACK, body: 'Kladde skrevet tidligt' }, f.request);
+  const thread = await f.lib.getReplyThread(FEEDBACK);
+  assert.deepEqual(thread.messages.map(m => m.body), ['Første svar', 'Kundens svar', 'Kladde skrevet tidligt']);
+});
