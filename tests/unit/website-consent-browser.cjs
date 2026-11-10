@@ -42,11 +42,11 @@ for(const path of ['/','/nyhedsbrev'])for(const width of [390,1440]) test(`captu
   assert.equal(await page.locator('script[src^="https://connect.facebook.net"],script[src^="https://omnisnippet1.com"]').count(),0);
   await page.locator('[flowappz-cookie-consent-sticky-cookie-button]').click();
   await page.locator('[flowappz-cookie-command="accept-all"]').filter({visible:true}).click();
-  await page.waitForFunction(()=>document.querySelectorAll('script[src^="https://www.googletagmanager.com"]').length===1);
-  assert.equal(providers.length,5);
+  await page.waitForFunction(()=>document.querySelectorAll('script[src^="https://www.googletagmanager.com"]').length===2);
+  assert.equal(providers.length,6);assert.deepEqual(providers.filter(u=>u.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
   await page.locator('[flowappz-cookie-consent-sticky-cookie-button]').click();
   await page.locator('[flowappz-cookie-command="accept-all"]').filter({visible:true}).click();
-  await page.waitForTimeout(100);assert.equal(providers.length,5);
+  await page.waitForTimeout(100);assert.equal(providers.length,6);
   assert.equal(await page.evaluate(()=>window.dataLayer.filter(x=>x.event==='gtm.js').length),1);
  }finally{await browser.close();}
 });

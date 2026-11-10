@@ -24,11 +24,22 @@ test('reject-all ignores checked choices; selected preserves separate categories
  const f=fixture();f.choices.forEach(n=>n.checked=true);f.click('reject-all');f.flush();assert.deepEqual(f.scripts,[]);assert.equal(f.jar['fa-consent-ad_storage'],'false');assert.equal(f.jar['fa-consent-analytics_storage'],'false');
  f.choices[0].checked=true;f.click('accept-selected');f.flush();assert.equal(f.scripts.length,2);assert.ok(f.scripts.some(s=>s.includes('facebook')));assert.ok(f.scripts.some(s=>s.includes('omnisnippet')));assert.ok(!f.scripts.some(s=>s.includes('googletagmanager')));
 });
-test('analytics-only stays saved but mixed Ads GTM is blocked pending category isolation',()=>{
+test('analytics-only stays saved but both Google containers stay blocked; they request Ads resources',()=>{
  const f=fixture();f.choices[1].checked=true;f.click('accept-selected');f.flush();assert.equal(f.jar['fa-consent-analytics_storage'],'true');assert.equal(f.jar['fa-consent-ad_storage'],'false');assert.deepEqual(f.scripts,[]);
+ assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,0);
+});
+test('statistics and marketing load both GTM containers once with one shared gtm.js and gtag js event',()=>{
+ const f=fixture();f.choices[1].checked=true;f.click('accept-selected');f.flush();f.click('accept-all');f.flush();f.click('accept-all');f.flush();
+ assert.deepEqual(f.scripts.filter(s=>s.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
+ assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,1);assert.equal(f.window.dataLayer.filter(x=>x[0]==='js').length,1);assert.equal(f.reloads(),0);
+});
+test('revoking analytics after the Orderfly GTM loaded persists denial, reloads and stays denied',()=>{
+ const f=fixture();f.click('accept-all');f.flush();f.choices.forEach(n=>n.checked=true);f.choices[1].checked=false;f.click('accept-selected');f.flush();assert.equal(f.reloads(),1);assert.equal(f.jar['fa-consent-analytics_storage'],'false');
+ const revisit=fixture(f.jar);revisit.flush();assert.ok(!revisit.scripts.some(s=>s.includes('googletagmanager')));
 });
 test('accept-all loads each provider once and one Meta PageView despite repeated events/boot',()=>{
- const f=fixture();f.click('accept-all');f.click('accept-all');f.flush();f.rerun();f.click('accept-all');f.flush();assert.equal(f.scripts.length,3);assert.equal(new Set(f.scripts).size,3);
+ const f=fixture();f.click('accept-all');f.click('accept-all');f.flush();f.rerun();f.click('accept-all');f.flush();assert.equal(f.scripts.length,4);assert.equal(new Set(f.scripts).size,4);
+ assert.deepEqual(f.scripts.filter(s=>s.includes('googletagmanager')).sort(),['https://www.googletagmanager.com/gtm.js?id=GTM-52G3QF76','https://www.googletagmanager.com/gtm.js?id=GTM-PK4J8ZFD']);
  assert.equal(f.window.fbq.queue.filter(x=>x[0]==='track'&&x[1]==='PageView').length,1);
  assert.equal(f.window.omnisend.filter(x=>x[0]==='track').length,1);
  assert.equal(f.window.dataLayer.filter(x=>x.event==='gtm.js').length,1);
@@ -39,21 +50,21 @@ test('accept then revoke before scheduled work makes zero requests',()=>{
  const f=fixture();f.click('accept-all');f.click('reject-all');f.flush();assert.deepEqual(f.scripts,[]);assert.equal(f.reloads(),0);
 });
 test('loaded provider revocation persists denial then reloads; next document stays denied',()=>{
- const f=fixture();f.click('accept-all');f.flush();f.click('reject-all');f.flush();assert.equal(f.reloads(),1);assert.equal(f.scripts.length,3);assert.equal(f.window.fbq.queue.at(-1)[1],'revoke');
+ const f=fixture();f.click('accept-all');f.flush();f.click('reject-all');f.flush();assert.equal(f.reloads(),1);assert.equal(f.scripts.length,4);assert.equal(f.window.fbq.queue.at(-1)[1],'revoke');
  const revisit=fixture(f.jar);revisit.flush();assert.deepEqual(revisit.scripts,[]);
 });
 test('removing analytics with marketing retained reloads loaded Google; no further loader',()=>{
- const f=fixture();f.click('accept-all');f.flush();f.choices[1].checked=false;f.click('accept-selected');f.flush();assert.equal(f.reloads(),1);assert.equal(f.jar['fa-consent-ad_storage'],'true');assert.equal(f.jar['fa-consent-analytics_storage'],'false');assert.equal(f.scripts.length,3);
+ const f=fixture();f.click('accept-all');f.flush();f.choices[1].checked=false;f.click('accept-selected');f.flush();assert.equal(f.reloads(),1);assert.equal(f.jar['fa-consent-ad_storage'],'true');assert.equal(f.jar['fa-consent-analytics_storage'],'false');assert.equal(f.scripts.length,4);
 });
 test('saved grant restores once; malformed/incomplete choice and preview origins stay closed',()=>{
- const f=fixture();f.click('accept-all');const revisit=fixture(f.jar);revisit.flush();assert.equal(revisit.scripts.length,3);
+ const f=fixture();f.click('accept-all');const revisit=fixture(f.jar);revisit.flush();assert.equal(revisit.scripts.length,4);
  const invalid=fixture({'fa-consent-ad_storage':'true','fa-consent-analytics_storage':'true','fa-consent-security_storage':'false'});invalid.flush();assert.deepEqual(invalid.scripts,[]);
  for(const host of ['https://web.orderfly.dk','http://terminal.local:4173','https://www.esmeraldapizza.dk.evil']){const preview=fixture(f.jar,host);preview.flush();assert.deepEqual(preview.scripts,[]);assert.equal(preview.nodes.get('[data-newsletter-consent-fallback]').hidden,false);}
 });
 test('provider load failure keeps newsletter fallback visible without repeated loader requests',()=>{
  const f=fixture();f.click('accept-all');f.flush();f.scriptNodes.find(n=>n.src.includes('omnisnippet')).onerror();
  assert.equal(f.nodes.get('[data-newsletter-consent-fallback]').hidden,false);assert.match(f.nodes.get('[data-newsletter-consent-message]').textContent,/kunne ikke indlæses/);
- f.click('accept-all');f.flush();assert.equal(f.scripts.length,3);
+ f.click('accept-all');f.flush();assert.equal(f.scripts.length,4);
 });
 
 test('successful launcher without downstream form retains feedback; late visible form resolves it',()=>{

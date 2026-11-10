@@ -2,7 +2,7 @@
 
 The V2 presentation is enabled by the server-selected storefront V2 context, only for the Esmeralda V2 alias. The menu continues to use the existing brand/location catalog, availability, discount and combo resolution. No sample dishes, example prices or new offers are introduced.
 
-V2 product cards have a labelled rectangular Tilføj button. It opens the product detail even when there are no modifiers, allowing a customer to review the dish and quantity before adding it. V1 retains its existing quick-add behavior. Combo cards show Vælg menu and continue to open the existing combo builder only when the chosen fulfilment mode has a valid configured price.
+V2 product cards have a labelled rectangular Tilføj button. Since 2026-11-08 (`a2e08ce`) it adds a dish without option groups directly to the basket, like V1; dishes with option groups open the product detail. The product title and image ("Se …") always open the detail, so a customer can still review the dish and quantity first. `tests/unit/menu-refresh-browser.cjs` covers direct add and opening the detail from the title. Combo cards show Vælg menu and continue to open the existing combo builder only when the chosen fulfilment mode has a valid configured price.
 
 Product and combo portals carry the V2 marker. The dedicated stylesheet loads after the existing commerce theme and scopes all changes to a page containing that marker. It uses the existing self-hosted Inter font, charcoal surfaces, warm gold actions, visible focus outlines and rectangular controls. The menu hero is more compact. Product details have a constrained-height scrolling choice area and a non-scrolling purchase footer; existing commerce panel safe-area padding remains in effect.
 

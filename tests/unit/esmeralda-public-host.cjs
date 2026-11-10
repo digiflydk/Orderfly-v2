@@ -4,6 +4,7 @@ const crypto=require('node:crypto');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const manifest=require('../../preview/esmeralda/manifest.json');
 const discovery=require('../../preview/esmeralda/production-discovery.json');
+const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
 const mocks={'../../preview/esmeralda/manifest.json':{default:manifest},'../../preview/esmeralda/production-discovery.json':{default:discovery}};
 const lib=loadTs('src/lib/esmeralda-public-host.ts');
 const server=loadTs('src/lib/web-design-preview-server.ts',mocks);
@@ -33,7 +34,7 @@ test('production discovery preserves reviewed104URLs; public content hashes matc
   for(const [p,e]of Object.entries(manifest.routes)) {
    if(p==='/robots.txt'||p==='/book-bord')continue;
    const r=await server.webDesignPreviewResponse(req(p+'?path=/api/health'));assert.equal(r.status,200,p);assert.equal(r.headers.get('x-robots-tag'),null,p);
-   assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),e.sha256,p);
+   assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),expectedSha(p),p);
   }
   for(const p of ['/sitemap.xml','/robots.txt','/'])assert.equal(await(await server.webDesignPreviewResponse(req(p,'HEAD'))).text(),'');
   assert.equal((await server.webDesignPreviewResponse(req('/book-bord?a=%2F'))).headers.get('location'),'/bordbooking?a=%2F');

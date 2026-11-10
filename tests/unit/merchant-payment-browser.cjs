@@ -106,10 +106,11 @@ before(async () => {
   const loader = fixture('ts-loader', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry, output: { path: dir, filename: 'bundle.js' },
     resolve: { alias: aliases, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
-    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }] },
+    // Component CSS imports (e.g. the stamp celebration on the receipt) are served below with the page styles.
+    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /\.css$/, use: [fixture('css-loader', 'module.exports=function(){return "";}')] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   const css = (await require('postcss')([require('tailwindcss')({ ...loadTs('tailwind.config.ts', { 'tailwindcss-animate': { default: require('tailwindcss-animate') } }).default, content: [path.join(root, 'src/**/*.{ts,tsx}')] })])
-    .process(fs.readFileSync(path.join(root, 'src/app/globals.css'), 'utf8'), { from: undefined })).css + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8');
+    .process(fs.readFileSync(path.join(root, 'src/app/globals.css'), 'utf8'), { from: undefined })).css + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/components/checkout/stamp-celebration.css'), 'utf8');
   server = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, origin || 'http://localhost'), name = scenario(url); res.setHeader('Cache-Control', 'no-store');
