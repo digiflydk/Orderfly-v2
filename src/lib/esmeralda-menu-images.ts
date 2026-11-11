@@ -278,6 +278,7 @@ export function esmeraldaProductImage(isV2: boolean, product: PizzaImageProduct,
 }
 
 const ESMERALDA_MENU_FULL_IMAGE_PATHS = Array.from(new Set([
+  '/images/esmeralda-v2/menu/combo-pizzamenu.webp',
   ...Object.values(assets).map(asset => `/images/esmeralda-v2/menu/${asset.file}.webp`),
   ...Object.values(catalogAssets).map(asset => `/images/esmeralda-v2/menu/${asset.file}.webp`),
   ...Object.keys(pizzaAssets).map(id => `/images/esmeralda-v2/menu/pizza-${id}.webp`),
@@ -295,4 +296,11 @@ export function esmeraldaMenuImage(isV2: boolean, brandId: string, comboId: stri
   if (!isV2 || brandId !== 'oeypKaMyYcQjIwaa1PtV' || comboId !== 'esmeralda-v2-pizzamenu-20261030') return undefined;
   const asset = assets[productId];
   return asset ? {src: menuAssetVariant(`/images/esmeralda-v2/menu/${asset.file}.webp`, variant), illustration: !!asset.illustration} : undefined;
+}
+
+/** Keep later catalog uploads authoritative, exactly as with product cutouts. */
+export function esmeraldaComboImage(isV2: boolean, combo: {id: string; brandId: string; imageUrl?: string | null}, variant: EsmeraldaMenuImageVariant = 'full'): string | undefined {
+  const source = 'https://firebasestorage.googleapis.com/v0/b/studio-2819118380-ae26c.firebasestorage.app/o/brands%2FoeypKaMyYcQjIwaa1PtV%2Fproducts%2Fca2a037a-9d70-4b4e-a5c4-d7217b465be8%2F24de917f-566c-400c-98b6-522701e053e3.avif';
+  if (!isV2 || combo.brandId !== 'oeypKaMyYcQjIwaa1PtV' || combo.id !== 'esmeralda-v2-pizzamenu-20261030' || combo.imageUrl?.split('?')[0] !== source) return undefined;
+  return menuAssetVariant('/images/esmeralda-v2/menu/combo-pizzamenu.webp', variant);
 }
