@@ -1,4 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto');
+const {reverseClubPromoGtm}=require('../../scripts/website-club-promo-gtm.cjs');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const CONSENT='/_assets/website-consent.js';
 // The consent adapter shipped before GTM-PK4J8ZFD (scripts/preview-gtm-orderfly.cjs), pinned by
@@ -14,6 +15,8 @@ function gtmOrderflyBaseline(route,body,manifest){
  assert.equal(hash(current),gtm.consent_sha256);
  const inline=`<script data-website-consent-owner="inline-v1" data-consent-sha256="${gtm.consent_sha256}">${current.toString('utf8')}</script>`;
  assert.equal(html.split(inline).length,2,'one current inline consent owner on /');
- return Buffer.from(html.replace(inline,()=>`<script data-website-consent-owner="inline-v1" data-consent-sha256="${gtm.previous_consent_sha256}">${previous.toString('utf8')}</script>`));
+ // Version 4 also moved the homepage Club promotion to GTM dataLayer events; reverse that exact change too.
+ const restored=html.replace(inline,()=>`<script data-website-consent-owner="inline-v1" data-consent-sha256="${gtm.previous_consent_sha256}">${previous.toString('utf8')}</script>`);
+ return Buffer.from(gtm.club_promotion==='gtm-datalayer-v1'?reverseClubPromoGtm(restored):restored);
 }
 module.exports={gtmOrderflyBaseline};

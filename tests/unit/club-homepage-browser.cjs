@@ -26,7 +26,9 @@ async function fixture({consent=null,width=1440,pathName='/',host='www.esmeralda
  });
  await page.goto('https://'+host+pathName);return {page,context};
 }
-async function events(page){return page.evaluate(()=>Array.from(window.dataLayer||[],x=>Array.from(x)));}
+// Promotion events are plain GTM dataLayer events (GTM-PK4J8ZFD owns Google Analytics since 2026-11-11):
+// [event name, ecommerce] pairs, so the assertions read like the former gtag commands.
+async function events(page){return page.evaluate(()=>(window.dataLayer||[]).filter(x=>x&&typeof x.event==='string').map(x=>['event',x.event,x.ecommerce]));}
 test('Club moves first into rotation; original CMS slides and explanation remain once',async()=>{
  const {page,context}=await fixture({rotation:true,consent:false});
  assert.deepEqual(await page.locator('.swiper-wrapper > *').evaluateAll(els=>els.map(el=>el.id||el.dataset.existing)),['pizza-club','brunch','restaurant','tuesday']);
@@ -60,7 +62,9 @@ test('rejected statistics: popup still works, no metrics or UTM',async()=>{
 test('statistics: bounded Google promotion events, never signup or personal data',async()=>{
  const {page,context}=await fixture({consent:true});await page.clock.fastForward(13000);
  const e=await events(page);assert.equal(e.filter(x=>x[1]==='view_promotion').length,2);
- for(const x of e){assert.equal(x[2].send_to,'G-F9XCDW2586');assert.equal(x[2].page_location,'https://www.esmeraldapizza.dk/');assert.deepEqual(Object.keys(x[2]).sort(),['creative_slot','page_location','page_referrer','promotion_id','promotion_name','send_to']);}
+ for(const x of e){assert.deepEqual(Object.keys(x[2]).sort(),['creative_slot','promotion_id','promotion_name']);assert.equal(x[2].promotion_id,'esmeralda_pizza_club');}
+ assert.equal(await page.evaluate(()=>JSON.stringify(window.dataLayer||[]).includes('G-F9XCDW2586')),false,'no hard-coded measurement id');
+ assert.ok(await page.evaluate(()=>(window.dataLayer||[]).filter(x=>x&&'ecommerce' in x&&x.ecommerce===null).length>=2),'each promotion event clears the previous ecommerce object');
  const navigation=page.waitForRequest(r=>r.isNavigationRequest()&&r.url().includes('orderfly.dk'));
  await page.locator('[data-club-placement="popup"]').click();const request=await navigation;
  const url=new URL(request.url());assert.equal(url.searchParams.get('utm_content'),'popup');assert.equal(url.searchParams.get('utm_campaign'),'pizza_club');await context.close();
