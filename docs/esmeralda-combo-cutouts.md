@@ -7,3 +7,5 @@ The Pizzamenu currently visible on the Amager storefront uses a transparent cuto
 Inventory on 2026-11-11: one standalone combo/menu photograph in the public Amager menu. Product images inside combo choices retain their existing cutouts.
 
 Asset preparation: image generation background extraction, then WebP encoding with alpha and contain resizing. No production data changes.
+
+The Combo administration form and server validator also accept the exact bundled `/images/esmeralda-v2/menu/combo-pizzamenu.webp` path, so the cutout can be saved as the canonical combo image. Other local paths are not admitted.

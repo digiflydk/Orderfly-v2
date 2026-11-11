@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { comboProductAdjustmentsSchema, validComboAdjustmentKeys } from '@/lib/combo-pricing-schema';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
-import { optionalImageUrl } from '@/lib/optional-image-url';
+import { optionalComboImageUrl } from '@/lib/optional-image-url';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { promotionDate } from '@/lib/promotion-date';
 
@@ -43,7 +43,7 @@ const comboMenuSchema = z.object({
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     comboName: z.string().min(2, 'Combo name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: optionalImageUrl,
+    imageUrl: optionalComboImageUrl,
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     isActive: z.boolean().default(true),
