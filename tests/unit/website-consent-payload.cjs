@@ -30,3 +30,15 @@ test('added consent asset pin, disabled contact asset and preserved UI fragment 
  assert.equal(manifest.added_assets['/_assets/website-contact-adapter.js'].activation,'disabled');
  assert.equal(crypto.createHash('sha256').update(fs.readFileSync('scripts/website-ui-preserved.html')).digest('hex'),'7b63406575ed90a1f81e462b8b4022a7934fdd930d4d255c7afba4158d89fb4e');
 });
+test('the retired website container and its hard-coded GA property are gone; the homepage promotion uses GTM dataLayer events',()=>{
+ for(const [route,entry]of Object.entries(payload)){
+  if(!/\.(html|js)$/.test(entry.file))continue;
+  const text=Buffer.from(entry.data,'base64').toString();
+  assert.ok(!text.includes('gtm.js?id=GTM-52G3QF76'),route);assert.ok(!text.includes("'G-F9XCDW2586'"),route);
+ }
+ const home=Buffer.from(payload['/'].data,'base64').toString();
+ const source=fs.readFileSync('design/esmeralda-club-popup.js','utf8');
+ const measure=source.slice(source.indexOf('  function event(name, slot) {'),source.indexOf('  function visible(el) {'));
+ assert.ok(measure.includes("window.dataLayer.push({event: name, ecommerce:"));assert.equal(home.split(measure).length,2,'homepage promotion matches design/esmeralda-club-popup.js');
+ assert.equal(manifest.gtm_orderfly.retired_container,'GTM-52G3QF76');assert.equal(manifest.gtm_orderfly.club_promotion,'gtm-datalayer-v1');
+});

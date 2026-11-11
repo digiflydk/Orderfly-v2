@@ -150,3 +150,14 @@ The popup and other CMS slides are unaffected by the scoped rotation rules.
 Responsive fixtures check actual frame height and text/control containment at
 320, 390, 600, 768, 1440 and 1920px. Compare Club and CMS frames in published
 Webflow staging and production as a separate visual acceptance step.
+
+## Measurement after the GTM consolidation (2026-11-11)
+
+The website container `GTM-52G3QF76` and the hard-coded `send_to: G-F9XCDW2586` were removed. The promotion pushes standard GA4 ecommerce events to the dataLayer for `GTM-PK4J8ZFD`, whose triggers and tags decide the destination (configured by the Google consultant):
+
+```js
+dataLayer.push({ecommerce: null});
+dataLayer.push({event: 'view_promotion' | 'select_promotion', ecommerce: {promotion_id: 'esmeralda_pizza_club', promotion_name: 'Esmeralda Pizza Club', creative_slot}});
+```
+
+`creative_slot` is one of `hero`, `hero_login`, `popup`, `nav`, `mobile_nav`, `footer`. The statistics-consent gate and the bounded, personal-data-free fields are unchanged. The page location is the real page; it is no longer forced to `/`.

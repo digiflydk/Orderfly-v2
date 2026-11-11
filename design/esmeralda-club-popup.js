@@ -3,7 +3,6 @@
   'use strict';
   if (location.pathname !== '/' || window.__esmeraldaClubPromo499) return;
   window.__esmeraldaClubPromo499 = true;
-  var GA = 'G-F9XCDW2586'; // Existing website property; never the Orderfly commerce property.
   var BASE = 'https://esmeralda.orderfly.dk';
   var DISMISS = 'esmeralda-club-promo-dismissed-v1';
   var slots = ['hero', 'hero_login', 'popup', 'nav', 'mobile_nav', 'footer'];
@@ -18,10 +17,11 @@
   }
   function event(name, slot) {
     if (!stats() || slots.indexOf(slot) < 0 || document.visibilityState !== 'visible') return;
+    // GTM-PK4J8ZFD owns Google Analytics and Ads (2026-11-11): a standard GA4 ecommerce
+    // promotion event for its triggers, without a hard-coded measurement id.
     window.dataLayer = window.dataLayer || [];
-    function gtag() { window.dataLayer.push(arguments); }
-    gtag('event', name, {send_to: GA, promotion_id:'esmeralda_pizza_club', promotion_name:'Esmeralda Pizza Club',
-      creative_slot:slot, page_location:'https://www.esmeraldapizza.dk/', page_referrer:''});
+    window.dataLayer.push({ecommerce: null});
+    window.dataLayer.push({event: name, ecommerce: {promotion_id:'esmeralda_pizza_club', promotion_name:'Esmeralda Pizza Club', creative_slot:slot}});
     return true;
   }
   function visible(el) {

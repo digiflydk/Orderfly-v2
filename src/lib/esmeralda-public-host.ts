@@ -31,7 +31,7 @@ const META_CONNECT = 'https://www.facebook.com https://graph.facebook.com https:
 const META_IMAGES = 'https://www.facebook.com https://static.xx.fbcdn.net';
 const META_STYLES = 'https://static.xx.fbcdn.net';
 const META_FRAMES = 'https://www.facebook.com';
-// Google Ads through GTM (PO decision 2026-11-10: GTM-52G3QF76 and GTM-PK4J8ZFD own Google Ads).
+// Google Ads through GTM (PO decision 2026-11-10: GTM-PK4J8ZFD owns Google Ads; GTM-52G3QF76 retired 2026-11-11).
 // Hosts from Google's tag-platform CSP guide for Ads conversions and remarketing, plus ad.doubleclick.net
 // observed from the published container; www.google.dk is the Danish country domain. Exact hosts only.
 // Consent Mode still decides what the Ads tags may do; nothing loads before a consent choice.

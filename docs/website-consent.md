@@ -143,3 +143,7 @@ PO decision: Google Ads is managed in GTM, on the website and in the webshop.
 * Analytics-only no longer stays saved-but-idle: it loads both containers with Ads storage denied. Marketing-only loads Meta, Omnisend and both containers with analytics storage denied.
 * The website CSP allows the Google Ads hosts from Google's CSP guide (see [tracking policy](website-tracking-policy.md)).
 * Payload: `scripts/preview-gtm-orderfly.cjs` version 3.
+
+## GTM-52G3QF76 retired (2026-11-11)
+
+The Google consultant moved everything needed into `GTM-PK4J8ZFD` (one Google Ads tag `AW-17906276961`, no double tracking) and published it. The website now loads only `GTM-PK4J8ZFD`, for statistics or marketing, with Consent Mode as above. The homepage Club promotion now pushes plain GA4 ecommerce `view_promotion` / `select_promotion` events to the dataLayer instead of `gtag('event', …, {send_to: 'G-F9XCDW2586'})` (see [Club homepage](stempelkort/esmeralda-homepage-club.md)). Payload: `scripts/preview-gtm-orderfly.cjs` version 4, using `scripts/website-club-promo-gtm.cjs`; baseline tests reverse that exact change through `tests/helpers/website-gtm-orderfly-baseline.cjs`.
