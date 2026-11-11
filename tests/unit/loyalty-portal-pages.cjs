@@ -32,7 +32,10 @@ test('the real brand layout selects the club footer only for Esmeralda club path
     const footer=children.find(c=>c?.type===expected),cookies=children.find(c=>c?.type==='Cookies');
     assert.ok(footer,`${slug} ${path}`);assert.equal(children.filter(c=>['Footer','EsmeraldaClubFooter'].includes(c?.type)).length,1);
     footer.props.onOpenCookieSettings();assert.ok(cookies);
-    if(path.includes('/club'))assert.equal(children.find(c=>c?.props?.children==='form').type,'div','club owns its single main');
+    // Route content is rendered through RouteContent (hydration-safe boundary), never directly under the host element.
+    const content=children.find(c=>c?.props?.children?.type===mod.exports.RouteContent);
+    assert.equal(content?.props.children.props.children,'form','route content is wrapped in RouteContent');
+    if(path.includes('/club'))assert.equal(content.type,'div','club owns its single main');
   }
   assert.equal(opened,4);
   // V2 landing page shares the menu header; other brands and V1 keep the generic header.

@@ -79,7 +79,7 @@ jobs:
 
       - name: Esmeralda V2 menu, products, combos and checkout browser checks
         timeout-minutes: 12
-        run: node --test tests/unit/menu-refresh-browser.cjs tests/unit/tilvalg-storefront-browser.cjs tests/unit/combo-modifiers-browser.cjs tests/unit/checkout-browser.cjs
+        run: node --test tests/unit/menu-refresh-browser.cjs tests/unit/storefront-route-hydration-browser.cjs tests/unit/tilvalg-storefront-browser.cjs tests/unit/combo-modifiers-browser.cjs tests/unit/checkout-browser.cjs
 
       - name: Cart price and mobile cart bar delivery regression
         run: node --test tests/unit/delivery-cart-price.cjs tests/unit/mobile-cart-bar-price.cjs

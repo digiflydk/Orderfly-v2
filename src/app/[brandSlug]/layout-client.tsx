@@ -14,6 +14,18 @@ import { storefrontSegments } from '@/lib/brand-subdomain';
 import { EsmeraldaClubFooter } from './club/portal-frame';
 import type { PublicCookieTexts } from '@/lib/cookie-texts';
 
+/**
+ * Route content arrives as a streamed React Server Components reference. While its
+ * client chunks (e.g. `error.tsx`) are still loading, React suspends on it. If it
+ * suspends directly under a host element, the vendored React 19.2 canary replays that
+ * element without resetting its hydration cursor and throws #418 ("server rendered HTML
+ * didn't match the client"). A component boundary is replayed safely, so the route
+ * content is always rendered through one.
+ */
+export function RouteContent({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
 export function BrandLayoutClient({
   children,
   brand,
@@ -56,7 +68,7 @@ export function BrandLayoutClient({
         {showGlobalHeader && (isV2 && segments.length === 0 ? <MenuHeader brand={brand} /> : <Header brand={brand} />)}
         {showMenuHeader && <MenuHeader brand={brand} />}
         <Content className="flex-1 w-full">
-            {children}
+            <RouteContent>{children}</RouteContent>
         </Content>
         {isClub && brand.slug === 'esmeralda' ? <EsmeraldaClubFooter onOpenCookieSettings={() => setIsCookieModalOpen(true)} /> : showFooter && (
           <Footer
