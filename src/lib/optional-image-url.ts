@@ -4,3 +4,9 @@ import { z } from 'zod';
 export const optionalImageUrl = z.string().trim().pipe(
   z.union([z.literal(''), z.string().url({ message: 'Please enter a valid URL.' })]),
 ).optional().nullable();
+
+// Bundled combo assets are served locally and do not need a remote image host.
+export const optionalComboImageUrl = z.union([
+  optionalImageUrl,
+  z.literal('/images/esmeralda-v2/menu/combo-pizzamenu.webp'),
+]);
