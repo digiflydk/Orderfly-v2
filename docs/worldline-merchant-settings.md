@@ -44,3 +44,9 @@ runtime and are still pending; this change must remain a draft until verified.
 
 References: https://developer.bambora.com/europe/checkout/getting-started/access-api
 and https://developer.bambora.com/europe/checkout/getting-started/test-your-setup.
+
+Provider preference is now stored on the agreement (`stripe` default or
+`worldline`) and inherited with the whole agreement. This preference remains
+staged: it is not yet used to route payment requests. Stripe still uses existing
+platform settings. Do not enable the preference in checkout until settlement,
+printing, managed delivery refund and callback verification support both providers.
