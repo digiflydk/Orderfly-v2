@@ -14,7 +14,7 @@ test('capture commits journal; duplicate calls do not move money twice',async()=
 test('lost provider reply is reconciled by readback, not a second mutation',async()=>{const f=fixture({lost:true});assert.equal((await f.run()).state,'confirmed');await f.run();assert.equal(f.calls(),1);});
 test('unresolved timeout remains locked across retries and blocks another operation',async()=>{const f=fixture({lost:true,move:false});assert.equal((await f.run()).state,'unknown');assert.equal((await f.run()).state,'unknown');assert.equal(f.calls(),1);await assert.rejects(f.run({requestId:'new-capture'}));assert.equal(f.calls(),1);});
 test('request identity cannot be reused for different money or actor',async()=>{const f=fixture();await f.run();await assert.rejects(f.run({amountMinor:100}));await assert.rejects(f.run({actorId:'other'}));assert.equal(f.calls(),1);});
-test('refund records authoritative credited total and refuses over-refund',async()=>{const f=fixture();await f.run();assert.equal((await f.run({operation:'credit',requestId:'refund-1',amountMinor:500})).state,'confirmed');assert.equal(f.rows.get('orders/o').refundedAmountOre,500);await assert.rejects(f.run({operation:'credit',requestId:'refund-2',amountMinor:12500}));assert.equal(f.calls(),2);});
+test('refund records authoritative credited total and refuses over-refund',async()=>{const f=fixture();await f.run();f.rows.get('orders/o').paymentStatus='Paid';assert.equal((await f.run({operation:'credit',requestId:'refund-1',amountMinor:500})).state,'confirmed');assert.equal(f.rows.get('orders/o').refundedAmountOre,500);await assert.rejects(f.run({operation:'credit',requestId:'refund-2',amountMinor:12500}));assert.equal(f.calls(),2);});
 
 test('concurrent duplicate finalization is monotonic and moves money at most once',async()=>{
  const f=fixture();const results=await Promise.all([f.run(),f.run(),f.run()]);assert.equal(f.calls(),1);assert.ok(results.every(r=>r.state==='confirmed'));const journal=[...f.rows].find(([path])=>path.includes('/paymentOperations/'))[1];assert.equal(journal.state,'confirmed');assert.equal(f.rows.get('orders/o').paymentOperation,null);
@@ -22,4 +22,9 @@ test('concurrent duplicate finalization is monotonic and moves money at most onc
 test('failed financial journal commit never reports confirmed; retry reconciles without resubmission',async()=>{
  const f=fixture();const original=f.db.runTransaction;let calls=0;f.db.runTransaction=async run=>{calls++;if(calls===2)throw Error('commit unavailable');return original(run);};
  assert.equal((await f.run()).state,'unknown');assert.equal(f.calls(),1);assert.ok(f.rows.get('orders/o').paymentOperation);assert.equal((await f.run()).state,'confirmed');assert.equal(f.calls(),1);
+});
+
+test('refund spend and financial adjustment commit once with journal, including replay',async()=>{
+ const f=fixture();await f.run();Object.assign(f.rows.get('orders/o'),{paymentStatus:'Paid',customerDetails:{id:'c'},invoice:{number:'INV-1'}});f.rows.set('customers/c',{brandId:'b',totalSpend:200});
+ const input={operation:'credit',requestId:'refund-ledger',amountMinor:500};assert.equal((await f.run(input)).state,'confirmed');await f.run(input);assert.equal(f.rows.get('customers/c').totalSpend,195);const adjustments=[...f.rows].filter(([p])=>p.includes('/financialAdjustments/'));assert.equal(adjustments.length,1);assert.equal(adjustments[0][1].amountMinor,-500);assert.equal(adjustments[0][1].customerApplied,true);
 });

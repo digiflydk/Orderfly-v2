@@ -19,9 +19,9 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
     loadWorldlineSettings({ brandId, locationId }).then(value => { if (active) setSettings(value); }).catch(() => { if (active) setMessage('Betalingsopsætning kræver platformadministratoradgang. Kunne ikke hente indstillinger.'); });
     return () => { active = false; };
   }, [brandId, locationId]);
-  return <section className="rounded-lg border p-6 space-y-4" aria-label="Worldline betalingsopsætning">
+  return <section className="rounded-lg border p-6 space-y-4" aria-label="Betalingsopsætning">
     <h2 className="text-xl font-semibold">Betalingsaftale</h2>
-    <p className="text-sm text-muted-foreground">Betalingsopsætningen omfatter hele aftalen. Worldline live kræver særskilt aktivering efter sandboxtest; administreret levering er endnu ikke understøttet med Worldline.</p>
+    <p className="text-sm text-muted-foreground">Betalingsopsætningen omfatter hele aftalen. Worldline live kræver særskilt aktivering efter sandboxtest; Stripe og Worldline bruger den valgte aftale i checkout.</p>
     {!settings && !message && <p role="status">Henter indstillinger…</p>}
     {settings?.effective && <div className="rounded-md bg-muted p-4 space-y-1" aria-label="Gemt betalingsaftale">
       <p className="font-medium">Gemt aftale i checkout</p>
@@ -64,7 +64,7 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
           </fieldset>)}</div>}
           <p className="text-sm text-muted-foreground">Nøgler gemmes i Secret Manager og vises aldrig igen. Tomme felter bevarer gemte nøgler i samme aftale og miljø. {settings.provider === 'worldline' ? 'Udfyld alle fire felter ved første opsætning eller skift af Merchant Number. Test og live bruger hver sit Merchant Number.' : 'Udfyld alle tre Stripe-felter ved første opsætning. Webhookadresse: /api/stripe/webhook.'}</p>
         </>}
-        <Button type="submit">{busy ? 'Gemmer…' : 'Gem Worldline-opsætning'}</Button>
+        <Button type="submit">{busy ? 'Gemmer…' : 'Gem betalingsopsætning'}</Button>
       </fieldset>
     </form>}
     {message && <p role="status">{message}</p>}

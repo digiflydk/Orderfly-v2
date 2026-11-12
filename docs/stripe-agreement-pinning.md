@@ -58,6 +58,4 @@ Local synthetic checks:
 - `npm run typecheck`
 
 These checks do not provision credentials, mutate production or prove provider
-connectivity or deployed IAM. Integrate the legacy resolver in checkout before
-claiming that new legacy orders are bound; the helper itself performs no work
-until called by the server flow.
+connectivity or deployed IAM. Checkout invokes the legacy resolver only when no explicit agreement exists, after authoritative pricing; verified Free orders bypass provider resolution entirely.

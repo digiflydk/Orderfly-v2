@@ -156,3 +156,25 @@ Deploy the companion notification template migration and the matching `orderfly-
 The issue-specific `Feedback Code Review` workflow reviews the exact same-repository candidate after Orderfly CI succeeds and records `Reviewed-Head`. A changed head invalidates the prior verdict. This bounded workflow is necessary because the older Work Quality Gate listens to the former CI workflow name. It does not merge, deploy, mutate business data or alter CI assertions.
 
 Live verification is read-only: check unauthenticated private worker/bridge rejection and the authenticated admin-link boundary, then inspect the scoped template/mapping and release evidence. Do not create a fake production booking, order or feedback. Record the first naturally received feedback's job and central provider status as operational delivery evidence, keeping customer details out of release comments. Queue acceptance alone cannot prove email receipt.
+
+## Stripe / Worldline rollout (#914)
+
+This task explicitly uses local checks/review instead of GitHub Actions. Keep
+`[skip ci]` in commits and the final PR title: the existing closed-PR live workflow
+checks that title before allocating a runner. Do not dispatch Actions manually.
+Record exact local candidate/review evidence and perform release readback locally.
+This exception does not permit weakening authentication, transaction, print or
+payment checks.
+
+The payment code can deploy while Worldline live remains gated by
+`ORDERFLY_WORLDLINE_LIVE_ENABLED` (default off). Scope-specific credentials remain
+manual, write-only administrator input. Verify Secret Manager permissions for the
+configured secret project and keep original numeric versions usable for existing
+orders. New unconfigured merchants retain pinned legacy Stripe compatibility.
+Callback/recovery hooks use the existing authenticated heartbeat; verify it after
+deployment. No scheduler or credential is provisioned by source deployment.
+
+Follow the controlled procedure in [merchant payments](worldline-merchant-settings.md)
+after manual sandbox key entry. A merged/deployed code candidate is not evidence
+of a successful Worldline sandbox payment, actual refund, physical print or courier
+booking. Do not enable Worldline live before the required real-provider acceptance.

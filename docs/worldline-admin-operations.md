@@ -61,8 +61,7 @@ browser cannot authorize a duplicate financial mutation.
 - `node tests/unit/worldline-settings.cjs` — eight existing settings regressions.
 - `npx playwright test -c tests/payments-admin/playwright.config.ts` — three real
   component flows at desktop/mobile (six tests), with intercepted server actions.
-- `npx playwright test -c tests/payments/playwright.config.ts` — six existing
-  desktop/mobile settings browser tests.
+- `npx playwright test -c tests/payments/playwright.config.ts` — desktop/mobile settings and token-only confirmation browser tests.
 
 These are synthetic local checks, not Secret Manager IAM verification or a real
 Worldline capture/refund. No merchant keys, live operations, Actions workflow,

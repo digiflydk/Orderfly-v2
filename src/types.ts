@@ -394,7 +394,7 @@ export type OrderSummary = {
     status: OrderStatus;
     totalAmount: number;
     paymentStatus: 'Paid' | 'Pending' | 'Failed';
-    paymentMethod: 'Stripe' | 'Worldline' | 'PayAtPickup' | 'Cash' | 'Other';
+    paymentMethod: 'Free' | 'Stripe' | 'Worldline' | 'PayAtPickup' | 'Cash' | 'Other';
     paymentDetails: PaymentDetails;
 };
 
@@ -490,7 +490,7 @@ export type OrderInvoice = {
   vatRate: number;
   vatAmount: number;
   totalAmount: number;
-  paymentMethod: 'Stripe' | 'Worldline' | 'Cash' | 'CardInRestaurant';
+  paymentMethod: 'Free' | 'Stripe' | 'Worldline' | 'Cash' | 'CardInRestaurant';
   paymentReference?: string;
 };
 

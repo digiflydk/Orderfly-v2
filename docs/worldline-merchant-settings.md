@@ -1,140 +1,168 @@
-# Worldline merchant onboarding settings
+# Stripe and Worldline merchant payments
 
-Brand and location edit pages expose separate Worldline configuration. Platform
-superusers only may read or write it; the server checks that the brand exists and
-that a supplied location belongs to it. Unconfigured locations inherit the brand.
-A location can instead select its own complete agreement. No credentials or
-individual fields fall back between agreements or between test and live.
+PR #914 extends the existing hosted checkout with **Worldline/Bambora Europe**.
+Stripe remains supported. This document describes the code contract; local mocked
+acceptance and an actual provider sandbox payment are separate evidence.
 
-Each agreement has disabled/test/live selection and separate merchant number,
-access token, secret token and callback MD5 key for each environment. T-prefixed
-merchant numbers are required for test and P-prefixed numbers for live, following
-Worldline Europe documentation. This is structural validation, not a successful
-provider connection test. Blank fields preserve saved values. Initial provisioning
-requires all four values. Switching an inherited location back to own retains its
-previous credentials; the administrator explicitly selects its environment.
+## Onboarding
 
-Credentials are JSON bundles in Google Secret Manager, scoped by hashed brand and
-location plus environment, with pinned versions. `ORDERFLY_PAYMENT_SECRET_PROJECT`
-selects a deployment-owned project, otherwise the Firebase Admin project is used.
-The runtime needs create/add/access secret version permissions on the corresponding
-`orderfly-worldline-*` secrets. There is no plaintext fallback. Firestore
-`platform_settings/worldline-<scope hash>` stores references and revision only.
-No secrets or references are returned to the browser or written to form recovery.
-Revision checks prevent concurrent administrators overwriting newer settings.
-A concurrent failed update can leave an unused secret version; it does not change
-the active reference. Existing Firestore client deny-all rules apply.
+Open **Superadmin → Brands → edit brand**, or **Locations → edit location**,
+and use **Betalingsaftale**. The existing platform-superuser boundary applies.
 
-## Rollout status
+1. On a brand, select its provider and disabled/test/live mode. On a location,
+   select inheritance or its own complete agreement.
+2. Enter that provider's test credentials. Worldline needs Merchant Number,
+   Access Token, Secret Token and MD5 key; Stripe needs secret key, publishable
+   key and webhook signing secret. Worldline test merchant numbers start with T;
+   live numbers start with P. Stripe key prefixes must match the selected mode.
+3. Save. The saved summary shows the effective provider, agreement owner,
+   environment and whether that environment has credential references. It is
+   separate from unsaved edits; secrets are never read back to the browser.
+4. Follow the controlled sandbox procedure below before enabling live operation.
 
-This is configuration groundwork, not a Stripe replacement. Checkout still uses
-its existing integration. The UI states this explicitly. The internal resolver is
-available for the forthcoming Worldline payment adapter, and is not a server
-action. Do not represent saved live settings as a working live checkout.
+Empty credential fields retain that scope/provider/environment's saved values.
+Changing a Worldline merchant number requires a new complete bundle. A location's
+own agreement is indivisible: neither individual keys nor missing environments
+fall back to the brand or global Stripe account. Explicit disabled, malformed or
+incomplete configuration rejects payment. Explicit inheritance without a brand
+agreement is incomplete. Existing merchants without a new agreement retain
+legacy Stripe; new legacy checkouts also receive an immutable account reference.
 
-Remaining integration: provider credential verification, payment session creation,
-callback hash plus server transaction verification, durable duplicate protection,
-capture/cancel/refund, existing order side effects, and controlled sandbox/mobile
-acceptance before routing any checkout to Worldline. Existing Stripe transactions
-must retain their original provider for refunds and reconciliation.
+[Administration and money controls](worldline-admin-operations.md) explains the
+metadata-only order pane, permissions and unknown-result recovery.
 
-Validation: `node --test tests/unit/worldline-settings.cjs`; `npm run typecheck`.
-Authenticated browser and Secret Manager acceptance require an authorized test
-runtime and are still pending; this change must remain a draft until verified.
+## Storage and original account binding
 
-References: https://developer.bambora.com/europe/checkout/getting-started/access-api
-and https://developer.bambora.com/europe/checkout/getting-started/test-your-setup.
+New scoped bundles are JSON in Google Secret Manager, under
+`orderfly-worldline-<scope hash>-<mode>` or `orderfly-stripe-<scope hash>-<mode>`.
+`ORDERFLY_PAYMENT_SECRET_PROJECT` selects the secret project; otherwise the
+Firebase Admin data project is used. The runtime requires create-secret,
+add-version and access-version permissions on these bundles. Firestore
+`platform_settings/worldline-<scope hash>` stores provider, mode, revision and
+immutable numeric secret-version references. There is no plaintext fallback for
+these agreements. Concurrent edits use revision checks; an orphan unused secret
+version cannot change the active configuration.
 
-Provider preference is now stored on the agreement (`stripe` default or
-`worldline`) and inherited with the whole agreement. This preference remains
-staged: it is not yet used to route payment requests. Stripe still uses existing
-platform settings. Do not enable the preference in checkout until settlement,
-printing, managed delivery refund and callback verification support both providers.
+Every new online order stores only its original provider, mode, account/owner
+scope and immutable version reference. Settlement, receipts, print verification,
+refund and delivery compensation use this original binding, not today's merchant
+settings. Keep original secret versions and keys usable for the lifetime of the
+payment's reconciliation/refund requirements. No migration guesses the account
+of historic orders created before binding existed.
 
-## Hosted checkout adapter
+[Stripe agreement binding](stripe-agreement-pinning.md) documents the private
+legacy compatibility archive. It uses the existing server-only platform-settings
+storage so existing merchants do not acquire a new Secret Manager IAM dependency.
+It is never a fallback for failed scoped-account resolution. Firestore client
+access remains denied; credential archives never enter order/browser projections.
 
-`worldline-client.ts` creates hosted sessions with server-side Basic authentication,
-integer minor amounts and HTTPS return/callback addresses. It validates the hosted
-redirect origin and session token. Network failures, malformed responses and server
-errors are uncertain outcomes and must not trigger a new-session retry. Provider
-error payloads and credentials are never included in thrown errors. Transaction
-reads validate the requested transaction identity and merchant account.
+## Checkout, callback and settlement
 
-The adapter remains internal and is not yet connected to order settlement. It must
-not be enabled in checkout until callbacks, pinned agreement references, printing,
-refunds and managed delivery have been integrated and tested. Manual key entry is
-supported by the settings UI; actual connection acceptance can happen after keys
-are supplied. Run `node --test tests/unit/worldline-client.cjs` for adapter checks.
+Catalog, options, discounts, fees, fulfillment and amount are validated on the
+server before provider routing. Existing checkout-attempt deduplication protects
+refreshes/retries. Worldline session creation uses the Europe API, exact integer
+minor units, HTTPS return/callback URLs and explicit `instantcaptureamount: 0`.
+A lost create reply is an uncertain outcome, not permission to create another
+session. No card details enter Orderfly.
 
-## PR #914 integration checkpoint (2026-11-12, unreleased)
+Worldline receives callback URL `/api/payments/worldline/callback` in the session
+request. It calls this URL with GET. The Europe hash is MD5 of decoded parameter
+values in incoming order, followed by the merchant MD5 key. Duplicate parameters,
+invalid references and parameters after `hash` are rejected. Callback admission
+records one durable transaction link/job; it does not mark an order Paid.
+Callback query/card data is not stored or logged by the handler.
 
-The candidate now includes write-only Stripe test/live bundles alongside Worldline
-bundles, whole-agreement selection, pinned merchant secret versions, hosted
-Worldline session routing, signed callback admission, durable payment jobs and a
-Worldline-specific captured-payment settlement/print capability. It does not
-manufacture Stripe sessions. Order invoices retain the Worldline provider label.
+The worker retrieves the transaction from the pinned merchant and checks order,
+transaction, merchant, environment, amount, DKK currency/minor units and state.
+Authorization is distinct from capture. Capture follows the existing automatic
+Stripe business policy, through a durable single-flight money journal. Only a
+fully captured, uncredited provider observation can mint a short-lived private
+Worldline payment proof. It is bound to the original account, amount, payment
+revision and absence of another money operation, and is checked again against the
+financial transaction's current order snapshot.
 
-Callbacks use GET `/api/payments/worldline/callback`. Europe `Handle Responses`
-requires decoded values in incoming order, excluding `hash`, followed by the MD5
-key. Duplicates and parameters after hash are rejected. A valid callback only
-admits a durable job; server-to-server merchant/transaction/order/amount/currency
-and captured-state validation precedes Paid and print. Callback query/card fields
-are not persisted. Worker execution also runs on the existing authenticated
-`/api/internal/feedback/send` heartbeat, isolated from other worker failures.
-`/api/payments/worldline/worker` is an optional dedicated endpoint protected by
-`ORDERFLY_PAYMENT_WORKER_SECRET`, at least 32 characters.
+The existing settlement plan still atomically owns capacity, promotion usage,
+customer accounting, invoice, loyalty, game/upsell conversions and notification
+outboxes. Worldline uses its own opaque print transition and private settlement
+capability; it is never represented as a Stripe session. Financial and original
+print-intent writes commit together, and replay cannot duplicate either.
 
-Worldline capture follows the existing automatic Stripe capture model. Capture,
-credit and delete use Europe Transaction API POST endpoints. Every operation has
-an order-scoped durable journal and exclusive lock. A lost response is read back;
-it never automatically submits a second money operation. Confirmation is reported
-only after the journal transaction commits. Unknown operations retain their lock
-for reconciliation. Payment proofs bind the account, amount, payment revision and
-absence of a pending money operation. Administrative credit/delete additionally
-require authenticated `orderfly.orders:edit` for the order's tenant/location.
+A return/accept page is display/read capability only. Token-only Worldline receipts
+poll the server, preserve Pending during an outage, and clear the cart/emit purchase
+analytics only after authoritative Paid. Stripe session receipts remain supported.
 
-Stripe explicit agreements use their pinned secret for checkout, confirmation,
-receipt, cancellation, print verification, stale holds and managed-delivery
-verification/refunds. The existing `/api/stripe/webhook` additionally verifies
-candidate events against the original order's pinned signing secret. Merchants
-with no explicit merchant configuration retain the legacy global Stripe flow.
-An explicit disabled/incomplete agreement fails rather than falling back.
+## Money operations and cancellation
 
-### Manual key entry and acceptance
+Capture, credit and delete use the Europe Transaction API. Each operation claims
+an order-scoped durable journal/lock before provider I/O. Timeout or failed local
+commit retains an unresolved operation; retry reads the provider and reuses that
+request ID instead of resending a money mutation. Terminal journal states are
+monotone. Refund accounting, immutable financial adjustment and journal completion
+commit together; missing customer records are explicit reconciliation work.
 
-Use Superadmin -> Brands -> edit brand, or Locations -> edit location, then the
-payment agreement section. Select own/inherit, provider and test/live/disabled.
-Worldline requires merchant number, access token, secret token and MD5 key for the
-selected environment. Stripe requires secret key, publishable key and webhook
-signing secret. Empty fields retain that environment's previously saved bundle.
-Configure Stripe's webhook at `/api/stripe/webhook`. Worldline callback/return URLs
-are generated in the session request. Secret Manager needs permissions on both
-`orderfly-worldline-*` and `orderfly-stripe-*` bundles. Runtime/IAM access remains
-to be verified; no keys are created or retrieved from the merchant portal.
+Worldline's session DELETE expires the hosted window. Browser cancellation alone
+never releases capacity. Expiry/cancel uses a shared payment-operation lock,
+provider-confirmed expiry or authorization void, then native order cancellation
+and idempotent reservation release. A late authorization after session expiry is
+voided by the callback worker rather than captured. Unknown results keep the hold.
 
-Worldline live additionally requires `ORDERFLY_WORLDLINE_LIVE_ENABLED=true`; do not
-set it before sandbox acceptance and remaining integration gates. At this
-checkpoint, managed delivery with Worldline is rejected before order/session
-creation. Zero-total Worldline checkout has no dedicated free-order path yet.
-Those are remaining implementation tasks, not successful integration claims.
-A canceled browser window without a known authorization cannot release a still
-payable session's reservation. Session-expiry/recovery acceptance remains open.
-The administrative money actions exist but final order-management UI remains open.
+Verified zero-total discount-card orders use the separate native **Free** proof,
+receipt and settlement path, with no payment provider or fake PSP identifiers.
+The same invoice/capacity/loyalty/print transaction remains authoritative.
 
-Local synthetic evidence so far includes existing settlement preparation (11),
-checkout regression recovery (4), Worldline settings (8), client (9), callback (3),
-transaction validation (4), operation journal (7), checkout routing (3) and
-Worldline settlement/print (3) tests. Later changes require revalidation; these
-counts are checkpoints rather than final release evidence. Browser tests use
-intercepted server actions and synthetic keys, never production login or data.
+See [expiry and free checkout](worldline-cancel-free.md) for the exact contract and
+[managed delivery payments](worldline-managed-delivery.md) for delivery acceptance,
+original-account compensation and proof boundaries.
 
-Still required: full managed-delivery Worldline adapter and compensation tests;
-free-order/expiry/cancel completeness; final administration integration; full
-current-head regression/browser suite; independent review; PR description update;
-manual Worldline sandbox payment/capture/cancel/refund acceptance after key entry.
-No merge, deployment, live activation or real provider payment is claimed.
+## Recovery and runtime
 
-Official contracts checked during implementation:
+The existing authenticated `/api/internal/feedback/send` heartbeat runs payment
+jobs, checkout-expiry and native Free settlement recovery independently from mail/delivery worker errors.
+`worldlinePaymentJobs` and `worldlineCheckoutExpiryJobs` use a single-field due-time
+query, bounded batches and backoff, so poison/terminal records cannot permanently
+hide later payments. Original capture journals are reconciled even when a later
+provider read already shows a successful capture.
+
+An optional dedicated POST `/api/payments/worldline/worker` accepts
+`x-payment-worker-secret` matching `ORDERFLY_PAYMENT_WORKER_SECRET` (minimum 32
+characters). It does not replace the established heartbeat. Do not put secrets in
+URLs, client configuration, source, screenshots or logs.
+
+Worldline live additionally requires `ORDERFLY_WORLDLINE_LIVE_ENABLED=true`.
+Leave it unset/false until the controlled sandbox procedure and release gates are
+complete. This code change does not provision credentials, turn on live payment,
+create API users or send an actual provider transaction.
+
+## Controlled sandbox acceptance after manual key entry
+
+1. Verify the deployed release, data project `orderfly-39325`, secret-project IAM,
+   saved test agreement and the existing heartbeat. Hosting remains
+   `orderfly-v21-10334086-b3076`; do not confuse hosting and data configuration.
+2. The merchant enters the existing test credentials manually. Do not create an
+   additional API key in the merchant portal. Configure Stripe's test webhook at
+   `/api/stripe/webhook`; Worldline callback URLs are supplied per checkout session.
+3. In an explicitly isolated/controlled test tenant, complete Worldline hosted
+   checkout on mobile/desktop. Verify server transaction, captured amount/account,
+   one Paid order/invoice, notification job and applicable original print intents.
+   Do not treat a success page or queue acceptance as proof of payment/delivery.
+4. Verify return-before-callback, callback-before-return/replay, refresh and aborted
+   window, then confirmed authorization deletion and partial/full credit. Inspect
+   provider and native journals after an induced transport interruption; never
+   blindly resend an uncertain money operation.
+5. Switch settings after creating a test order and prove its lookup/refund stays
+   on the original test account. Repeat a Stripe checkout as a regression.
+6. Exercise managed-delivery rejection/compensation in its sandbox without real
+   courier dispatch or physical print unless those actions are separately chosen.
+   Keep synthetic business data out of production; restore controlled fixtures.
+
+Actual Worldline sandbox/IAM acceptance is still pending manual credentials.
+Local tests use synthetic accounts, persistence and provider transport. Final
+release evidence must identify the exact tested commit and distinguish local
+unit/browser results, deployment and actual provider acceptance.
+
+Official contracts:
+- https://developer.bambora.com/europe
 - https://developer.bambora.com/europe/checkout/getting-started/handle-responses
+- https://developer-api.bambora.com/swagger/europe/checkout/api-reference/checkout
 - https://developer-api.bambora.com/swagger/europe/checkout/api-reference/merchant
 - https://developer-api.bambora.com/swagger/europe/checkout/api-reference/transaction

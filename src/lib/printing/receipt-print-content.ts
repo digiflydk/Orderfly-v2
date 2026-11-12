@@ -35,7 +35,7 @@ const invoiceSchema = z.object({ number: text(160), currency: z.string().regex(/
   fulfillmentLocation: z.object({ name: text(300) }), customer: z.object({ name: text(300), email: text(300) }),
   lines: z.array(z.object({ description: text(300), quantity, unitAmount: money, totalAmount: money })).min(1).max(100),
   subtotal: money, itemDiscount: money, orderDiscount: money, deliveryFee: money, bagFee: money, adminFee: money,
-  vatAmount: money, totalAmount: money, paymentMethod: z.enum(['Stripe','Worldline', 'Cash', 'CardInRestaurant']) });
+  vatAmount: money, totalAmount: money, paymentMethod: z.enum(['Free','Stripe','Worldline', 'Cash', 'CardInRestaurant']) });
 const orderSchema = z.object({ brandId: id, locationId: id,
   brandName: text(300).optional().default(''), locationName: text(300).optional().default(''),
   customerName: text(300).optional().default(''), customerContact: text(300).optional().default(''),

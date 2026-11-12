@@ -368,7 +368,7 @@ export type OrderSummary = {
     status: OrderStatus;
     totalAmount: number;
     paymentStatus: 'Paid' | 'Pending' | 'Failed';
-    paymentMethod: 'Stripe' | 'Cash' | 'Other';
+    paymentMethod: 'Free' | 'Stripe' | 'Cash' | 'Other';
     paymentDetails: PaymentDetails;
 };
 

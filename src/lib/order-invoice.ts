@@ -73,7 +73,7 @@ export function buildOrderInvoice(input: {
     totalAmount: money(order.totalAmount),
     paymentMethod: order.paymentMethod === 'PayAtPickup'
       ? order.paymentCollection?.method === 'cash' ? 'Cash' : 'CardInRestaurant'
-      : order.paymentMethod==='Worldline'?'Worldline':'Stripe',
+      : order.paymentMethod==='Free'?'Free':order.paymentMethod==='Worldline'?'Worldline':'Stripe',
     ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
   };
 }

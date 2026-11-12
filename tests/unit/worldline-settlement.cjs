@@ -60,10 +60,10 @@ async function fixture(options = {}) {
     amount_total: Math.round(f.order().totalAmount * 100), metadata: { orderId: f.orderId, brandId: 'b', locationId: 'l' } };
   class Provider { checkout = { sessions: { retrieve: async id => { requests.push(id); if (options.providerFailure) throw Error('private provider detail'); return { ...structuredClone(session), ...options.providerPatch }; } } }; }
   const storeMock={readPinnedWorldlineAgreement:async binding=>({binding,credentials:{merchantNumber:'T123'}})};
-  const clientMock={readWorldlineTransaction:async()=>{requests.push('123');if(options.providerFailure)throw Error('provider unavailable');return {id:'123',orderid:f.orderId,merchantnumber:'T123',status:'approved',currency:{code:'DKK',minorunits:2},total:{authorized:session.amount_total,captured:session.amount_total,credited:0},...options.providerPatch};}};
+  const clientMock={readWorldlineTransaction:async()=>{requests.push('123');if(options.providerFailure)throw Error('provider unavailable');options.afterProvider?.(f);return {id:'123',orderid:f.orderId,merchantnumber:'T123',status:'approved',currency:{code:'DKK',minorunits:2},total:{authorized:session.amount_total,captured:session.amount_total,credited:0},...options.providerPatch};}};
   const load = moduleGraph({'./worldline-store':storeMock,'./worldline-client':clientMock, ...f.mocks, 'next/headers': { cookies: async () => ({ get: () => undefined }) }, stripe: { default: Provider },
     '@/lib/payments/worldline-store':{readPinnedWorldlineAgreement:async binding=>({binding,credentials:{merchantNumber:'T123'}})},
-    '@/lib/payments/worldline-client':{readWorldlineTransaction:async()=>{requests.push('123');if(options.providerFailure)throw Error('provider unavailable');return {id:'123',orderid:f.orderId,merchantnumber:'T123',status:'approved',currency:{code:'DKK',minorunits:2},total:{authorized:session.amount_total,captured:session.amount_total,credited:0},...options.providerPatch};}},
+    '@/lib/payments/worldline-client':{readWorldlineTransaction:async()=>{requests.push('123');if(options.providerFailure)throw Error('provider unavailable');options.afterProvider?.(f);return {id:'123',orderid:f.orderId,merchantnumber:'T123',status:'approved',currency:{code:'DKK',minorunits:2},total:{authorized:session.amount_total,captured:session.amount_total,credited:0},...options.providerPatch};}},
     '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => 'fixture-provider-key' },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => 'fixture-server-time' } },
   });
@@ -92,4 +92,10 @@ test('authorization without capture, refund, wrong order, amount, currency and p
 });
 test('late print failure rolls back the entire financial settlement and can reconcile safely',async()=>{
  const f=await fixture({failPath:'locations/l/printers/packing/jobs/'});await assert.rejects(f.settle());assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.jobs().length,0);assert.equal(f.records.get('customers/'+f.order().customerDetails.id).totalOrders,0);
+});
+
+test('refund lock or payment revision changed after provider retrieval invalidates settlement proof',async()=>{
+ for(const patch of [{paymentOperation:'refund-active'},{paymentRevision:7}]){
+ const f=await fixture({afterProvider:f=>Object.assign(f.order(),patch)});await assert.rejects(f.settle(),/Worldline payment changed/);assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.jobs().length,0);assert.ok(f.requests.length>0);
+ }
 });

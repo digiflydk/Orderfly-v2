@@ -1,3 +1,5 @@
+import { processDueNativeFreeCheckouts } from '@/lib/payments/native-free-recovery';
+import { processWorldlineStaleCheckouts } from '@/lib/payments/worldline-stale-holds';
 import { processWorldlineJobs } from '@/lib/payments/worldline-reconcile';
 import { timingSafeEqual } from 'node:crypto';
 import { runDullyFeedbackWorker } from '@/lib/feedback/dully-worker';
@@ -21,10 +23,10 @@ export async function POST(request: Request) {
   })) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   try {
     // Loyalty and QR retention failures must not fail the other heartbeat workers.
-    const [feedback, orders, games, contacts, loyalty, qr, delivery, dully, worldline] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb()),
+    const [feedback, orders, games, contacts, loyalty, qr, delivery, dully, worldline, worldlineStale, freeCheckouts] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb()),
       runLoyaltyWorker(getAdminDb()).catch(() => ({ failed: true })),
-      runQrRetentionWorker(getAdminDb).catch(() => ({ state: 'failed' })), runDeliveryDispatchWorker().catch(() => ({ state: 'failed' })), runDullyFeedbackWorker().catch(() => ({ state: 'failed' })), processWorldlineJobs().catch(()=>({state:'failed'}))]);
-    return Response.json({ feedback, orders, games, contacts, loyalty, qr, delivery, dully, worldline }, { headers: { 'Cache-Control': 'no-store' } });
+      runQrRetentionWorker(getAdminDb).catch(() => ({ state: 'failed' })), runDeliveryDispatchWorker().catch(() => ({ state: 'failed' })), runDullyFeedbackWorker().catch(() => ({ state: 'failed' })), processWorldlineJobs().catch(()=>({state:'failed'})),processWorldlineStaleCheckouts().catch(()=>({state:'failed'})),processDueNativeFreeCheckouts().catch(()=>({state:'failed'}))]);
+    return Response.json({ feedback, orders, games, contacts, loyalty, qr, delivery, dully, worldline, worldlineStale, freeCheckouts }, { headers: { 'Cache-Control': 'no-store' } });
   }
   catch { return Response.json({ error: 'Feedback worker unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
 }

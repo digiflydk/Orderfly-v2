@@ -20,11 +20,11 @@ async function mount(page:any, options:{location?:boolean;denied?:boolean}={}){
 }
 test('inherited location shows brand environment and requires own agreement before editing keys',async({page})=>{
  await mount(page,{location:true});await expect(page.getByText(/Arver brandets aftale/)).toContainText('Worldline');await expect(page.getByLabel('Test Access Token')).toHaveCount(0);
- await page.getByLabel('Betalingsaftale',{exact:true}).selectOption('own');await page.getByLabel('Betalingsudbyder').selectOption('worldline');await expect(page.getByLabel('Test Access Token')).toBeVisible();
+ await page.getByRole('combobox',{name:/^Betalingsaftale/}).selectOption('own');await page.getByLabel('Betalingsudbyder').selectOption('worldline');await expect(page.getByLabel('Test Access Token')).toBeVisible();
 });
 test('Stripe-only entry sends separate keys and clears sensitive fields after save',async({page})=>{
  await mount(page);await page.getByLabel('Miljø for aftalen').selectOption('test');await page.getByLabel('Test Stripe secretKey').fill('sk_test_synthetic');await page.getByLabel('Test Stripe publishableKey').fill('pk_test_synthetic');await page.getByLabel('Test Stripe webhookSecret').fill('whsec_synthetic');
- await page.getByRole('button',{name:'Gem Worldline-opsætning',exact:true}).click();await expect(page.getByLabel('Test Stripe secretKey')).toHaveValue('');
+ await page.getByRole('button',{name:'Gem betalingsopsætning',exact:true}).click();await expect(page.getByLabel('Test Stripe secretKey')).toHaveValue('');
  const saves=await page.evaluate(()=>(window as any).saves);expect(saves).toHaveLength(1);expect(saves[0].input.provider).toBe('stripe');expect(saves[0].input.stripeTest.secretKey).toBe('sk_test_synthetic');expect(saves[0].input.test.accessToken).toBe('');
 });
 test('denied configuration never displays editable credential fields',async({page})=>{

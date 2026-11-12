@@ -8,7 +8,7 @@ import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/deli
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
-import { settlePaidCheckoutSession } from './settle-checkout';
+import { settlePaidCheckoutSession, settleFreeCheckoutOrder } from './settle-checkout';
 import type { OrderDetail } from '@/types';
 
 export type ReceiptProof = { sessionId?: string; receiptToken?: string; orderId?: string; brandId?: string; locationId?: string };
@@ -55,6 +55,10 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
     if (!timingSafeEqual(Buffer.from(tokenHash, 'hex'), createHash('sha256').update(proof.receiptToken!).digest())) return null;
   }
 
+  if(free && options.reconcilePayment !== false && order.paymentStatus==='Pending'){
+    try{await settleFreeCheckoutOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Retain Pending; durable free job also owns retry. */}
+  }
+  if(!order)return null;
   if(worldline && options.reconcilePayment !== false && order.paymentStatus==='Pending'){
     try{const {reconcileWorldlineOrder}=await import('@/lib/payments/worldline-reconcile');await reconcileWorldlineOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Keep Pending while callback/capture is unresolved. */}
   }

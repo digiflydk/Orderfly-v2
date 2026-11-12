@@ -102,3 +102,21 @@ Paid checkout settlement creates one `orderNotificationJobs` confirmation job in
 The private worker endpoint accepts either its dedicated worker secret or the existing shared mPanel integration secret. This lets mPanel's already scheduled notification worker provide the heartbeat without adding another scheduler. Both values remain server-only, and invalid or short values are rejected before any Firestore work.
 
 The mPanel endpoint, organization ID and machine secret are runtime configuration. Secrets, recipients and signed feedback links are never returned in admin job listings or logged. The coordinated mPanel implementation is tracked in `digiflydk/esmeralda-restaurant-operations#262`.
+
+## Merchant payment routing (PR #914)
+
+[Stripe and Worldline merchant payments](worldline-merchant-settings.md) defines
+whole-account brand/location inheritance, separate environments and original-order
+account binding. Provider routing follows authoritative pricing. Explicit scoped
+agreements use immutable Secret Manager versions; new legacy Stripe orders use a
+private immutable compatibility archive rather than today's mutable gateway.
+
+Worldline/Bambora Europe hosted checkout admits signed callbacks to a durable
+queue; independent provider reads and the capture journal precede its own opaque
+payment/print proofs. The shared settlement transaction still owns all financial,
+loyalty, notification and original-print effects. A browser return is never Paid
+authority. Zero-total discount-card orders have a separate native Free proof.
+Managed delivery uses a provider-neutral payment authority and the original
+account for compensation. The existing heartbeat also processes payment and
+session-expiry recovery with bounded due-time queries. Live Worldline activation
+and actual sandbox acceptance are separate from source/local-test completion.
