@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { stripeForOrder } from '@/lib/payments/stripe-order';
+import { stripeForOrder, assertStripeOrderSession } from '@/lib/payments/stripe-order';
 import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/delivery/payments/stripe-authority';
 import { db } from '@/lib/server/firestore-compat';
 import { doc, getDoc } from '@/lib/server/firestore-compat';
@@ -30,10 +30,7 @@ export async function POST(req: NextRequest) {
     // The random session is the caller's capability. Do not expose whether an
     // unrelated predictable order ID exists, and never accept it as proof alone.
     const session = await stripe.checkout.sessions.retrieve(sessionId);
-    if (session.id !== sessionId || session.metadata?.orderId !== orderId ||
-        !session.metadata.brandId || !session.metadata.locationId) return reply({ ok: false, error: 'payment_scope_mismatch' }, 403);
-    if (!snap.exists() || order?.psp?.checkoutSessionId !== sessionId ||
-        order.brandId !== session.metadata.brandId || order.locationId !== session.metadata.locationId) return reply({ ok: false, error: 'payment_scope_mismatch' }, 403);
+    try { assertStripeOrderSession(orderId,order,session); } catch { return reply({ok:false,error:'payment_scope_mismatch'},403); }
     // A complete checkout may still be awaiting an asynchronous payment.
     if (session.payment_status !== 'paid' && !(isCompletedFreeCardSession(session) && isZeroTotalDiscountCardOrder(order))) return reply({ ok: true, status: 'Pending', orderId });
     await settlePaidCheckoutSession(session);

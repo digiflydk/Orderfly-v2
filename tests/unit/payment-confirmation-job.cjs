@@ -20,7 +20,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
  }
  if(job)records[jobKey]={orderId:'ORD-TEST',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'keep',attempts:2,...job};
  let capacity=0,analytics=0,queue=Promise.resolve();
- const session={id:'cs_test_fixture_123456',payment_status:'paid',status:'complete',currency:'dkk',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
+ const session={id:'cs_test_fixture_123456',mode:'payment',payment_status:'paid',status:'complete',currency:'dkk',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
  const snapshot=value=>({exists:()=>!!value,data:()=>value});
  const mocks={
   'server-only':{},'@/lib/firebase':{db:{}},

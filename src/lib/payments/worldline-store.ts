@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
-import { worldlineCredentialsSchema, validateWorldlineCredentials, type WorldlineCredentials, type WorldlineScope, type WorldlineSettingsRecord, selectWorldlineAgreement, stripeCredentialsSchema, type StripeCredentials } from './worldline-settings';
+import { worldlineCredentialsSchema, worldlineSettingsRecordSchema, worldlineScopeSchema, validateWorldlineCredentials, validateStripeCredentials, type WorldlineCredentials, type WorldlineScope, type WorldlineSettingsRecord, selectWorldlineAgreement, stripeCredentialsSchema, type StripeCredentials } from './worldline-settings';
 let client: SecretManagerServiceClient | undefined;
 const secretClient = () => client ??= new SecretManagerServiceClient();
 export const worldlineSettingsId = (scope: WorldlineScope) => createHash('sha256').update(JSON.stringify([scope.brandId, scope.locationId || null])).digest('hex');
@@ -13,12 +13,15 @@ function name(scope: WorldlineScope, mode: 'test' | 'live') {
   return `projects/${project}/secrets/orderfly-worldline-${worldlineSettingsId(scope)}-${mode}`;
 }
 export async function writeWorldlineSecret(scope: WorldlineScope, mode: 'test' | 'live', value: WorldlineCredentials) {
+  scope=worldlineScopeSchema.parse(scope);
+  value=worldlineCredentialsSchema.parse(value);
+  validateWorldlineCredentials(value,mode);
   const parent = name(scope, mode);
   try { await secretClient().createSecret({ parent: parent.split('/secrets/')[0], secretId: parent.split('/').at(-1), secret: { replication: { automatic: {} } } }); }
   catch (error) { if ((error as { code?: number }).code !== 6) throw error; }
   const [version] = await secretClient().addSecretVersion({ parent, payload: { data: Buffer.from(JSON.stringify(value)) } });
   const number = version.name?.split('/').at(-1);
-  if (!number || !/^\d+$/.test(number)) throw new Error('Ugyldig nøglereference.');
+  if (!number || !/^[1-9][0-9]*$/.test(number)) throw new Error('Ugyldig nøglereference.');
   return `${parent}/versions/${number}`;
 }
 export async function readWorldlineSecret(scope: WorldlineScope, mode: 'test' | 'live', reference: string) {
@@ -31,12 +34,17 @@ export async function readWorldlineSecret(scope: WorldlineScope, mode: 'test' | 
 }
 /** Internal only. Checkout must explicitly adopt this resolver in the payment integration. */
 export async function resolveWorldlineAgreement(scope: WorldlineScope) {
+  scope=worldlineScopeSchema.parse(scope);
+  if (!(await getAdminDb().collection('brands').doc(scope.brandId).get()).exists) throw new Error('Brand findes ikke.');
   if (scope.locationId) {
     const location = await getAdminDb().collection('locations').doc(scope.locationId).get();
     if (!location.exists || location.data()?.brandId !== scope.brandId) throw new Error('Ugyldig lokation.');
   }
-  const brand = (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data() as WorldlineSettingsRecord | undefined;
-  const location = scope.locationId ? (await worldlineSettingsRef(scope).get()).data() as WorldlineSettingsRecord | undefined : undefined;
+  const rawBrand = (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data();
+  const rawLocation = scope.locationId ? (await worldlineSettingsRef(scope).get()).data() : undefined;
+  const brand = rawBrand ? worldlineSettingsRecordSchema.parse(rawBrand) : undefined;
+  const location = rawLocation ? worldlineSettingsRecordSchema.parse(rawLocation) : undefined;
+  if(brand && brand.source!=='own')throw new Error('Brandets betalingsaftale er ugyldig.');
   const selected = selectWorldlineAgreement(brand || null, location);
   if (!selected || (selected.provider || 'stripe') !== 'worldline') return null;
   if (selected.mode === 'disabled') throw new Error('Betalingsaftalen er deaktiveret.');
@@ -60,6 +68,9 @@ function stripeName(scope: WorldlineScope, mode: 'test' | 'live') {
   return name(scope, mode).replace('/orderfly-worldline-', '/orderfly-stripe-');
 }
 export async function writeStripeSecret(scope: WorldlineScope, mode: 'test' | 'live', value: StripeCredentials) {
+  scope=worldlineScopeSchema.parse(scope);
+  value=stripeCredentialsSchema.parse(value);
+  validateStripeCredentials(value,mode);
   const parent = stripeName(scope, mode);
   try { await secretClient().createSecret({ parent: parent.split('/secrets/')[0], secretId: parent.split('/').at(-1), secret: { replication: { automatic: {} } } }); }
   catch (error) { if ((error as { code?: number }).code !== 6) throw error; }
