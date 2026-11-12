@@ -11,7 +11,7 @@ async function fixture() {
     doc: (_, collection, id) => `${collection}/${id}`, getDoc: async ref => snapshot(ref), serverTimestamp: () => 'server-time',
     runTransaction: async (_, callback) => callback({ get: async ref => snapshot(ref), set: (ref, value) => data.set(ref, value), update: (ref, value) => data.set(ref, { ...data.get(ref), ...value }) }),
   };
-  const mocks = { '@/lib/firebase': { db: {} }, 'firebase/firestore': sdk };
+  const mocks = { 'server-only': {}, '@/lib/firebase': { db: {} }, 'firebase/firestore': sdk };
   const reservations = loadTs('src/lib/discount-reservations.ts', mocks);
   data.set('customers/c', { brandId: 'b', totalOrders: 0 });
   data.set('discounts/d', { brandId: 'b', isActive: true, usageLimit: 1, perCustomerLimit: 1, usedCount: 0 });

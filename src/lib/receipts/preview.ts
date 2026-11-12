@@ -40,8 +40,8 @@ export function projectReceipt(order: OrderDetail, brandIdentity?: ReceiptBrandI
     notes: order.customerDetails?.deliveryInstructions ?? '',
     paymentStatus: ({ Paid: 'Betalt', Pending: 'Ikke betalt', Failed: 'Betaling mislykket' } as Record<string, string>)[order.paymentStatus] ?? order.paymentStatus,
     status: ORDER_STATUS_LABELS[order.status] ?? order.status,
-    paymentMethod: invoice ? ({ Stripe: 'Online betaling', Cash: 'Kontant', CardInRestaurant: 'Kort i restaurant' })[invoice.paymentMethod]
-      : order.paymentMethod === 'PayAtPickup' ? 'Betaling ved afhentning' : order.paymentMethod === 'Cash' ? 'Kontant' : order.paymentMethod === 'Stripe' ? 'Online betaling' : 'Anden betaling',
+    paymentMethod: invoice ? ({ Stripe: 'Online betaling', Worldline:'Online betaling', Free:'Ingen restbetaling', Cash: 'Kontant', CardInRestaurant: 'Kort i restaurant' })[invoice.paymentMethod]
+      : order.paymentMethod === 'Free' ? 'Ingen restbetaling' : order.paymentMethod === 'PayAtPickup' ? 'Betaling ved afhentning' : order.paymentMethod === 'Cash' ? 'Kontant' : ['Stripe','Worldline'].includes(order.paymentMethod) ? 'Online betaling' : 'Anden betaling',
     deliveryType: order.deliveryType === 'Delivery' ? 'Levering' : 'Afhentning',
     // Invoice lines are immutable fiscal facts. Do not substitute mutable order lines.
     lines: invoice ? invoice.lines.map(line => ({ name: line.description, quantity: line.quantity, unitPrice: line.unitAmount, total: line.totalAmount, modifiers: [] }))

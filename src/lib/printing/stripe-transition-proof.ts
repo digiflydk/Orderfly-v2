@@ -23,7 +23,7 @@ const persistedOrder = z.object({
 });
 const PROOF_TTL_MS = 300_000;
 type Origin = z.infer<typeof scope> & {
-  sessionId: string; amountMinor: number; freeCard: boolean; verifiedAt: number; lastObservedAt: number; invalidated: boolean;
+  binding?: string; sessionId: string; amountMinor: number; freeCard: boolean; verifiedAt: number; lastObservedAt: number; invalidated: boolean;
 };
 /** Opaque, nonserializable process-local evidence. Never persist or send to a browser. */
 export type StripePrintPaymentProof = Readonly<{ readonly stripePrintPaymentProof: unique symbol }>;
@@ -52,24 +52,27 @@ function assertCurrent(origin: Origin): void {
 /** Retrieves independently from Stripe. A raw webhook/session object is NOT accepted.
  * Existing settlement entrypoints are unchanged; this origin boundary is unwired.
  */
-export async function verifyStripePrintPayment(input: unknown): Promise<StripePrintPaymentProof> {
+export async function verifyStripePrintPayment(input: unknown, orderId?: string): Promise<StripePrintPaymentProof> {
   const parsed = sessionId.safeParse(input);
   if (!parsed.success) throw new PrintTransitionProofError('invalid_payment_reference');
   try {
     const local = localQaStripeOptions();
-    const key = local ? local.key : await getActiveStripeSecretKey();
-    if (!key) throw new PrintTransitionProofError('proof_unavailable');
-    const stripe = new Stripe(key, local ? local.options : { timeout: 5000, maxNetworkRetries: 0 });
+    const order = orderId ? (await getAdminDb().collection('orders').doc(id.parse(orderId)).get()).data() : undefined;
+    if(orderId&&(!order||order.psp?.checkoutSessionId!==parsed.data||order.psp?.provider&&order.psp.provider!=='stripe'))throw new PrintTransitionProofError('payment_unverified');
+    const key = local ? local.key : order?.paymentAgreement ? null : await getActiveStripeSecretKey();
+    if (!key&&!order?.paymentAgreement) throw new PrintTransitionProofError('proof_unavailable');
+    const stripe = order?.paymentAgreement ? await (await import('@/lib/payments/stripe-order')).stripeForOrder(order) : new Stripe(key!, local ? local.options : { timeout: 5000, maxNetworkRetries: 0 });
     const session = await stripe.checkout.sessions.retrieve(parsed.data);
     const native = scope.safeParse(session.metadata);
     if (session.id !== parsed.data || session.mode !== 'payment' || session.status !== 'complete'
+      || orderId && session.metadata?.orderId!==orderId || order?.paymentAgreement && session.livemode!==(order.paymentAgreement.mode==='live')
       || session.currency?.toLowerCase() !== 'dkk'
       || !((session.payment_status === 'paid' && Number.isSafeInteger(session.amount_total) && session.amount_total! > 0) || isCompletedFreeCardSession(session)) || !native.success) {
       throw new PrintTransitionProofError('payment_unverified');
     }
     const proof = Object.freeze({}) as StripePrintPaymentProof;
     const verifiedAt = now();
-    origins.set(proof, { ...native.data, sessionId: session.id, amountMinor: session.amount_total!,
+    origins.set(proof, { ...native.data, ...(order?.paymentAgreement?{binding:JSON.stringify(order.paymentAgreement)}:{}), sessionId: session.id, amountMinor: session.amount_total!,
       freeCard: isCompletedFreeCardSession(session), verifiedAt, lastObservedAt: verifiedAt, invalidated: false });
     return proof;
   } catch (error) {
@@ -97,6 +100,7 @@ export async function prepareStripePrintTransition(context: NativeTransactionCon
   if (!order.exists || order.id !== origin.orderId || !brand.exists || !location.exists
     || location.data()?.brandId !== origin.brandId || !current.success
     || current.data.brandId !== origin.brandId || current.data.locationId !== origin.locationId
+    || JSON.stringify(order.data()?.paymentAgreement)!==origin.binding
     || current.data.psp.checkoutSessionId !== origin.sessionId
     || Math.round(current.data.totalAmount * 100) !== origin.amountMinor
     || (origin.freeCard && !isZeroTotalDiscountCardOrder(order.data()))) {

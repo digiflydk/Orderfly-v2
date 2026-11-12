@@ -1,4 +1,7 @@
 'use server';
+import { resolveMerchantAgreement, resolveLegacyStripeAgreement } from '@/lib/payments/merchant-agreement';
+import { createWorldlineCheckoutSession, WorldlineRequestError } from '@/lib/payments/worldline-client';
+import { worldlineBindingSchema } from '@/lib/payments/worldline-verification';
 import {recordQuoteDiagnostic} from '@/lib/delivery/quotes/diagnostics';
 import {withQuoteTimings,measureQuoteStep} from '@/lib/delivery/quotes/performance';
 import type {QuoteTimings} from '@/lib/delivery/quotes/performance-schema';
@@ -761,25 +764,16 @@ export async function createStripeCheckoutSessionAction(
     const paymentMethod = customerInfo.paymentMethod || 'online';
     assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
     let stripe: Stripe | undefined;
+    let agreement: Awaited<ReturnType<typeof resolveMerchantAgreement>> = null;
     let managedStripeAccount:ManagedStripeAccount|undefined;
     let managedEnvironment:'sandbox'|'production'|undefined;
     let managedQuote:StoredDeliveryQuote|undefined;
     let managedDraft:AuthoritativeDraft|undefined;
     if(managedDeliveryAcceptance && paymentMethod!=='online')throw Error('Levering kræver online betaling.');
-    if (paymentMethod === 'online') {
-      stage = 'configuration';
-      if(managedDeliveryAcceptance){
-        const environment=await managedDeliveryRuntimeEnvironment({brandId,locationId});
-        if(!environment)throw Error('delivery_environment_unconfigured');
-        managedEnvironment=environment;
-        const gateway=await resolveManagedStripeGateway(environment);
-        if(gateway.binding.livemode!==(environment==='production'))throw Error('delivery_payment_environment_mismatch');
-        stripe=gateway.stripe;managedStripeAccount=gateway.binding;
-      }
-      else {const stripeSecretKey = await getActiveStripeSecretKey();
-      if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
-      stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });}
-      stage = 'validation';
+    if(managedDeliveryAcceptance){
+      const environment=await managedDeliveryRuntimeEnvironment({brandId,locationId});
+      if(!environment)throw Error('delivery_environment_unconfigured');
+      managedEnvironment=environment;
     }
     
     if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
@@ -796,12 +790,29 @@ export async function createStripeCheckoutSessionAction(
       const preflight=await getAdminDb().runTransaction(tx=>prepareCustomerQuoteConsumption(tx,proof,managedDraft!,'preflight'));
       managedQuote=preflight.quote;
       totalAmount=sumMoney([priced.subtotalAfterDiscount,serverPaymentDetails.bagFee||0,serverPaymentDetails.adminFee||0,managedQuote.economics.customerFee.amountMinor/100]);
-      if(totalAmount<=0)throw Error('Levering kræver en positiv online betaling. Vælg afhentning.');
+      if(totalAmount<=0)return {success:false,retryable:true,error:'Levering kræver en positiv online betaling. Vælg afhentning.'};
       if(managedDeliveryAcceptance.currency!==managedQuote.economics.customerFee.currency||managedDeliveryAcceptance.checkoutTotalMinor!==ore(totalAmount))throw Error('Leveringsprisen er ændret. Beregn levering igen.');
       serverPaymentDetails.deliveryFee=managedQuote.economics.customerFee.amountMinor/100;
       serverPaymentDetails.vatAmount=money(totalAmount*((brand.vatPercentage??25)/(100+(brand.vatPercentage??25))));
       if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet udløber snart. Beregn levering igen.');
       fulfillmentAt=managedDraft.binding.fulfillmentAt;
+    }
+
+    const nativeFree = paymentMethod==='online' && totalAmount===0 && !!discountCard && !managedQuote;
+    if(paymentMethod==='online'&&!nativeFree){
+      stage='configuration';
+      agreement=await resolveMerchantAgreement({brandId,locationId}) ?? await resolveLegacyStripeAgreement({brandId,locationId},managedEnvironment?managedEnvironment==='production'?'live':'test':undefined);
+      if(agreement?.provider==='worldline'){
+        if(agreement.mode==='live'&&process.env.ORDERFLY_WORLDLINE_LIVE_ENABLED!=='true')throw Error('Worldline live kræver gennemført sandboxtest og aktivering.');
+        if(managedEnvironment&&(agreement.mode==='live')!==(managedEnvironment==='production'))throw Error('delivery_payment_environment_mismatch');
+      }else if(managedEnvironment){
+        const gateway=await resolveManagedStripeGateway(managedEnvironment,agreement?.binding);
+        stripe=gateway.stripe;managedStripeAccount=gateway.binding;
+      }else{
+        if(!agreement?.credentials.secretKey)throw Error('Stripe API key is not configured.');
+        stripe=new Stripe(agreement.credentials.secretKey,{timeout:15000,maxNetworkRetries:2});
+      }
+      stage='validation';
     }
 
     // Modern checkout always sends the displayed cart discount (including zero).
@@ -849,7 +860,7 @@ export async function createStripeCheckoutSessionAction(
         createdAt: serverTimestamp(),
         status: 'Pending',
         paymentStatus: 'Pending',
-        paymentMethod: paymentMethod === 'pay_at_pickup' ? 'PayAtPickup' : 'Stripe',
+        paymentMethod: nativeFree?'Free':paymentMethod === 'pay_at_pickup' ? 'PayAtPickup' : agreement?.provider==='worldline'?'Worldline':'Stripe',
         brandId,
         locationId,
         productItems: cartItems,
@@ -884,8 +895,9 @@ export async function createStripeCheckoutSessionAction(
             ...(managedQuote ? {deliveryInstructions:customerInfo.deliveryInstructions||''} : {}),
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
-        ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),
-        ...(managedQuote ? {managedDelivery:{version:1,providerId:managedQuote.binding.providerId,quoteRef:managedQuote.quoteRef,requestDigest:managedQuote.contentDigest},managedStripeAccount} : {}),
+        ...(nativeFree?{freeCheckout:{version:1,kind:'discount_card'}}:{}),
+        ...(paymentMethod === 'online' && !nativeFree ? { psp: { provider: agreement?.provider || 'stripe' }, ...(agreement ? {paymentAgreement:agreement.provider==='stripe'?agreement.binding:worldlineBindingSchema.parse({provider:'worldline',mode:agreement.mode,owner:agreement.owner,reference:agreement.reference,merchantNumber:agreement.merchantNumber,revision:agreement.revision})} : {}) } : {}),
+        ...(managedQuote ? {managedDelivery:{version:1,providerId:managedQuote.binding.providerId,quoteRef:managedQuote.quoteRef,requestDigest:managedQuote.contentDigest},...(managedStripeAccount?{managedStripeAccount}:{})} : {}),
     });
     // Six-digit order references can collide. Never overwrite another order or
     // reuse its Stripe idempotency key; a collision must fail before payment.
@@ -897,6 +909,14 @@ export async function createStripeCheckoutSessionAction(
       const claim=managedQuote&&managedDraft&&managedDeliveryAcceptance ? await prepareCustomerQuoteConsumption(context.transaction,{...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor},managedDraft,orderId):null;
       claim?.apply();
       transaction.set(orderRef, orderData);
+      if(nativeFree){
+        const now=Date.now();
+        context.transaction.create(context.db.collection('freeCheckoutSettlementJobs').doc(orderId),{orderId,brandId,locationId,state:'pending',nextAttemptAt:now,attempts:0,createdAt:now});
+      }
+      if(agreement?.provider==='worldline'&&!nativeFree){
+        const now=Date.now();
+        context.transaction.create(context.db.collection('worldlineCheckoutExpiryJobs').doc(orderId),{orderId,brandId,locationId,nextAttemptAt:now+31*60*1000,attempts:0,createdAt:now});
+      }
     });
 
 
@@ -904,6 +924,12 @@ export async function createStripeCheckoutSessionAction(
     reservedOrderId = orderId;
     await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
 
+    if(nativeFree){
+      sessionRequestStarted=true; // A lost financial commit response cannot authorize a second free order.
+      const {settleFreeCheckoutOrder}=await import('@/lib/server/settle-checkout');
+      await settleFreeCheckoutOrder(orderId);
+      return {success:true,orderId,url:`${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}`};
+    }
     if (paymentMethod === 'pay_at_pickup') {
       // Only an order with a committed capacity hold can enter the kitchen.
       // Re-read configuration in the acceptance transaction so concurrent
@@ -944,6 +970,20 @@ export async function createStripeCheckoutSessionAction(
         throw error;
       }
       return { success: true, orderId, url: `${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
+    }
+    if(agreement?.provider==='worldline'){
+      if(totalAmount<=0)throw Error('Worldline kan ikke bruges til en ordre uden restbetaling.');
+      stage='worldline_session';sessionRequestStarted=true;
+      try {
+        const session=await createWorldlineCheckoutSession(agreement.credentials,agreement.mode,{orderId,amountMinor:ore(totalAmount),currency:'DKK',
+          acceptUrl:`${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}`,
+          cancelUrl:`${origin}${checkoutPath}/cancel?order_id=${orderId}&token=${cancelToken}`,
+          callbackUrl:`${origin}/api/payments/worldline/callback`});
+        const patch={'psp.checkoutSessionId':session.token,updatedAt:serverTimestamp()};
+        // Retry only the idempotent native link write, never the provider session request.
+        try{await updateDoc(orderRef,patch);}catch{await updateDoc(orderRef,patch);}
+        return {success:true,url:session.url,orderId};
+      }catch(error){if(error instanceof WorldlineRequestError&&error.outcome==='rejected')sessionRequestStarted=false;throw error;}
     }
     if (!stripe) throw new Error('Stripe API key is not configured.');
 
@@ -1072,6 +1112,7 @@ export async function createStripeCheckoutSessionAction(
       ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
       : identityMessage
       ? identityMessage
+      : stage === 'configuration' ? 'Restaurantens betalingsaftale er deaktiveret, mangler nøgler eller er utilgængelig. Kontakt restauranten.'
       : stage === 'newsletter_consent' ? 'Tilmeldingen kunne ikke gemmes. Prøv igen, eller fjern afkrydsningen for nyhedsbrev og fortsæt uden tilmelding.'
       : managedDeliveryAcceptance && stage === 'validation' ? 'Leveringstilbuddet eller kurven er ændret. Beregn levering igen, og kontrollér totalbeløbet.'
       : ['validation', 'reservation'].includes(stage) && e instanceof Error

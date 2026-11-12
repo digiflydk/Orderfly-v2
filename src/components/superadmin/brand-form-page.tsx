@@ -1,6 +1,7 @@
 
       
 'use client';
+import { WorldlineSettings } from './worldline-settings';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -715,6 +716,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
                 {brand && <BrandAppearancesForm brand={brand} />}
             </TabsContent>
         </Tabs>
+        {brand?.id && <WorldlineSettings key={brand.id} brandId={brand.id} />}
     </div>
   );
 }

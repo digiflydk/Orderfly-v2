@@ -2,6 +2,7 @@ import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
 import Stripe from 'stripe';
+import {verifyPinnedStripeWebhook} from '@/lib/payments/stripe-order';
 import {verifyManagedStripeWebhook} from '@/lib/delivery/payments/stripe-authority';
 import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/lib/server/payment-settings';
 import { headers } from 'next/headers';
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
   } catch (err) {
     try{if(!sig)throw Error('missing_signature');event=await verifyManagedStripeWebhook(rawBody,sig);}
-    catch{return new Response('Webhook signature verification failed', { status: 400 });}
+    catch{try{if(!sig)throw Error('missing_signature');event=await verifyPinnedStripeWebhook(rawBody,sig);}catch{return new Response('Webhook signature verification failed', { status: 400 });}}
   }
 
   // Handle the event

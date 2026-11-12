@@ -19,6 +19,17 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
  const records=new Map();
+ // Production's legacy resolver pins a create-once private archive. Keep the
+ // identical scope/mode/digest contract so downstream real readers can verify it.
+ const legacyAgreement=(scope={brandId:'b',locationId:'l'},mode='test')=>{
+  const credentials={secretKey:`sk_${mode}_fixture`,publishableKey:`pk_${mode}_fixture`,webhookSecret:'whsec_fixture'};
+  const owner={brandId:scope.brandId,...(scope.locationId?{locationId:scope.locationId}:{})};
+  const digest=require('node:crypto').createHash('sha256').update(JSON.stringify([owner.brandId,owner.locationId??null,mode,credentials.secretKey,credentials.publishableKey,credentials.webhookSecret])).digest('hex');
+  const id=`stripe-legacy-${digest}`;
+  records.set(`platform_settings/${id}`,{kind:'legacyStripeAgreement',owner,mode,credentials,digest});
+  return {provider:'stripe',binding:{provider:'stripe',mode,owner,reference:`platform_settings/${id}`,revision:1},credentials};
+ };
+ legacyAgreement();
  const marketingDb=require('./marketing-db.cjs').memoryDb(records);
  const nativeCollection=marketingDb.collection;
  const nativeRef=ref=>({...ref,collection:child=>nativeQuery(nativeCollection(ref.path+'/'+child))});
@@ -104,6 +115,9 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> origin},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
+  '@/lib/payments/merchant-agreement':{resolveMerchantAgreement:async()=>null,resolveLegacyStripeAgreement:async(scope,mode)=>legacyAgreement(scope,mode)},
+  '@/lib/payments/worldline-client':loadTs('src/lib/payments/worldline-client.ts',{'server-only':{}}),
+  '@/lib/payments/worldline-verification':loadTs('src/lib/payments/worldline-verification.ts'),
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   // Stale-hold reconciliation has its own suite (stale-discount-holds-210); here it finds nothing.
   '@/lib/server/stale-discount-holds':{reconcileStaleDiscountHolds:async()=>({inspected:0,released:0,settled:0})},

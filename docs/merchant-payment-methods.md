@@ -161,3 +161,14 @@ Regression coverage executes the actual sales page serialization for both cash
 and card, visits the guest receipt after merchant cancellation, and delays a
 promotion validation response to assert the correct loading message and blocked
 parallel checkout. Existing payment lifecycle and checkout regressions remain.
+
+## Online provider agreements (PR #914)
+
+Online checkout can resolve a complete Stripe or Worldline/Bambora Europe
+agreement at brand/location level. This is separate from the location's
+online/pay-at-pickup method switches above. An own disabled/incomplete agreement
+never inherits individual keys; each order pins the original account/environment.
+Worldline uses its own captured-payment proof, shared transactional settlement and
+print capability, including original-account managed-delivery compensation.
+Native zero-total discount-card orders bypass provider keys through a Free proof.
+See [onboarding, callbacks, recovery and sandbox acceptance](worldline-merchant-settings.md).

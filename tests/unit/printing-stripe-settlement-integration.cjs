@@ -335,7 +335,7 @@ test('#349 Paid replay refuses missing/corrupt manifest, changed targets/rules/c
 
 test('#349 valid provider origin/serialized objects cannot mint the private financial plan capability', async () => {
   const f = await fixture(), origin = await f.origins.verifyStripePrintPayment(f.session.id), before = structuredClone([...f.records]);
-  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'readPickupSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder', 'settleTerminalPickupOrder'].sort());
+  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'readPickupSettlementPrintCapability', 'readWorldlineSettlementPrintCapability', 'readFreeSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder', 'settleTerminalPickupOrder', 'settleWorldlineOrder', 'settleFreeCheckoutOrder'].sort());
   // The new guarded terminal entry point accepts no caller authority. Even a
   // valid provider proof or forged session passed as an extra argument cannot
   // replace the required dedicated cookie, despite this fixture's admin identity.
@@ -344,6 +344,8 @@ test('#349 valid provider origin/serialized objects cannot mint the private fina
   }
   for (const fake of [{}, origin, JSON.parse(JSON.stringify(origin)), null]) {
     await assert.rejects(f.db.runTransaction(transaction => f.outbox.prepareStripeSettlementPrintIntents({ db: f.db, transaction }, fake, { intents: [] })), /Unverified settlement print capability/);
+    await assert.rejects(f.db.runTransaction(transaction => f.outbox.prepareWorldlineSettlementPrintIntents({ db: f.db, transaction }, fake, { intents: [] })), /Unverified Worldline settlement capability/);
+    await assert.rejects(f.db.runTransaction(transaction => f.outbox.prepareFreeSettlementPrintIntents({ db: f.db, transaction }, fake, { intents: [] })), /Unverified free settlement capability/);
   }
   assert.deepEqual([...f.records], before); assert.equal(writes(f).length, 0);
 });

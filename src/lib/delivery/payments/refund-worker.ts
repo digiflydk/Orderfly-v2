@@ -7,13 +7,13 @@ import {deliveryScopeRuntimeAllowed} from '../management-runtime';
 import { bookingIntentSchema } from '../booking/state';
 import { originalAttemptReference } from '../booking/server';
 import { deliveryCreateResultSchema, managedDeliveryBindingSchema } from '../provider-contract';
-import { assertManagedRefund, managedPaymentProjection, managedStripeAccountSchema, reconcileManagedRefund, submitManagedRefund, verifyManagedPaidOrder, type VerifiedManagedPayment } from './stripe-authority';
+import { assertManagedRefund, managedPaymentProjection, managedPaymentAccountSchema, managedPaymentEnvironment, assertManagedPaymentOrder, reconcileManagedRefund, submitManagedRefund, verifyManagedPaidOrder, type VerifiedManagedPayment } from './payment-authority';
 
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,200}$/), digest=z.string().regex(/^[a-f0-9]{64}$/), integer=z.number().int().nonnegative().safe();
 const scopeSchema=z.object({brandId:id,locationId:id,orderId:id}).strict();
 type Scope=z.infer<typeof scopeSchema>;
-const ledgerSchema=z.object({version:z.literal(1),scope:scopeSchema,key:digest,account:managedStripeAccountSchema,
-  paymentIntentId:z.string(),checkoutSessionId:z.string(),amountMinor:integer,requestDigest:digest,
+const ledgerSchema=z.object({version:z.literal(1),scope:scopeSchema,key:digest,account:managedPaymentAccountSchema,
+  paymentIntentId:z.string().optional(),paymentReference:z.string().optional(),provider:z.enum(['stripe','worldline']).optional(),checkoutSessionId:z.string(),amountMinor:integer,requestDigest:digest,
   state:z.enum(['submitting','unknown','pending','failed','succeeded']),refundId:z.string().nullable(),createdAtMs:integer,updatedAtMs:integer}).strict();
 type Ledger=z.infer<typeof ledgerSchema>;
 async function native(tx:FirebaseFirestore.Transaction,scope:Scope){
@@ -38,18 +38,14 @@ async function native(tx:FirebaseFirestore.Transaction,scope:Scope){
   if(ledger&&(!isDeepStrictEqual(ledger.scope,scope)||ledger.requestDigest!==managed.data.requestDigest))throw new Error('delivery_refund_ledger_scope');
   return {ref,order,managed:managed.data,ledger};
 }
-function assertPayment(order:Record<string,any>,proof:VerifiedManagedPayment,scope:Scope){
-  const value=managedPaymentProjection(proof);
-  if(!isDeepStrictEqual(value.scope,scope)||!isDeepStrictEqual(value.binding,managedStripeAccountSchema.parse(order.managedStripeAccount))
-    ||order.psp?.paymentIntentId!==value.paymentIntentId||order.psp?.checkoutSessionId!==value.checkoutSessionId
-    ||Math.round(order.totalAmount*100)!==value.amountMinor)throw new Error('delivery_refund_payment_changed');
-  return value;
+function assertPayment(order:Record<string,any>,proof:VerifiedManagedPayment,scope:Scope,refundKey?:string){
+  return assertManagedPaymentOrder(order,proof,scope,refundKey);
 }
 /** Only the authenticated server dispatch worker may invoke this internal function. No public action/route. */
 export async function processManagedDeliveryRefund(input:unknown):Promise<{state:Ledger['state'];refundId:string|null}> {
   const scope=scopeSchema.parse(input),db=getAdminDb();
   const snapshot=await db.runTransaction(tx=>native(tx,scope),{readOnly:true});
-  const environment=managedStripeAccountSchema.parse(snapshot.order.managedStripeAccount).livemode?'production':'sandbox';
+  const environment=managedPaymentEnvironment(snapshot.order);
   if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery'))throw new Error('delivery_refund_disabled');
   if(snapshot.ledger?.state==='succeeded')return {state:'succeeded',refundId:snapshot.ledger.refundId};
   if(snapshot.ledger?.state==='failed')return db.runTransaction(async tx=>{
@@ -58,21 +54,22 @@ export async function processManagedDeliveryRefund(input:unknown):Promise<{state
     tx.update(db.collection('deliveryDispatchJobs').doc(scope.orderId),{refundReviewRequired:true});
     return {state:'failed' as const,refundId:current.ledger.refundId};
   });
-  const proof=await verifyManagedPaidOrder(scope.orderId,snapshot.order);
-  const payment=assertPayment(snapshot.order,proof,scope);
-  const key=createHash('sha256').update(JSON.stringify(['delivery-refund-v1',scope,payment.binding,payment.paymentIntentId,snapshot.managed.requestDigest])).digest('hex');
+  const proof=await verifyManagedPaidOrder(scope.orderId,snapshot.order,{allowRefundInFlight:true});
+  const payment=managedPaymentProjection(proof);
+  const key=createHash('sha256').update(JSON.stringify(['delivery-refund-v1',scope,payment.binding,payment.paymentReference,snapshot.managed.requestDigest])).digest('hex');
   const claim=await db.runTransaction(async tx=>{
-    const current=await native(tx,scope);assertPayment(current.order,proof,scope);
+    const current=await native(tx,scope);assertPayment(current.order,proof,scope,key);
     if(current.ledger){
       if(current.ledger.key!==key||current.ledger.amountMinor!==payment.amountMinor||!isDeepStrictEqual(current.ledger.account,payment.binding))throw new Error('delivery_refund_conflict');
       return {ledger:current.ledger,submit:false};
     }
     if(payment.refundedAmountMinor!==0||current.order.refundedAmountOre!==undefined&&current.order.refundedAmountOre!==0
       ||current.order.refundedAmount!==undefined&&current.order.refundedAmount!==0||current.order.refundedAt!=null)throw new Error('delivery_refund_already_adjusted');
-    const now=Date.now();const ledger:Ledger={version:1,scope,key,account:payment.binding,paymentIntentId:payment.paymentIntentId,
-      checkoutSessionId:payment.checkoutSessionId,amountMinor:payment.amountMinor,requestDigest:current.managed.requestDigest,
+    const now=Date.now();const ledger:Ledger={version:1,scope,key,account:payment.binding,...(payment.provider==='stripe'?{paymentIntentId:payment.paymentReference}:{provider:'worldline' as const,paymentReference:payment.paymentReference}),
+      checkoutSessionId:payment.checkoutReference,amountMinor:payment.amountMinor,requestDigest:current.managed.requestDigest,
       state:'submitting',refundId:null,createdAtMs:now,updatedAtMs:now};
     tx.create(current.ref.collection('deliveryRefunds').doc('original'),ledger);
+    if(payment.provider==='worldline')tx.update(current.ref,{paymentOperation:`delivery-refund:${key}`});
     return {ledger,submit:true};
   });
   if(claim.ledger.state==='succeeded'||claim.ledger.state==='failed')return {state:claim.ledger.state,refundId:claim.ledger.refundId};
@@ -82,7 +79,9 @@ export async function processManagedDeliveryRefund(input:unknown):Promise<{state
     if(refund)outcome=assertManagedRefund(proof,key,refund);
   }catch{/* Lost or invalid result remains unknown; never create again. */}
   return db.runTransaction(async tx=>{
-    const current=await native(tx,scope);assertPayment(current.order,proof,scope);
+    const current=await native(tx,scope);
+    if(current.ledger?.key===key&&(current.ledger.state==='succeeded'||current.ledger.state==='failed'))return {state:current.ledger.state,refundId:current.ledger.refundId};
+    assertPayment(current.order,proof,scope,key);
     if(!current.ledger||current.ledger.key!==key)throw new Error('delivery_refund_conflict');
     if(current.ledger.state==='succeeded'||current.ledger.state==='failed')return {state:current.ledger.state,refundId:current.ledger.refundId};
     const state=outcome?.status??'unknown';
@@ -100,12 +99,13 @@ export async function processManagedDeliveryRefund(input:unknown):Promise<{state
       const customerApplied=!!customer?.exists&&customer.data()?.brandId===scope.brandId&&Number.isSafeInteger(spendMinor)&&spendMinor>=payment.amountMinor;
       const stamp=getAdminFieldValue().serverTimestamp();
       tx.update(db.collection('deliveryDispatchJobs').doc(scope.orderId),{refundCompletedAtMs:Date.now()});
-      tx.update(current.ref,{refundedAmountOre:payment.amountMinor,refundedAt:stamp,status:'Canceled',deliveryStatus:'failed',updatedAt:stamp});
+      tx.update(current.ref,{...(payment.provider==='worldline'?{paymentOperation:null,paymentRevision:(current.order.paymentRevision??0)+1}:{}),refundedAmountOre:payment.amountMinor,refundedAt:stamp,status:'Canceled',deliveryStatus:'failed',updatedAt:stamp});
       if(customerApplied&&customerRef)tx.update(customerRef,{totalSpend:(spendMinor-payment.amountMinor)/100});
       tx.create(adjustmentRef,{version:1,scope,type:'delivery_full_refund',refundId:outcome!.id,amountMinor:-payment.amountMinor,currency:'DKK',
-        originalInvoiceNumber:current.order.invoice?.number??null,paymentIntentId:payment.paymentIntentId,account:payment.binding,customerId:customerId??null,
+        originalInvoiceNumber:current.order.invoice?.number??null,...(payment.provider==='stripe'?{paymentIntentId:payment.paymentReference}:{provider:'worldline',paymentReference:payment.paymentReference}),account:payment.binding,customerId:customerId??null,
         customerApplied,requiresCustomerReconciliation:!customerApplied,createdAt:stamp});
     }
+    if(state==='failed'&&payment.provider==='worldline')tx.update(current.ref,{paymentOperation:null,paymentRevision:(current.order.paymentRevision??0)+1});
     if(state==='failed')tx.update(db.collection('deliveryDispatchJobs').doc(scope.orderId),{refundReviewRequired:true});
     tx.set(current.ref.collection('deliveryRefunds').doc('original'),{...current.ledger,state,refundId:outcome?.id??current.ledger.refundId,updatedAtMs:Date.now()});
     return {state,refundId:outcome?.id??current.ledger.refundId};

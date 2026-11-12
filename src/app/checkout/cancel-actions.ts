@@ -2,6 +2,7 @@
 
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
+import { stripeForOrder } from '@/lib/payments/stripe-order';
 import { doc, getDoc } from '@/lib/server/firestore-compat';
 import { db } from '@/lib/server/firestore-compat';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
@@ -15,6 +16,11 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
     const order = snapshot.data();
     if (createHash('sha256').update(token).digest('hex') !== order.cancelTokenHash) return { status: 'error' };
     if (order.paymentStatus === 'Paid') return { status: 'paid' };
+    if(order.psp?.provider==='worldline'){
+      const {cancelWorldlineCheckout}=await import('@/lib/payments/worldline-expiry');
+      const result=await cancelWorldlineCheckout(orderId);
+      return {status:result==='unknown'?'error':result};
+    }
     const sessionId = order.psp?.checkoutSessionId;
     if (!sessionId) return { status: 'error' };
     let stripe: Stripe;
@@ -23,14 +29,12 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
       if (order.psp?.provider !== 'stripe' || order.deliveryType !== 'Delivery') return { status: 'error' };
       const { managedStripeAccountSchema, resolveManagedStripeGateway } = await import('@/lib/delivery/payments/stripe-authority');
       const expected = managedStripeAccountSchema.parse(order.managedStripeAccount);
-      const gateway = await resolveManagedStripeGateway(expected.livemode ? 'production' : 'sandbox');
+      const gateway = await resolveManagedStripeGateway(expected.livemode ? 'production' : 'sandbox',order.paymentAgreement);
       if (gateway.binding.accountId !== expected.accountId || gateway.binding.livemode !== expected.livemode) return { status: 'error' };
       stripe = gateway.stripe;
       expectedLivemode = expected.livemode;
     } else {
-      const key = await getActiveStripeSecretKey();
-      if (!key) return { status: 'error' };
-      stripe = new Stripe(key);
+      stripe = await stripeForOrder(order);
     }
     const matchesOrder = (session: Stripe.Checkout.Session) => session.id === sessionId
       && !!order.brandId && !!order.locationId

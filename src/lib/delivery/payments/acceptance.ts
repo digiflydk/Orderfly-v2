@@ -15,7 +15,7 @@ import { paidOrderMarketingEnabled } from '@/lib/marketing/config';
 import { bookingIntentSchema } from '../booking/state';
 import { originalAttemptReference } from '../booking/server';
 import { deliveryCreateResultSchema, managedDeliveryBindingSchema } from '../provider-contract';
-import { managedPaymentProjection, verifyManagedPaidOrder, type VerifiedManagedPayment } from './stripe-authority';
+import { assertManagedPaymentOrder, managedPaymentProjection, verifyManagedPaidOrder, type VerifiedManagedPayment } from './payment-authority';
 
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const scopeSchema=z.object({brandId:id,locationId:id,orderId:id}).strict();
@@ -42,9 +42,7 @@ export async function completeManagedDeliveryAcceptance(input:unknown):Promise<b
     const claim=claimSnap.data();
     const result=resultSnap.data(),outcome=deliveryCreateResultSchema.safeParse(result?.result),payment=managedPaymentProjection(proof),reference=originalAttemptReference(scope);
     if(!order||!managed.success||!attempt.success||order.brandId!==scope.brandId||order.locationId!==scope.locationId||order.deliveryType!=='Delivery'
-      ||order.paymentStatus!=='Paid'||!isDeepStrictEqual(payment.scope,scope)||order.psp?.paymentIntentId!==payment.paymentIntentId
-      ||order.psp?.checkoutSessionId!==payment.checkoutSessionId||Math.round(order.totalAmount*100)!==payment.amountMinor
-      ||!isDeepStrictEqual(order.managedStripeAccount,payment.binding)||!isDeepStrictEqual(attempt.data.scope,scope)||attempt.data.reference!==reference
+      ||order.paymentStatus!=='Paid'||!isDeepStrictEqual(payment.scope,scope)||!assertManagedPaymentOrder(order,proof,scope)||!isDeepStrictEqual(attempt.data.scope,scope)||attempt.data.reference!==reference
       ||attempt.data.intentId!==reference||attempt.data.state!=='booked'||attempt.data.provider!==managed.data.providerId||attempt.data.requestDigest!==managed.data.requestDigest
       ||!result||result.version!==1||!isDeepStrictEqual(result.scope,scope)||result.attemptRef!==reference||result.requestDigest!==managed.data.requestDigest
       ||result.providerId!==managed.data.providerId||!claim||claim.claimId!==result.claimId||!isDeepStrictEqual(claim.scope,scope)||claim.requestDigest!==managed.data.requestDigest||typeof claim.networkStartedAtMs!=='number'||!outcome.success||outcome.data.kind!=='accepted'||outcome.data.providerDeliveryId!==attempt.data.providerDeliveryId)throw new Error('delivery_acceptance_scope');
@@ -84,7 +82,7 @@ export async function completeManagedDeliveryAcceptance(input:unknown):Promise<b
         return selected.kinds.map(kind=>({brandId:scope.brandId,locationId:scope.locationId,orderId:scope.orderId,printerId:target.printerId,kind}));
       });
       capability=Object.freeze({}) as ManagedDeliveryAcceptanceCapability;
-      capabilities.set(capability,{context,order:Object.freeze({id:scope.orderId,brandId:scope.brandId,locationId:scope.locationId,status:'Received',paymentStatus:'Paid',paymentMethod:'Stripe',deliveryType:'Delivery'}),applied:false,writeCount:writes.length,proof});
+      capabilities.set(capability,{context,order:Object.freeze({id:scope.orderId,brandId:scope.brandId,locationId:scope.locationId,status:'Received',paymentStatus:'Paid',paymentMethod:payment.provider==='worldline'?'Worldline':'Stripe',deliveryType:'Delivery'}),applied:false,writeCount:writes.length,proof});
       printPlan=await prepareManagedDeliveryAcceptancePrintIntents(context,capability,{intents,identity:{schemaVersion:1,id:'original',...scope,originalRevision:0,
         ...(policy.automaticActivationId?{automaticActivationId:policy.automaticActivationId}:{}),policyRevision:policy.policyRevision,routingRevision:saved.revision,
         rulesHash:hash(saved.rules),catalogHash:hash(catalog),targets}});

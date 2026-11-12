@@ -60,12 +60,13 @@ const toNumber = (value: string | number | undefined | null): number => {
 
 
 export function ConfirmationClient({ order: initialOrder, brand, location, sessionId, orderId, receiptToken }: ConfirmationClientProps) {
+    const proofAvailable=!!sessionId||!!(orderId&&receiptToken);
     const [order, setOrder] = useState(initialOrder);
     const [checking, setChecking] = useState(true);
     const [retry, setRetry] = useState(0);
     useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
     useEffect(() => {
-        if (!sessionId || !brand || !location || (order && order.paymentStatus !== 'Pending')) { setChecking(false); return; }
+        if ((!sessionId && !(orderId && receiptToken)) || !brand || !location || (order && order.paymentStatus !== 'Pending')) { setChecking(false); return; }
         let stopped = false, attempts = 0;
         let timer: ReturnType<typeof setTimeout>;
         const controller = new AbortController();
@@ -73,7 +74,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         setChecking(true);
         const poll = async () => {
             try {
-                const query = new URLSearchParams({ session_id: sessionId, brand_id: brand.id, location_id: location.id });
+                const query = new URLSearchParams({ ...(sessionId?{session_id:sessionId}:{}), brand_id: brand.id, location_id: location.id });
                 if (orderId) query.set('order_id', orderId);
                 if (receiptToken) query.set('receipt_token', receiptToken);
                 const response = await fetch(`/api/orders/lookup-by-session?${query}`, { cache: 'no-store', signal: controller.signal });
@@ -97,7 +98,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     useEffect(() => {
         // Retain the receipt capability and tenant scope. Poll native status only,
         // never replay payment reconciliation on each delivery refresh.
-        if (!sessionId || !brand || !location || !trackingStatus || order?.deliveryType !== 'Delivery' || order.paymentStatus === 'Pending' || (deliveryFinished && retry === 0)) return;
+        if (!proofAvailable || !brand || !location || !trackingStatus || order?.deliveryType !== 'Delivery' || order.paymentStatus === 'Pending' || (deliveryFinished && retry === 0)) return;
         let stopped = false, inFlight = false;
         let timer: ReturnType<typeof setTimeout>;
         let controller: AbortController | undefined;
@@ -110,7 +111,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
             const timeout = setTimeout(() => controller?.abort(), 10000);
             setDeliveryLoading(true);
             try {
-                const query = new URLSearchParams({ session_id: sessionId, brand_id: brand.id, location_id: location.id, status_only: 'true', order_id: order.id });
+                const query = new URLSearchParams({ ...(sessionId?{session_id:sessionId}:{}), brand_id: brand.id, location_id: location.id, status_only: 'true', order_id: order.id });
                 if (receiptToken) query.set('receipt_token', receiptToken);
                 const response = await fetch(`/api/orders/lookup-by-session?${query}`, { cache: 'no-store', signal: controller.signal });
                 const result = await response.json();
@@ -160,13 +161,13 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
                                <AlertTriangle className="h-8 w-8 text-yellow-600" />
                             </div>
-                            <CardTitle className="mt-4 text-2xl">{checking && sessionId ? 'Kontrollerer betaling' : 'Ordreoplysninger er ikke tilgængelige'}</CardTitle>
+                            <CardTitle className="mt-4 text-2xl">{checking && proofAvailable ? 'Kontrollerer betaling' : 'Ordreoplysninger er ikke tilgængelige'}</CardTitle>
                             <CardDescription>
                                 Vi kunne ikke finde din ordre endnu. Betalingen kan stadig være under behandling. Kontakt restauranten, før du betaler igen, hvis beløbet allerede er trukket.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <Button variant="outline" disabled={checking || !sessionId} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>
+                             <Button variant="outline" disabled={checking || !proofAvailable} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>
                              <Button asChild className="mt-6">
                                 <Link href={brand && location ? storefront(location.slug) : brand ? storefront() : `/`}>Tilbage til menuen</Link>
                             </Button>

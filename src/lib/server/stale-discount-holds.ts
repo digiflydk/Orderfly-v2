@@ -38,7 +38,14 @@ function createdAtMs(value: unknown): number | null {
 // any Stripe or Firestore failure leaves the hold untouched.
 export async function reconcileStaleDiscountHolds(brandId: string, discountId: string, deps: Dependencies = {}) {
   const result = { inspected: 0, released: 0, settled: 0 };
-  try { return await reconcile(brandId, discountId, deps, result); }
+  const now=deps.now??Date.now,deadline=now()+TOTAL_BUDGET_MS;
+  try {
+    await reconcile(brandId, discountId, deps, result);
+    const {reconcileWorldlineStaleHolds}=await import('@/lib/payments/worldline-stale-holds');
+    const worldline=await reconcileWorldlineStaleHolds(brandId,discountId,{db:deps.db,now,deadline});
+    result.inspected+=worldline.inspected;result.released+=worldline.released;
+    return result;
+  }
   catch { return result; } // Reconciliation is best effort; reservation still enforces capacity.
 }
 
@@ -62,15 +69,17 @@ async function reconcile(brandId: string, discountId: string, deps: Dependencies
   }).slice(0, MAX_INSPECTED_HOLDS);
   if (!candidates.length) return result;
   const key = await (deps.stripeKey ?? getActiveStripeSecretKey)().catch(() => null);
-  if (!key) return result;
-  const stripe = (deps.stripe ?? (k => new Stripe(k, { timeout: STRIPE_TIMEOUT_MS, maxNetworkRetries: 0 })))(key);
+  if (!key && !candidates.some(doc=>doc.data().paymentAgreement)) return result;
+  const stripe = key ? (deps.stripe ?? (k => new Stripe(k, { timeout: STRIPE_TIMEOUT_MS, maxNetworkRetries: 0 })))(key) : null;
   const deadline = now + TOTAL_BUDGET_MS;
   for (const doc of candidates) {
     if ((deps.now ?? Date.now)() >= deadline) break;
     const order = doc.data();
     result.inspected++;
     try {
-      const session = await stripe.checkout.sessions.retrieve(order.psp.checkoutSessionId);
+      const accountStripe=order.paymentAgreement?await (await import('@/lib/payments/stripe-order')).stripeForOrder(order,STRIPE_TIMEOUT_MS):stripe;
+      if(!accountStripe)continue;
+      const session = await accountStripe.checkout.sessions.retrieve(order.psp.checkoutSessionId);
       if (session.id !== order.psp.checkoutSessionId || session.metadata?.orderId !== doc.id ||
           session.metadata?.brandId !== brandId || session.metadata?.locationId !== order.locationId) continue;
       if (session.payment_status === 'paid') {

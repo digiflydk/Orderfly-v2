@@ -5,7 +5,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import {deliveryScopeRuntimeAllowed} from '../management-runtime';
-import {managedStripeAccountSchema} from '../payments/stripe-authority';
+import {managedPaymentEnvironment} from '../payments/payment-authority';
 import { loadDeliverySettingsInTransaction } from '../settings/server';
 import { deliveryIdSchema, deliveryCreateRequestSchema, deliveryCreateResultSchema, managedDeliveryBindingSchema, type DeliveryCreateRequest, type DeliveryCreateResult, type DeliveryScope } from '../provider-contract';
 import { storedDeliveryQuoteSchema } from '../quotes/schema';
@@ -29,7 +29,7 @@ const sameScope=(a:DeliveryScope,b:DeliveryScope)=>a.brandId===b.brandId&&a.loca
 async function activeEnvironment(scope:Scope):Promise<Environment> {
  const order=(await getAdminDb().runTransaction(tx=>tx.get(getAdminDb().collection('orders').doc(scope.orderId)),{readOnly:true})).data();
  if(!order||!sameScope(order as DeliveryScope,scope))throw new Error('delivery_scope_invalid');
- return managedStripeAccountSchema.parse(order.managedStripeAccount).livemode?'production':'sandbox';
+ return managedPaymentEnvironment(order);
 }
 function inspect(capability:WoltDispatchCapability,allowExpired=false):Claim {
   const value=capability&&typeof capability==='object'?capabilities.get(capability):undefined;
@@ -47,7 +47,7 @@ export async function authorizeWoltDispatchInTransaction(tx:FirebaseFirestore.Tr
   const [orderSnap,attemptSnap,dispatchSnap]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryDispatch').doc('original'))]);
   const order=orderSnap.data(),attempt=bookingIntentSchema.parse(attemptSnap.data()),dispatch=dispatchSnap.data(),managed=managedDeliveryBindingSchema.parse(order?.managedDelivery);
   if(!order||!sameScope(order as DeliveryScope,scope)||order.deliveryType!=='Delivery'||order.paymentStatus!=='Paid'||order.status!=='Pending'
-    ||managedStripeAccountSchema.parse(order.managedStripeAccount).livemode!==(claim.environment==='production')
+    ||managedPaymentEnvironment(order)!==claim.environment
     ||managed.providerId!=='wolt'||managed.requestDigest!==claim.requestDigest||attempt.reference!==claim.attemptRef||attempt.requestDigest!==claim.requestDigest
     ||!sameScope(attempt.scope,scope)||attempt.scope.orderId!==claim.scope.orderId||attempt.state!=='submitting'||attempt.revision!==claim.revision
     ||dispatch?.claimId!==claim.claimId||dispatch.environment!==claim.environment||dispatch.requestDigest!==claim.requestDigest||dispatch.expiresAtMs!==claim.expiresAtMs)throw new Error('delivery_claim_changed');
@@ -79,7 +79,7 @@ async function claimOriginal(scope:Scope,environment:Environment):Promise<WoltDi
     if(!order||!sameScope(order as DeliveryScope,scope)||order.deliveryType!=='Delivery'||order.paymentStatus!=='Paid'||order.status!=='Pending'
       ||managed.providerId!=='wolt'||job?.version!==1||job.orderId!==scope.orderId||!sameScope(job as DeliveryScope,scope)||job.providerId!=='wolt'||job.requestDigest!==managed.requestDigest)throw new Error('delivery_order_ineligible');
     if(!await deliveryScopeRuntimeAllowed(scope,environment,'recovery',tx))throw new Error('delivery_dispatch_disabled');
-    if(managedStripeAccountSchema.parse(order.managedStripeAccount).livemode!==(environment==='production'))throw new Error('delivery_payment_environment_changed');
+    if(managedPaymentEnvironment(order)!==environment)throw new Error('delivery_payment_environment_changed');
     if(job.state!=='pending')return null;
     if(dispatchSnap.exists)throw new Error('delivery_claim_exists');
     const reference=originalAttemptReference(scope),now=Date.now();

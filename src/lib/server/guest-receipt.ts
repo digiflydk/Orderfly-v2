@@ -3,11 +3,12 @@ import { z } from 'zod';
 import { readReceiptDeliveryTracking } from '@/lib/delivery/tracking-server';
 import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import Stripe from 'stripe';
+import {stripeForOrder, assertStripeOrderSession} from '@/lib/payments/stripe-order';
 import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/delivery/payments/stripe-authority';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
-import { settlePaidCheckoutSession } from './settle-checkout';
+import { settlePaidCheckoutSession, settleFreeCheckoutOrder } from './settle-checkout';
 import type { OrderDetail } from '@/types';
 
 export type ReceiptProof = { sessionId?: string; receiptToken?: string; orderId?: string; brandId?: string; locationId?: string };
@@ -40,11 +41,13 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
   if (!order ||
       (proof.brandId && order.brandId !== proof.brandId) ||
       (proof.locationId && order.locationId !== proof.locationId)) return null;
+  const worldline = order.psp?.provider === 'worldline';
   const pickup = order.paymentMethod === 'PayAtPickup';
-  if (pickup ? !!proof.sessionId || order.deliveryType !== 'Pickup' || !!order.psp : !validSession || order.psp?.checkoutSessionId !== proof.sessionId) return null;
+  const free = (order.paymentMethod as string) === 'Free';
+  if (free ? !!proof.sessionId || !!order.psp || order.totalAmount !== 0 : worldline ? !!proof.sessionId : pickup ? !!proof.sessionId || order.deliveryType !== 'Pickup' || !!order.psp : !validSession || order.psp?.checkoutSessionId !== proof.sessionId) return null;
 
   const tokenHash = (order as OrderDetail & { receiptTokenHash?: string }).receiptTokenHash;
-  if (pickup && !tokenHash) return null;
+  if ((pickup || worldline || free) && !tokenHash) return null;
   // New receipts use a dedicated capability stored only as a hash. Previously
   // issued Stripe URLs retain their session-bound proof during the migration.
   if (tokenHash) {
@@ -52,22 +55,29 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
     if (!timingSafeEqual(Buffer.from(tokenHash, 'hex'), createHash('sha256').update(proof.receiptToken!).digest())) return null;
   }
 
+  if(free && options.reconcilePayment !== false && order.paymentStatus==='Pending'){
+    try{await settleFreeCheckoutOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Retain Pending; durable free job also owns retry. */}
+  }
+  if(!order)return null;
+  if(worldline && options.reconcilePayment !== false && order.paymentStatus==='Pending'){
+    try{const {reconcileWorldlineOrder}=await import('@/lib/payments/worldline-reconcile');await reconcileWorldlineOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Keep Pending while callback/capture is unresolved. */}
+  }
+  if(!order)return null;
   // A delayed webhook must not produce either a false receipt or a second order.
   // A failed read stays Pending and can be retried; it is not payment failure.
-  if (options.reconcilePayment !== false && !pickup && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
+  if (options.reconcilePayment !== false && !pickup && !free && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
     try {
       // getOrderById/getOrderByCheckoutSessionId are private native server reads.
       // Keep payment authority fields local; the public receipt projection below never includes them.
       const nativePayment=order as OrderDetail&{managedDelivery?:unknown;managedStripeAccount?:unknown};
-      const key = nativePayment.managedDelivery?null:await getActiveStripeSecretKey();
+      const key = nativePayment.managedDelivery?null:order.paymentAgreement?'pinned':await getActiveStripeSecretKey();
       if (nativePayment.managedDelivery||key) {
         const expected=nativePayment.managedDelivery?managedStripeAccountSchema.parse(nativePayment.managedStripeAccount):null;
-        const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox'):null;
+        const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox',(order as any).paymentAgreement):null;
         if(expected&&gateway?.binding.accountId!==expected.accountId)throw Error('delivery_payment_account_changed');
-        const stripe = gateway?.stripe??new Stripe(key!, { timeout: 5000, maxNetworkRetries: 0 });
+        const stripe = gateway?.stripe??await stripeForOrder(order);
         const session = await stripe.checkout.sessions.retrieve(proof.sessionId);
-        if (session.id !== proof.sessionId || session.metadata?.orderId !== order.id ||
-            session.metadata?.brandId !== order.brandId || session.metadata?.locationId !== order.locationId) return null;
+        try { assertStripeOrderSession(order.id,order,session); } catch { return null; }
         if (session.payment_status === 'paid') {
           await settlePaidCheckoutSession(session);
           order = await getOrderById(order.id);

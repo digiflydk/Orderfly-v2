@@ -368,7 +368,7 @@ export type OrderSummary = {
     status: OrderStatus;
     totalAmount: number;
     paymentStatus: 'Paid' | 'Pending' | 'Failed';
-    paymentMethod: 'Stripe' | 'Cash' | 'Other';
+    paymentMethod: 'Free' | 'Stripe' | 'Cash' | 'Other';
     paymentDetails: PaymentDetails;
 };
 
@@ -392,6 +392,7 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
+    paymentAgreement?: unknown;
     refundedAmountOre?: number;
   brandLogoUrl?: string | null;
   productItems: MinimalCartItem[];
@@ -403,7 +404,8 @@ export type OrderDetail = OrderSummary & {
   deliveryTime?: string;
   paidAt?: Date;
   psp?: {
-      provider: 'stripe';
+      provider: 'stripe' | 'worldline';
+      transactionId?: string;
       checkoutSessionId?: string;
       paymentIntentId?: string;
       descriptorPrefix?: string;

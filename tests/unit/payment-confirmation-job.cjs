@@ -13,20 +13,23 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   'customers/c':{brandId:'b',email:'kunde@example.test',marketingConsent,totalOrders:paid?1:0,totalSpend:paid?100:0},
   'discounts/d':{brandId:'b',usedCount:paid?1:0},
  };
- if(managed){Object.assign(records['orders/ORD-TEST'],{status:'Pending',deliveryType:'Delivery',psp:{...records['orders/ORD-TEST'].psp,provider:'stripe'},managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},managedStripeAccount:{accountId:'acct_test',livemode:false}});}
+ if(managed){records['platform_settings/payment_gateway']={activeMode:'test',test:{secretKey:'sk_test_fixture'}};Object.assign(records['orders/ORD-TEST'],{status:'Pending',deliveryType:'Delivery',psp:{...records['orders/ORD-TEST'].psp,provider:'stripe'},managedDelivery:{version:1,providerId:'wolt',quoteRef:'quote',requestDigest:'a'.repeat(64)},managedStripeAccount:{accountId:'acct_test',livemode:false}});}
  if(paid&&!missingInvoice){
   records['orders/ORD-TEST'].invoice={number:'INV-2026-000001'};
   records['invoiceCounters/b-2026']={brandId:'b',year:2026,lastNumber:1};
  }
  if(job)records[jobKey]={orderId:'ORD-TEST',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'keep',attempts:2,...job};
  let capacity=0,analytics=0,queue=Promise.resolve();
- const session={id:'cs_test_fixture_123456',payment_status:'paid',status:'complete',currency:'dkk',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
+ const session={id:'cs_test_fixture_123456',mode:'payment',payment_status:'paid',status:'complete',currency:'dkk',payment_intent:'pi_fixture',livemode:false,amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
  const snapshot=value=>({exists:()=>!!value,data:()=>value});
  const mocks={
   'server-only':{},'@/lib/firebase':{db:{}},
-  '@/lib/delivery/payments/stripe-authority':{verifyManagedPaidOrder:async()=>{assert.ok(managed);return {};},managedPaymentProjection:()=>({scope:{orderId:'ORD-TEST',brandId:'b',locationId:'l'},paymentIntentId:'pi',checkoutSessionId:session.id,amountMinor:10000,binding:{accountId:'acct_test',livemode:false}})},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture'},
-  'stripe':{default:class{checkout={sessions:{retrieve:async()=>structuredClone(session)}}}},
+  'stripe':{default:class{
+    accounts={retrieve:async()=>({id:'acct_test'})};
+    checkout={sessions:{retrieve:async()=>structuredClone(session)}};
+    paymentIntents={retrieve:async()=>({id:'pi_fixture',status:'succeeded',currency:'dkk',amount:10000,amount_received:10000,livemode:false,metadata:structuredClone(session.metadata),latest_charge:{id:'ch_fixture',paid:true,disputed:false,currency:'dkk',amount:10000,amount_refunded:0,payment_intent:'pi_fixture',livemode:false}})};
+  }},
   'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{analytics++;}},
   '@/lib/server/discount-capacity':{prepareAdminCapacitySettlement:async(...args)=>{const commit=await loadTs('src/lib/server/discount-capacity.ts',{'server-only':{}}).prepareAdminCapacitySettlement(...args);return Object.assign(()=>{commit();capacity++;},{writeCount:commit.writeCount});}},
@@ -37,7 +40,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
      const draft=structuredClone(records);let writes=false;
      const result=await fn({get:async ref=>{assert.equal(writes,false,'Firestore reads must precede writes');return snapshot(draft[ref]);},
       set:(ref,value)=>{writes=true;if(fail)throw Error('write failure');draft[ref]=value;},
-      update:(ref,value)=>{writes=true;draft[ref]={...draft[ref],...value};}});
+      update:(ref,value)=>{writes=true;const next={...draft[ref]};for(const [key,item]of Object.entries(value)){const parts=key.split('.');let target=next;for(const part of parts.slice(0,-1)){target[part]={...(target[part]||{})};target=target[part];}target[parts.at(-1)]=item;}draft[ref]=next;}});
      records=draft;return result;
     });queue=task.catch(()=>{});return task;
    },
@@ -143,6 +146,7 @@ test('signed asynchronous success invokes the same settlement; invalid signature
  const api=loadTs('src/app/api/stripe/webhook/route.ts',{
   '@/lib/server/settle-checkout':{settlePaidCheckoutSession:async value=>{assert.equal(value,session);calls++;}},
   '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('no alternate signed managed event');}},
+  '@/lib/payments/stripe-order':{verifyPinnedStripeWebhook:async()=>{throw Error('no pinned signed event');}},
   '@/lib/discount-reservations':{},'next/headers':{headers:async()=>({get:()=> 'signature'})},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture',getActiveStripeWebhookSecret:async()=> 'fixture'},
   stripe:{default:class{webhooks={constructEventAsync:async()=>{if(invalid)throw Error('invalid');return{type:'checkout.session.async_payment_succeeded',data:{object:session}};}}}},
@@ -207,7 +211,7 @@ test('managed settlement rejects missing or changed stored payment provider with
   if(provider===undefined)delete f.records()['orders/ORD-TEST'].psp.provider;
   else f.records()['orders/ORD-TEST'].psp.provider=provider;
   const before=structuredClone(f.records());
-  await assert.rejects(f.settle(),/Managed delivery payment changed/);
+  await assert.rejects(f.settle(),/^Error: delivery_payment_invalid$/);
   assert.deepEqual(f.records(),before);
   assert.deepEqual(f.counters(),{capacity:0,analytics:0});
  }

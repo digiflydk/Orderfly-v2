@@ -7,10 +7,10 @@ const goodOrder=()=>({brandId:'b1',locationId:'l1',status:'Pending',paymentStatu
 function fixture({session=goodSession(),order=goodOrder(),key='test-only',retrieveFailure=false,brand={},location={brandId:'b1'}}={}){
  const calls=[],writes=[];
  const rows=new Map([['orders/o1',order],['brands/b1',brand],['locations/l1',location]]);
- const db={collection:name=>({doc:id=>({path:name+'/'+id,id})})};
+ const db={collection:name=>({doc:id=>({path:name+'/'+id,id,get:async()=>({exists:rows.has(name+'/'+id),data:()=>rows.get(name+'/'+id)})})})};
  const tx={get:async ref=>{calls.push(['read',ref.path]);const value=rows.get(ref.path);return {id:ref.id,exists:value!==undefined,data:()=>value};},set:()=>writes.push('set'),update:()=>writes.push('update')};
  class FakeStripe {constructor(secret,options){calls.push(['stripe',secret,options]);} checkout={sessions:{retrieve:async id=>{calls.push(['retrieve',id]);if(retrieveFailure)throw Error('SECRET_DETAIL');return session;}}};}
- const api=loadTs('src/lib/printing/stripe-transition-proof.ts',{'server-only':{},stripe:{default:FakeStripe},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=>key}});
+ const api=loadTs('src/lib/printing/stripe-transition-proof.ts',{'server-only':{},stripe:{default:FakeStripe},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=>{calls.push(['global-key']);return key;}},'@/lib/payments/stripe-order':{stripeForOrder:async native=>{calls.push(['pinned-order',native.paymentAgreement.reference]);return new FakeStripe('pinned-secret',{timeout:5000,maxNetworkRetries:0});}}});
  return {...api,calls,writes,rows,context:{db,transaction:tx}};
 }
 test('server retrieval produces opaque proof, transaction projection reads native ownership and never writes',async()=>{
@@ -154,4 +154,15 @@ test('foreign native database contexts and missing order never produce a project
  await assert.rejects(f.prepareStripePrintTransition({...f.context,db:{}},proof),e=>e.code==='transition_unverified');
  assert.equal(f.calls.filter(x=>x[0]==='read').length,0);f.rows.delete('orders/o1');
  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='transition_unverified');
+});
+
+test('pinned Stripe print verification reads original account and invalidates a changed binding',async()=>{
+ const order={...goodOrder(),psp:{provider:'stripe',checkoutSessionId:reference},paymentAgreement:{provider:'stripe',mode:'test',owner:{brandId:'b1'},reference:'pinned-version-1',revision:1}};
+ const f=fixture({order,session:{...goodSession(),livemode:false}});
+ const proof=await f.verifyStripePrintPayment(reference,'o1');assert.equal(f.calls.some(row=>row[0]==='global-key'),false);assert.equal(f.calls.find(row=>row[0]==='pinned-order')[1],'pinned-version-1');
+ const transition=await f.prepareStripePrintTransition(f.context,proof);assert.equal(f.stripePrintTransitionProjection(f.context,transition).order.paymentStatus,'Paid');
+ f.rows.get('orders/o1').paymentAgreement.reference='different-version';await assert.rejects(f.prepareStripePrintTransition(f.context,proof));
+});
+test('pinned Stripe print rejects environment mismatch before minting a payment origin',async()=>{
+ const f=fixture({order:{...goodOrder(),paymentAgreement:{provider:'stripe',mode:'test',reference:'pinned-version'}},session:{...goodSession(),livemode:true}});await assert.rejects(f.verifyStripePrintPayment(reference,'o1'));assert.equal(f.writes.length,0);
 });
