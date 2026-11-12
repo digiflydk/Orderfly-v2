@@ -26,6 +26,13 @@ const sessionResponse = z.object({
   token: z.string().regex(/^[a-zA-Z0-9_-]{1,256}$/),
   url: z.string().url(),
 });
+function checkoutProviderCode(body: unknown): string | undefined {
+  const parsed = z.object({ meta: z.object({ action: z.object({ code: z.string() }) }) }).safeParse(body);
+  const code = parsed.success ? parsed.data.meta.action.code : undefined;
+  // BEC codes include five-digit values (e.g. 40005). Never carry messages,
+  // arbitrary strings, line breaks, or unbounded numeric data into diagnostics.
+  return code && code.length <= 6 && !/[^0-9]/.test(code) ? code : undefined;
+}
 
 /** Server-side hosted checkout. No card details enter Orderfly. */
 export async function createWorldlineCheckoutSession(
@@ -58,20 +65,20 @@ export async function createWorldlineCheckoutSession(
   }
   if (!response.ok) {
     const outcome = response.status >= 400 && response.status < 500 && response.status !== 408 ? 'rejected' : 'unknown';
+    let providerCode: string | undefined;
+    try { providerCode = checkoutProviderCode(await response.json()); }
+    catch { /* Optional diagnostics never change the known HTTP outcome. */ }
     // The HTTP status is a bounded number, never an upstream message or body.
     const code = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
-      ? `WORLDLINE_CHECKOUT_HTTP_${response.status}` : 'WORLDLINE_CHECKOUT_UNKNOWN';
+      ? `WORLDLINE_CHECKOUT_HTTP_${response.status}${providerCode ? `_PROVIDER_${providerCode}` : ''}` : 'WORLDLINE_CHECKOUT_UNKNOWN';
     throw new WorldlineRequestError(outcome, code);
   }
   let body: unknown;
   try { body = await response.json(); } catch { throw new WorldlineRequestError('unknown', 'WORLDLINE_CHECKOUT_UNKNOWN'); }
   const declined = z.object({ meta: z.object({ result: z.literal(false) }) }).safeParse(body);
   if (declined.success) {
-    // Europe meta.action.code is a string (official example: "2000"). Admit
-    // only four ASCII digits for diagnostics; never propagate meta.message.
-    const action = z.object({ meta: z.object({ action: z.object({ code: z.string() }) }) }).safeParse(body);
-    const providerCode = action.success ? action.data.meta.action.code : undefined;
-    throw new WorldlineRequestError('rejected', providerCode?.length === 4 && /^[0-9]{4}$/.test(providerCode)
+    const providerCode = checkoutProviderCode(body);
+    throw new WorldlineRequestError('rejected', providerCode
       ? `WORLDLINE_CHECKOUT_PROVIDER_${providerCode}` : 'WORLDLINE_CHECKOUT_REJECTED');
   }
   const parsed = sessionResponse.safeParse(body);

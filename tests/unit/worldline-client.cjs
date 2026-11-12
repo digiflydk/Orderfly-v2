@@ -51,22 +51,39 @@ test('operation validation rejects wrong environment and malformed amounts befor
  for(const amount of [undefined,0,-1,1.5,2147483648])await assert.rejects(c.mutateWorldlineTransaction(keys,'test','123','capture',amount));
  await assert.rejects(c.mutateWorldlineTransaction(keys,'live','123','credit',1));assert.equal(calls,0);
 });
-test('checkout HTTP diagnostics distinguish refusal from uncertain outcomes without reading error bodies',async()=>{
+test('checkout HTTP diagnostics preserve refusal versus uncertainty when optional body parsing fails',async()=>{
  for(const [status,outcome] of [[400,'rejected'],[401,'rejected'],[403,'rejected'],[408,'unknown'],[429,'rejected'],[503,'unknown']]){
   let calls=0,reads=0;const c=client(async()=>{calls++;return {ok:false,status,json:async()=>{reads++;throw Error('private provider body');}};});
   await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>e.outcome===outcome&&e.code===`WORLDLINE_CHECKOUT_HTTP_${status}`&&!e.message.includes('private'));
-  assert.equal(calls,1);assert.equal(reads,0);
+  assert.equal(calls,1);assert.equal(reads,1);
  }
 });
-test('provider diagnostics expose only four numeric action digits and preserve explicit rejection',async()=>{
+test('provider diagnostics expose only bounded numeric action digits and preserve explicit rejection',async()=>{
  const privateValue='synthetic-credential-value';
- for(const [action,code] of [[{code:'1001'},'WORLDLINE_CHECKOUT_PROVIDER_1001'],[{code:privateValue},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'12345'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'1234\n'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:1001},'WORLDLINE_CHECKOUT_REJECTED'],[null,'WORLDLINE_CHECKOUT_REJECTED']]){
+ for(const [action,code] of [[{code:'1001'},'WORLDLINE_CHECKOUT_PROVIDER_1001'],[{code:'40005'},'WORLDLINE_CHECKOUT_PROVIDER_40005'],[{code:'3'},'WORLDLINE_CHECKOUT_PROVIDER_3'],[{code:'123456'},'WORLDLINE_CHECKOUT_PROVIDER_123456'],[{code:privateValue},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'1234567'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:''},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'1234\n'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:1001},'WORLDLINE_CHECKOUT_REJECTED'],[null,'WORLDLINE_CHECKOUT_REJECTED']]){
   let calls=0;const c=client(async()=>{calls++;return {ok:true,json:async()=>({meta:{result:false,action,message:{merchant:privateValue,enduser:privateValue}},privateValue})};});
   await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>{
    assert.equal(e.outcome,'rejected');assert.equal(e.code,code);
    assert.ok(!JSON.stringify(e).includes(privateValue));assert.ok(!e.message.includes(privateValue));assert.equal(e.cause,undefined);return true;
   });
   assert.equal(calls,1);
+ }
+});
+test('HTTP failures retain HTTP status and safe provider code without exposing body or changing outcome',async()=>{
+ const secret='synthetic-private-key-value';
+ for(const [status,outcome] of [[400,'rejected'],[401,'rejected'],[408,'unknown'],[500,'unknown'],[503,'unknown']]){
+  let calls=0,reads=0;const c=client(async()=>{calls++;return {ok:false,status,json:async()=>{reads++;return {meta:{result:false,action:{code:'40005',type:secret,source:secret},message:{merchant:secret,enduser:secret}},secret};}};});
+  await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>{
+   assert.equal(e.code,`WORLDLINE_CHECKOUT_HTTP_${status}_PROVIDER_40005`);assert.equal(e.outcome,outcome);
+   assert.ok(!e.message.includes(secret));assert.ok(!JSON.stringify(e).includes(secret));assert.equal(e.cause,undefined);return true;
+  });assert.equal(calls,1);assert.equal(reads,1);
+ }
+});
+test('HTTP400 with malformed or sensitive action code stays a redacted HTTP400 rejection',async()=>{
+ const secret='synthetic-private-key-value';
+ for(const body of [{},{meta:{action:{code:secret}}},{meta:{action:{code:'1234567'}}},{meta:{action:{code:'40005\n'}}},{meta:{action:{code:'40005\r'}}},{meta:{action:{code:40005}}},null]){
+  let calls=0;const c=client(async()=>{calls++;return {ok:false,status:400,json:async()=>body};});
+  await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>e.outcome==='rejected'&&e.code==='WORLDLINE_CHECKOUT_HTTP_400'&&!e.message.includes(secret)&&!JSON.stringify(e).includes(secret));assert.equal(calls,1);
  }
 });
 test('checkout timeout, bad JSON and malformed success have a fixed redacted unknown diagnostic and no retry',async()=>{
