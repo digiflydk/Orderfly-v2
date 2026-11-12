@@ -52,3 +52,10 @@ test('saved views expose flags only and stale saves cannot replace configuration
  await assert.rejects(f.actions.saveWorldlineSettings({brandId:'b'},{...data,test:blank,mode:'live',revision:1}));
  assert.equal(f.records.get('settings/b/').mode,'test');
 });
+test('provider preference persists and inherits without changing legacy defaults',async()=>{
+ const f=actionFixture();
+ const initial=await f.actions.loadWorldlineSettings({brandId:'b'});assert.equal(initial.provider,'stripe');
+ await f.actions.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',test:testKeys,live:blank,revision:0});
+ const local=await f.actions.loadWorldlineSettings({brandId:'b',locationId:'l'});
+ assert.equal(local.source,'brand');assert.equal(local.brandProvider,'worldline');
+});
