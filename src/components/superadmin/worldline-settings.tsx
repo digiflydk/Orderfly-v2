@@ -25,7 +25,7 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
       event.preventDefault(); if (busy) return;
       setBusy(true); setMessage('');
       try {
-        const updated = await saveWorldlineSettings({ brandId, locationId }, { source: settings.source, mode: settings.mode, revision: settings.revision, ...keys });
+        const updated = await saveWorldlineSettings({ brandId, locationId }, { source: settings.source, provider: settings.provider, mode: settings.mode, revision: settings.revision, ...keys });
         setSettings(updated); setKeys({ test: empty(), live: empty() }); setMessage('Worldline-opsætningen er gemt. Checkout er endnu ikke skiftet.');
       } catch (error) { setMessage(error instanceof Error ? error.message : 'Kunne ikke gemme.'); }
       finally { setBusy(false); }
@@ -34,8 +34,12 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
         {locationId && <label className="block">Betalingsaftale<select className="block w-full border rounded p-2 bg-background" value={settings.source} onChange={event => setSettings({ ...settings, source: event.target.value as 'own' | 'brand' })}>
           <option value="brand">Brug brandets hovedaftale</option><option value="own">Brug lokationens egen aftale</option>
         </select></label>}
-        {settings.source === 'brand' ? <p>Arver brandets aftale og miljø: <strong>{modeLabel[settings.brandMode]}</strong>. Ændringer på brandet gælder automatisk her.</p> : <>
-          <label className="block">Miljø for aftalen<select className="block w-full border rounded p-2 bg-background" value={settings.mode} onChange={event => setSettings({ ...settings, mode: event.target.value as typeof settings.mode })}>
+        {settings.source === 'brand' ? <p>Arver brandets aftale ({settings.brandProvider === 'stripe' ? 'Stripe' : 'Worldline'}) og Worldline-miljø: <strong>{modeLabel[settings.brandMode]}</strong>. Ændringer på brandet gælder automatisk her.</p> : <>
+          <label className="block">Betalingsudbyder<select className="block w-full border rounded p-2 bg-background" value={settings.provider} onChange={event => setSettings({ ...settings, provider: event.target.value as 'stripe' | 'worldline' })}>
+            <option value="stripe">Stripe</option><option value="worldline">Worldline</option>
+          </select></label>
+          {settings.provider === 'stripe' && <p>Stripe bruger fortsat platformens eksisterende betalingsopsætning. Worldline-nøglerne nedenfor kan klargøres separat.</p>}
+          <label className="block">Miljø for Worldline-aftalen<select className="block w-full border rounded p-2 bg-background" value={settings.mode} onChange={event => setSettings({ ...settings, mode: event.target.value as typeof settings.mode })}>
             <option value="disabled">Deaktiveret</option><option value="test">Test</option><option value="live">Live</option>
           </select></label>
           <div className="grid gap-6 md:grid-cols-2">{(['test', 'live'] as const).map(mode => <fieldset className="space-y-3 border rounded p-4" key={mode}>
