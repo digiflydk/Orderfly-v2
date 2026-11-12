@@ -18,7 +18,7 @@ export async function loadWorldlineSettings(input: WorldlineScope) {
   const row = (await worldlineSettingsRef(scope).get()).data() as WorldlineSettingsRecord | undefined;
   const brand = scope.locationId ? (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data() as WorldlineSettingsRecord | undefined : row;
   return { source: row?.source || (scope.locationId ? 'brand' as const : 'own' as const), mode: row?.mode || 'disabled' as const,
-    revision: row?.revision || 0, testSet: !!row?.test, liveSet: !!row?.live, brandMode: brand?.mode || 'disabled' as const };
+    provider: row?.provider || 'stripe' as const, brandProvider: brand?.provider || 'stripe' as const, revision: row?.revision || 0, testSet: !!row?.test, liveSet: !!row?.live, brandMode: brand?.mode || 'disabled' as const };
 }
 export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: unknown) {
   const scope = await authorize(scopeInput), parsed = worldlineInputSchema.parse(input);
@@ -26,7 +26,7 @@ export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: u
   const ref = worldlineSettingsRef(scope);
   const previous = (await ref.get()).data() as WorldlineSettingsRecord | undefined;
   if ((previous?.revision || 0) !== parsed.revision) throw new Error('Indstillingerne er ændret. Genindlæs siden.');
-  const next: WorldlineSettingsRecord = { source: parsed.source, mode: parsed.mode, revision: parsed.revision + 1 };
+  const next: WorldlineSettingsRecord = { source: parsed.source, provider: parsed.provider, mode: parsed.mode, revision: parsed.revision + 1 };
   try {
     for (const mode of ['test', 'live'] as const) {
       if (previous?.[mode]) next[mode] = previous[mode];
