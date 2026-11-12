@@ -6,7 +6,7 @@ function fixture(){
  const rows=new Map([['brands/b',{}],['locations/l',{brandId:'b'}]]),secrets=new Map(),reads=[],writes=[];
  const ref=path=>({path,get:async()=>({exists:rows.has(path),data:()=>rows.get(path)})});
  const db={collection:name=>({doc:id=>ref(name+'/'+id)}),runTransaction:async run=>run({get:r=>r.get(),set:(r,v)=>rows.set(r.path,v)})};
- const mocks={'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{}},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/payments/worldline-settings':schema,'@/lib/payments/worldline-store':{worldlineSettingsRef:s=>ref('settings/'+s.brandId+'/'+(s.locationId||'')),readWorldlineSecret:async(s,m,r)=>{reads.push(r);return secrets.get(r);},writeWorldlineSecret:async(s,m,k)=>{const id='private-ref-'+writes.length;writes.push(k);secrets.set(id,k);return id;},readStripeSecret:async(s,m,r)=>{reads.push(r);return secrets.get(r);},writeStripeSecret:async(s,m,k)=>{writes.push(k);return 'private-stripe';}}};
+ const mocks={'@/lib/payments/worldline-api-key':loadTs('src/lib/payments/worldline-api-key.ts',{'server-only':{}}),'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{}},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/payments/worldline-settings':schema,'@/lib/payments/worldline-store':{worldlineSettingsRef:s=>ref('settings/'+s.brandId+'/'+(s.locationId||'')),readWorldlineSecret:async(s,m,r)=>{reads.push(r);return secrets.get(r);},writeWorldlineSecret:async(s,m,k)=>{const id='private-ref-'+writes.length;writes.push(k);secrets.set(id,k);return id;},readStripeSecret:async(s,m,r)=>{reads.push(r);return secrets.get(r);},writeStripeSecret:async(s,m,k)=>{writes.push(k);return 'private-stripe';}}};
  const api=loadTs('src/app/superadmin/payments/worldline-actions.ts',mocks);return {api,rows,secrets,reads,writes};
 }
 test('effective legacy Stripe summary reflects mode and missing keys without exposing any values',async()=>{
@@ -28,10 +28,10 @@ test('explicit inheritance with missing brand is incomplete rather than legacy f
 });
 test('changing Worldline merchant requires a complete replacement bundle and keeps old reference on failure',async()=>{
  const f=fixture();f.rows.set('settings/b/',{source:'own',provider:'worldline',mode:'test',test:'old-ref',revision:1});f.secrets.set('old-ref',{merchantNumber:'T123',accessToken:'old-access',secretToken:'old-secret',md5Key:'old-md5'});
- await assert.rejects(f.api.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',revision:1,test:{...blank,merchantNumber:'T456'},live:blank}));assert.equal(f.writes.length,0);assert.equal(f.rows.get('settings/b/').test,'old-ref');
+ const result=await f.api.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',revision:1,test:{...blank,merchantNumber:'T456'},live:blank});assert.equal(result.ok,false);assert.equal(result.code,'WORLDLINE_MD5_REQUIRED');assert.equal(f.writes.length,0);assert.equal(f.rows.get('settings/b/').test,'old-ref');
 });
 test('invalid credential input produces a fixed error without its raw value',async()=>{
- const f=fixture();await assert.rejects(f.api.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',revision:0,test:{...blank,accessToken:'PRIVATE TOKEN'},live:blank}),e=>!e.message.includes('PRIVATE TOKEN'));assert.equal(f.writes.length,0);
+ const f=fixture();const result=await f.api.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',revision:0,test:{...blank,accessToken:'PRIVATE TOKEN'},live:blank});assert.equal(result.ok,false);assert.equal(result.code,'INVALID_INPUT');assert.doesNotMatch(JSON.stringify(result),/PRIVATE TOKEN/);assert.equal(f.writes.length,0);
 });
 
-test('saving explicit brand inheritance requires a stored brand agreement',async()=>{const f=fixture();await assert.rejects(f.api.saveWorldlineSettings({brandId:'b',locationId:'l'},{source:'brand',provider:'stripe',mode:'disabled',revision:0,test:blank,live:blank}));assert.equal(f.rows.has('settings/b/l'),false);});
+test('saving explicit brand inheritance requires a stored brand agreement',async()=>{const f=fixture();const result=await f.api.saveWorldlineSettings({brandId:'b',locationId:'l'},{source:'brand',provider:'stripe',mode:'disabled',revision:0,test:blank,live:blank});assert.equal(result.ok,false);assert.equal(result.code,'MISSING_BRAND_AGREEMENT');assert.equal(f.rows.has('settings/b/l'),false);});
