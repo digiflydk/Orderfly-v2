@@ -78,7 +78,7 @@ export function kitchenPrintIntentEligibility(order: KitchenOrder, printer: Prin
     return { eligible: false, reason: 'order_not_in_production' };
   }
   const eligible = ['Pickup', 'Delivery'].includes(order.deliveryType) && (
-    (['Stripe','Worldline'].includes(order.paymentMethod) && order.paymentStatus === 'Paid')
+    (['Free','Stripe','Worldline'].includes(order.paymentMethod) && order.paymentStatus === 'Paid')
     || (order.paymentMethod === 'PayAtPickup' && order.deliveryType === 'Pickup' && !order.psp
       && (order.paymentStatus === 'Paid'
         || (order.paymentStatus === 'Pending' && order.discountReservation === 'held')))

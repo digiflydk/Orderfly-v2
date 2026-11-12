@@ -1,8 +1,10 @@
+import type { NativeFreeCheckoutProof, NativeFreePrintTransition } from '@/lib/payments/native-free-checkout';
+let freeModule: typeof import('@/lib/payments/native-free-checkout') | undefined;
 import type { WorldlinePaymentProof, WorldlinePrintTransition } from '@/lib/payments/worldline-proof';
 let worldlineModule: typeof import('@/lib/payments/worldline-proof') | undefined;
 import { prepareAutomaticPrintSkip } from '@/lib/printing/automatic-print-skip-native';
 import { managedDeliveryBindingSchema } from '@/lib/delivery/provider-contract';
-import { managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/stripe-authority';
+import { assertManagedPaymentOrder, managedPaymentProjection, verifyManagedPaidOrder } from '@/lib/delivery/payments/payment-authority';
 import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import 'server-only';
 import { prepareOrderStamps } from '@/lib/loyalty/stamp-card/order-stamps';
@@ -31,7 +33,7 @@ import { storedManifestSchema } from '@/lib/printing/outbox';
 import { projectNativePrintCatalog } from '@/lib/printing/catalog-line-projection';
 import { prepareSavedPrinterRouting } from '@/lib/printing/saved-routing';
 import { previewPrinterRouting } from '@/lib/printing/routing-preview';
-import { prepareWorldlineSettlementPrintIntents, prepareStripeSettlementPrintIntents, preparePickupSettlementPrintIntents } from '@/lib/printing/outbox';
+import { prepareFreeSettlementPrintIntents, prepareWorldlineSettlementPrintIntents, prepareStripeSettlementPrintIntents, preparePickupSettlementPrintIntents } from '@/lib/printing/outbox';
 import { verifyPickupPrintPayment, verifyTerminalPickupPrintPayment, preparePickupPrintTransition, pickupPrintTransitionProjection,
   type PickupPrintTransition } from '@/lib/printing/pickup-transition-proof';
 
@@ -64,6 +66,19 @@ export async function settleWorldlineOrder(orderId:string,transactionId:string){
   worldlineModule ??= await import('@/lib/payments/worldline-proof');
   const proof=await worldlineModule.verifyWorldlinePaidOrder(orderId,transactionId);
   return settleOrder({kind:'worldline',proof});
+}
+
+export type FreeSettlementPrintCapability=Readonly<{readonly freeSettlementPrintCapability:unique symbol}>;
+const freeSettlementPlans=new WeakMap<object,{context:NativeTransactionContext;transition:NativeFreePrintTransition;order:Readonly<KitchenOrder>;writeCount:number;financialApplied:boolean}>();
+export function readFreeSettlementPrintCapability(context:NativeTransactionContext,capability:FreeSettlementPrintCapability,requireApplied=false){
+  const entry=capability&&freeSettlementPlans.get(capability);
+  if(!entry||entry.context!==context||context.db!==getAdminDb()||requireApplied&&!entry.financialApplied)throw Error('Unverified free settlement capability');
+  const proof=freeModule!.freePrintTransitionProjection(context,entry.transition);
+  return Object.freeze({order:entry.order,writeCount:entry.writeCount+(proof.replay?0:1),replay:proof.replay,financialApplied:entry.financialApplied});
+}
+export async function settleFreeCheckoutOrder(orderId:string){
+  freeModule ??= await import('@/lib/payments/native-free-checkout');
+  return settleOrder({kind:'free',proof:await freeModule.verifyFreeCheckout(orderId)});
 }
 
 export type PickupSettlementPrintCapability = Readonly<{ readonly pickupSettlementPrintCapability: unique symbol }>;
@@ -113,20 +128,21 @@ const isTerminalPaidReplay = (order: { paymentStatus?: unknown; status?: unknown
   order?.paymentStatus === 'Paid' && typeof order.status === 'string'
   && ['Completed', 'Delivered', 'Error', 'Canceled'].includes(order.status);
 
-type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session } | {kind:'worldline';proof:WorldlinePaymentProof}
+type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session } | {kind:'worldline';proof:WorldlinePaymentProof} | {kind:'free';proof:NativeFreeCheckoutProof}
   | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> | null; terminalActor?: OrderTerminalActor };
 async function settleOrder(proof: PaymentProof) {
   const session = proof.kind === 'stripe' ? proof.session : null;
+  const free = proof.kind==='free'?freeModule!.freeCheckoutProjection(proof.proof):null;
   const worldline = proof.kind === 'worldline' ? worldlineModule!.worldlinePaymentProjection(proof.proof) : null;
   const metadata: { orderId: string; brandId: string; locationId: string } = session
     ? { orderId: session.metadata!.orderId, brandId: session.metadata!.brandId, locationId: session.metadata!.locationId }
-    : worldline ? {orderId:worldline.orderId,brandId:worldline.brandId,locationId:worldline.locationId} : { orderId: proof.kind === 'pickup' ? proof.orderId : '', brandId: '', locationId: '' };
+    : free ? {orderId:free.orderId,brandId:free.brandId,locationId:free.locationId} : worldline ? {orderId:worldline.orderId,brandId:worldline.brandId,locationId:worldline.locationId} : { orderId: proof.kind === 'pickup' ? proof.orderId : '', brandId: '', locationId: '' };
   const db = getAdminDb();
   const marketingEnabled = paidOrderMarketingEnabled();
   const serverTimestamp = () => getAdminFieldValue().serverTimestamp();
   const orderRef = db.collection('orders').doc(metadata.orderId);
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
-  const managedSnapshot = session ? (await orderRef.get()).data() : undefined;
+  const managedSnapshot = session || worldline ? (await orderRef.get()).data() : undefined;
   const managedProof = managedSnapshot?.managedDelivery !== undefined ? await verifyManagedPaidOrder(metadata.orderId, managedSnapshot) : null;
   let dispatchAfterCommit = false;
   let analytics: OrderDetail['analytics'];
@@ -149,7 +165,7 @@ async function settleOrder(proof: PaymentProof) {
   }
   // Private plan owns the actual settlement writes. Nothing supplied by a caller
   // can replace the mutation, projected state or apply callback. Rebuilt on retry.
-  const prepareSettlement = async (context: NativeTransactionContext, transition?: { kind: 'stripe'; value: StripePrintTransition } | { kind: 'pickup'; value: PickupPrintTransition } | {kind:'worldline';value:WorldlinePrintTransition}) => {
+  const prepareSettlement = async (context: NativeTransactionContext, transition?: { kind: 'stripe'; value: StripePrintTransition } | { kind: 'pickup'; value: PickupPrintTransition } | {kind:'worldline';value:WorldlinePrintTransition} | {kind:'free';value:NativeFreePrintTransition}) => {
     dispatchAfterCommit = false; // Transaction retries must not retain a previous attempt's eligibility.
     const transaction: Transaction = context.transaction;
     const writes: Array<() => void> = [];
@@ -163,8 +179,9 @@ async function settleOrder(proof: PaymentProof) {
       let capability: StripeSettlementPrintCapability | undefined;
       let pickupCapability: PickupSettlementPrintCapability | undefined;
       let worldlineCapability: WorldlineSettlementPrintCapability | undefined;
+      let freeCapability:FreeSettlementPrintCapability|undefined;
       if (transition) {
-        const projection = transition.kind === 'stripe' ? stripePrintTransitionProjection(context, transition.value) : transition.kind === 'worldline' ? worldlineModule!.worldlinePrintTransitionProjection(context,transition.value) : pickupPrintTransitionProjection(context, transition.value);
+        const projection = transition.kind === 'stripe' ? stripePrintTransitionProjection(context, transition.value) : transition.kind === 'worldline' ? worldlineModule!.worldlinePrintTransitionProjection(context,transition.value) : transition.kind==='free'?freeModule!.freePrintTransitionProjection(context,transition.value) : pickupPrintTransitionProjection(context, transition.value);
         const expectedStatus = order.status === 'Pending' ? 'Received' : order.status;
         if (proof.kind !== transition.kind || projection.order.id !== orderSnap.id || projection.order.brandId !== order.brandId
           || projection.order.locationId !== order.locationId || projection.order.status !== expectedStatus
@@ -173,6 +190,9 @@ async function settleOrder(proof: PaymentProof) {
         if (transition.kind === 'stripe') {
           capability = Object.freeze({}) as StripeSettlementPrintCapability;
           stripeSettlementPlans.set(capability, { context, transition: transition.value, order: projection.order, writeCount, financialApplied: false });
+        } else if(transition.kind==='free'){
+          freeCapability=Object.freeze({}) as FreeSettlementPrintCapability;
+          freeSettlementPlans.set(freeCapability,{context,transition:transition.value,order:projection.order,writeCount,financialApplied:false});
         } else if(transition.kind==='worldline') {
           worldlineCapability=Object.freeze({}) as WorldlineSettlementPrintCapability;
           worldlineSettlementPlans.set(worldlineCapability,{context,transition:transition.value,order:projection.order,writeCount,financialApplied:false});
@@ -182,11 +202,12 @@ async function settleOrder(proof: PaymentProof) {
         }
       }
       let applied = false;
-      return Object.freeze({ fulfilled, writeCount, capability, pickupCapability, worldlineCapability, apply: () => {
+      return Object.freeze({ fulfilled, writeCount, capability, pickupCapability, worldlineCapability, freeCapability, apply: () => {
         if (applied) throw new Error('Settlement plan already applied');
         applied = true;
         for (const write of writes) write();
         if (capability) stripeSettlementPlans.get(capability)!.financialApplied = true;
+        if(freeCapability)freeSettlementPlans.get(freeCapability)!.financialApplied=true;
         if(worldlineCapability)worldlineSettlementPlans.get(worldlineCapability)!.financialApplied=true;
         if (pickupCapability) pickupSettlementPlans.get(pickupCapability)!.financialApplied = true;
       } });
@@ -197,13 +218,10 @@ async function settleOrder(proof: PaymentProof) {
     const managed = order.managedDelivery !== undefined ? managedDeliveryBindingSchema.parse(order.managedDelivery) : null;
     if (Boolean(managed) !== Boolean(managedSnapshot?.managedDelivery)) throw new Error('Managed delivery binding changed');
     if (managed) {
-      if (!managedProof || !session) throw new Error('Managed delivery payment proof missing');
-      const payment = managedPaymentProjection(managedProof);
-      if (order.psp?.provider !== 'stripe' || order.psp.checkoutSessionId !== payment.checkoutSessionId
-        || payment.scope.orderId !== metadata.orderId || payment.scope.brandId !== order.brandId || payment.scope.locationId !== order.locationId
-        || order.psp?.paymentIntentId !== undefined && order.psp.paymentIntentId !== payment.paymentIntentId
-        || payment.paymentIntentId !== piId || payment.checkoutSessionId !== session.id || payment.amountMinor !== Math.round(order.totalAmount * 100)
-        || payment.binding.accountId !== order.managedStripeAccount?.accountId || payment.binding.livemode !== order.managedStripeAccount?.livemode) throw new Error('Managed delivery payment changed');
+      if (!managedProof) throw new Error('Managed delivery payment proof missing');
+      const payment = assertManagedPaymentOrder(order,managedProof,metadata);
+      if(payment.provider==='stripe'&&(!session||payment.paymentReference!==piId||payment.checkoutReference!==session.id)
+        ||payment.provider==='worldline'&&(!worldline||payment.paymentReference!==worldline.transactionId))throw Error('Managed delivery payment changed');
     }
     analytics = order.analytics;
     if (proof.kind === 'pickup') {
@@ -212,6 +230,8 @@ async function settleOrder(proof: PaymentProof) {
       if (order.paymentMethod !== 'PayAtPickup' || order.deliveryType !== 'Pickup' || order.psp) throw new Error('Kun afhentningsordrer med betaling i restaurant kan registreres her.');
       metadata.brandId = order.brandId; metadata.locationId = order.locationId;
       if (order.paymentStatus !== 'Paid' && (order.paymentStatus !== 'Pending' || order.status === 'Pending' || order.discountReservation !== 'held')) throw new Error('Ordren er ikke en godkendt ubetalt afhentningsordre.');
+    } else if(proof.kind==='free'){
+      freeModule!.assertFreeCheckoutOrder(proof.proof,metadata.orderId,order);
     } else if(proof.kind==='worldline') {
       worldlineModule!.assertWorldlineOrder(proof.proof,metadata.orderId,order);
     } else {
@@ -342,7 +362,7 @@ async function settleOrder(proof: PaymentProof) {
     addWrite(() => transaction.update(orderRef, {
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
-      ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : worldline ? {'psp.captured':true} : { paymentCollection }),
+      ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : worldline ? {'psp.captured':true} : free ? {} : { paymentCollection }),
       paymentStatus: 'Paid', status: managed ? order.status : order.status === 'Pending' ? 'Received' : order.status, ...(managed ? {deliveryStatus:'awaiting_booking'} : {}), paidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       invoice,
@@ -393,11 +413,11 @@ async function settleOrder(proof: PaymentProof) {
     if (printTransitionEnabled && proof.kind === 'stripe' && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
     const transition = printTransitionEnabled ? proof.kind === 'stripe'
       ? { kind: 'stripe' as const, value: await prepareStripePrintTransition(context, stripePrintProof!) }
-      : proof.kind === 'worldline' ? {kind:'worldline' as const,value:await worldlineModule!.prepareWorldlinePrintTransition(context,proof.proof)} : { kind: 'pickup' as const, value: await preparePickupPrintTransition(context, pickupPrintProof!) } : undefined;
+      : proof.kind === 'worldline' ? {kind:'worldline' as const,value:await worldlineModule!.prepareWorldlinePrintTransition(context,proof.proof)} : proof.kind==='free'?{kind:'free' as const,value:await freeModule!.prepareFreePrintTransition(context,proof.proof)} : { kind: 'pickup' as const, value: await preparePickupPrintTransition(context, pickupPrintProof!) } : undefined;
     const prepared = await prepareSettlement(context, transition);
     let printPlan: Awaited<ReturnType<typeof prepareStripeSettlementPrintIntents>> | undefined;
     if (printTransitionEnabled && policy) {
-      if (!prepared.capability && !prepared.pickupCapability && !prepared.worldlineCapability) throw new Error('Missing private settlement print capability');
+      if (!prepared.capability && !prepared.pickupCapability && !prepared.worldlineCapability && !prepared.freeCapability) throw new Error('Missing private settlement print capability');
       const [catalog, saved] = await Promise.all([
         projectNativePrintCatalog(context, { orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId }),
         prepareSavedPrinterRouting(context, { brandId: metadata.brandId, locationId: metadata.locationId }),
@@ -424,11 +444,11 @@ async function settleOrder(proof: PaymentProof) {
       } };
       printPlan = prepared.pickupCapability
         ? await preparePickupSettlementPrintIntents(context, prepared.pickupCapability, intentInput)
-        : prepared.worldlineCapability ? await prepareWorldlineSettlementPrintIntents(context,prepared.worldlineCapability,intentInput) : await prepareStripeSettlementPrintIntents(context, prepared.capability!, intentInput);
+        : prepared.freeCapability ? await prepareFreeSettlementPrintIntents(context,prepared.freeCapability,intentInput) : prepared.worldlineCapability ? await prepareWorldlineSettlementPrintIntents(context,prepared.worldlineCapability,intentInput) : await prepareStripeSettlementPrintIntents(context, prepared.capability!, intentInput);
     }
     // Pickup's original print decision belongs to acceptance, never payment
     // collection. A later policy change must not invent a contradictory skip.
-    const skipPlan = (proof.kind === 'stripe'||proof.kind==='worldline') && prepared.fulfilled && policy?.skipReason && !printPlan
+    const skipPlan = (proof.kind === 'stripe'||proof.kind==='worldline'||proof.kind==='free') && prepared.fulfilled && policy?.skipReason && !printPlan
       ? await prepareAutomaticPrintSkip(context, metadata, policy.skipReason) : undefined;
     if (prepared.writeCount + (skipPlan?.writeCount ?? 0) > 500) throw new Error('Settlement write budget exceeded');
     // Every native read is complete before either plan writes. The outbox's
@@ -451,12 +471,12 @@ async function settleOrder(proof: PaymentProof) {
       });
     } catch { /* No request lifecycle (e.g. an offline worker): retain the durable heartbeat job. */ }
   }
-  if (fulfilled && session) {
+  if (fulfilled && (session || worldline || free)) {
     // Analytics are optional after an authoritative, idempotent settlement.
     try { await trackServerEvent('payment_succeeded', {
       brandId: metadata.brandId, locationId: metadata.locationId,
       ...(analytics?.sessionId ? {sessionId: analytics.sessionId, deviceType: analytics.deviceType, ...(analytics.attribution || {})} : {}),
-      orderId: metadata.orderId, cartValue: (session.amount_total || 0) / 100,
+      orderId: metadata.orderId, cartValue: session ? (session.amount_total || 0) / 100 : (worldline?.amountMinor ?? 0)/100,
     }); } catch { /* Never report a successful payment as failed due to telemetry. */ }
   }
   return fulfilled;

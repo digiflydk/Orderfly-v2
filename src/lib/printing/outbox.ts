@@ -300,3 +300,9 @@ export async function prepareWorldlineSettlementPrintIntents(context:NativeTrans
   const read=(await import('@/lib/server/settle-checkout')).readWorldlineSettlementPrintCapability;
   return prepareAuthorizedOriginals(context,applied=>read(context,capability,applied),input);
 }
+
+/** No-PSP checkout uses its own private verified financial writer. */
+export async function prepareFreeSettlementPrintIntents(context:NativeTransactionContext,capability:import('@/lib/server/settle-checkout').FreeSettlementPrintCapability,input:unknown){
+  const read=(await import('@/lib/server/settle-checkout')).readFreeSettlementPrintCapability;
+  return prepareAuthorizedOriginals(context,applied=>read(context,capability,applied),input);
+}
