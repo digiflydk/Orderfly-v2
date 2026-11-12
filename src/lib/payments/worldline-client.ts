@@ -5,7 +5,7 @@ import { worldlineCredentialsSchema, validateWorldlineCredentials, type Worldlin
 
 /** Uncertain writes must be reconciled, never retried as a new payment. */
 export class WorldlineRequestError extends Error {
-  constructor(public readonly outcome: 'rejected' | 'unknown') {
+  constructor(public readonly outcome: 'rejected' | 'unknown', public readonly code = outcome === 'unknown' ? 'WORLDLINE_REQUEST_UNKNOWN' : 'WORLDLINE_REQUEST_REJECTED') {
     super(outcome === 'unknown' ? 'Worldline-resultatet kunne ikke bekræftes.' : 'Worldline afviste anmodningen.');
     this.name = 'WorldlineRequestError';
   }
@@ -54,16 +54,30 @@ export async function createWorldlineCheckoutSession(
     });
   } catch {
     // Do not include fetch errors: upstream errors can contain credentials/URLs.
-    throw new WorldlineRequestError('unknown');
+    throw new WorldlineRequestError('unknown', 'WORLDLINE_CHECKOUT_UNKNOWN');
   }
-  if (!response.ok) throw new WorldlineRequestError(response.status >= 400 && response.status < 500 && response.status !== 408 ? 'rejected' : 'unknown');
+  if (!response.ok) {
+    const outcome = response.status >= 400 && response.status < 500 && response.status !== 408 ? 'rejected' : 'unknown';
+    // The HTTP status is a bounded number, never an upstream message or body.
+    const code = Number.isInteger(response.status) && response.status >= 100 && response.status <= 599
+      ? `WORLDLINE_CHECKOUT_HTTP_${response.status}` : 'WORLDLINE_CHECKOUT_UNKNOWN';
+    throw new WorldlineRequestError(outcome, code);
+  }
   let body: unknown;
-  try { body = await response.json(); } catch { throw new WorldlineRequestError('unknown'); }
-  if (z.object({ meta: z.object({ result: z.literal(false) }) }).safeParse(body).success) throw new WorldlineRequestError('rejected');
+  try { body = await response.json(); } catch { throw new WorldlineRequestError('unknown', 'WORLDLINE_CHECKOUT_UNKNOWN'); }
+  const declined = z.object({ meta: z.object({ result: z.literal(false) }) }).safeParse(body);
+  if (declined.success) {
+    // Europe meta.action.code is a string (official example: "2000"). Admit
+    // only four ASCII digits for diagnostics; never propagate meta.message.
+    const action = z.object({ meta: z.object({ action: z.object({ code: z.string() }) }) }).safeParse(body);
+    const providerCode = action.success ? action.data.meta.action.code : undefined;
+    throw new WorldlineRequestError('rejected', providerCode?.length === 4 && /^[0-9]{4}$/.test(providerCode)
+      ? `WORLDLINE_CHECKOUT_PROVIDER_${providerCode}` : 'WORLDLINE_CHECKOUT_REJECTED');
+  }
   const parsed = sessionResponse.safeParse(body);
-  if (!parsed.success) throw new WorldlineRequestError('unknown');
+  if (!parsed.success) throw new WorldlineRequestError('unknown', 'WORLDLINE_CHECKOUT_UNKNOWN');
   const url = new URL(parsed.data.url);
-  if (url.origin !== 'https://v1.checkout.bambora.com' || url.username || url.password || url.pathname !== `/${parsed.data.token}`) throw new WorldlineRequestError('unknown');
+  if (url.origin !== 'https://v1.checkout.bambora.com' || url.username || url.password || url.pathname !== `/${parsed.data.token}`) throw new WorldlineRequestError('unknown', 'WORLDLINE_CHECKOUT_UNKNOWN');
   return { token: parsed.data.token, url: url.href };
 }
 

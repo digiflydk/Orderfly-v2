@@ -51,3 +51,29 @@ test('operation validation rejects wrong environment and malformed amounts befor
  for(const amount of [undefined,0,-1,1.5,2147483648])await assert.rejects(c.mutateWorldlineTransaction(keys,'test','123','capture',amount));
  await assert.rejects(c.mutateWorldlineTransaction(keys,'live','123','credit',1));assert.equal(calls,0);
 });
+test('checkout HTTP diagnostics distinguish refusal from uncertain outcomes without reading error bodies',async()=>{
+ for(const [status,outcome] of [[400,'rejected'],[401,'rejected'],[403,'rejected'],[408,'unknown'],[429,'rejected'],[503,'unknown']]){
+  let calls=0,reads=0;const c=client(async()=>{calls++;return {ok:false,status,json:async()=>{reads++;throw Error('private provider body');}};});
+  await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>e.outcome===outcome&&e.code===`WORLDLINE_CHECKOUT_HTTP_${status}`&&!e.message.includes('private'));
+  assert.equal(calls,1);assert.equal(reads,0);
+ }
+});
+test('provider diagnostics expose only four numeric action digits and preserve explicit rejection',async()=>{
+ const privateValue='synthetic-credential-value';
+ for(const [action,code] of [[{code:'1001'},'WORLDLINE_CHECKOUT_PROVIDER_1001'],[{code:privateValue},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'12345'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:'1234\n'},'WORLDLINE_CHECKOUT_REJECTED'],[{code:1001},'WORLDLINE_CHECKOUT_REJECTED'],[null,'WORLDLINE_CHECKOUT_REJECTED']]){
+  let calls=0;const c=client(async()=>{calls++;return {ok:true,json:async()=>({meta:{result:false,action,message:{merchant:privateValue,enduser:privateValue}},privateValue})};});
+  await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>{
+   assert.equal(e.outcome,'rejected');assert.equal(e.code,code);
+   assert.ok(!JSON.stringify(e).includes(privateValue));assert.ok(!e.message.includes(privateValue));assert.equal(e.cause,undefined);return true;
+  });
+  assert.equal(calls,1);
+ }
+});
+test('checkout timeout, bad JSON and malformed success have a fixed redacted unknown diagnostic and no retry',async()=>{
+ const secret='synthetic-credential-value';
+ for(const transport of [async()=>{throw Error(secret);},async()=>({ok:true,json:async()=>{throw Error(secret);}}),async()=>({ok:true,json:async()=>({meta:{result:true,message:secret},url:secret,token:secret})})]){
+  let calls=0;const c=client(async(...args)=>{calls++;return transport(...args);});
+  await assert.rejects(c.createWorldlineCheckoutSession(keys,'test',input),e=>e.outcome==='unknown'&&e.code==='WORLDLINE_CHECKOUT_UNKNOWN'&&!e.message.includes(secret)&&!JSON.stringify(e).includes(secret));
+  assert.equal(calls,1);
+ }
+});
