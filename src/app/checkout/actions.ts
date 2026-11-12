@@ -909,6 +909,10 @@ export async function createStripeCheckoutSessionAction(
       const claim=managedQuote&&managedDraft&&managedDeliveryAcceptance ? await prepareCustomerQuoteConsumption(context.transaction,{...managedDeliveryAcceptance,acceptedFeeMinor:managedDeliveryAcceptance.customerFeeMinor},managedDraft,orderId):null;
       claim?.apply();
       transaction.set(orderRef, orderData);
+      if(nativeFree){
+        const now=Date.now();
+        context.transaction.create(context.db.collection('freeCheckoutSettlementJobs').doc(orderId),{orderId,brandId,locationId,state:'pending',nextAttemptAt:now,attempts:0,createdAt:now});
+      }
       if(agreement?.provider==='worldline'&&!nativeFree){
         const now=Date.now();
         context.transaction.create(context.db.collection('worldlineCheckoutExpiryJobs').doc(orderId),{orderId,brandId,locationId,nextAttemptAt:now+31*60*1000,attempts:0,createdAt:now});

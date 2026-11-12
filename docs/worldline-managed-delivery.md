@@ -87,6 +87,13 @@ the persisted authoritative arithmetic and mints a distinct process-local proof.
 The existing financial plan and a private Free print capability provide the same
 atomic accounting and replay protection as paid checkout.
 
+Free order creation atomically creates `freeCheckoutSettlementJobs/<orderId>`.
+`processDueNativeFreeCheckouts()` runs one due job through fresh native settlement
+per authenticated heartbeat, with scoped rechecks and bounded backoff. A lost
+response cannot strand a valid free order or authorize a new order automatically.
+The queue records settlement only after the financial commit is verified; retries
+use the same invoice/accounting/print idempotency boundaries.
+
 Managed delivery still requires a strictly positive online total. A zero-total
 managed cart is rejected before any order, quote consumption or provider key
 resolution. Ordinary pickup and unmanaged delivery can use native Free checkout.
