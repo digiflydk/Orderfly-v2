@@ -1,4 +1,5 @@
 'use client';
+import { WorldlineSettings } from './worldline-settings';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -1350,6 +1351,7 @@ export function LocationFormPage({
       </form>
     </Form>
     {location?.id && <LocationTerminalLogin key={location.id} locationId={location.id} locationName={location.name} brandSlug={brands.find(brand => brand.id === location.brandId)?.slug} />}
+    {location?.id && <WorldlineSettings key={location.id} brandId={location.brandId} locationId={location.id} />}
     </>
   );
 }
