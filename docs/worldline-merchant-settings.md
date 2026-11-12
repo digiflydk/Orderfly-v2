@@ -50,3 +50,18 @@ Provider preference is now stored on the agreement (`stripe` default or
 staged: it is not yet used to route payment requests. Stripe still uses existing
 platform settings. Do not enable the preference in checkout until settlement,
 printing, managed delivery refund and callback verification support both providers.
+
+## Hosted checkout adapter
+
+`worldline-client.ts` creates hosted sessions with server-side Basic authentication,
+integer minor amounts and HTTPS return/callback addresses. It validates the hosted
+redirect origin and session token. Network failures, malformed responses and server
+errors are uncertain outcomes and must not trigger a new-session retry. Provider
+error payloads and credentials are never included in thrown errors. Transaction
+reads validate the requested transaction identity and merchant account.
+
+The adapter remains internal and is not yet connected to order settlement. It must
+not be enabled in checkout until callbacks, pinned agreement references, printing,
+refunds and managed delivery have been integrated and tested. Manual key entry is
+supported by the settings UI; actual connection acceptance can happen after keys
+are supplied. Run `node --test tests/unit/worldline-client.cjs` for adapter checks.
