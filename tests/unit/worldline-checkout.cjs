@@ -10,4 +10,14 @@ test('Worldline session receives authoritative amount and order keeps pinned acc
 test('disabled or incomplete explicit configuration fails before creating any payable order',async()=>{
  const f=await checkout({configureMocks:({mocks})=>{mocks['@/lib/payments/merchant-agreement']={resolveMerchantAgreement:async()=>{throw Error('disabled');}};}});assert.equal(f.result.success,false);assert.equal(f.records.has('orders/ORD-TEST'),false);assert.ok(!f.events.includes('stripe'));
 });
-test('legacy merchants retain their Stripe session path',async()=>{const f=await checkout();assert.equal(f.result.success,true);assert.ok(f.events.includes('stripe'));assert.equal(f.records.get('orders/ORD-TEST').paymentAgreement,undefined);});
+test('legacy merchants retain Stripe checkout with an original private account archive',async()=>{
+ const f=await checkout();assert.equal(f.result.success,true);assert.ok(f.events.includes('stripe'));
+ const order=f.records.get('orders/ORD-TEST'),binding=order.paymentAgreement;
+ assert.equal(binding.provider,'stripe');assert.equal(binding.mode,'test');assert.deepEqual(binding.owner,{brandId:'b',locationId:'l'});
+ assert.match(binding.reference,/^platform_settings\/stripe-legacy-[a-f0-9]{64}$/);assert.equal(binding.revision,1);
+ const archive=f.records.get(binding.reference);assert.equal(archive.kind,'legacyStripeAgreement');assert.equal(archive.mode,binding.mode);assert.deepEqual(archive.owner,binding.owner);assert.equal(archive.credentials.secretKey,'sk_test_fixture');
+ assert.doesNotMatch(JSON.stringify(order),/sk_test_fixture|pk_test_fixture|whsec_fixture/);
+ const {moduleGraph}=require('../helpers/load-ts-graph.cjs'),{memoryDb}=require('../helpers/marketing-db.cjs');
+ const read=moduleGraph({'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>memoryDb(f.records)},'@google-cloud/secret-manager':{SecretManagerServiceClient:class{constructor(){throw Error('Legacy reader must not require Secret Manager');}}},stripe:{default:class{constructor(key){this.key=key;}}}})('src/lib/payments/stripe-order.ts');
+ assert.equal((await read.stripeForOrder(order)).key,archive.credentials.secretKey);
+});
