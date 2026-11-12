@@ -9,7 +9,7 @@ function fixture(livemode=false){
  const session={id:'cs_pinned',livemode,status:'open',payment_status:'unpaid',metadata:{orderId:'ORD-ONE',brandId:'b',locationId:'l'}};
  const f={order,session,calls,token,binding:{...order.managedStripeAccount},after:null,fallback:null,fail:false};
  const stripe={checkout:{sessions:{retrieve:async id=>{assert.equal(id,'cs_pinned');calls.retrieve++;return calls.retrieve>1&&f.fallback?f.fallback:session;},expire:async id=>{assert.equal(id,'cs_pinned');calls.expire++;if(f.fail)throw Error('timeout');return f.after||{...session,status:'expired'};}}}};
- f.api=loadTs('src/app/checkout/cancel-actions.ts',{
+ f.api=loadTs('src/app/checkout/cancel-actions.ts',{'server-only':{},
   '@/lib/server/firestore-compat':{db:{},doc:(_,collection,id)=>{assert.equal(collection,'orders');assert.equal(id,'ORD-ONE');return id;},getDoc:async()=>({exists:()=>true,data:()=>order})},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=>{calls.active++;return 'legacy-active-key';}},
   '@/lib/delivery/payments/stripe-authority':{managedStripeAccountSchema:z.object({accountId:z.string().regex(/^acct_[A-Za-z0-9]+$/),livemode:z.boolean()}).strict(),resolveManagedStripeGateway:async environment=>{calls.gateway.push(environment);return {stripe,binding:f.binding};}},

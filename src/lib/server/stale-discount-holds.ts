@@ -38,7 +38,14 @@ function createdAtMs(value: unknown): number | null {
 // any Stripe or Firestore failure leaves the hold untouched.
 export async function reconcileStaleDiscountHolds(brandId: string, discountId: string, deps: Dependencies = {}) {
   const result = { inspected: 0, released: 0, settled: 0 };
-  try { return await reconcile(brandId, discountId, deps, result); }
+  const now=deps.now??Date.now,deadline=now()+TOTAL_BUDGET_MS;
+  try {
+    await reconcile(brandId, discountId, deps, result);
+    const {reconcileWorldlineStaleHolds}=await import('@/lib/payments/worldline-stale-holds');
+    const worldline=await reconcileWorldlineStaleHolds(brandId,discountId,{db:deps.db,now,deadline});
+    result.inspected+=worldline.inspected;result.released+=worldline.released;
+    return result;
+  }
   catch { return result; } // Reconciliation is best effort; reservation still enforces capacity.
 }
 

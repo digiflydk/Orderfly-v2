@@ -17,13 +17,9 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
     if (createHash('sha256').update(token).digest('hex') !== order.cancelTokenHash) return { status: 'error' };
     if (order.paymentStatus === 'Paid') return { status: 'paid' };
     if(order.psp?.provider==='worldline'){
-      // Returning from the window does not prove cancellation. Never release a live payable session.
-      if(!order.psp.transactionId)return {status:'error'};
-      const {runWorldlineOperation}=await import('@/lib/payments/worldline-operations');
-      const result=await runWorldlineOperation({orderId,transactionId:order.psp.transactionId,requestId:'customer-cancel',operation:'delete',actorId:'receipt-cancel'});
-      if(result.state!=='confirmed')return {status:'error'};
-      await releaseDiscount(orderId,order.brandId,order.psp.checkoutSessionId,order.locationId);
-      return {status:'canceled'};
+      const {cancelWorldlineCheckout}=await import('@/lib/payments/worldline-expiry');
+      const result=await cancelWorldlineCheckout(orderId);
+      return {status:result==='unknown'?'error':result};
     }
     const sessionId = order.psp?.checkoutSessionId;
     if (!sessionId) return { status: 'error' };
