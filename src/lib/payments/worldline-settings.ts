@@ -11,7 +11,7 @@ const emptyStripe = { secretKey: '', publishableKey: '', webhookSecret: '' };
 export function validateStripeCredentials(keys: StripeCredentials, mode: 'test' | 'live') {
   if (!new RegExp(`^sk_${mode}_[A-Za-z0-9]+$`).test(keys.secretKey) || !new RegExp(`^pk_${mode}_[A-Za-z0-9]+$`).test(keys.publishableKey) || !/^whsec_[A-Za-z0-9]+$/.test(keys.webhookSecret)) throw new Error('Ugyldige Stripe-nøgler for miljøet.');
 }
-export const worldlineInputSchema = z.object({ source: z.enum(['own', 'brand']), provider: z.enum(['stripe', 'worldline']).default('stripe'), mode: z.enum(['disabled', 'test', 'live']), test: worldlineCredentialsSchema, live: worldlineCredentialsSchema, stripeTest: stripeCredentialsSchema.default(emptyStripe), stripeLive: stripeCredentialsSchema.default(emptyStripe), revision: z.number().int().nonnegative() }).strict();
+export const worldlineInputSchema = z.object({ source: z.enum(['own', 'brand']), provider: z.enum(['stripe', 'worldline']).default('stripe'), mode: z.enum(['disabled', 'test', 'live']), test: worldlineCredentialsSchema, live: worldlineCredentialsSchema, testApiKey: z.string().trim().max(4096).default(''), liveApiKey: z.string().trim().max(4096).default(''), stripeTest: stripeCredentialsSchema.default(emptyStripe), stripeLive: stripeCredentialsSchema.default(emptyStripe), revision: z.number().int().nonnegative() }).strict();
 export type WorldlineInput = z.infer<typeof worldlineInputSchema>;
 export function mergeWorldlineCredentials(input: WorldlineCredentials, stored?: WorldlineCredentials): WorldlineCredentials {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, value || stored?.[key as keyof WorldlineCredentials] || ''])) as WorldlineCredentials;

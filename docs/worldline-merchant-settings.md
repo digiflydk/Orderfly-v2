@@ -11,8 +11,9 @@ and use **Betalingsaftale**. The existing platform-superuser boundary applies.
 
 1. On a brand, select its provider and disabled/test/live mode. On a location,
    select inheritance or its own complete agreement.
-2. Enter that provider's test credentials. Worldline needs Merchant Number,
-   Access Token, Secret Token and MD5 key; Stripe needs secret key, publishable
+2. Enter that provider's test credentials. Worldline accepts the existing combined **API key** (optionally with `Basic `
+   prefix) plus a separate **MD5 callback key**, or the three separate
+   Merchant Number / Access Token / Secret Token fields plus MD5; Stripe needs secret key, publishable
    key and webhook signing secret. Worldline test merchant numbers start with T;
    live numbers start with P. Stripe key prefixes must match the selected mode.
 3. Save. The saved summary shows the effective provider, agreement owner,
@@ -21,6 +22,11 @@ and use **Betalingsaftale**. The existing platform-superuser boundary applies.
 4. Follow the controlled sandbox procedure below before enabling live operation.
 
 Empty credential fields retain that scope/provider/environment's saved values.
+A combined API key is decoded server-side using the official
+`Base64(accessToken@merchantNumber:secretToken)` contract; it never contains or
+replaces MD5. Use one input format at a time. For `merchant.bambora.com`, the
+existing MD5 value is documented under **Settings → Merchant numbers → Edit →
+MD5 key**. No additional API user/key needs to be created.
 Changing a Worldline merchant number requires a new complete bundle. A location's
 own agreement is indivisible: neither individual keys nor missing environments
 fall back to the brand or global Stripe account. Explicit disabled, malformed or
@@ -166,3 +172,20 @@ Official contracts:
 - https://developer-api.bambora.com/swagger/europe/checkout/api-reference/checkout
 - https://developer-api.bambora.com/swagger/europe/checkout/api-reference/merchant
 - https://developer-api.bambora.com/swagger/europe/checkout/api-reference/transaction
+
+
+## Expected onboarding errors
+
+Saving returns a serializable success/error result. Expected errors are never
+thrown for the browser to display because Next.js masks thrown Server Action
+messages in production. Missing MD5, invalid API-key format, environment mismatch,
+missing authority, stale revision and unavailable/denied key storage have fixed,
+redacted messages. Unknown write/response outcomes instruct a reload/readback
+before retry. Fields are retained after a rejected save and cleared after success.
+Unexpected transport/framework errors use a fixed fallback, never raw error text.
+The callback hash requirement and server transaction verification remain unchanged.
+
+Official API access guides distinguish portal generations:
+- https://developer.bambora.com/europe/checkout/getting-started/access-api
+- https://developer.bambora.com/europe/checkout/getting-started/access-api-previous
+- https://developer.bambora.com/europe/checkout/getting-started/handle-responses
