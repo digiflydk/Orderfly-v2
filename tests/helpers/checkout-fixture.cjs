@@ -104,6 +104,9 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> origin},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
+  '@/lib/payments/merchant-agreement':{resolveMerchantAgreement:async()=>null},
+  '@/lib/payments/worldline-client':loadTs('src/lib/payments/worldline-client.ts',{'server-only':{}}),
+  '@/lib/payments/worldline-verification':loadTs('src/lib/payments/worldline-verification.ts'),
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   // Stale-hold reconciliation has its own suite (stale-discount-holds-210); here it finds nothing.
   '@/lib/server/stale-discount-holds':{reconcileStaleDiscountHolds:async()=>({inspected:0,released:0,settled:0})},

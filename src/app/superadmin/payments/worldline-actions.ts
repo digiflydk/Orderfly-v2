@@ -1,8 +1,8 @@
 'use server';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { worldlineInputSchema, worldlineScopeSchema, mergeWorldlineCredentials, validateWorldlineCredentials, type WorldlineScope, type WorldlineSettingsRecord } from '@/lib/payments/worldline-settings';
-import { readWorldlineSecret, writeWorldlineSecret, worldlineSettingsRef } from '@/lib/payments/worldline-store';
+import { worldlineInputSchema, worldlineScopeSchema, mergeWorldlineCredentials, validateWorldlineCredentials, validateStripeCredentials, type WorldlineScope, type WorldlineSettingsRecord } from '@/lib/payments/worldline-settings';
+import { readWorldlineSecret, writeWorldlineSecret, worldlineSettingsRef, readStripeSecret, writeStripeSecret } from '@/lib/payments/worldline-store';
 async function authorize(input: unknown) {
   await requirePlatformSuperuser();
   const scope = worldlineScopeSchema.parse(input);
@@ -18,7 +18,7 @@ export async function loadWorldlineSettings(input: WorldlineScope) {
   const row = (await worldlineSettingsRef(scope).get()).data() as WorldlineSettingsRecord | undefined;
   const brand = scope.locationId ? (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data() as WorldlineSettingsRecord | undefined : row;
   return { source: row?.source || (scope.locationId ? 'brand' as const : 'own' as const), mode: row?.mode || 'disabled' as const,
-    provider: row?.provider || 'stripe' as const, brandProvider: brand?.provider || 'stripe' as const, revision: row?.revision || 0, testSet: !!row?.test, liveSet: !!row?.live, brandMode: brand?.mode || 'disabled' as const };
+    provider: row?.provider || 'stripe' as const, brandProvider: brand?.provider || 'stripe' as const, revision: row?.revision || 0, testSet: !!row?.test, liveSet: !!row?.live, stripeTestSet: !!row?.stripeTest, stripeLiveSet: !!row?.stripeLive, brandMode: brand?.mode || 'disabled' as const };
 }
 export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: unknown) {
   const scope = await authorize(scopeInput), parsed = worldlineInputSchema.parse(input);
@@ -31,11 +31,20 @@ export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: u
     for (const mode of ['test', 'live'] as const) {
       if (previous?.[mode]) next[mode] = previous[mode];
       const changed = Object.values(parsed[mode]).some(Boolean);
-      if (parsed.source === 'own' && (changed || parsed.mode === mode)) {
+      if (parsed.source === 'own' && (changed || parsed.provider === 'worldline' && parsed.mode === mode)) {
         const stored = previous?.[mode] ? await readWorldlineSecret(scope, mode, previous[mode]!) : undefined;
         const credentials = mergeWorldlineCredentials(parsed[mode], stored);
         validateWorldlineCredentials(credentials, mode);
         if (changed) next[mode] = await writeWorldlineSecret(scope, mode, credentials);
+      }
+      const field = mode === 'test' ? 'stripeTest' : 'stripeLive';
+      if (previous?.[field]) next[field] = previous[field];
+      const stripeChanged = Object.values(parsed[field]).some(Boolean);
+      if (parsed.source === 'own' && (stripeChanged || parsed.provider === 'stripe' && parsed.mode === mode)) {
+        const old = previous?.[field] ? await readStripeSecret(scope, mode, previous[field]!) : undefined;
+        const keys = { secretKey: parsed[field].secretKey || old?.secretKey || '', publishableKey: parsed[field].publishableKey || old?.publishableKey || '', webhookSecret: parsed[field].webhookSecret || old?.webhookSecret || '' };
+        validateStripeCredentials(keys, mode);
+        if (stripeChanged) next[field] = await writeStripeSecret(scope, mode, keys);
       }
     }
   } catch { throw new Error('Nøglerne kunne ikke gemmes eller valideres. Kontrollér alle felter, T/P-nummer og Secret Manager-adgang.'); }

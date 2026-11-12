@@ -65,7 +65,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     const [retry, setRetry] = useState(0);
     useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
     useEffect(() => {
-        if (!sessionId || !brand || !location || (order && order.paymentStatus !== 'Pending')) { setChecking(false); return; }
+        if ((!sessionId && !(orderId && receiptToken)) || !brand || !location || (order && order.paymentStatus !== 'Pending')) { setChecking(false); return; }
         let stopped = false, attempts = 0;
         let timer: ReturnType<typeof setTimeout>;
         const controller = new AbortController();
@@ -73,7 +73,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         setChecking(true);
         const poll = async () => {
             try {
-                const query = new URLSearchParams({ session_id: sessionId, brand_id: brand.id, location_id: location.id });
+                const query = new URLSearchParams({ ...(sessionId?{session_id:sessionId}:{}), brand_id: brand.id, location_id: location.id });
                 if (orderId) query.set('order_id', orderId);
                 if (receiptToken) query.set('receipt_token', receiptToken);
                 const response = await fetch(`/api/orders/lookup-by-session?${query}`, { cache: 'no-store', signal: controller.signal });

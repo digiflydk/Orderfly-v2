@@ -65,3 +65,76 @@ not be enabled in checkout until callbacks, pinned agreement references, printin
 refunds and managed delivery have been integrated and tested. Manual key entry is
 supported by the settings UI; actual connection acceptance can happen after keys
 are supplied. Run `node --test tests/unit/worldline-client.cjs` for adapter checks.
+
+## PR #914 integration checkpoint (2026-11-12, unreleased)
+
+The candidate now includes write-only Stripe test/live bundles alongside Worldline
+bundles, whole-agreement selection, pinned merchant secret versions, hosted
+Worldline session routing, signed callback admission, durable payment jobs and a
+Worldline-specific captured-payment settlement/print capability. It does not
+manufacture Stripe sessions. Order invoices retain the Worldline provider label.
+
+Callbacks use GET `/api/payments/worldline/callback`. Europe `Handle Responses`
+requires decoded values in incoming order, excluding `hash`, followed by the MD5
+key. Duplicates and parameters after hash are rejected. A valid callback only
+admits a durable job; server-to-server merchant/transaction/order/amount/currency
+and captured-state validation precedes Paid and print. Callback query/card fields
+are not persisted. Worker execution also runs on the existing authenticated
+`/api/internal/feedback/send` heartbeat, isolated from other worker failures.
+`/api/payments/worldline/worker` is an optional dedicated endpoint protected by
+`ORDERFLY_PAYMENT_WORKER_SECRET`, at least 32 characters.
+
+Worldline capture follows the existing automatic Stripe capture model. Capture,
+credit and delete use Europe Transaction API POST endpoints. Every operation has
+an order-scoped durable journal and exclusive lock. A lost response is read back;
+it never automatically submits a second money operation. Confirmation is reported
+only after the journal transaction commits. Unknown operations retain their lock
+for reconciliation. Payment proofs bind the account, amount, payment revision and
+absence of a pending money operation. Administrative credit/delete additionally
+require authenticated `orderfly.orders:edit` for the order's tenant/location.
+
+Stripe explicit agreements use their pinned secret for checkout, confirmation,
+receipt, cancellation, print verification, stale holds and managed-delivery
+verification/refunds. The existing `/api/stripe/webhook` additionally verifies
+candidate events against the original order's pinned signing secret. Merchants
+with no explicit merchant configuration retain the legacy global Stripe flow.
+An explicit disabled/incomplete agreement fails rather than falling back.
+
+### Manual key entry and acceptance
+
+Use Superadmin -> Brands -> edit brand, or Locations -> edit location, then the
+payment agreement section. Select own/inherit, provider and test/live/disabled.
+Worldline requires merchant number, access token, secret token and MD5 key for the
+selected environment. Stripe requires secret key, publishable key and webhook
+signing secret. Empty fields retain that environment's previously saved bundle.
+Configure Stripe's webhook at `/api/stripe/webhook`. Worldline callback/return URLs
+are generated in the session request. Secret Manager needs permissions on both
+`orderfly-worldline-*` and `orderfly-stripe-*` bundles. Runtime/IAM access remains
+to be verified; no keys are created or retrieved from the merchant portal.
+
+Worldline live additionally requires `ORDERFLY_WORLDLINE_LIVE_ENABLED=true`; do not
+set it before sandbox acceptance and remaining integration gates. At this
+checkpoint, managed delivery with Worldline is rejected before order/session
+creation. Zero-total Worldline checkout has no dedicated free-order path yet.
+Those are remaining implementation tasks, not successful integration claims.
+A canceled browser window without a known authorization cannot release a still
+payable session's reservation. Session-expiry/recovery acceptance remains open.
+The administrative money actions exist but final order-management UI remains open.
+
+Local synthetic evidence so far includes existing settlement preparation (11),
+checkout regression recovery (4), Worldline settings (8), client (9), callback (3),
+transaction validation (4), operation journal (7), checkout routing (3) and
+Worldline settlement/print (3) tests. Later changes require revalidation; these
+counts are checkpoints rather than final release evidence. Browser tests use
+intercepted server actions and synthetic keys, never production login or data.
+
+Still required: full managed-delivery Worldline adapter and compensation tests;
+free-order/expiry/cancel completeness; final administration integration; full
+current-head regression/browser suite; independent review; PR description update;
+manual Worldline sandbox payment/capture/cancel/refund acceptance after key entry.
+No merge, deployment, live activation or real provider payment is claimed.
+
+Official contracts checked during implementation:
+- https://developer.bambora.com/europe/checkout/getting-started/handle-responses
+- https://developer-api.bambora.com/swagger/europe/checkout/api-reference/merchant
+- https://developer-api.bambora.com/swagger/europe/checkout/api-reference/transaction

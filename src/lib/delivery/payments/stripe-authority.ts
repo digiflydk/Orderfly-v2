@@ -1,5 +1,6 @@
 import 'server-only';
 import Stripe from 'stripe';
+import { readPinnedStripeAgreement } from '@/lib/payments/merchant-agreement';
 import { z } from 'zod';
 import {getAdminDb} from '@/lib/firebase-admin';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
@@ -7,9 +8,9 @@ import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 export const managedStripeAccountSchema = z.object({ accountId: z.string().regex(/^acct_[A-Za-z0-9]+$/), livemode: z.boolean() }).strict();
 export type ManagedStripeAccount = z.infer<typeof managedStripeAccountSchema>;
 /** The exact returned client must create the managed checkout session bound to this account. */
-export async function resolveManagedStripeGateway(environment?:'sandbox'|'production') {
+export async function resolveManagedStripeGateway(environment?:'sandbox'|'production',paymentAgreement?:unknown) {
   let secret:string|null;
-  if(environment){
+  if(paymentAgreement){secret=(await readPinnedStripeAgreement(paymentAgreement)).credentials.secretKey;}else if(environment){
     const settings=(await getAdminDb().collection('platform_settings').doc('payment_gateway').get()).data();
     secret=settings?.[environment==='production'?'live':'test']?.secretKey||null;
   }else secret=await getActiveStripeSecretKey();
@@ -32,7 +33,7 @@ export async function verifyManagedPaidOrder(orderId: string, order: Record<stri
   if (!['Pending', 'Paid'].includes(order.paymentStatus) || order.deliveryType !== 'Delivery' || order.psp?.provider !== 'stripe'
     || (storedPaymentIntentId === undefined ? order.paymentStatus !== 'Pending' : !/^pi_[A-Za-z0-9]+$/.test(storedPaymentIntentId)) || !/^cs_[A-Za-z0-9_]+$/.test(order.psp.checkoutSessionId)
     || typeof order.totalAmount !== 'number' || !Number.isFinite(order.totalAmount)) throw new Error('delivery_payment_invalid');
-  const { stripe, binding } = await resolveManagedStripeGateway(expected.livemode?'production':'sandbox');
+  const { stripe, binding } = await resolveManagedStripeGateway(expected.livemode?'production':'sandbox',order.paymentAgreement);
   if (binding.accountId !== expected.accountId || binding.livemode !== expected.livemode) throw new Error('delivery_payment_account_changed');
   const session = await stripe.checkout.sessions.retrieve(order.psp.checkoutSessionId);
   // First settlement has only the saved checkout session. Resolve the intent from

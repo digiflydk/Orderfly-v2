@@ -32,7 +32,7 @@ function actionFixture(){
  '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{if(!allowed)throw Error('forbidden');}},
  '@/lib/firebase-admin':{getAdminDb:()=>db},
  '@/lib/payments/worldline-settings':exportsObject,
- '@/lib/payments/worldline-store':{worldlineSettingsRef:s=>ref('settings/'+s.brandId+'/'+(s.locationId||'')),readWorldlineSecret:async(s,m,r)=>secrets.get(r),writeWorldlineSecret:async(s,m,v)=>{const r='private-'+(++counter);secrets.set(r,v);return r;}}
+ '@/lib/payments/worldline-store':{readStripeSecret:async(s,m,r)=>secrets.get(r),writeStripeSecret:async(s,m,v)=>{const r='stripe-private-'+(++counter);secrets.set(r,v);return r;},worldlineSettingsRef:s=>ref('settings/'+s.brandId+'/'+(s.locationId||'')),readWorldlineSecret:async(s,m,r)=>secrets.get(r),writeWorldlineSecret:async(s,m,v)=>{const r='private-'+(++counter);secrets.set(r,v);return r;}}
  };
  vm.runInNewContext(ts.transpileModule(fs.readFileSync('src/app/superadmin/payments/worldline-actions.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,{exports:actionExports,require:name=>mocks[name]||require(name)});
  return {actions:actionExports,records,secrets,deny:()=>allowed=false};
@@ -40,10 +40,10 @@ function actionFixture(){
 const blank={merchantNumber:'',accessToken:'',secretToken:'',md5Key:''};
 test('actions enforce authority and location ownership before credential writes',async()=>{
  const f=actionFixture();await assert.rejects(f.actions.loadWorldlineSettings({brandId:'b',locationId:'other'}));
- f.deny();await assert.rejects(f.actions.saveWorldlineSettings({brandId:'b'},{source:'own',mode:'test',test:testKeys,live:blank,revision:0}));assert.equal(f.secrets.size,0);
+ f.deny();await assert.rejects(f.actions.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',test:testKeys,live:blank,revision:0}));assert.equal(f.secrets.size,0);
 });
 test('saved views expose flags only and stale saves cannot replace configuration',async()=>{
- const f=actionFixture();const data={source:'own',mode:'test',test:testKeys,live:blank,revision:0};
+ const f=actionFixture();const data={source:'own',provider:'worldline',mode:'test',test:testKeys,live:blank,revision:0};
  const view=await f.actions.saveWorldlineSettings({brandId:'b'},data);
  assert.equal(view.testSet,true);assert.equal(view.liveSet,false);
  assert.doesNotMatch(JSON.stringify(view),/test-secret|test-access|test-hash|private-/);
@@ -58,4 +58,13 @@ test('provider preference persists and inherits without changing legacy defaults
  await f.actions.saveWorldlineSettings({brandId:'b'},{source:'own',provider:'worldline',mode:'test',test:testKeys,live:blank,revision:0});
  const local=await f.actions.loadWorldlineSettings({brandId:'b',locationId:'l'});
  assert.equal(local.source,'brand');assert.equal(local.brandProvider,'worldline');
+});
+
+test('Stripe-only agreements save without Worldline keys and preserve separate environments',async()=>{
+ const f=actionFixture();const keys={secretKey:'sk_test_synthetic',publishableKey:'pk_test_synthetic',webhookSecret:'whsec_synthetic'};
+ const value={source:'own',provider:'stripe',mode:'test',revision:0,test:blank,live:blank,stripeTest:keys};
+ const view=await f.actions.saveWorldlineSettings({brandId:'b'},value);assert.equal(view.stripeTestSet,true);assert.equal(view.testSet,false);assert.equal(f.records.get('settings/b/').provider,'stripe');assert.doesNotMatch(JSON.stringify(view),/sk_test|whsec_|private/);
+ await f.actions.saveWorldlineSettings({brandId:'b'},{...value,revision:1,stripeTest:{secretKey:'',publishableKey:'',webhookSecret:''}});
+ assert.equal(f.secrets.size,1);
+ await assert.rejects(f.actions.saveWorldlineSettings({brandId:'b'},{...value,mode:'live',revision:2}));
 });

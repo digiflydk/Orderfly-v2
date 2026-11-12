@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import { stripeForOrder } from '@/lib/payments/stripe-order';
 import {resolveManagedStripeGateway,managedStripeAccountSchema} from '@/lib/delivery/payments/stripe-authority';
 import { db } from '@/lib/server/firestore-compat';
 import { doc, getDoc } from '@/lib/server/firestore-compat';
@@ -23,11 +24,9 @@ export async function POST(req: NextRequest) {
     const order = snap.data();
     if(!snap.exists()||order?.psp?.checkoutSessionId!==sessionId)return reply({ok:false,error:'payment_scope_mismatch'},403);
     const expected=order.managedDelivery?managedStripeAccountSchema.parse(order.managedStripeAccount):null;
-    const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox'):null;
+    const gateway=expected?await resolveManagedStripeGateway(expected.livemode?'production':'sandbox',(order as any).paymentAgreement):null;
     if(expected&&gateway?.binding.accountId!==expected.accountId)throw new Error('Stripe unavailable');
-    const stripeKey = gateway?null:await getActiveStripeSecretKey();
-    if (!gateway&&!stripeKey) throw new Error('Stripe unavailable');
-    const stripe = gateway?.stripe??new Stripe(stripeKey!, { timeout: 5000, maxNetworkRetries: 0 });
+    const stripe = gateway?.stripe ?? await stripeForOrder(order);
     // The random session is the caller's capability. Do not expose whether an
     // unrelated predictable order ID exists, and never accept it as proof alone.
     const session = await stripe.checkout.sessions.retrieve(sessionId);

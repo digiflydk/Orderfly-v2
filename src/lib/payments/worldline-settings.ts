@@ -5,7 +5,13 @@ export type WorldlineMode = 'disabled' | 'test' | 'live';
 const credential = z.string().trim().max(512).refine(value => !/[\s\p{Cc}]/u.test(value));
 export const worldlineCredentialsSchema = z.object({ merchantNumber: credential, accessToken: credential, secretToken: credential, md5Key: credential }).strict();
 export type WorldlineCredentials = z.infer<typeof worldlineCredentialsSchema>;
-export const worldlineInputSchema = z.object({ source: z.enum(['own', 'brand']), provider: z.enum(['stripe', 'worldline']).default('stripe'), mode: z.enum(['disabled', 'test', 'live']), test: worldlineCredentialsSchema, live: worldlineCredentialsSchema, revision: z.number().int().nonnegative() }).strict();
+export const stripeCredentialsSchema = z.object({ secretKey: credential, publishableKey: credential, webhookSecret: credential }).strict();
+export type StripeCredentials = z.infer<typeof stripeCredentialsSchema>;
+const emptyStripe = { secretKey: '', publishableKey: '', webhookSecret: '' };
+export function validateStripeCredentials(keys: StripeCredentials, mode: 'test' | 'live') {
+  if (!keys.secretKey.startsWith(`sk_${mode}_`) || !keys.publishableKey.startsWith(`pk_${mode}_`) || !/^whsec_[A-Za-z0-9]+$/.test(keys.webhookSecret)) throw new Error('Ugyldige Stripe-nøgler for miljøet.');
+}
+export const worldlineInputSchema = z.object({ source: z.enum(['own', 'brand']), provider: z.enum(['stripe', 'worldline']).default('stripe'), mode: z.enum(['disabled', 'test', 'live']), test: worldlineCredentialsSchema, live: worldlineCredentialsSchema, stripeTest: stripeCredentialsSchema.default(emptyStripe), stripeLive: stripeCredentialsSchema.default(emptyStripe), revision: z.number().int().nonnegative() }).strict();
 export type WorldlineInput = z.infer<typeof worldlineInputSchema>;
 export function mergeWorldlineCredentials(input: WorldlineCredentials, stored?: WorldlineCredentials): WorldlineCredentials {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, value || stored?.[key as keyof WorldlineCredentials] || ''])) as WorldlineCredentials;
@@ -14,7 +20,7 @@ export function validateWorldlineCredentials(credentials: WorldlineCredentials, 
   if (Object.values(credentials).some(value => !value)) throw new Error('Alle fire nøglefelter skal udfyldes for det valgte miljø.');
   if (!credentials.merchantNumber.startsWith(mode === 'test' ? 'T' : 'P')) throw new Error('Merchant Number skal begynde med T for test og P for live.');
 }
-export type WorldlineSettingsRecord = { source: 'own' | 'brand'; provider?: 'stripe' | 'worldline'; mode: WorldlineMode; test?: string; live?: string; revision: number };
+export type WorldlineSettingsRecord = { source: 'own' | 'brand'; provider?: 'stripe' | 'worldline'; mode: WorldlineMode; test?: string; live?: string; stripeTest?: string; stripeLive?: string; revision: number };
 export function selectWorldlineAgreement(brand: WorldlineSettingsRecord | null, location?: WorldlineSettingsRecord | null) {
   // An own agreement is indivisible: never fall back to brand credentials.
   return location?.source === 'own' ? location : brand;

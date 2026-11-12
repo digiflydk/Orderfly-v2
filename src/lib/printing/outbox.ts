@@ -294,3 +294,9 @@ export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction,
   const plan = await prepareOriginalPrintIntents(db, tx, { intents: [input], reservedWriteCount: 0 });
   return { ...plan.jobs[0], apply: plan.apply };
 }
+
+/** Closed Worldline path: capture verification and financial writes are required in the same transaction. */
+export async function prepareWorldlineSettlementPrintIntents(context:NativeTransactionContext,capability:import('@/lib/server/settle-checkout').WorldlineSettlementPrintCapability,input:unknown){
+  const read=(await import('@/lib/server/settle-checkout')).readWorldlineSettlementPrintCapability;
+  return prepareAuthorizedOriginals(context,applied=>read(context,capability,applied),input);
+}

@@ -6,9 +6,9 @@ const reply = (body: object, status = 200) => Response.json(body, { status, head
 export async function GET(request: Request) {
   const query = new URL(request.url).searchParams;
   const sessionId = query.get('session_id'), brandId = query.get('brand_id'), locationId = query.get('location_id');
-  if (!sessionId || !brandId || !locationId) return reply({ found: false }, 400);
+  if ((!sessionId && !(query.get('order_id') && query.get('receipt_token'))) || !brandId || !locationId) return reply({ found: false }, 400);
   try {
-    const order = await readGuestReceipt({ sessionId, brandId, locationId, receiptToken: query.get('receipt_token') || undefined, orderId: query.get('order_id') || undefined }, { reconcilePayment: query.get('status_only') !== 'true' });
+    const order = await readGuestReceipt({ sessionId:sessionId||undefined, brandId, locationId, receiptToken: query.get('receipt_token') || undefined, orderId: query.get('order_id') || undefined }, { reconcilePayment: query.get('status_only') !== 'true' });
     return reply(order ? { found: true, order } : { found: false });
   } catch { return reply({ found: false, retryable: true }, 503); }
 }

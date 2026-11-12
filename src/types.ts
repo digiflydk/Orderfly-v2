@@ -394,7 +394,7 @@ export type OrderSummary = {
     status: OrderStatus;
     totalAmount: number;
     paymentStatus: 'Paid' | 'Pending' | 'Failed';
-    paymentMethod: 'Stripe' | 'PayAtPickup' | 'Cash' | 'Other';
+    paymentMethod: 'Stripe' | 'Worldline' | 'PayAtPickup' | 'Cash' | 'Other';
     paymentDetails: PaymentDetails;
 };
 
@@ -418,6 +418,7 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
+    paymentAgreement?: unknown;
   /** Immutable personal-card calculation; absent on ordinary orders. */
   discountCard?: import('./lib/loyalty/discount-card/checkout').AppliedDiscountCard;
     refundedAmountOre?: number;
@@ -440,7 +441,8 @@ export type OrderDetail = OrderSummary & {
   };
   invoice?: OrderInvoice;
   psp?: {
-      provider: 'stripe';
+      provider: 'stripe' | 'worldline';
+      transactionId?: string;
       checkoutSessionId?: string;
       paymentIntentId?: string;
       descriptorPrefix?: string;
@@ -488,7 +490,7 @@ export type OrderInvoice = {
   vatRate: number;
   vatAmount: number;
   totalAmount: number;
-  paymentMethod: 'Stripe' | 'Cash' | 'CardInRestaurant';
+  paymentMethod: 'Stripe' | 'Worldline' | 'Cash' | 'CardInRestaurant';
   paymentReference?: string;
 };
 

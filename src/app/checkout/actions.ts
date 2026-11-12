@@ -1,4 +1,7 @@
 'use server';
+import { resolveMerchantAgreement } from '@/lib/payments/merchant-agreement';
+import { createWorldlineCheckoutSession, WorldlineRequestError } from '@/lib/payments/worldline-client';
+import { worldlineBindingSchema } from '@/lib/payments/worldline-verification';
 import {recordQuoteDiagnostic} from '@/lib/delivery/quotes/diagnostics';
 import {withQuoteTimings,measureQuoteStep} from '@/lib/delivery/quotes/performance';
 import type {QuoteTimings} from '@/lib/delivery/quotes/performance-schema';
@@ -761,6 +764,9 @@ export async function createStripeCheckoutSessionAction(
     const paymentMethod = customerInfo.paymentMethod || 'online';
     assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
     let stripe: Stripe | undefined;
+    const agreement = paymentMethod === 'online' ? await resolveMerchantAgreement({brandId,locationId}) : null;
+    if(agreement?.provider==='worldline'&&managedDeliveryAcceptance)throw Error('Worldline understøtter endnu ikke administreret levering. Vælg afhentning.');
+    if(agreement?.provider==='worldline'&&agreement.mode==='live'&&process.env.ORDERFLY_WORLDLINE_LIVE_ENABLED!=='true')throw Error('Worldline live kræver gennemført sandboxtest og aktivering.');
     let managedStripeAccount:ManagedStripeAccount|undefined;
     let managedEnvironment:'sandbox'|'production'|undefined;
     let managedQuote:StoredDeliveryQuote|undefined;
@@ -772,11 +778,11 @@ export async function createStripeCheckoutSessionAction(
         const environment=await managedDeliveryRuntimeEnvironment({brandId,locationId});
         if(!environment)throw Error('delivery_environment_unconfigured');
         managedEnvironment=environment;
-        const gateway=await resolveManagedStripeGateway(environment);
+        const gateway=await resolveManagedStripeGateway(environment,agreement?.provider==='stripe'?agreement.binding:undefined);
         if(gateway.binding.livemode!==(environment==='production'))throw Error('delivery_payment_environment_mismatch');
         stripe=gateway.stripe;managedStripeAccount=gateway.binding;
       }
-      else {const stripeSecretKey = await getActiveStripeSecretKey();
+      else if(agreement?.provider!=='worldline') {const stripeSecretKey = agreement?.provider==='stripe'?agreement.credentials.secretKey:await getActiveStripeSecretKey();
       if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
       stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });}
       stage = 'validation';
@@ -849,7 +855,7 @@ export async function createStripeCheckoutSessionAction(
         createdAt: serverTimestamp(),
         status: 'Pending',
         paymentStatus: 'Pending',
-        paymentMethod: paymentMethod === 'pay_at_pickup' ? 'PayAtPickup' : 'Stripe',
+        paymentMethod: paymentMethod === 'pay_at_pickup' ? 'PayAtPickup' : agreement?.provider==='worldline'?'Worldline':'Stripe',
         brandId,
         locationId,
         productItems: cartItems,
@@ -884,7 +890,7 @@ export async function createStripeCheckoutSessionAction(
             ...(managedQuote ? {deliveryInstructions:customerInfo.deliveryInstructions||''} : {}),
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
-        ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),
+        ...(paymentMethod === 'online' ? { psp: { provider: agreement?.provider || 'stripe' }, ...(agreement ? {paymentAgreement:agreement.provider==='stripe'?agreement.binding:worldlineBindingSchema.parse({provider:'worldline',mode:agreement.mode,owner:agreement.owner,reference:agreement.reference,merchantNumber:agreement.merchantNumber,revision:agreement.revision})} : {}) } : {}),
         ...(managedQuote ? {managedDelivery:{version:1,providerId:managedQuote.binding.providerId,quoteRef:managedQuote.quoteRef,requestDigest:managedQuote.contentDigest},managedStripeAccount} : {}),
     });
     // Six-digit order references can collide. Never overwrite another order or
@@ -944,6 +950,18 @@ export async function createStripeCheckoutSessionAction(
         throw error;
       }
       return { success: true, orderId, url: `${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
+    }
+    if(agreement?.provider==='worldline'){
+      if(totalAmount<=0)throw Error('Worldline kan ikke bruges til en ordre uden restbetaling.');
+      stage='worldline_session';sessionRequestStarted=true;
+      try {
+        const session=await createWorldlineCheckoutSession(agreement.credentials,agreement.mode,{orderId,amountMinor:ore(totalAmount),currency:'DKK',
+          acceptUrl:`${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}`,
+          cancelUrl:`${origin}${checkoutPath}/cancel?order_id=${orderId}&token=${cancelToken}`,
+          callbackUrl:`${origin}/api/payments/worldline/callback`});
+        await updateDoc(orderRef,{'psp.checkoutSessionId':session.token,updatedAt:serverTimestamp()});
+        return {success:true,url:session.url,orderId};
+      }catch(error){if(error instanceof WorldlineRequestError&&error.outcome==='rejected')sessionRequestStarted=false;throw error;}
     }
     if (!stripe) throw new Error('Stripe API key is not configured.');
 
