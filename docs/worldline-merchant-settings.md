@@ -217,6 +217,22 @@ Only investigate that cause when the actual provider code supports it; HTTP 400
 alone does not prove a domain mismatch. Register the intended domain on the
 correct merchant agreement rather than changing account or weakening URL checks.
 
+## Automatic return from hosted checkout
+
+New sessions explicitly set `url.immediateredirecttoaccept=1`. The official Europe
+Checkout contract defaults this option to `0` (automatic return disabled); `1`
+redirects to the configured accept URL after completion without requiring a
+"Back to shop" click. The accept URL keeps the original order ID and dedicated
+receipt capability. A browser return never marks the order Paid: signed callback,
+server transaction verification, capture and shared settlement remain authoritative.
+Callback-before-return and return-before-callback continue to use the existing
+Pending receipt/polling path.
+
+This applies when creating a session. The current official API exposes no update
+operation for an existing hosted session; an already completed window can use its
+own "Back to shop" button to return with the original receipt proof. Do not start
+another payment or fabricate a session-only receipt link for recovery.
+
 The official sandbox instructions are at
 https://developer.bambora.com/europe/checkout/getting-started/test-your-setup.
 Use the payment window's **Use test card** option with a T-merchant; the guide
