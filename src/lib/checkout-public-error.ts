@@ -31,7 +31,7 @@ const CHECKOUT_FAILURE_CODES: Record<string, string> = Object.fromEntries([
 export function checkoutFailureCode(stage: string, error: unknown): string {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   if (stage === 'worldline_session' && typeof code === 'string') {
-    const match = /^WORLDLINE_CHECKOUT_(HTTP_[1-5][0-9]{2}|PROVIDER_[0-9]{4}|REJECTED|UNKNOWN)$/.exec(code);
+    const match = /^WORLDLINE_CHECKOUT_(HTTP_[1-5][0-9]{2}(?:_PROVIDER_[0-9]{1,6})?|PROVIDER_[0-9]{1,6}|REJECTED|UNKNOWN)$/.exec(code);
     if (match?.[0] === code) return code;
   }
   return Object.hasOwn(CHECKOUT_FAILURE_CODES, stage) ? CHECKOUT_FAILURE_CODES[stage] : 'CHECKOUT_UNAVAILABLE';

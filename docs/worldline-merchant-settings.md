@@ -190,8 +190,12 @@ The callback hash requirement and server transaction verification remain unchang
 A successful credential save proves persistence and schema validation, not that
 Worldline accepts the supplied API access. A failed checkout now includes a safe
 support code. `WORLDLINE_CHECKOUT_HTTP_401`/`403` identify HTTP access rejection;
-other bounded HTTP statuses and four-digit `meta.action.code` values are retained
-as fixed diagnostic codes. Raw provider messages, response bodies, credentials,
+other bounded HTTP statuses and one-to-six-digit `meta.action.code` values are retained
+as fixed diagnostic codes. For non-success HTTP replies the client best-effort
+extracts only that numeric code, including five-digit Europe codes, and combines
+it with the HTTP status (for example `WORLDLINE_CHECKOUT_HTTP_400_PROVIDER_40005`).
+Unreadable or absent diagnostics preserve the original HTTP outcome and code.
+Raw provider messages, response bodies, credentials,
 customer contact details and hosted-session URLs are never included.
 `CHECKOUT_CUSTOMER`, `CHECKOUT_ORDER` and the other fixed stage codes distinguish
 failures before the provider call. Support must inspect the code rather than
@@ -205,6 +209,13 @@ keeps the existing reservation release behavior. A timeout, invalid response or
 uncertain session-link write still forbids a blind new payment attempt and retains
 the original order reference for reconciliation. Diagnostics do not retry provider
 requests, switch agreements or weaken transaction/hash verification.
+
+Worldline requires merchant-registered domains for return/callback URLs. The
+official checkout plugin's historical issue documents `40005` as
+`invalidurlsupplied`: https://github.com/bambora/checkout-woocommerce/issues/12.
+Only investigate that cause when the actual provider code supports it; HTTP 400
+alone does not prove a domain mismatch. Register the intended domain on the
+correct merchant agreement rather than changing account or weakening URL checks.
 
 The official sandbox instructions are at
 https://developer.bambora.com/europe/checkout/getting-started/test-your-setup.

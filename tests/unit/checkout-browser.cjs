@@ -154,7 +154,7 @@ before(async()=>{
     const {result}=await checkout({configureMocks:({mocks})=>{
      mocks['@/lib/payments/merchant-agreement']={resolveMerchantAgreement:async()=>({provider:'worldline',mode:'test',owner:{brandId:'b'},reference:'projects/orderfly-39325/secrets/orderfly-worldline-'+ 'a'.repeat(64)+'-test/versions/1',merchantNumber:'T123',revision:1,credentials:{merchantNumber:'T123',accessToken:'synthetic-access',secretToken:'synthetic-secret',md5Key:'synthetic-md5'}})};
      const client=mocks['@/lib/payments/worldline-client'];
-     mocks['@/lib/payments/worldline-client']={...client,createWorldlineCheckoutSession:async()=>{throw new client.WorldlineRequestError(unknown?'unknown':'rejected',unknown?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_401');}};
+     mocks['@/lib/payments/worldline-client']={...client,createWorldlineCheckoutSession:async()=>{throw new client.WorldlineRequestError(unknown?'unknown':'rejected',unknown?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_400_PROVIDER_40005');}};
     }});
     return res.end(JSON.stringify(result));
    }
@@ -233,7 +233,7 @@ test('customer identity conflict is shown as an actionable Danish checkout error
 for(const surface of ['desktop','mobile'])for(const outcome of ['rejected','unknown'])test(`Worldline diagnostics: ${surface} ${outcome} displays safe server code and preserves retry policy`,async t=>{
  const scenario=`worldline-diagnostic-${outcome}-${surface}`;
  const page=await setup(t,scenario,'test@example.test',{v2:true});await pay(page);
- const code=outcome==='unknown'?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_401';
+ const code=outcome==='unknown'?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_400_PROVIDER_40005';
  await page.getByRole('alert').filter({hasText:'Fejlkode: '+code,visible:true}).first().waitFor();
  assert.equal((requests.get(scenario)||[]).length,1);
  assert.equal(await page.getByRole('button',{name:/Gå til betaling/}).first().isDisabled(),outcome==='unknown');
