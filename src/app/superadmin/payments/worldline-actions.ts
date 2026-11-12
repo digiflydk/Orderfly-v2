@@ -1,7 +1,7 @@
 'use server';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { worldlineInputSchema, worldlineScopeSchema, mergeWorldlineCredentials, validateWorldlineCredentials, validateStripeCredentials, type WorldlineScope, type WorldlineSettingsRecord } from '@/lib/payments/worldline-settings';
+import { worldlineInputSchema, worldlineScopeSchema, mergeWorldlineCredentials, validateWorldlineCredentials, validateStripeCredentials, worldlineSettingsRecordSchema, type WorldlineScope, type WorldlineSettingsRecord } from '@/lib/payments/worldline-settings';
 import { readWorldlineSecret, writeWorldlineSecret, worldlineSettingsRef, readStripeSecret, writeStripeSecret } from '@/lib/payments/worldline-store';
 async function authorize(input: unknown) {
   await requirePlatformSuperuser();
@@ -15,16 +15,37 @@ async function authorize(input: unknown) {
 }
 export async function loadWorldlineSettings(input: WorldlineScope) {
   const scope = await authorize(input);
-  const row = (await worldlineSettingsRef(scope).get()).data() as WorldlineSettingsRecord | undefined;
-  const brand = scope.locationId ? (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data() as WorldlineSettingsRecord | undefined : row;
-  return { source: row?.source || (scope.locationId ? 'brand' as const : 'own' as const), mode: row?.mode || 'disabled' as const,
+  const rowData = (await worldlineSettingsRef(scope).get()).data();
+  const brandData = scope.locationId ? (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data() : rowData;
+  const row = rowData ? worldlineSettingsRecordSchema.parse(rowData) : undefined;
+  const brand = brandData ? worldlineSettingsRecordSchema.parse(brandData) : undefined;
+  if (brand && brand.source !== 'own') throw new Error('Brandets betalingsaftale er ugyldig.');
+  const selected = row?.source === 'own' ? row : brand;
+  const legacy = !selected && !row;
+  const globalSettings = legacy ? (await getAdminDb().collection('platform_settings').doc('payment_gateway').get()).data() : undefined;
+  const globalMode = globalSettings?.activeMode;
+  const globalKeysSet = (globalMode === 'test' || globalMode === 'live') && ['secretKey', 'publishableKey', 'webhookSecret'].every(field => typeof globalSettings?.[globalMode]?.[field] === 'string' && !!globalSettings[globalMode][field]);
+  const effectiveMode: 'disabled' | 'test' | 'live' = selected?.mode || (globalMode === 'test' || globalMode === 'live' ? globalMode : 'disabled');
+  const effectiveProvider = selected?.provider || 'stripe';
+  const credentialField = effectiveProvider === 'worldline' ? effectiveMode : effectiveMode === 'test' ? 'stripeTest' : 'stripeLive';
+  const effective = {
+    source: legacy ? 'platform' as const : row?.source === 'own' && scope.locationId ? 'location' as const : 'brand' as const,
+    provider: effectiveProvider, mode: effectiveMode, legacy,
+    configured: !!selected || legacy && effectiveMode !== 'disabled',
+    credentialsSet: legacy ? globalKeysSet : effectiveMode !== 'disabled' && !!selected?.[credentialField as 'test' | 'live' | 'stripeTest' | 'stripeLive'],
+  };
+  return { effective, source: row?.source || (scope.locationId ? 'brand' as const : 'own' as const), mode: row?.mode || 'disabled' as const,
     provider: row?.provider || 'stripe' as const, brandProvider: brand?.provider || 'stripe' as const, revision: row?.revision || 0, testSet: !!row?.test, liveSet: !!row?.live, stripeTestSet: !!row?.stripeTest, stripeLiveSet: !!row?.stripeLive, brandMode: brand?.mode || 'disabled' as const };
 }
 export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: unknown) {
-  const scope = await authorize(scopeInput), parsed = worldlineInputSchema.parse(input);
+  const scope = await authorize(scopeInput), validated = worldlineInputSchema.safeParse(input);
+  if (!validated.success) throw new Error('Kontrollér betalingsopsætningens felter og miljø.');
+  const parsed = validated.data;
   if (!scope.locationId && parsed.source !== 'own') throw new Error('Brandet skal bruge egen aftale.');
+  if (scope.locationId && parsed.source === 'brand' && !(await worldlineSettingsRef({ brandId: scope.brandId }).get()).exists) throw new Error('Opret brandets betalingsaftale, før lokationen gemmes med arv fra brandet.');
   const ref = worldlineSettingsRef(scope);
-  const previous = (await ref.get()).data() as WorldlineSettingsRecord | undefined;
+  const previousData = (await ref.get()).data();
+  const previous = previousData ? worldlineSettingsRecordSchema.parse(previousData) : undefined;
   if ((previous?.revision || 0) !== parsed.revision) throw new Error('Indstillingerne er ændret. Genindlæs siden.');
   const next: WorldlineSettingsRecord = { source: parsed.source, provider: parsed.provider, mode: parsed.mode, revision: parsed.revision + 1 };
   try {
@@ -33,6 +54,7 @@ export async function saveWorldlineSettings(scopeInput: WorldlineScope, input: u
       const changed = Object.values(parsed[mode]).some(Boolean);
       if (parsed.source === 'own' && (changed || parsed.provider === 'worldline' && parsed.mode === mode)) {
         const stored = previous?.[mode] ? await readWorldlineSecret(scope, mode, previous[mode]!) : undefined;
+        if (stored && parsed[mode].merchantNumber && parsed[mode].merchantNumber !== stored.merchantNumber && Object.values(parsed[mode]).some(value => !value)) throw new Error('Et nyt Merchant Number kræver alle nye nøgler.');
         const credentials = mergeWorldlineCredentials(parsed[mode], stored);
         validateWorldlineCredentials(credentials, mode);
         if (changed) next[mode] = await writeWorldlineSecret(scope, mode, credentials);

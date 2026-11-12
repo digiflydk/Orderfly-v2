@@ -1,5 +1,6 @@
 import { getOrderDetails } from '@/lib/access/order-details';
 import { FeedbackRequestButton } from '@/components/superadmin/feedback-request-button';
+import { WorldlineOrderPayment } from '@/components/superadmin/worldline-order-payment';
 import { OrderPaymentActions } from '@/components/superadmin/order-payment-actions';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 import { orderflySession } from '@/lib/access/orderfly-session';
@@ -194,8 +195,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 							<InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
 							{order.paymentCollection && <p>Betaling modtaget {danishTime(order.paymentCollection.receivedAt)} af {order.paymentCollection.employeeName || order.paymentCollection.employeeId}.</p>}
 							<OrderPaymentActions orderId={order.id} paymentMethod={order.paymentMethod} paymentStatus={order.paymentStatus} status={order.status} canEdit={access.superuser || access.permissions.includes('orderfly.orders:edit')} />
+							{order.psp?.provider === 'worldline' && <WorldlineOrderPayment key={order.id} orderId={order.id} canEdit={access.superuser || access.permissions.includes('orderfly.orders:edit')} />}
 							<InfoItem icon={Hash} label="Betalingsreference">
-								<p className="font-mono text-xs break-all">{order.psp?.paymentIntentId || order.psp?.checkoutSessionId}</p>
+								<p className="font-mono text-xs break-all">{order.psp?.provider === 'worldline' ? order.psp.transactionId || 'Afventer transaktionsreference' : order.psp?.paymentIntentId || order.psp?.checkoutSessionId}</p>
 							</InfoItem>
 						</CardContent>
 					</Card>

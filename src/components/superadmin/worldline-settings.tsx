@@ -23,6 +23,14 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
     <h2 className="text-xl font-semibold">Betalingsaftale</h2>
     <p className="text-sm text-muted-foreground">Betalingsopsætningen omfatter hele aftalen. Worldline live kræver særskilt aktivering efter sandboxtest; administreret levering er endnu ikke understøttet med Worldline.</p>
     {!settings && !message && <p role="status">Henter indstillinger…</p>}
+    {settings?.effective && <div className="rounded-md bg-muted p-4 space-y-1" aria-label="Gemt betalingsaftale">
+      <p className="font-medium">Gemt aftale i checkout</p>
+      <p>{settings.effective.provider === 'stripe' ? 'Stripe' : 'Worldline'} · {settings.effective.source === 'platform' ? 'Eksisterende platformaftale' : settings.effective.source === 'location' ? 'Lokationens egen aftale' : 'Brandets hovedaftale'} · {modeLabel[settings.effective.mode]}</p>
+      {settings.effective.legacy && <p>Platformaftalen bruges, indtil du gemmer en ny aftale. Gemning som deaktiveret stopper online betaling.</p>}
+      {!settings.effective.configured && <p role="status">Aftalen mangler. Online betaling kan ikke startes.</p>}
+      {settings.effective.configured && settings.effective.mode === 'disabled' && <p>Online betaling er deaktiveret på den gemte aftale.</p>}
+      {settings.effective.mode !== 'disabled' && <p>{settings.effective.credentialsSet ? 'Nøgler er registreret for det valgte miljø. Faktisk providerforbindelse skal stadig kontrolleres ved test.' : 'Det valgte miljø mangler nøgler. Der bruges ikke en anden aftale som fallback.'}</p>}
+    </div>}
     {settings && <form onSubmit={async event => {
       event.preventDefault(); if (busy) return;
       setBusy(true); setMessage('');
@@ -33,11 +41,11 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
       finally { setBusy(false); }
     }}>
       <fieldset disabled={busy} className="space-y-5">
-        {locationId && <label className="block">Betalingsaftale<select className="block w-full border rounded p-2 bg-background" value={settings.source} onChange={event => setSettings({ ...settings, source: event.target.value as 'own' | 'brand' })}>
+        {locationId && <label className="block">Betalingsaftale<select aria-label="Betalingsaftale" className="block w-full border rounded p-2 bg-background" value={settings.source} onChange={event => setSettings({ ...settings, source: event.target.value as 'own' | 'brand' })}>
           <option value="brand">Brug brandets hovedaftale</option><option value="own">Brug lokationens egen aftale</option>
         </select></label>}
         {settings.source === 'brand' ? <p>Arver brandets aftale ({settings.brandProvider === 'stripe' ? 'Stripe' : 'Worldline'}) og miljø: <strong>{modeLabel[settings.brandMode]}</strong>. Ændringer på brandet gælder automatisk her.</p> : <>
-          <label className="block">Betalingsudbyder<select className="block w-full border rounded p-2 bg-background" value={settings.provider} onChange={event => setSettings({ ...settings, provider: event.target.value as 'stripe' | 'worldline' })}>
+          <label className="block">Betalingsudbyder<select className="block w-full border rounded p-2 bg-background" value={settings.provider} onChange={event => { setSettings({ ...settings, provider: event.target.value as 'stripe' | 'worldline' }); setKeys({ test: empty(), live: empty() }); setStripeKeys({ stripeTest: emptyStripe(), stripeLive: emptyStripe() }); }}>
             <option value="stripe">Stripe</option><option value="worldline">Worldline</option>
           </select></label>
           {settings.provider === 'stripe' && <p>Gem en samlet Stripe-aftale med separate test- og live-nøgler. Nøglerne følger den valgte aftale og det valgte miljø.</p>}
@@ -54,7 +62,7 @@ export function WorldlineSettings({ brandId, locationId }: WorldlineScope) {
             <legend>{modeLabel[mode]}-nøgler {settings[mode === 'test' ? 'testSet' : 'liveSet'] ? '(gemt)' : '(mangler)'}</legend>
             {(Object.keys(labels) as Array<keyof WorldlineCredentials>).map(key => <label className="block" key={key}>{labels[key]}<Input aria-label={`${modeLabel[mode]} ${labels[key]}`} type={key === 'merchantNumber' ? 'text' : 'password'} autoComplete="off" maxLength={512} value={keys[mode][key]} placeholder={settings[mode === 'test' ? 'testSet' : 'liveSet'] ? 'Tomt felt bevarer gemt værdi' : key === 'merchantNumber' ? mode === 'test' ? 'T…' : 'P…' : ''} onChange={event => setKeys(old => ({ ...old, [mode]: { ...old[mode], [key]: event.target.value } }))} /></label>)}
           </fieldset>)}</div>}
-          <p className="text-sm text-muted-foreground">Nøgler gemmes i Secret Manager og vises aldrig igen. Udfyld alle fire felter ved første opsætning. Test og live bruger hver sit Merchant Number.</p>
+          <p className="text-sm text-muted-foreground">Nøgler gemmes i Secret Manager og vises aldrig igen. Tomme felter bevarer gemte nøgler i samme aftale og miljø. {settings.provider === 'worldline' ? 'Udfyld alle fire felter ved første opsætning eller skift af Merchant Number. Test og live bruger hver sit Merchant Number.' : 'Udfyld alle tre Stripe-felter ved første opsætning. Webhookadresse: /api/stripe/webhook.'}</p>
         </>}
         <Button type="submit">{busy ? 'Gemmer…' : 'Gem Worldline-opsætning'}</Button>
       </fieldset>
