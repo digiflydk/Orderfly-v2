@@ -7,7 +7,7 @@ const input={orderId:'123',amountMinor:12500,currency:'DKK',acceptUrl:'https://e
 const good={meta:{result:true},token:'abc123',url:'https://v1.checkout.bambora.com/abc123'};
 const client=fetch=>load('src/lib/payments/worldline-client.ts',{'./worldline-settings':settings,'./worldline-verification':verification,fetch});
 test('creates hosted session with exact amount and server credentials',async()=>{
- let count=0;const c=client(async(url,options)=>{count++;assert.equal(url,'https://api.v1.checkout.bambora.com/sessions');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Basic '+Buffer.from('access@T123:secret').toString('base64'));const body=JSON.parse(options.body);assert.equal(body.order.amount,12500);assert.equal(body.url.callbacks[0].url,input.callbackUrl);return {ok:true,json:async()=>good};});
+ let count=0;const c=client(async(url,options)=>{count++;assert.equal(url,'https://api.v1.checkout.bambora.com/sessions');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Basic '+Buffer.from('access@T123:secret').toString('base64'));const body=JSON.parse(options.body);assert.equal(body.order.amount,12500);assert.equal(body.url.accept,input.acceptUrl);assert.equal(body.url.immediateredirecttoaccept,1);assert.equal(body.url.cancel,input.cancelUrl);assert.deepEqual(body.url.callbacks,[{url:input.callbackUrl}]);return {ok:true,json:async()=>good};});
  assert.equal((await c.createWorldlineCheckoutSession(keys,'test',input)).url,good.url);assert.equal(count,1);
 });
 test('rejects wrong environment and insecure callback before network',async()=>{

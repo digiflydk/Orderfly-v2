@@ -55,7 +55,7 @@ export async function createWorldlineCheckoutSession(
       body: JSON.stringify({
         order: { id: value.orderId, amount: value.amountMinor, currency: value.currency },
         instantcaptureamount: 0,
-        url: { accept: value.acceptUrl, cancel: value.cancelUrl, callbacks: [{ url: value.callbackUrl }] },
+        url: { accept: value.acceptUrl, immediateredirecttoaccept: 1, cancel: value.cancelUrl, callbacks: [{ url: value.callbackUrl }] },
         paymentwindow: { language: 'da-DK' },
       }),
     });
