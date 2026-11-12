@@ -21,3 +21,17 @@ test('legacy merchants retain Stripe checkout with an original private account a
  const read=moduleGraph({'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>memoryDb(f.records)},'@google-cloud/secret-manager':{SecretManagerServiceClient:class{constructor(){throw Error('Legacy reader must not require Secret Manager');}}},stripe:{default:class{constructor(key){this.key=key;}}}})('src/lib/payments/stripe-order.ts');
  assert.equal((await read.stripeForOrder(order)).key,archive.credentials.secretKey);
 });
+
+test('one transient Worldline link-write failure retries the same token without a second provider session',async()=>{
+ let sessions=0;
+ const f=await checkout({fault:'patch-once',configureMocks:({mocks})=>{
+  mocks['@/lib/payments/merchant-agreement']={resolveMerchantAgreement:async()=>agreement};
+  const original=mocks['@/lib/payments/worldline-client'];
+  mocks['@/lib/payments/worldline-client']={...original,createWorldlineCheckoutSession:async()=>{sessions++;return {token:'worldline-session-once',url:'https://v1.checkout.bambora.com/worldline-session-once'};}};
+ }});
+ assert.equal(f.result.success,true,f.result.error);assert.equal(sessions,1);assert.equal(f.patchCalls,2);
+ assert.equal(f.records.get('orders/ORD-TEST').psp.checkoutSessionId,'worldline-session-once');
+ assert.equal(f.records.get('orders/ORD-TEST').paymentAgreement.reference,reference);
+ assert.equal(f.result.url,'https://v1.checkout.bambora.com/worldline-session-once');
+ assert.ok(!f.events.includes('release'));assert.ok(!f.events.includes('stripe'));
+});

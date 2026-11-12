@@ -979,7 +979,9 @@ export async function createStripeCheckoutSessionAction(
           acceptUrl:`${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}`,
           cancelUrl:`${origin}${checkoutPath}/cancel?order_id=${orderId}&token=${cancelToken}`,
           callbackUrl:`${origin}/api/payments/worldline/callback`});
-        await updateDoc(orderRef,{'psp.checkoutSessionId':session.token,updatedAt:serverTimestamp()});
+        const patch={'psp.checkoutSessionId':session.token,updatedAt:serverTimestamp()};
+        // Retry only the idempotent native link write, never the provider session request.
+        try{await updateDoc(orderRef,patch);}catch{await updateDoc(orderRef,patch);}
         return {success:true,url:session.url,orderId};
       }catch(error){if(error instanceof WorldlineRequestError&&error.outcome==='rejected')sessionRequestStarted=false;throw error;}
     }
