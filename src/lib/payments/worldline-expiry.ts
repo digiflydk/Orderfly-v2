@@ -2,8 +2,6 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { readPinnedWorldlineAgreement } from './worldline-store';
-import { readWorldlineTransaction } from './worldline-client';
-import { assertWorldlineTransaction } from './worldline-verification';
 import { runWorldlineOperation } from './worldline-operations';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
@@ -42,18 +40,27 @@ export async function finalizeWorldlineVoid(orderId:string,transactionId:string)
 export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'|'paid'|'unknown'>{
   if(!id(orderId))throw Error('Invalid order');
   const db=getAdminDb(),ref=db.collection('orders').doc(orderId),initial=(await ref.get()).data();
-  if(!initial||initial.psp?.provider!=='worldline'||!sessionToken(initial.psp.checkoutSessionId))throw Error('Worldline checkout unavailable');
+  if(!initial||initial.psp?.provider!=='worldline')throw Error('Worldline checkout unavailable');
   if(initial.paymentStatus==='Paid')return 'paid';
   const {binding,credentials}=await readPinnedWorldlineAgreement(initial.paymentAgreement);
   if(!scopeMatches(initial,binding))throw Error('Invalid payment scope');
   if(initial.psp.voided&&initial.psp.transactionId){await finalizeWorldlineVoid(orderId,initial.psp.transactionId);return 'canceled';}
-  const marker='session-expiry:'+createHash('sha256').update(initial.psp.checkoutSessionId).digest('hex');
-  if(initial.psp.transactionId&&!initial.managedDelivery&&initial.paymentOperation!==marker){
+  const marker=sessionToken(initial.psp.checkoutSessionId)?'session-expiry:'+createHash('sha256').update(initial.psp.checkoutSessionId).digest('hex'):undefined;
+  if(initial.psp.transactionId&&!initial.managedDelivery&&(marker===undefined||initial.paymentOperation!==marker)){
     const result=await runWorldlineOperation({orderId,transactionId:initial.psp.transactionId,requestId:'customer-cancel',operation:'delete',actorId:'receipt-cancel'});
     if(result.state!=='confirmed')return 'unknown';
     await finalizeWorldlineVoid(orderId,initial.psp.transactionId);return 'canceled';
   }
+  if(initial.managedDelivery&&initial.psp.transactionId&&marker===undefined){
+    const {cancelManagedWorldlineAuthorization}=await import('@/lib/delivery/payments/worldline-operation-authority');
+    const result=await cancelManagedWorldlineAuthorization(orderId,initial.psp.transactionId);
+    if(result.state!=='confirmed')return 'unknown';
+    await finalizeWorldlineVoid(orderId,initial.psp.transactionId);return 'canceled';
+  }
+  if(!sessionToken(initial.psp.checkoutSessionId))throw Error('Worldline session requires reconciliation');
   if(initial.managedDelivery&&initial.psp.transactionId){
+    const {readWorldlineTransaction}=await import('./worldline-client');
+    const {assertWorldlineTransaction}=await import('./worldline-verification');
     const transaction=assertWorldlineTransaction(await readWorldlineTransaction(credentials,binding.mode,initial.psp.transactionId),{transactionId:initial.psp.transactionId,orderId,merchantNumber:binding.merchantNumber,mode:binding.mode,amountMinor:Math.round(initial.totalAmount*100),currency:'DKK'});
     if(transaction.total.captured>0)return 'paid';
   }

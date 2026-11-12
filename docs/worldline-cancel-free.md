@@ -30,9 +30,12 @@ captured is not canceled or released as unpaid.
 
 Managed checkout cancellation with an existing authorization first expires the
 window. The paired managed callback recovery adapter owns its permitted void.
-An unknown create-session result with no saved token cannot be canceled by
-inventing a token or starting a replacement payment; it remains an explicit
-operator reconciliation case.
+An unknown create-session result without a saved token can still be canceled
+when a signed callback has linked the provider transaction: cancellation uses that
+verified authorization and the original pinned account, with no invented token.
+Managed authorization cancellation uses its dedicated callback-scoped permit.
+Without either a token or linked transaction, the due job backs off for operator
+reconciliation; it never invents a token or starts a replacement payment.
 
 ## Recovery
 
@@ -40,9 +43,15 @@ operator reconciliation case.
 31 minutes. Time only selects candidates; actual provider expiry or void is
 required. It attempts at most one Worldline recovery and respects the foreground
 checkout's existing time budget. Stripe stale-hold handling remains intact.
-`processWorldlineStaleCheckouts` is the equivalent bounded heartbeat helper,
-including orders without a discount code; the existing authenticated worker is
-its intended caller. No new scheduler or production job is created by this code.
+`processWorldlineStaleCheckouts` processes one due `worldlineCheckoutExpiryJobs`
+record per authenticated heartbeat, including orders without a discount code.
+Checkout creates `{orderId,brandId,locationId,nextAttemptAt,attempts:0,createdAt}`
+in the same transaction as the Worldline order, with `nextAttemptAt` 31 minutes
+later. The worker queries and orders only that single field, requiring no new
+composite index. Terminal jobs are deleted; unknown/error outcomes use bounded
+exponential backoff. More than 50 older released/canceled orders cannot permanently
+hide a later due checkout. The checkout/provider journals retain the business
+and money-operation audit even after a terminal queue item is removed. No new scheduler or production job is created by this code.
 
 ## Native free checkout
 
@@ -64,6 +73,8 @@ settlement integration owns invoice, loyalty, notification and print capabilitie
 - `node tests/unit/worldline-expiry.cjs` — provider confirmation, unknown result,
   shared-lock safety, callback race, changed agreement, verified void and managed
   pre-capture/captured cases.
+- `node tests/unit/worldline-expiry-queue.cjs` — durable due selection beyond 50
+  terminal orders, error backoff and scope isolation.
 - `node tests/unit/worldline-stale-holds.cjs` — scope/age selection, unknown-state
   preservation, deadline and bounded attempts.
 - `node tests/unit/native-free-checkout.cjs` — exact free-order eligibility,
