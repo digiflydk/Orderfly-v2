@@ -20,3 +20,19 @@ export function checkoutCustomerIdentityMessage(error: unknown): string | null {
     ? CUSTOMER_IDENTITY_CHECKOUT_MESSAGE
     : null;
 }
+
+const CHECKOUT_FAILURE_CODES: Record<string, string> = Object.fromEntries([
+  'configuration', 'validation', 'customer', 'club_signup', 'newsletter_consent',
+  'reservation_reconcile', 'order', 'reservation', 'pickup_acceptance',
+  'worldline_session', 'coupon', 'stripe_session', 'session_link',
+].map(stage => [stage, `CHECKOUT_${stage.toUpperCase()}`]));
+
+/** Support diagnostics contain only fixed stage names or validated numeric provider codes. */
+export function checkoutFailureCode(stage: string, error: unknown): string {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  if (stage === 'worldline_session' && typeof code === 'string') {
+    const match = /^WORLDLINE_CHECKOUT_(HTTP_[1-5][0-9]{2}|PROVIDER_[0-9]{4}|REJECTED|UNKNOWN)$/.exec(code);
+    if (match?.[0] === code) return code;
+  }
+  return Object.hasOwn(CHECKOUT_FAILURE_CODES, stage) ? CHECKOUT_FAILURE_CODES[stage] : 'CHECKOUT_UNAVAILABLE';
+}

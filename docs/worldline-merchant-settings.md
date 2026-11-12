@@ -185,6 +185,33 @@ before retry. Fields are retained after a rejected save and cleared after succes
 Unexpected transport/framework errors use a fixed fallback, never raw error text.
 The callback hash requirement and server transaction verification remain unchanged.
 
+## Checkout-start diagnostics
+
+A successful credential save proves persistence and schema validation, not that
+Worldline accepts the supplied API access. A failed checkout now includes a safe
+support code. `WORLDLINE_CHECKOUT_HTTP_401`/`403` identify HTTP access rejection;
+other bounded HTTP statuses and four-digit `meta.action.code` values are retained
+as fixed diagnostic codes. Raw provider messages, response bodies, credentials,
+customer contact details and hosted-session URLs are never included.
+`CHECKOUT_CUSTOMER`, `CHECKOUT_ORDER` and the other fixed stage codes distinguish
+failures before the provider call. Support must inspect the code rather than
+assuming every payment-start failure is a credential error.
+An unexpected customer-identity lookup failure also uses a fixed customer message;
+it never exposes the underlying storage exception through validation errors.
+
+`checkout_failed` logs are one JSON line containing only the fixed stage/code,
+order reference when available and retryability. A definitive provider rejection
+keeps the existing reservation release behavior. A timeout, invalid response or
+uncertain session-link write still forbids a blind new payment attempt and retains
+the original order reference for reconciliation. Diagnostics do not retry provider
+requests, switch agreements or weaken transaction/hash verification.
+
+The official sandbox instructions are at
+https://developer.bambora.com/europe/checkout/getting-started/test-your-setup.
+Use the payment window's **Use test card** option with a T-merchant; the guide
+documents CVC `000` for successful authorization and a future expiry. Complete
+the controlled acceptance procedure above before claiming provider verification.
+
 Official API access guides distinguish portal generations:
 - https://developer.bambora.com/europe/checkout/getting-started/access-api
 - https://developer.bambora.com/europe/checkout/getting-started/access-api-previous

@@ -148,6 +148,16 @@ before(async()=>{
    res.setHeader('Content-Type','application/json');
    if(key==='retry'&&calls.length===1)return res.end(JSON.stringify({success:false,error:'Payment temporarily unavailable. Please try again.',retryable:true}));
    if(key==='identity-message')return res.end(JSON.stringify({success:false,error:CUSTOMER_IDENTITY_CHECKOUT_MESSAGE,retryable:true}));
+   if(key.startsWith('worldline-diagnostic-')){
+    const unknown=key.includes('-unknown-');
+    const {checkout}=require('../helpers/checkout-fixture.cjs');
+    const {result}=await checkout({configureMocks:({mocks})=>{
+     mocks['@/lib/payments/merchant-agreement']={resolveMerchantAgreement:async()=>({provider:'worldline',mode:'test',owner:{brandId:'b'},reference:'projects/orderfly-39325/secrets/orderfly-worldline-'+ 'a'.repeat(64)+'-test/versions/1',merchantNumber:'T123',revision:1,credentials:{merchantNumber:'T123',accessToken:'synthetic-access',secretToken:'synthetic-secret',md5Key:'synthetic-md5'}})};
+     const client=mocks['@/lib/payments/worldline-client'];
+     mocks['@/lib/payments/worldline-client']={...client,createWorldlineCheckoutSession:async()=>{throw new client.WorldlineRequestError(unknown?'unknown':'rejected',unknown?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_401');}};
+    }});
+    return res.end(JSON.stringify(result));
+   }
    if(key==='uncertain')return res.end(JSON.stringify({success:false,error:'Please contact the restaurant. Reference: ORD-TEST.',retryable:false}));
    return res.end(JSON.stringify({success:true,url:origin+'/stripe?case='+key,orderId:'ORD-TEST'}));
   }
@@ -219,6 +229,20 @@ test('customer identity conflict is shown as an actionable Danish checkout error
  assert.equal((requests.get('identity-message')||[]).length,1);
  assert.equal(await page.getByRole('button',{name:/Gå til betaling/}).first().isDisabled(),false);
  assert.equal((await page.locator('body').innerText()).includes('Customer identity scope conflict'),false);
+});
+for(const surface of ['desktop','mobile'])for(const outcome of ['rejected','unknown'])test(`Worldline diagnostics: ${surface} ${outcome} displays safe server code and preserves retry policy`,async t=>{
+ const scenario=`worldline-diagnostic-${outcome}-${surface}`;
+ const page=await setup(t,scenario,'test@example.test',{v2:true});await pay(page);
+ const code=outcome==='unknown'?'WORLDLINE_CHECKOUT_UNKNOWN':'WORLDLINE_CHECKOUT_HTTP_401';
+ await page.getByRole('alert').filter({hasText:'Fejlkode: '+code,visible:true}).first().waitFor();
+ assert.equal((requests.get(scenario)||[]).length,1);
+ assert.equal(await page.getByRole('button',{name:/Gå til betaling/}).first().isDisabled(),outcome==='unknown');
+ const body=await page.locator('body').innerText();
+ assert.equal(/synthetic-access|synthetic-secret|synthetic-md5/.test(body),false);
+ if(outcome==='unknown'){
+  assert.match(body,/ORD-TEST/);await page.locator('form').evaluate(form=>form.requestSubmit());
+  assert.equal((requests.get(scenario)||[]).length,1);
+ }
 });
 for(const scenario of ['uncertain','transport-failure'])test(`${scenario}: never silently starts another payment`,async t=>{
  const page=await setup(t,scenario);await pay(page);await page.getByText(/contact the restaurant|Kontakt restauranten/).first().waitFor();

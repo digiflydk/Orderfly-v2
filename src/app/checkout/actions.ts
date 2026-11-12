@@ -28,7 +28,7 @@ import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices, verifiedUpsellAmount } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
-import { checkoutCustomerIdentityMessage } from '@/lib/checkout-public-error';
+import { checkoutCustomerIdentityMessage, checkoutFailureCode } from '@/lib/checkout-public-error';
 import { customerHasEmail, customerHasPhone, mergeCustomerIdentity } from '@/lib/customer-identity';
 import { normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
@@ -95,7 +95,10 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
-    const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone);
+    const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone).catch(error => {
+        if (checkoutCustomerIdentityMessage(error)) throw error;
+        throw new Error('Kundeoplysningerne kunne ikke kontrolleres. Prøv igen.');
+    });
     if (integrated) {
         // Public checkout cannot prove ownership of a new email from a phone number.
         // Otherwise a later email-link Club login could expose this existing profile.
@@ -1106,18 +1109,21 @@ export async function createStripeCheckoutSessionAction(
       catch { retryable = false; }
     }
     // Correlate stages without logging customer details, secrets or session URLs.
-    console.error('checkout_failed', { stage, orderId: reservedOrderId, code: e?.code || e?.type || 'unknown', retryable });
+    const diagnosticCode = checkoutFailureCode(stage, e);
+    console.error(JSON.stringify({ event: 'checkout_failed', stage, orderId: reservedOrderId, code: diagnosticCode, retryable }));
     const identityMessage = checkoutCustomerIdentityMessage(e);
     const errorMessage = !retryable
-      ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
+      ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''} Fejlkode: ${diagnosticCode}.`
       : identityMessage
       ? identityMessage
-      : stage === 'configuration' ? 'Restaurantens betalingsaftale er deaktiveret, mangler nøgler eller er utilgængelig. Kontakt restauranten.'
+      : stage === 'configuration' ? `Restaurantens betalingsaftale er deaktiveret, mangler nøgler eller er utilgængelig. Kontakt restauranten. Fejlkode: ${diagnosticCode}.`
       : stage === 'newsletter_consent' ? 'Tilmeldingen kunne ikke gemmes. Prøv igen, eller fjern afkrydsningen for nyhedsbrev og fortsæt uden tilmelding.'
       : managedDeliveryAcceptance && stage === 'validation' ? 'Leveringstilbuddet eller kurven er ændret. Beregn levering igen, og kontrollér totalbeløbet.'
       : ['validation', 'reservation'].includes(stage) && e instanceof Error
         ? e.message
-        : 'Betalingen kunne ikke åbnes. Prøv igen, eller kontakt restauranten.';
+        : stage === 'worldline_session' && e instanceof WorldlineRequestError && e.outcome === 'rejected'
+          ? `Betalingsudbyderen afviste betalingsstarten. Kontakt restauranten. Fejlkode: ${diagnosticCode}.`
+          : `Betalingen kunne ikke åbnes. Prøv igen, eller kontakt restauranten. Fejlkode: ${diagnosticCode}.`;
     return { success: false, error: errorMessage, retryable };
   }
 }
