@@ -71,6 +71,14 @@ terminal receipt acceptance, operations/admin/managed delivery regressions,
 capacity-release races and desktop/mobile receipt/cancellation browsers.
 Typecheck and independent review must refer to the final integrated head.
 
+The integrated code passed 398 isolated checks in 49 files, 36 payment browser
+cases, six administration browser cases and typecheck. One old lifecycle fixture
+needed the actual pure capacity-identity helpers instead of an incomplete module
+mock; its ten cases were rerun successfully without weakening financial assertions.
+Per-file results, the original failed harness run and the successful targeted
+rerun are distinguished in [validation evidence](payment-reliability-validation.json).
+These are local checks, not a deployed-provider acceptance claim.
+
 Actual provider verification needs fresh T-merchant sessions with the existing
 manually entered keys. Repeat successful checkout/reload, no-card cancellation,
 failed3DS cancellation and managed delivery. Record safe support codes if a
