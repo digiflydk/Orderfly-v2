@@ -161,10 +161,11 @@ create API users or send an actual provider transaction.
    courier dispatch or physical print unless those actions are separately chosen.
    Keep synthetic business data out of production; restore controlled fixtures.
 
-Actual Worldline sandbox/IAM acceptance is still pending manual credentials.
-Local tests use synthetic accounts, persistence and provider transport. Final
-release evidence must identify the exact tested commit and distinguish local
-unit/browser results, deployment and actual provider acceptance.
+Controlled live sandbox evidence is recorded in [Worldline live QA](worldline-live-qa.md).
+Local tests use synthetic accounts, persistence and provider transport. Release
+evidence identifies the exact tested commit and distinguishes local unit/browser
+results, deployment and actual provider acceptance. Passing one checkout does not
+establish refund, void, delivery or physical-print acceptance.
 
 Official contracts:
 - https://developer.bambora.com/europe
@@ -227,6 +228,15 @@ receipt capability. A browser return never marks the order Paid: signed callback
 server transaction verification, capture and shared settlement remain authoritative.
 Callback-before-return and return-before-callback continue to use the existing
 Pending receipt/polling path.
+
+The confirmation route includes a visible loading state. Its first server render
+validates the original receipt capability and tenant scope, then reads the native
+Worldline status without waiting for provider lookup/capture. Pending Worldline
+reconciliation stays with the normal guest-status API and durable workers so the
+page can appear promptly while the payment is checked. The server-only deferral
+option does not affect Stripe, Free, pickup or the default guest API behavior and
+never permits a client return to mark a payment Paid. Worldline still owns its
+own short processing screen before it initiates the redirect.
 
 This applies when creating a session. The current official API exposes no update
 operation for an existing hosted session; an already completed window can use its
