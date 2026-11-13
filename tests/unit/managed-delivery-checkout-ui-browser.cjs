@@ -11,6 +11,13 @@ const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 const root = process.cwd();
 let dir, server, browser, origin;
+// install() alone keeps time running. Freeze it before user interaction so slow
+// browser IPC cannot consume a debounce interval between an input and an assert.
+async function pauseClock(page) {
+  const now = Date.now();
+  await page.clock.install({ time: new Date(now - 60000) });
+  await page.clock.pauseAt(new Date(now));
+}
 const brands = [{ id: 'a', name: 'Nord' }, { id: 'b', name: 'Syd' }];
 const locations = [{ id: 'la', name: 'Nord Station', brandId: 'a' }, { id: 'lb', name: 'Syd Torv', brandId: 'b' }];
 before(async () => {
@@ -27,7 +34,7 @@ before(async () => {
     const identity=JSON.stringify({address,cart,time,contactReady});const input=React.useMemo(()=>({address,cart,time}),[address,cart,time]);const fetchQuote=React.useCallback(value=>new Promise((resolve,reject)=>{window.requests=window.requests||[];window.requests.push({value,resolve,reject});}),[]);
     const flow=useManagedDeliveryQuote({enabled,requestIdentity:identity,input,requestQuote:fetchQuote,autoRequestReady:address.length>=3&&contactReady});window.paymentProof=flow.paymentProof;
     return React.createElement(React.Fragment,null,React.createElement(ManagedDeliveryLoading,{pending:flow.loadingPending,requestIdentity:identity}),React.createElement('p',null,'Kurv: 2 pizzaer'),React.createElement('label',null,'Adresse',React.createElement('input',{value:address,onChange:event=>setAddress(event.target.value)})),React.createElement(ManagedDeliveryQuote,{enabled,state:flow.state,checkoutFingerprint:flow.state.kind==='ready'?flow.state.quote.checkoutFingerprint:'',previousFeeMinor:flow.previousFeeMinor,onRequest:flow.request,showDeliveryTime}),React.createElement('button',{disabled:!flow.paymentProof,onClick:()=>window.submittedProof=flow.paymentProof},'Test betaling'),React.createElement(ManagedDeliveryTracking,{enabled,orderId:'order-a',data:tracking,fallbackDeliveryTime:fallback,onRefresh:()=>{}}));}
-    createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,sessionId:window.__receiptSession,receiptToken:window.__receiptToken,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
+    createRoot(document.getElementById('root')).render(window.location.pathname==='/confirmation'?React.createElement(ConfirmationClient,{order:window.__receipt,orderId:window.__receiptOrderId,sessionId:window.__receiptSession,receiptToken:window.__receiptToken,brand:{id:'brand-a',slug:'brand-a',name:'Test'},location:{id:'location-a',slug:'location-a',name:'Test'}}):React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   const cartStub=path.join(dir,'cart-stub.js'),pathStub=path.join(dir,'path-stub.js'),analyticsStub=path.join(dir,'analytics-stub.js'),linkStub=path.join(dir,'link-stub.js');
@@ -35,10 +42,12 @@ before(async () => {
   fs.writeFileSync(pathStub,"export const useStorefrontPath=()=>()=>'/menu';");
   fs.writeFileSync(analyticsStub,'export const pushPaidPurchase=()=>{};');
   fs.writeFileSync(linkStub,"import React from 'react';export default function Link(props){return React.createElement('a',props);}");
+  const cssLoader=path.join(dir,'css-loader.js');
+  fs.writeFileSync(cssLoader,`module.exports=source=>'const style=document.createElement("style");style.textContent='+JSON.stringify(source)+';document.head.appendChild(style);';`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
     output: { path: dir, filename: 'bundle.js' },
     resolve: { alias: { '@/context/cart-context':cartStub,'@/hooks/use-storefront-path':pathStub,'@/lib/analytics':analyticsStub,'next/link':linkStub,'@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
-    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }] },
+    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /\.css$/, use: [cssLoader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
   const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/admin-ui.css'), 'utf8');
@@ -58,7 +67,7 @@ async function respond(page,result,index=0){await page.evaluate(({result,index})
 async function waitRequests(page,count){await expect.poll(()=>page.evaluate(()=>window.requests?.length||0)).toBe(count);}
 async function quotePage(t,viewport={width:390,height:844}){const context=await browser.newContext({viewport});t.after(()=>context.close());const page=await context.newPage();await page.goto(origin);return page;}
 test('valid address automatically debounces one quote and payment accepts the visible price without extra controls',async t=>{
- const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),pay=page.getByRole('button',{name:'Test betaling'});
+ const page=await quotePage(t);await pauseClock(page);const address=page.getByRole('textbox',{name:'Adresse'}),pay=page.getByRole('button',{name:'Test betaling'});
  await address.fill('a');await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await address.fill('Testvej');await page.clock.runFor(100);await address.fill('Testvej 12');await page.clock.runFor(100);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await page.clock.runFor(200);await waitRequests(page,1);await expect(pay).toBeDisabled();await respond(page,quote());await expect(pay).toBeEnabled();
@@ -78,7 +87,7 @@ test('cart and time changes immediately revoke payment and automatically replace
  await page.evaluate(()=>window.changeTime('tomorrow'));await expect(pay).toBeDisabled();await waitRequests(page,3);await respond(page,quote({quoteId:'time'}),2);await pay.click();assert.equal(await page.evaluate(()=>window.submittedProof.quoteId),'time');
 });
 test('near-expiry quote blocks payment and retries only on explicit request',async t=>{
- const page=await quotePage(t);await page.clock.install();await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(800);await waitRequests(page,1);
+ const page=await quotePage(t);await pauseClock(page);await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(800);await waitRequests(page,1);
  const now=await page.evaluate(()=>Date.now());await respond(page,quote({expiresAtMs:now+61000}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();await page.clock.runFor(2000);await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(10000);assert.equal(await page.evaluate(()=>window.requests.length),1);
  await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await waitRequests(page,2);await respond(page,quote({expiresAtMs:now+180000}),1);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
 });
@@ -108,7 +117,7 @@ test('persisted cancellation separates payment, hides stale ETA and preserves un
 test('paid cancelled receipt reports courier cancellation without claiming a refund',async t=>{const context=await browser.newContext({viewport:{width:390,height:844}});t.after(()=>context.close());const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.addInitScript(()=>{window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test kunde',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',deliveryTime:'asap',status:'Pending',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'accepted',cancellationState:'cancelled',deliveryStatus:'cancelled',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};});await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Leveringen er annulleret',exact:true})).toBeVisible();await expect(page.getByText('Betaling: Betalt')).toBeVisible();await expect(page.getByText(/har fået annulleret kurérleveringen/)).toBeVisible();await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toHaveCount(0);assert.deepEqual(errors,[]);});
 
 test('paid delivery receipt refreshes ETA automatically with scoped proof, recovers errors and stops on delivery',async t=>{
- const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.clock.install();
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await pauseClock(page);
  const receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',deliveryTime:'asap',status:'Pending',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'pending',deliveryStatus:null,paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};
  await page.addInitScript(r=>{window.__receipt=r;window.__receiptSession='cs_test_receipt_fixture';window.__receiptToken='a'.repeat(64);},receipt);
  let requests=0,fail=false,done=false;
@@ -127,7 +136,7 @@ test('paid delivery receipt refreshes ETA automatically with scoped proof, recov
 });
 
 test('legacy paid delivery does not start managed delivery polling',async t=>{
- const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.clock.install();let requests=0;
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await pauseClock(page);let requests=0;
  await page.route('**/api/orders/lookup-by-session?**',async route=>{requests++;await route.fulfill({json:{found:false}});});
  await page.addInitScript(()=>{window.__receiptSession='cs_test_receipt_fixture';window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',status:'Received',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35}};});
  await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();await page.clock.runFor(45000);assert.equal(requests,0);
@@ -158,7 +167,7 @@ test('accepted managed confirmation shows only the provider estimate, not the or
 
 
 test('managed receipt uses one preliminary native estimate until a provider ETA arrives',async t=>{
- const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.clock.install();
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await pauseClock(page);
  const receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-30T10:00:00Z',deliveryType:'Delivery',deliveryTime:'fre. 30. okt. 11:30',fulfillmentAt:'2026-10-30T10:30:00.000Z',expectedDeliveryAt:'2026-10-30T11:00:00.000Z',status:'Received',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'accepted',deliveryStatus:'booked',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};
  await page.addInitScript(r=>{window.__receipt=r;window.__receiptSession='cs_test_receipt_fixture';window.__receiptToken='a'.repeat(64);},receipt);
  await page.route('**/api/orders/lookup-by-session?**',async route=>route.fulfill({json:{found:true,order:{...receipt,managedDeliveryTracking:{...receipt.managedDeliveryTracking,deliveryInterval:{earliest:'2026-10-30T11:05:00Z',latest:'2026-10-30T11:15:00Z'}}}}}));
@@ -178,34 +187,34 @@ test('preliminary estimate is suppressed for unsafe states and non-ISO saved cho
 
 
 test('price popup appears before debounce, retains input focus and closes on the current result',async t=>{
- const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ const page=await quotePage(t);await pauseClock(page);const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
  await address.fill('Testvej 1');await expect(popup).toBeVisible();await expect(address).toBeFocused();assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await page.clock.runFor(200);await expect(popup).toBeVisible();assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await page.clock.runFor(100);await waitRequests(page,1);await respond(page,quote());await expect(popup).toHaveCount(0);await expect(address).toBeFocused();
 });
 
 test('price popup covers an obsolete queued request and closes on latest error without retrying',async t=>{
- const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ const page=await quotePage(t);await pauseClock(page);const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
  await address.fill('first');await page.clock.runFor(300);await waitRequests(page,1);await address.fill('second');await expect(popup).toBeVisible();await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests.length),1);
  await respond(page,quote({quoteId:'obsolete'}));await expect(popup).toBeVisible();await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(300);await waitRequests(page,2);
  await respond(page,{ok:false,code:'outside_area'},1);await expect(popup).toHaveCount(0);await expect(page.getByRole('alert')).toContainText('uden for restaurantens');await page.clock.runFor(5000);assert.equal(await page.evaluate(()=>window.requests.length),2);
 });
 
 test('price popup can be dismissed while work continues and reopens for changed input',async t=>{
- const page=await quotePage(t);await page.clock.install();const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
+ const page=await quotePage(t);await pauseClock(page);const address=page.getByRole('textbox',{name:'Adresse'}),popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'});
  await address.fill('first');await expect(popup).toBeVisible();await address.press('Escape');await expect(popup).toHaveCount(0);await expect(address).toBeFocused();await page.clock.runFor(300);await waitRequests(page,1);
  await address.fill('second');await expect(popup).toBeVisible();await expect(address).toBeFocused();await page.getByRole('button',{name:'Skjul beskeden'}).click();await expect(popup).toHaveCount(0);await respond(page,quote({quoteId:'old'}));await page.clock.runFor(300);await waitRequests(page,2);await respond(page,quote({quoteId:'current'}),1);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
 });
 
 test('missing required contact or incomplete address never claims a price request is pending',async t=>{
- const page=await quotePage(t);await page.clock.install();const popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'}),address=page.getByRole('textbox',{name:'Adresse'});
+ const page=await quotePage(t);await pauseClock(page);const popup=page.getByRole('dialog',{name:'Henter leveringsprisen…'}),address=page.getByRole('textbox',{name:'Adresse'});
  await page.evaluate(()=>window.setContactReady(false));await address.fill('Testvej 1');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
  await page.evaluate(()=>window.setContactReady(true));await expect(popup).toBeVisible();await address.fill('');await expect(popup).toHaveCount(0);await page.clock.runFor(1000);assert.equal(await page.evaluate(()=>window.requests?.length||0),0);
 });
 
 
 test('quote timings measure invocation only and log strictly numeric server aggregates',async t=>{
- const page=await quotePage(t);await page.clock.install();await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));
+ const page=await quotePage(t);await pauseClock(page);await page.clock.pauseAt(new Date(await page.evaluate(()=>Date.now()+1000)));
  await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.clock.runFor(5000);
  await page.getByRole('textbox',{name:'Adresse'}).fill('private address');await page.clock.runFor(250);await waitRequests(page,1);await page.clock.runFor(800);
  const timings={serverMs:700,stages:{scope:{ms:50,count:1},provider:{ms:400,count:1}}};await respond(page,quote({timings}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
@@ -213,7 +222,7 @@ test('quote timings measure invocation only and log strictly numeric server aggr
 });
 
 test('invalid server timing objects never leak unknown fields or disable valid payment',async t=>{
- const page=await quotePage(t);await page.clock.install();await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});
+ const page=await quotePage(t);await pauseClock(page);await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});
  const values=[{serverMs:1,stages:{provider:{ms:1,count:1}},address:'PRIVATE'},{serverMs:1,stages:{PRIVATE_STAGE:{ms:1,count:1}}},{serverMs:-1,stages:{}},{serverMs:1,stages:{provider:{ms:1,count:1,token:'PRIVATE'}}}];
  for(let index=0;index<values.length;index++){
   await page.getByRole('textbox',{name:'Adresse'}).fill('address-'+index);await page.clock.runFor(300);await waitRequests(page,index+1);await respond(page,quote({timings:values[index]}),index);await expect(page.getByRole('button',{name:'Test betaling'})).toBeEnabled();
@@ -226,8 +235,25 @@ test('timing logging cannot break a quote when the browser console throws',async
 });
 
 test('obsolete and failed quote completion log durations without exposing results or enabling stale proof',async t=>{
- const page=await quotePage(t);await page.clock.install();await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(300);await waitRequests(page,1);
+ const page=await quotePage(t);await pauseClock(page);await page.evaluate(()=>{window.timingLogs=[];console.info=(...args)=>window.timingLogs.push(args);});await page.getByRole('textbox',{name:'Adresse'}).fill('first');await page.clock.runFor(300);await waitRequests(page,1);
  await page.getByRole('textbox',{name:'Adresse'}).fill('second');await respond(page,quote({quoteId:'private-obsolete-id',timings:{serverMs:10,stages:{provider:{ms:5,count:1}}}}));await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();await page.clock.runFor(300);await waitRequests(page,2);
  await page.evaluate(()=>window.requests[1].reject(Error('PRIVATE_PROVIDER_ERROR')));await expect(page.getByRole('alert')).toBeVisible();await expect(page.getByRole('button',{name:'Test betaling'})).toBeDisabled();
  const logs=await page.evaluate(()=>window.timingLogs);assert.equal(logs.length,2);assert.equal(JSON.parse(logs[0][1]).serverMs,10);assert.deepEqual(Object.keys(JSON.parse(logs[1][1])),['clientMs']);assert.doesNotMatch(JSON.stringify(logs),/PRIVATE|private-obsolete-id|first|second/);
+});
+
+test('verified Worldline receipt appears before booking and refreshes delivery using only its private native proof',async t=>{
+ const context=await browser.newContext({viewport:{width:390,height:844}});t.after(()=>context.close());const page=await context.newPage();await pauseClock(page);
+ const receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Synthetic TEST',customerContact:'test@example.invalid',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',status:'Pending',paymentStatus:'Paid',paymentMethod:'Worldline',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'unknown',deliveryStatus:null,paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};
+ await page.addInitScript(r=>{window.__receipt=r;window.__receiptOrderId='order-a';window.__receiptToken='a'.repeat(64);},receipt);
+ let requests=0;
+ await page.route('**/api/orders/lookup-by-session?**',async route=>{
+  requests++;const q=new URL(route.request().url()).searchParams;
+  assert.equal(q.has('session_id'),false);assert.equal(q.get('order_id'),'order-a');assert.equal(q.get('receipt_token'),'a'.repeat(64));assert.equal(q.get('brand_id'),'brand-a');assert.equal(q.get('location_id'),'location-a');assert.equal(q.get('status_only'),'true');
+  await route.fulfill({json:{found:true,order:{...receipt,status:'Received',managedDeliveryTracking:{...receipt.managedDeliveryTracking,bookingState:'accepted',deliveryStatus:'booked',trackingUrl:'https://tracking.example/order'}}}});
+ });
+ await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();
+ await expect(page.getByText(/er betalt. Leveringen er endnu ikke bekræftet/)).toBeVisible();await expect(page.getByText('Betaling: Betalt',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Afventer bekræftelse af betaling'})).toHaveCount(0);await expect(page.getByText('Vi afklarer, om leveringen er bestilt. Start ikke en ny bestilling.')).toBeVisible();
+ await page.clock.runFor(1600);assert.equal(requests,1);await expect(page.getByText('Leveringen er bestilt',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();await expect(page.getByRole('link',{name:'Åbn kurérens tracking (nyt vindue)'})).toHaveAttribute('href','https://tracking.example/order');
 });

@@ -58,6 +58,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test'})};}},
   '@/lib/checkout-public-error':loadTs('src/lib/checkout-public-error.ts'),
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  '@/lib/payments/merchant-agreement':{resolveMerchantAgreement:async()=>({provider:'stripe',binding:{provider:'stripe',mode:'test',owner:{brandId:'b',locationId:'l'},reference:`projects/orderfly-39325/secrets/orderfly-stripe-${'a'.repeat(64)}-test/versions/1`,revision:1},credentials:{secretKey:'sk_test_fixture',publishableKey:'pk_test_fixture',webhookSecret:'whsec_fixture'}})},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b',slug:'location',isActive:true,deliveryTypes:['pickup'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))})},

@@ -2,6 +2,29 @@ import { createHash } from 'node:crypto';
 import { checkoutSignupMode, clubDiscountEligible, discountApplicationType, isSignupDiscount, signupModeAllows } from './promotion-rules';
 import { db, doc, runTransaction, serverTimestamp, type Transaction } from '@/lib/server/firestore-compat';
 
+/** Private order metadata, captured before a Worldline cancellation starts.
+ * This is reservation ownership, not a client-selected payment authority. */
+export type ReservationReleaseIdentity = {
+  version: 1; orderId: string; brandId: string; locationId: string;
+  customerId: string; discountId: string | null; firstTimeReservation: boolean;
+};
+const identityId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+const capacityId = (value: unknown): value is string => typeof value === 'string' && value.length > 0
+  && Buffer.byteLength(value, 'utf8') <= 1500 && !value.includes('/') && value !== '.' && value !== '..';
+export function reservationReleaseIdentity(orderId: string, order: any): ReservationReleaseIdentity {
+  const discountId = order?.appliedDiscountId || null, firstTime = order?.firstTimeReservation ?? false;
+  if (!identityId(orderId) || !identityId(order?.brandId) || !identityId(order?.locationId)
+    || !capacityId(order?.customerDetails?.id) || discountId !== null && !capacityId(discountId)
+    || typeof firstTime !== 'boolean') throw new Error('Reservation identity requires reconciliation');
+  return {version:1,orderId,brandId:order.brandId,locationId:order.locationId,customerId:order.customerDetails.id,discountId,firstTimeReservation:firstTime};
+}
+export function sameReservationReleaseIdentity(left: unknown, right: ReservationReleaseIdentity): left is ReservationReleaseIdentity {
+  const value = left as ReservationReleaseIdentity | null;
+  return !!value && value.version === 1 && value.orderId === right.orderId && value.brandId === right.brandId
+    && value.locationId === right.locationId && value.customerId === right.customerId
+    && value.discountId === right.discountId && value.firstTimeReservation === right.firstTimeReservation;
+}
+
 function refs(brandId: string, customerId: string, discountId: string | null) {
   const key = (parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
   return {
@@ -63,7 +86,7 @@ export async function prepareCapacitySettlement(tx: Transaction, order: any, pai
   };
 }
 
-export async function releaseDiscount(orderId: string, brandId: string, sessionId?: string, locationId?: string) {
+export async function releaseDiscount(orderId: string, brandId: string, sessionId?: string, locationId?: string, expectedIdentity?: ReservationReleaseIdentity) {
   await runTransaction(db, async tx => {
     const orderRef = doc(db, 'orders', orderId), orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists()) return;
@@ -71,6 +94,22 @@ export async function releaseDiscount(orderId: string, brandId: string, sessionI
     if (sessionId && order.paymentMethod === 'PayAtPickup') throw new Error('Reservation scope mismatch');
     if (order.brandId !== brandId || (locationId && order.locationId !== locationId) || (sessionId && order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== sessionId)) throw new Error('Reservation scope mismatch');
     if (order.paymentStatus === 'Paid') return;
+    const originalIdentity = order.psp?.cancellationCapacity;
+    const verifiedWorldlineCancellation = order.paymentMethod === 'Worldline' && order.psp?.provider === 'worldline'
+      && (order.psp.sessionExpired === true || order.psp.voided === true);
+    if ((expectedIdentity || originalIdentity || verifiedWorldlineCancellation) && order.discountReservation === 'released' && order.status === 'Canceled' && order.paymentStatus === 'Failed') return;
+    if (expectedIdentity || originalIdentity || verifiedWorldlineCancellation && order.discountReservation === 'held') {
+      const actual = reservationReleaseIdentity(orderId, order);
+      // The optional argument cannot select another reservation: it must match
+      // the original private snapshot AND the current order inside this same
+      // transaction, before reading or writing any capacity counter.
+      if (!sameReservationReleaseIdentity(originalIdentity, actual)
+        || expectedIdentity && !sameReservationReleaseIdentity(expectedIdentity, actual)
+        || order.paymentMethod !== 'Worldline' || order.psp?.provider !== 'worldline'
+        || order.status !== 'Canceled' || order.paymentOperation
+        || order.psp?.captured === true || !(order.psp?.sessionExpired === true || order.psp?.voided === true))
+        throw new Error('Reservation identity requires reconciliation');
+    }
     if (order.discountReservation === 'held') {
       const settle = await prepareCapacitySettlement(tx, order, false);
       settle();
