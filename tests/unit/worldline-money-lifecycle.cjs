@@ -1,7 +1,12 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {moduleGraph}=require('../helpers/load-ts-graph.cjs');
+const {loadTs}=require('../helpers/load-ts.cjs');
 const {memoryDb}=require('../helpers/marketing-db.cjs');
+// Cancellation now pins capacity ownership before the provider operation. Use
+// the production pure identity helpers while retaining the explicitly checked
+// release handoff below (real counter release has its own integration suite).
+const capacityIdentity=loadTs('src/lib/discount-reservations.ts',{'@/lib/server/firestore-compat':{}});
 
 // Isolated financial lifecycle integration: production admin authorization,
 // HTTP client, journal, settlement, invoice and print outbox run together.
@@ -65,7 +70,7 @@ function fixture(options={}){
  const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>new Date()})},'@/lib/access/orderfly-session':session,'./orderfly-session':session,
   '@/lib/payments/worldline-store':store,'./worldline-store':store,
   '@/lib/analytics-server':{trackServerEvent:async()=>{}},'@/lib/marketing/config':{paidOrderMarketingEnabled:()=>false},'@/lib/feedback/mail-queue':{queueOrderFeedback:async()=>{}},
-  '@/lib/discount-reservations':{releaseDiscount:async(orderId,brandId,sessionId,locationId)=>{const order=rows.get('orders/'+orderId);assert.equal(order.status,'Canceled');assert.equal(order.psp.voided,true);assert.equal(brandId,'b');assert.equal(locationId,'l');releases.push({orderId,brandId,locationId});order.discountReservation='released';order.paymentStatus='Failed';}},
+  '@/lib/discount-reservations':{...capacityIdentity,releaseDiscount:async(orderId,brandId,sessionId,locationId,expected)=>{const order=rows.get('orders/'+orderId);assert.equal(order.status,'Canceled');assert.equal(order.psp.voided,true);assert.equal(brandId,'b');assert.equal(locationId,'l');assert.deepEqual(expected,order.psp.cancellationCapacity);assert.equal(capacityIdentity.sameReservationReleaseIdentity(expected,capacityIdentity.reservationReleaseIdentity(orderId,order)),true);releases.push({orderId,brandId,locationId});order.discountReservation='released';order.paymentStatus='Failed';}},
   'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'firebase-admin/firestore':{FieldValue:{serverTimestamp:()=>new Date()}},
  };
  const load=moduleGraph(mocks),{principalKey}=load('src/lib/access/authority.ts');
