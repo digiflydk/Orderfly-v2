@@ -71,6 +71,16 @@ confirmed receipt. Local tests and independent review must complete before relea
 actual provider verification of this new path is recorded separately below once
 deployed and exercised.
 
+Local verification of source candidate `218c54d`: 185 focused cases in 28 unit/
+integration files, 20 desktop/mobile payment browser cases, typecheck and an
+independent exact-head review passed. This includes private-capability rejection,
+original-account mismatches, callback replay and ordering, bounded stalled reads,
+concurrent cancellation/refund/operation rejection and paid-receipt rendering.
+Two additional older Stripe fixture files (`printing-stripe-settlement-integration`
+and `payment-confirmation-job`) did not complete and were stopped. They are not
+included in the passing count; the Stripe settlement source is unchanged from
+the deployed baseline and their fixture diagnosis is tracked separately.
+
 Native admin refund/void, direct provider-ledger checks and physical printing are
 not established by these browser scenarios. Sandbox booking is not proof of a
 physical courier delivery. Protected receipt URLs, callback values, card/3DS
