@@ -34,7 +34,7 @@ function receiptExpectedDeliveryAt(value: unknown): string | undefined {
 
 // The existing random Stripe session ID is a guest capability, not a user ID.
 // Never recover or disclose it from a predictable order ID. Keep it out of logs.
-export async function readGuestReceipt(proof: ReceiptProof, options: { reconcilePayment?: boolean } = {}): Promise<GuestReceipt | null> {
+export async function readGuestReceipt(proof: ReceiptProof, options: { reconcilePayment?: boolean; reconcileWorldlinePayment?: boolean } = {}): Promise<GuestReceipt | null> {
   const validSession = /^cs_(test_|live_)?[A-Za-z0-9_]{8,250}$/.test(proof.sessionId || '');
   if (!validSession && (proof.sessionId || !proof.orderId)) return null;
   let order = proof.orderId ? await getOrderById(proof.orderId) : await getOrderByCheckoutSessionId(proof.sessionId!);
@@ -59,7 +59,10 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
     try{await settleFreeCheckoutOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Retain Pending; durable free job also owns retry. */}
   }
   if(!order)return null;
-  if(worldline && options.reconcilePayment !== false && order.paymentStatus==='Pending'){
+  // Initial confirmation rendering can project the authenticated native state
+  // immediately. Its client polling and the durable callback job own recovery;
+  // a page request must not wait for Worldline capture before showing progress.
+  if(worldline && options.reconcilePayment !== false && options.reconcileWorldlinePayment !== false && order.paymentStatus==='Pending'){
     try{const {reconcileWorldlineOrder}=await import('@/lib/payments/worldline-reconcile');await reconcileWorldlineOrder(order.id);order=await getOrderById(order.id);if(!order)return null;}catch{/* Keep Pending while callback/capture is unresolved. */}
   }
   if(!order)return null;

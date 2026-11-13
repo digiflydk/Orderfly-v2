@@ -29,7 +29,7 @@ export default async function ConfirmationPage({
 
   const order = brand && location && (sessionId || orderId && query.receipt_token) ? await readGuestReceipt({
     orderId, sessionId, receiptToken: query.receipt_token, brandId: brand.id, locationId: location.id,
-  }).catch(() => null) : null;
+  }, { reconcileWorldlinePayment: false }).catch(() => null) : null;
 
   return <ConfirmationClient order={order} brand={brand} location={location} sessionId={sessionId} orderId={orderId} receiptToken={query.receipt_token} />;
 }
