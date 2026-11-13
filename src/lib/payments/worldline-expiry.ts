@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { readPinnedWorldlineAgreement } from './worldline-store';
 import { runWorldlineOperation } from './worldline-operations';
+import { worldlineExpiryDiagnostic } from './worldline-response-diagnostics';
 import { releaseDiscount, reservationReleaseIdentity, sameReservationReleaseIdentity, type ReservationReleaseIdentity } from '@/lib/discount-reservations';
 
 const id=(value:string)=>/^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -10,10 +11,6 @@ const sessionToken=(value:unknown):value is string=>typeof value==='string'&&/^[
 export const worldlineCancellationCode = (value: unknown): value is string =>
   typeof value === 'string' && /^WORLDLINE_CANCEL_[A-Z0-9_]{1,96}$/.test(value);
 type ExpiryResult = { expired: true } | { expired: false; code: string };
-const providerCode = (body: unknown): string => {
-  const code = (body as {meta?:{action?:{code?:unknown}}})?.meta?.action?.code;
-  return (typeof code === 'string' || typeof code === 'number') && /^\d{1,6}$/.test(String(code)) ? `_PROVIDER_${code}` : '';
-};
 
 async function requestSessionExpiry(credentials:{merchantNumber:string;accessToken:string;secretToken:string},token:string):Promise<ExpiryResult>{
   if(!sessionToken(token))throw Error('Invalid checkout session');
@@ -25,8 +22,10 @@ async function requestSessionExpiry(credentials:{merchantNumber:string;accessTok
   try { body = await response.json(); } catch {
     return {expired:false,code:response.ok?'WORLDLINE_CANCEL_EXPIRY_INVALID_RESPONSE':`WORLDLINE_CANCEL_EXPIRY_HTTP_${Number.isInteger(response.status)&&response.status>=100&&response.status<=599?response.status:'UNKNOWN'}`};
   }
-  if(!response.ok)return {expired:false,code:`WORLDLINE_CANCEL_EXPIRY_HTTP_${Number.isInteger(response.status)&&response.status>=100&&response.status<=599?response.status:'UNKNOWN'}${providerCode(body)}`};
-  if((body as {meta?:{result?:unknown}})?.meta?.result!==true)return {expired:false,code:`WORLDLINE_CANCEL_EXPIRY_REJECTED${providerCode(body)}`};
+  // Provider action codes are unique only within their source. A static code
+  // lookup adds bounded support diagnostics, never cancellation authority.
+  if(!response.ok)return {expired:false,code:`WORLDLINE_CANCEL_EXPIRY_HTTP_${Number.isInteger(response.status)&&response.status>=100&&response.status<=599?response.status:'UNKNOWN'}${await worldlineExpiryDiagnostic(credentials,body)}`};
+  if((body as {meta?:{result?:unknown}})?.meta?.result!==true)return {expired:false,code:`WORLDLINE_CANCEL_EXPIRY_REJECTED${await worldlineExpiryDiagnostic(credentials,body)}`};
   return {expired:true};
 }
 

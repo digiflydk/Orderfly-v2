@@ -67,3 +67,14 @@ test('unknown transport errors and unsafe diagnostic strings never leak provider
   await expect(page.getByText('synthetic-private-provider-error')).toHaveCount(0);
   await expect(page.getByText(/Fejlkode:/)).toHaveCount(0);
 });
+
+test('provider expiry diagnostic remains pending and never offers a new checkout',async({page})=>{
+  const code='WORLDLINE_CANCEL_EXPIRY_HTTP_403_PROVIDER_40200_SRC_BEC_REASON_SESSION_EXPIRED';
+  await mount(page,[{status:'pending',code}]);
+  await expect(page.getByRole('heading',{name:'Annulleringen afventer bekræftelse'})).toBeVisible();
+  await expect(page.getByText('Fejlkode: '+code,{exact:true})).toBeVisible();
+  await expect(page.getByText(/Betal ikke igen/)).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Betalingen er annulleret'})).toHaveCount(0);
+  await expect(page.getByRole('link',{name:'Tilbage til kassen'})).toHaveCount(0);
+  expect(await page.evaluate(()=>(window as any).cancellationCalls.length)).toBe(1);
+});
