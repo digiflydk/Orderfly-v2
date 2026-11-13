@@ -22,6 +22,7 @@ export function isWorldlineCallbackFinanciallyComplete(value: unknown, expected:
     && ['Pending', 'Received', 'In Progress', 'Ready', 'Completed', 'Delivered', 'Error'].includes(row.status)
     && (row.paymentOperation === undefined || row.paymentOperation === null)
     && (row.refundedAmountOre === undefined || row.refundedAmountOre === 0)
+    && (row.refundedAmount === undefined || row.refundedAmount === 0)
     && (row.refundedAt === undefined || row.refundedAt === null)
     && row.psp?.provider === 'worldline' && row.psp.transactionId === expected.transactionId && row.psp.captured === true
     && typeof row.totalAmount === 'number' && Number.isFinite(row.totalAmount) && Math.round(row.totalAmount * 100) === expected.amountMinor

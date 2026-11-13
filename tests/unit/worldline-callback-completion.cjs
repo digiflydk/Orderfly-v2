@@ -9,7 +9,7 @@ test('only the original scoped captured native payment satisfies financial compl
  for(const patch of [
   {id:'ORD-OTHER'},{brandId:'other'},{locationId:'other'},{totalAmount:1},{totalAmount:'125'},
   {paymentMethod:'Stripe'},{paymentStatus:'Pending'},
-  {status:'Canceled'},{status:'Failed'},{paymentOperation:'refund-in-progress'},{refundedAmountOre:12500},{refundedAt:new Date()},
+  {status:'Canceled'},{status:'Failed'},{paymentOperation:'refund-in-progress'},{refundedAmountOre:12500},{refundedAmount:125},{refundedAt:new Date()},
   {psp:{...paid.psp,provider:'stripe'}},{psp:{...paid.psp,transactionId:'999'}},{psp:{...paid.psp,captured:false}},
   {paymentAgreement:{...binding,revision:2}},{paymentAgreement:{...binding,merchantNumber:'T999'}},
   {paymentAgreement:{...binding,owner:{brandId:'b',locationId:'other'}}},
