@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { readPinnedWorldlineAgreement } from './worldline-store';
 import { runWorldlineOperation } from './worldline-operations';
-import { releaseDiscount } from '@/lib/discount-reservations';
+import { releaseDiscount, reservationReleaseIdentity, sameReservationReleaseIdentity, type ReservationReleaseIdentity } from '@/lib/discount-reservations';
 
 const id=(value:string)=>/^[A-Za-z0-9_-]{1,128}$/.test(value);
 const sessionToken=(value:unknown):value is string=>typeof value==='string'&&/^[A-Za-z0-9_-]{1,256}$/.test(value);
@@ -42,10 +42,44 @@ function scopeMatches(order:Record<string,any>,binding:{owner:{brandId:string;lo
 }
 function unchanged(current:Record<string,any>|undefined,initial:Record<string,any>):current is Record<string,any>{
   return !!current && current.brandId===initial.brandId && current.locationId===initial.locationId
+    && current.customerDetails?.id===initial.customerDetails?.id
+    && (current.appliedDiscountId||null)===(initial.appliedDiscountId||null)
+    && (current.firstTimeReservation??false)===(initial.firstTimeReservation??false)
     && current.totalAmount===initial.totalAmount && current.paymentMethod===initial.paymentMethod
     && current.psp?.provider==='worldline' && current.psp.checkoutSessionId===initial.psp.checkoutSessionId
     && (!initial.psp.transactionId || current.psp.transactionId===initial.psp.transactionId)
     && JSON.stringify(current.paymentAgreement)===JSON.stringify(initial.paymentAgreement);
+}
+class CancellationCapacityError extends Error {
+  constructor(readonly code:'WORLDLINE_CANCEL_CAPACITY_IDENTITY_UNAVAILABLE'|'WORLDLINE_CANCEL_CAPACITY_IDENTITY_CHANGED') { super('Cancellation capacity identity requires reconciliation'); }
+}
+function capacityMatches(orderId:string,current:Record<string,any>,capacity:ReservationReleaseIdentity|undefined){
+  if(!capacity)return current.discountReservation!=='held';
+  return sameReservationReleaseIdentity(current.psp?.cancellationCapacity,capacity)
+    && sameReservationReleaseIdentity(capacity,reservationReleaseIdentity(orderId,current));
+}
+/** Server-only plumbing. Call only AFTER cancel-capability/admin authorization.
+ * Capture reservation ownership before the first provider operation, never from
+ * a later mutable retry or an already canceled historical held order. */
+export async function prepareWorldlineCancellationCapacity(orderId:string,expected?:Record<string,any>):Promise<ReservationReleaseIdentity|undefined>{
+  if(!id(orderId))throw Error('Invalid order');
+  const db=getAdminDb(),ref=db.collection('orders').doc(orderId);
+  return db.runTransaction(async tx=>{
+    const order=(await tx.get(ref)).data();
+    if(!order||order.paymentMethod!=='Worldline'||order.psp?.provider!=='worldline'||!scopeMatches(order,order.paymentAgreement)
+      ||expected&&!unchanged(order,expected))throw Error('Cancellation scope changed');
+    if(order.paymentStatus==='Paid'||order.discountReservation!=='held')return undefined;
+    let identity:ReservationReleaseIdentity;
+    try{identity=reservationReleaseIdentity(orderId,order);}catch{throw new CancellationCapacityError('WORLDLINE_CANCEL_CAPACITY_IDENTITY_UNAVAILABLE');}
+    if(order.psp.cancellationCapacity!==undefined){
+      if(!sameReservationReleaseIdentity(order.psp.cancellationCapacity,identity))throw new CancellationCapacityError('WORLDLINE_CANCEL_CAPACITY_IDENTITY_CHANGED');
+      return identity;
+    }
+    if(order.status==='Canceled'||order.psp.sessionExpired===true||order.psp.voided===true
+      ||order.psp.sessionExpiryState!==undefined||order.paymentOperation)
+      throw new CancellationCapacityError('WORLDLINE_CANCEL_CAPACITY_IDENTITY_UNAVAILABLE');
+    tx.update(ref,{'psp.cancellationCapacity':identity});return identity;
+  });
 }
 /** Unknown means preserve the financial lock and capacity. Bring the original
  * authenticated recovery job forward; never create another checkout/payment. */
@@ -74,19 +108,30 @@ export async function finalizeWorldlineVoid(orderId:string,transactionId:string,
     if(!order||order.psp?.provider!=='worldline'||order.psp.transactionId!==transactionId||order.psp.voided!==true||order.psp.captured===true||order.paymentOperation||order.paymentStatus==='Paid')throw Error('Unverified payment cancellation');
     if(!scopeMatches(order,order.paymentAgreement)||expected&&!unchanged(order,expected))throw Error('Cancellation scope changed');
     if(!order.brandId||!order.locationId)throw Error('Invalid cancellation scope');
+    let capacity:ReservationReleaseIdentity|undefined;
+    if(order.discountReservation==='held'){
+      capacity=reservationReleaseIdentity(orderId,order);
+      if(!sameReservationReleaseIdentity(order.psp.cancellationCapacity,capacity))throw new CancellationCapacityError('WORLDLINE_CANCEL_CAPACITY_IDENTITY_UNAVAILABLE');
+    }
     tx.update(ref,{status:'Canceled',cancellationReason:'worldline_authorization_voided','psp.cancellationErrorCode':null});
-    return {brandId:order.brandId as string,locationId:order.locationId as string,sessionId:order.psp.checkoutSessionId as string|undefined};
+    return {brandId:order.brandId as string,locationId:order.locationId as string,sessionId:order.psp.checkoutSessionId as string|undefined,capacity};
   });
-  await releaseDiscount(orderId,scope.brandId,scope.sessionId,scope.locationId);
+  await releaseDiscount(orderId,scope.brandId,scope.sessionId,scope.locationId,scope.capacity);
 }
 /** Called only behind a validated guest cancel capability or authenticated stale-hold worker. */
 export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'|'paid'|'unknown'>{
   if(!id(orderId))throw Error('Invalid order');
   const db=getAdminDb(),ref=db.collection('orders').doc(orderId),initial=(await ref.get()).data();
-  if(!initial||initial.psp?.provider!=='worldline')throw Error('Worldline checkout unavailable');
+  if(!initial||initial.paymentMethod!=='Worldline'||initial.psp?.provider!=='worldline')throw Error('Worldline checkout unavailable');
   if(initial.paymentStatus==='Paid')return 'paid';
   const {binding,credentials}=await readPinnedWorldlineAgreement(initial.paymentAgreement);
   if(!scopeMatches(initial,binding))throw Error('Invalid payment scope');
+  if(initial.status==='Canceled'&&initial.paymentStatus==='Failed'&&initial.discountReservation==='released'&&!initial.paymentOperation&&(initial.psp.sessionExpired===true||initial.psp.voided===true))return 'canceled';
+  let capacity:ReservationReleaseIdentity|undefined;
+  try{capacity=await prepareWorldlineCancellationCapacity(orderId,initial);}catch(error){
+    if(error instanceof CancellationCapacityError)return pendingCancellation(orderId,initial,error.code);
+    throw error;
+  }
   if(initial.psp.voided&&initial.psp.transactionId){await finalizeWorldlineVoid(orderId,initial.psp.transactionId,initial);return 'canceled';}
   const marker=sessionToken(initial.psp.checkoutSessionId)?'session-expiry:'+createHash('sha256').update(initial.psp.checkoutSessionId).digest('hex'):undefined;
   if(initial.psp.transactionId){
@@ -110,7 +155,7 @@ export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'
     if(transaction.status.toLowerCase()==='deleted'&&!initial.paymentOperation&&initial.psp.captured!==true){
       await db.runTransaction(async tx=>{
         const current=(await tx.get(ref)).data();
-        if(!unchanged(current,initial)||current.psp.transactionId!==initial.psp.transactionId||current.psp.captured===true||current.paymentOperation||current.paymentStatus==='Paid'||(current.paymentRevision??0)!==(initial.paymentRevision??0))throw Error('Payment state changed');
+        if(!unchanged(current,initial)||!capacityMatches(orderId,current,capacity)||current.psp.transactionId!==initial.psp.transactionId||current.psp.captured===true||current.paymentOperation||current.paymentStatus==='Paid'||(current.paymentRevision??0)!==(initial.paymentRevision??0))throw Error('Payment state changed');
         tx.update(ref,{'psp.voided':true,paymentRevision:(current.paymentRevision??0)+1});
       });
       await finalizeWorldlineVoid(orderId,initial.psp.transactionId,initial);return 'canceled';
@@ -131,7 +176,7 @@ export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'
   if(!sessionToken(initial.psp.checkoutSessionId))throw Error('Worldline session requires reconciliation');
   const claim=await db.runTransaction(async tx=>{
     const current=(await tx.get(ref)).data();
-    if(!unchanged(current,initial))throw Error('Checkout agreement changed');
+    if(!unchanged(current,initial)||!capacityMatches(orderId,current,capacity))throw Error('Checkout agreement changed');
     if(current.paymentStatus==='Paid')return 'paid';
     if(current.psp.transactionId&&!current.managedDelivery&&current.paymentOperation!==marker)return 'transaction';
     if(current.psp.sessionExpired===true&&current.status==='Canceled')return 'expired';
@@ -141,12 +186,12 @@ export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'
   });
   if(claim==='paid')return 'paid';
   if(claim==='transaction')return cancelWorldlineCheckout(orderId);
-  if(claim==='expired'){await releaseDiscount(orderId,initial.brandId,initial.psp.checkoutSessionId,initial.locationId);return 'canceled';}
+  if(claim==='expired'){await releaseDiscount(orderId,initial.brandId,initial.psp.checkoutSessionId,initial.locationId,capacity);return 'canceled';}
   const expiry=await requestSessionExpiry(credentials,initial.psp.checkoutSessionId);
   if(!expiry.expired)return pendingCancellation(orderId,initial,expiry.code);
   const result=await db.runTransaction(async tx=>{
     const current=(await tx.get(ref)).data();
-    if(!unchanged(current,initial))throw Error('Checkout agreement changed');
+    if(!unchanged(current,initial)||!capacityMatches(orderId,current,capacity))throw Error('Checkout agreement changed');
     if(current.paymentStatus==='Paid')return 'paid';
     if(current.psp.sessionExpired===true&&current.status==='Canceled')return 'canceled';
     if(current.paymentOperation!==marker)throw Error('Cancellation lock changed');
@@ -157,6 +202,6 @@ export async function cancelWorldlineCheckout(orderId:string):Promise<'canceled'
     return 'canceled';
   });
   if(result==='paid')return 'paid';
-  await releaseDiscount(orderId,initial.brandId,initial.psp.checkoutSessionId,initial.locationId);
+  await releaseDiscount(orderId,initial.brandId,initial.psp.checkoutSessionId,initial.locationId,capacity);
   return 'canceled';
 }

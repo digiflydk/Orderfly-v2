@@ -42,6 +42,31 @@ unresolved and does not authorize capacity release. Decline/3DS failure text fro
 the browser never proves an unpaid cancellation. Scope, amount, payment method,
 provider, original account and session are rechecked inside expiry transactions.
 
+Before the first cancellation provider operation, a private
+`psp.cancellationCapacity` snapshot records the original order/brand/location,
+customer, discount (or null) and first-order-reservation identity. It is never
+overwritten from a later request. Guest capability/admin authorization precedes
+this server-only preparation; it is not a new public Server Action. Admin void
+preparation checks the authorized order snapshot before provider work.
+
+The real `releaseDiscount` transaction checks both this persisted identity and any
+expected identity before reading or writing capacity counters. A caller-supplied
+optional identity cannot choose another owner or substitute for missing private
+metadata. Verified Worldline expiry/void with a held reservation requires the
+private snapshot even on the older four-argument helper call; deleted, null or
+false metadata cannot downgrade to the default path. This closes the gap between
+the native Canceled commit and capacity release, including a later retry.
+Only immutable ownership is compared; normal held→released progress and unrelated
+UI fields are not frozen. Default Stripe and definitively failed session-create
+cleanup (without provider-confirmed cancellation) retain their original contract.
+
+Historical already-released cancellation remains idempotent. A historical held
+reservation with a prior cancellation attempt but no provable original identity
+requires operator reconciliation rather than guessing today's mutable customer
+or discount. Restoring a verified original identity can resume the same expired
+session's release without another provider operation. No data migration guesses
+counter ownership.
+
 Managed checkout cancellation with an existing authorization first expires the
 window. The paired managed callback recovery adapter owns its permitted void.
 An unknown create-session result without a saved token can still be canceled
