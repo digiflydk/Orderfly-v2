@@ -33,4 +33,4 @@ function loadTs(filename, mocks = {}) {
   }, mod, mod.exports);
   return mod.exports;
 }
-module.exports = { loadTs };
+module.exports = { loadTs, compileFixture: compile };

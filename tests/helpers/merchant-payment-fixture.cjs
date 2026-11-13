@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { loadTs } = require('./load-ts.cjs');
+const { moduleGraph } = require('./load-ts-graph.cjs');
 const { memoryDb } = require('./marketing-db.cjs');
 const { checkout } = require('./checkout-fixture.cjs');
 const { principalKey, executeAuthority } = loadTs('src/lib/access/authority.ts', { 'server-only': {} });
@@ -48,10 +49,14 @@ async function paymentFixture(options = {}) {
     '@/lib/feedback/mail-queue': { queueOrderFeedback: async () => {} },
     'next/cache': { revalidatePath: () => {}, revalidateTag: () => {} },
   };
-  const settlement = loadTs('src/lib/server/settle-checkout.ts', mocks);
-  const cancellation = loadTs('src/lib/server/pickup-orders.ts', mocks);
-  const settings = loadTs('src/lib/server/merchant-payment-settings.ts', mocks);
-  const scoped = loadTs('src/lib/access/scoped-data.ts', mocks);
+  // Native financial proofs depend on module identity. Evaluate this fixture's
+  // shared server graph once, as production CommonJS does, with fresh mocks for
+  // each fixture. Repeated recursive evaluation also made broad suites stall.
+  const load = moduleGraph({ react: require('next/dist/compiled/react'), ...mocks });
+  const settlement = load('src/lib/server/settle-checkout.ts');
+  const cancellation = load('src/lib/server/pickup-orders.ts');
+  const settings = load('src/lib/server/merchant-payment-settings.ts');
+  const scoped = load('src/lib/access/scoped-data.ts');
   const requireAccess = async (brandId, locationIds, permission) => db.runTransaction(async tx => {
     await scoped.authorizeTransaction(tx, identity, { brandId, ...(locationIds ? { locationIds } : {}) }, permission, 'locations');
     return { identity, brandId, locationIds };
@@ -64,7 +69,7 @@ async function paymentFixture(options = {}) {
       const snap = await tx.get(ref); return { ...snap, exists: () => snap.exists };
     } })),
   };
-  const receipts = loadTs('src/lib/server/guest-receipt.ts', { ...mocks,
+  const receipts = moduleGraph({ react: require('next/dist/compiled/react'), ...mocks,
     '@/app/checkout/order-actions': { getOrderById: async id => {
       const order = records.get('orders/' + id); return order ? { ...order, id } : null;
     }, getOrderByCheckoutSessionId: async id => {
@@ -73,11 +78,11 @@ async function paymentFixture(options = {}) {
     } },
     '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => { throw Error('Pickup receipts must never load Stripe'); } },
     './settle-checkout': settlement,
-  });
-  const sales = loadTs('src/lib/superadmin/getSalesSummary.ts', { ...mocks,
+  })('src/lib/server/guest-receipt.ts');
+  const sales = moduleGraph({ react: require('next/dist/compiled/react'), ...mocks,
     'firebase-admin/firestore': { Timestamp: { fromDate: date => date } },
-  });
-  const statuses = loadTs('src/app/superadmin/sales/orders/actions.ts', mocks);
+  })('src/lib/superadmin/getSalesSummary.ts');
+  const statuses = load('src/app/superadmin/sales/orders/actions.ts');
   const orderId = created.result.orderId || options.orderId || 'ORD-TEST';
   const kpis = () => [...records].filter(([path]) => path.startsWith('orders/')).map(([, order]) => order).filter(order => order.paymentStatus === 'Paid' && order.status !== 'Canceled');
   return { ...created, db, mocks, actorId, orderId, settlement, cancellation, settings, scoped, compat, receipts, sales, statuses,

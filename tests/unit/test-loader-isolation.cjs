@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { loadTs } = require('../helpers/load-ts.cjs');
+const { moduleGraph } = require('../helpers/load-ts-graph.cjs');
 
 test('repeated fixture loads preserve independent mocks and opaque module identities', () => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orderfly-loader-'));
@@ -28,5 +29,19 @@ test('editing a fixture source between loads cannot execute stale compiled code'
     assert.equal(loadTs(filename).schemaVersion, 1);
     fs.writeFileSync(filename, 'export const schemaVersion: number = 2;');
     assert.equal(loadTs(filename).schemaVersion, 2);
+  } finally { fs.rmSync(folder, { recursive: true, force: true }); }
+});
+
+test('cached graph compilation retains one identity per graph and isolates graphs', () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orderfly-loader-'));
+  const filename = path.join(folder, 'fixture.ts');
+  try {
+    fs.writeFileSync(filename, "import { value } from 'fixture-dependency'; export const observed = value; export const capability = {};");
+    const first = moduleGraph({ 'fixture-dependency': { value: 'first' } });
+    const second = moduleGraph({ 'fixture-dependency': { value: 'second' } });
+    assert.equal(first(filename), first(filename));
+    assert.equal(first(filename).observed, 'first');
+    assert.equal(second(filename).observed, 'second');
+    assert.notEqual(first(filename).capability, second(filename).capability);
   } finally { fs.rmSync(folder, { recursive: true, force: true }); }
 });
