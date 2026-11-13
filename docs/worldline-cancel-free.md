@@ -1,6 +1,7 @@
 # Worldline cancellation, abandoned windows and native zero-total checkout
 
-PR #914 candidate; no production provider acceptance is claimed here.
+PR #914 introduced the original integration. The follow-up cancellation recovery
+described here needs a fresh provider sandbox check before runtime acceptance.
 
 ## Verified session expiry
 
@@ -20,13 +21,26 @@ Canceled and its durable callback worker must void the late authorization; it
 must not capture it. Hosted sessions explicitly disable instant capture in the
 paired checkout adapter, so the Orderfly operation journal owns every capture.
 
-A timeout or unrecognized response retains the lock and reservation. Retrying
-this same session DELETE changes only its terminal session state, never creates
-a session or moves money. Another capture/refund operation's lock is never
-replaced. Orders with known authorization use the existing verified void journal;
+A timeout, HTTP failure (including404), `meta.result=false` or an unrecognized
+response retains the lock and reservation. Each cancellation invocation sends at
+most one session DELETE; no automatic transport retry is added. The documented
+endpoint expires a window, but the contract does not document404 or a failed
+response as evidence that no authorization exists. Explicit retry and the existing
+authenticated recovery worker keep the same original session and native marker;
+neither creates a checkout or repeats a capture/credit request. Another
+capture/refund operation's lock is never replaced. Orders with known authorization
+use the existing verified void journal;
 `finalizeWorldlineVoid(orderId,transactionId)` provides the shared cancellation
 and reservation-release boundary after a confirmed void. A payment already
 captured is not canceled or released as unpaid.
+
+A matching server-to-server observation of a terminal `deleted`, zero-capture,
+zero-credit authorization can finish its original cancellation without another
+money POST. A different active operation cannot be cleared by that observation.
+Full captured payment is reported as paid; partial capture or credit remains
+unresolved and does not authorize capacity release. Decline/3DS failure text from
+the browser never proves an unpaid cancellation. Scope, amount, payment method,
+provider, original account and session are rechecked inside expiry transactions.
 
 Managed checkout cancellation with an existing authorization first expires the
 window. The paired managed callback recovery adapter owns its permitted void.
@@ -38,6 +52,22 @@ Without either a token or linked transaction, the due job backs off for operator
 reconciliation; it never invents a token or starts a replacement payment.
 
 ## Recovery
+
+An unknown cancellation writes only a fixed `WORLDLINE_CANCEL_*` support code to
+the private native PSP metadata, and brings the original scoped expiry job
+forward to within15 seconds. HTTP status and an optional one-to-six-digit numeric
+provider action code can be retained; raw provider messages, bodies, credentials
+and session URLs are never retained or returned. A malformed or foreign-scope
+job is not overwritten. Paid status observed during this write wins over pending.
+
+The guest cancel action validates the original cancel capability before any
+provider work. Unknown Worldline outcomes return `pending` and a sanitized support
+code. Both legacy brand and location cancel routes use the same verified UI;
+browser query parameters alone cannot claim a successful cancellation. The UI
+clearly states that status is unresolved, says not to pay again and offers an
+explicit check of the same operation. It does not send automatic money requests
+or offer a new checkout while cancellation is unresolved. Unexpected errors use
+fixed text and never show upstream messages.
 
 `reconcileWorldlineStaleHolds` selects tenant/code-scoped held orders older than
 31 minutes. Time only selects candidates; actual provider expiry or void is
@@ -72,7 +102,8 @@ settlement integration owns invoice, loyalty, notification and print capabilitie
 
 - `node tests/unit/worldline-expiry.cjs` — provider confirmation, unknown result,
   shared-lock safety, callback race, changed agreement, verified void and managed
-  pre-capture/captured cases.
+  pre-capture/captured cases, diagnostics and preserved locks/jobs, explicit
+  same-session recovery, terminal void readback and partial-capture rejection.
 - `node tests/unit/worldline-expiry-queue.cjs` — durable due selection beyond 50
   terminal orders, error backoff and scope isolation.
 - `node tests/unit/worldline-stale-holds.cjs` — scope/age selection, unknown-state
@@ -81,7 +112,15 @@ settlement integration owns invoice, loyalty, notification and print capabilitie
   opaque proof/print boundary, mutation rejection and proof lifetime.
 - Existing `stale-discount-holds-210`, `cart-cancel` and
   `delivery-checkout-cancel` regression suites, plus TypeScript typecheck.
+- `npx playwright test -c tests/payments/playwright.config.ts worldline-cancellation.spec.ts`
+  — desktop/mobile pending, manual recheck, verified cancellation, paid protection,
+  absent proof and redacted errors.
 
-The actual Worldline sandbox session-expiry and late-authorization behavior must
-still be verified after manual key entry. Synthetic tests do not attest provider
-runtime, merchant configuration, IAM or inbox/hardware behavior.
+Historical runtime evidence includes successful no-card cancellation on
+`ORD-949526` and unresolved cancellation after a provider3DS error on `ORD-421839`
+with the old `985cbfd` release. The latter incident's exact provider response is
+not established. Safe stage codes and durable recovery improve diagnosis without
+pretending that the incident was an unpaid cancellation. Fresh sandbox verification
+of no-card, failed3DS, known authorization and late callbacks remains necessary.
+Synthetic tests do not attest provider runtime, merchant configuration, IAM or
+inbox/hardware behavior. No additional merchant key is needed or created.

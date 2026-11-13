@@ -8,7 +8,7 @@ import { db } from '@/lib/server/firestore-compat';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
-export async function cancelCheckout(orderId: string, token: string): Promise<{ status: 'canceled' | 'paid' | 'error' }> {
+export async function cancelCheckout(orderId: string, token: string): Promise<{ status: 'canceled' | 'paid' | 'pending' | 'error'; code?: string }> {
   try {
     if (!/^ORD-[A-Za-z0-9-]+$/.test(orderId) || !/^[a-f0-9]{64}$/.test(token)) return { status: 'error' };
     const snapshot = await getDoc(doc(db, 'orders', orderId));
@@ -17,9 +17,12 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
     if (createHash('sha256').update(token).digest('hex') !== order.cancelTokenHash) return { status: 'error' };
     if (order.paymentStatus === 'Paid') return { status: 'paid' };
     if(order.psp?.provider==='worldline'){
-      const {cancelWorldlineCheckout}=await import('@/lib/payments/worldline-expiry');
+      const {cancelWorldlineCheckout,worldlineCancellationCode}=await import('@/lib/payments/worldline-expiry');
       const result=await cancelWorldlineCheckout(orderId);
-      return {status:result==='unknown'?'error':result};
+      if(result!=='unknown')return {status:result};
+      const current=await getDoc(doc(db,'orders',orderId)).catch(()=>null);
+      const code=current?.exists()?current.data().psp?.cancellationErrorCode:undefined;
+      return {status:'pending',code:worldlineCancellationCode(code)?code:'WORLDLINE_CANCEL_UNCONFIRMED'};
     }
     const sessionId = order.psp?.checkoutSessionId;
     if (!sessionId) return { status: 'error' };
