@@ -127,7 +127,8 @@ for (const width of [390,1280]) test(`stalled restoration remains safe, leaves c
   await page.clock.runFor(15001);await page.getByRole('alert').waitFor();assert.equal((await state(page)).ready,false);
   assert.deepEqual(await saved(page),snapshot,'timeout must retain the saved choices');
   retryAllowed=true;await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await ready(page);await count(page,2);
-  await page.click('#pizza');await count(page,3);waiting();await page.waitForTimeout(10);
+  await page.click('#pizza');await count(page,3);
+  const late=page.waitForResponse(response=>response.url().endsWith('/restore'));waiting();await(await late).finished();await page.clock.runFor(32);
   assert.equal((await state(page)).items[0].quantity,3,'late original response cannot erase the retried/edited basket');
   assert.ok(calls>=2);assert.equal(retryReads,1);
 });
@@ -145,7 +146,8 @@ test('malformed or wrong-brand restore cannot make a cart ready; changing scope 
     const restored=f.restoreCartItems(input.choices,catalog,{...input,now:f.scope.now});return route.fulfill({json:{...restored,discounts:[]}});
   });
   await page.click('#delivery');await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…').waitFor();
-  await page.click('#pickup');await ready(page);await count(page,1);release();
+  await page.click('#pickup');await ready(page);await count(page,1);
+  const late=page.waitForResponse(response=>response.url().endsWith('/restore')&&response.request().postDataJSON().deliveryType==='delivery');release();await(await late).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));
   assert.equal((await state(page)).deliveryType,'pickup');assert.equal((await state(page)).items.length,1);
 });
 
@@ -158,7 +160,7 @@ test('matching verified receipt during hydration clears only its basket and rehy
  });
  await page.goto(origin+'/checkout');await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…').waitFor();
  await page.click('#complete-verified');await ready(page);await count(page,0);assert.equal(await saved(page),null);
- release();await page.evaluate(()=>new Promise(requestAnimationFrame));assert.equal((await state(page)).ready,true);assert.equal((await state(page)).items.length,0);
+ const late=page.waitForResponse(response=>response.url().endsWith('/restore')&&response.request().postDataJSON().choices.length>0);release();await(await late).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));assert.equal((await state(page)).ready,true);assert.equal((await state(page)).items.length,0);
 });
 
 test('menu refresh and direct checkout restore quantities, toppings, combos and current prices', async t => {
