@@ -41,3 +41,32 @@ node tests/unit/worldline-settlement.cjs
 
 Report actual completion and case counts. A process stopped by a time limit is
 not a passing test, and a mocked provider observation is not a real payment.
+
+The in-memory Admin adapter supports both `db.doc(path)` and collection-based
+document references, including child collections. The real modular server bridge
+uses `db.doc(path)`; omitting it previously stopped the compound scoped-Stripe
+checkout/receipt probes before their product assertions. The compound probes now
+execute original-account checkout, settlement and guest readback after settings
+rotation for inherited brand and own-location agreements. No current/global key
+may be read, and invoice/customer accounting must remain single-application.
+
+The managed-delivery browser harness loads imported CSS into a real style element.
+Tests that inspect debounce boundaries explicitly pause Playwright's clock before
+input. `clock.install()` alone advances with wall time, so slow browser IPC could
+previously invoke the request before the zero-request assertion. Explicit clock
+advancement and the original debounce/focus/replay assertions remain unchanged.
+The native managed-provider mutation test expects the current safe provider error
+for a changed provider while preserving its no-write and no-invoice assertions.
+The merchant browser harness also prepares its synthetic `createOnly` database
+and server modules before navigation. This prevents cold TypeScript evaluation
+from blocking the local server's resource responses and exhausting the unchanged
+browser load deadline. Checkout/order creation still happens through the UI.
+
+Additional focused checks:
+
+```sh
+node tests/unit/fixture-firestore-reference.cjs
+node tests/unit/stripe-pinned-checkout-flow.cjs
+node tests/unit/managed-delivery-checkout-ui-browser.cjs
+node tests/unit/delivery-native-lifecycle.cjs
+```

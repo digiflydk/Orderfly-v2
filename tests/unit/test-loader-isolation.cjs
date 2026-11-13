@@ -10,7 +10,7 @@ test('repeated fixture loads preserve independent mocks and opaque module identi
   const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'orderfly-loader-'));
   const filename = path.join(folder, 'fixture.ts');
   try {
-    fs.writeFileSync(filename, "import { value } from 'fixture-dependency'; export const observed = value; const handle = {}; export function mint() { return handle; } export function owns(input: unknown) { return input === handle; }");
+    fs.writeFileSync(filename, "import { value } from 'fixture-dependency'; export const observed = value; const handle = {}; const handles = new WeakMap<object, string>(); handles.set(handle, value); export function mint() { return handle; } export function owns(input: object) { return handles.get(input) === value; }");
     const first = loadTs(filename, { 'fixture-dependency': { value: 'first' } });
     const second = loadTs(filename, { 'fixture-dependency': { value: 'second' } });
     assert.equal(first.observed, 'first');
@@ -43,5 +43,10 @@ test('cached graph compilation retains one identity per graph and isolates graph
     assert.equal(first(filename).observed, 'first');
     assert.equal(second(filename).observed, 'second');
     assert.notEqual(first(filename).capability, second(filename).capability);
+    fs.writeFileSync(filename, "export const observed = 'updated'; export const capability = {};");
+    const third = moduleGraph();
+    assert.equal(third(filename).observed, 'updated');
+    assert.equal(first(filename).observed, 'first', 'an evaluated graph keeps its CommonJS identity');
+    assert.notEqual(third(filename).capability, first(filename).capability);
   } finally { fs.rmSync(folder, { recursive: true, force: true }); }
 });

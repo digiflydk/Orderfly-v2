@@ -3,7 +3,7 @@ const { compileFixture } = require('./load-ts.cjs');
 
 // Cache before evaluation, as CommonJS does. This preserves production module
 // identity/opaque WeakMaps when the outbox lazily imports its financial writer.
-// Existing noncached loadTs is deliberately unchanged.
+// loadTs still evaluates fresh exports; only its compilation output is shared.
 exports.moduleGraph = (mocks = {}) => {
   const modules = new Map();
   const load = filename => {
