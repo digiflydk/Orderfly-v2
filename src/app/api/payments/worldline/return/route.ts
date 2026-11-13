@@ -7,7 +7,7 @@ import { readPinnedWorldlineAgreement } from '@/lib/payments/worldline-store';
 import { readWorldlineTransaction } from '@/lib/payments/worldline-client';
 import { assertWorldlineTransaction, worldlineBindingSchema } from '@/lib/payments/worldline-verification';
 import { reconcileWorldlineOrder } from '@/lib/payments/worldline-reconcile';
-import { isWorldlineCallbackFinanciallyComplete, waitForWorldlineCallbackFinancialCompletion } from '@/lib/payments/worldline-callback-completion';
+import { isWorldlineCallbackFinanciallyComplete, worldlineNativeTerminalOutcome, waitForWorldlineReturnOutcome } from '@/lib/payments/worldline-callback-completion';
 import { brandSlugFromHost, storefrontPath } from '@/lib/brand-subdomain';
 
 export const runtime = 'nodejs';
@@ -17,10 +17,14 @@ const headers = { 'Cache-Control': 'private, no-store', 'Referrer-Policy': 'no-r
 type ReturnStage = 'proof' | 'order' | 'storefront' | 'agreement' | 'transaction' | 'admission' | 'settlement';
 class ReturnFailure extends Error { constructor(readonly status: 400 | 403 | 409 | 503) { super('Worldline return unavailable'); } }
 function fail(status: 400 | 403 | 409 | 503): never { throw new ReturnFailure(status); }
-const incomplete = (stage: ReturnStage, timeout: boolean) => {
+const incomplete = (stage: ReturnStage, timeout: boolean, retryUrl?: string) => {
   const code = `WORLDLINE_RETURN_${stage.toUpperCase()}_${timeout ? 'TIMEOUT' : 'UNAVAILABLE'}`;
-  return new Response(`Betalingen er endnu ikke bekræftet. Genindlæs denne side for at kontrollere status. Betal ikke igen. Fejlkode: ${code}`, {
-    status: 503, headers: { ...headers, 'Retry-After': '3', 'X-Payment-Error-Code': code },
+  // Exception-only page: the successful path remains an empty HTTP redirect.
+  // The retry link contains only validated native proof fields, never provider
+  // return/card/hash parameters, and cannot start a new checkout session.
+  const retry = retryUrl ? `<a href="${retryUrl.replaceAll('&', '&amp;')}">Kontrollér samme betaling</a>` : '';
+  return new Response(`<!doctype html><html lang="da"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Betalingsstatus | Orderfly</title><style>body{font:1rem system-ui,sans-serif;margin:0;color:#17212b;background:#f7f8fa}main{max-width:36rem;margin:12vh auto;padding:2rem;background:white;border-radius:1rem}h1{font-size:1.6rem}p{line-height:1.6}a{display:inline-block;padding:1rem;background:#087f8c;color:white;border-radius:.5rem;text-decoration:none}small{display:block;margin-top:2rem;overflow-wrap:anywhere}</style><main><p>Orderfly</p><h1>Betalingen er endnu ikke bekræftet</h1><p>Vi kunne ikke hente den endelige betalingsstatus. Betalingen kan stadig være under behandling. Betal ikke igen.</p><p>Kontrollér den samme betaling igen, eller kontakt restauranten med fejlkoden nedenfor.</p>${retry}<small>Fejlkode: ${code}</small></main></html>`, {
+    status: 503, headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '3', 'X-Payment-Error-Code': code },
   });
 };
 const id = (value: string) => /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -40,6 +44,9 @@ export async function GET(request: Request) {
   const transactionHint = url.searchParams.get('txnid');
   if (url.search.length > 16384 || !id(orderId) || !/^[a-f0-9]{64}$/.test(receiptToken) || transactionHint !== null && !txn(transactionHint)
     || url.searchParams.getAll('order_id').length !== 1 || url.searchParams.getAll('receipt_token').length !== 1 || url.searchParams.getAll('txnid').length > 1) return new Response('Betalingsreturen kunne ikke valideres.', { status: 400, headers });
+  const retryQuery = new URLSearchParams({ order_id: orderId, receipt_token: receiptToken });
+  if (transactionHint) retryQuery.set('txnid', transactionHint);
+  const retryUrl = `/api/payments/worldline/return?${retryQuery}`;
   let preparationExpired = false, preparationTimer: ReturnType<typeof setTimeout> | undefined;
   const active = () => { if (preparationExpired || Date.now() >= deadline) fail(503); };
   const read = async <T,>(operation: () => Promise<T>): Promise<T> => {
@@ -65,7 +72,6 @@ export async function GET(request: Request) {
         || order.paymentMethod !== 'Worldline' || order.psp?.provider !== 'worldline'
         || !/^[a-f0-9]{64}$/.test(order.receiptTokenHash || '')
         || !timingSafeEqual(Buffer.from(order.receiptTokenHash, 'hex'), createHash('sha256').update(receiptToken).digest())) fail(403);
-      if (order.status === 'Canceled' || order.paymentStatus === 'Failed') fail(409);
       const parsedBinding = worldlineBindingSchema.safeParse(order.paymentAgreement);
       if (!parsedBinding.success) fail(403);
       const binding = parsedBinding.data;
@@ -84,22 +90,55 @@ export async function GET(request: Request) {
       const path = storefrontPath(brandData.slug, onSubdomain, locationData.slug, 'checkout', 'confirmation');
       const target = `${path}?${new URLSearchParams({ order_id: orderId, receipt_token: receiptToken })}`;
       const expected = { orderId, brandId: order.brandId, locationId: order.locationId, transactionId, amountMinor, binding };
-      if (isWorldlineCallbackFinanciallyComplete(order, expected)) return { expected, ref, target, complete: true };
-      stage = 'agreement';
-      const pinned = await read(() => readPinnedWorldlineAgreement(binding));
-      active();
-      if (!isDeepStrictEqual(pinned.binding, binding)) fail(403);
+      let pinned: Awaited<ReturnType<typeof readPinnedWorldlineAgreement>> | undefined;
+      const account = async () => {
+        if (!pinned) {
+          stage = 'agreement';
+          const result = await read(() => readPinnedWorldlineAgreement(binding));
+          if (!isDeepStrictEqual(result.binding, binding)) fail(403);
+          pinned = result;
+        }
+        return pinned;
+      };
+      const terminalOutcome = async (value: unknown) => {
+        const terminal = worldlineNativeTerminalOutcome(value, expected);
+        if (!terminal) return null;
+        const original = await account();
+        stage = 'transaction';
+        const transaction = assertWorldlineTransaction(await read(() => readWorldlineTransaction(original.credentials, binding.mode, transactionId)), {
+          orderId, transactionId, merchantNumber: binding.merchantNumber, mode: binding.mode, amountMinor, currency: 'DKK',
+        });
+        const refundMinor = (value as Record<string, any>).refundedAmountOre;
+        if (terminal !== 'canceled' ? transaction.status.toLowerCase() !== 'approved'
+          || transaction.total.captured !== amountMinor || transaction.total.credited !== refundMinor
+          : transaction.status.toLowerCase() !== 'deleted' || transaction.total.captured !== 0 || transaction.total.credited !== 0) fail(409);
+        // The receipt capability and native terminal state must still match after
+        // provider I/O; no capture/refund/cancel operation is initiated here.
+        const current = (await read(() => ref.get())).data();
+        return worldlineNativeTerminalOutcome(current, expected) === terminal
+          && (terminal === 'canceled' || current?.refundedAmountOre === refundMinor) ? terminal : null;
+      };
+      if (isWorldlineCallbackFinanciallyComplete(order, expected)) return { expected, ref, target, terminalOutcome, complete: true };
+      if (worldlineNativeTerminalOutcome(order, expected)) {
+        if (await terminalOutcome(order)) return { expected, ref, target, terminalOutcome, complete: true };
+        fail(409);
+      }
+      if (order.status === 'Canceled' || order.paymentStatus === 'Failed') fail(409);
+      const original = await account();
       stage = 'transaction';
-      const rawObservation = await read(() => readWorldlineTransaction(pinned.credentials, binding.mode, transactionId));
+      const rawObservation = await read(() => readWorldlineTransaction(original.credentials, binding.mode, transactionId));
       let observation;
       try { observation = assertWorldlineTransaction(rawObservation, {
         orderId, transactionId, merchantNumber: binding.merchantNumber, mode: binding.mode, amountMinor, currency: 'DKK',
       }); } catch { fail(409); }
       active();
-      if (observation.status.toLowerCase() !== 'approved' || observation.total.credited !== 0) fail(409);
+      if (observation.status.toLowerCase() !== 'approved' || observation.total.credited !== 0) {
+        if (await terminalOutcome((await read(() => ref.get())).data())) return { expected, ref, target, terminalOutcome, complete: true };
+        fail(409);
+      }
       stage = 'admission';
       const job = db.collection('worldlinePaymentJobs').doc(orderId);
-      await db.runTransaction(async tx => {
+      try { await db.runTransaction(async tx => {
         const [current, previous] = await Promise.all([tx.get(ref), tx.get(job)]);
         active();
         const value = current.data(), prior = previous.data();
@@ -113,16 +152,20 @@ export async function GET(request: Request) {
           tx.create(job, { orderId, brandId: order.brandId, locationId: order.locationId, transactionId, state: 'pending', nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now() });
         }
         if (!value.psp.transactionId) tx.update(ref, { 'psp.transactionId': transactionId });
-      });
+      }); } catch (error) {
+        if (error instanceof ReturnFailure && error.status === 409 && await terminalOutcome((await read(() => ref.get())).data()))
+          return { expected, ref, target, terminalOutcome, complete: true };
+        throw error;
+      }
       active();
-      return { expected, ref, target, complete: false };
+      return { expected, ref, target, terminalOutcome, complete: false };
     };
     const prepared = await Promise.race([
       prepare(),
       new Promise<undefined>(resolve => { preparationTimer = setTimeout(() => { preparationExpired = true; resolve(undefined); }, Math.max(0, deadline - Date.now())); }),
     ]);
     clearTimeout(preparationTimer);
-    if (!prepared) return incomplete(stage, true);
+    if (!prepared) return incomplete(stage, true, retryUrl);
     if (!prepared.complete) {
       // Use the original journalled reconciliation once. Another callback may
       // already own its capture; native observation below can await that commit
@@ -152,15 +195,15 @@ export async function GET(request: Request) {
       })();
       try { after(async () => { await work; }); } catch { /* Durable admission still owns recovery. */ }
       let complete;
-      try { complete = await waitForWorldlineCallbackFinancialCompletion({ expected: prepared.expected,
+      try { complete = await waitForWorldlineReturnOutcome({ expected: prepared.expected, terminalOutcome: prepared.terminalOutcome,
         readOrder: async () => (await prepared.ref.get()).data(), work, timeoutMs: Math.max(0, deadline - Date.now()),
         pollIntervalMs: 250, stopWhenWorkFinishes: false, retryReadFailures: true }); }
       finally { gateFinished = true; }
-      if (!complete) return incomplete(stage, true);
+      if (!complete) return incomplete(stage, true, retryUrl);
     }
     return new Response(null, { status: 302, headers: { ...headers, Location: prepared.target } });
   } catch (error) {
     if (error instanceof ReturnFailure && error.status !== 503) return new Response('Betalingsreturen kunne ikke valideres.', { status: error.status, headers });
-    return incomplete(stage, preparationExpired || Date.now() >= deadline);
+    return incomplete(stage, preparationExpired || Date.now() >= deadline, retryUrl);
   } finally { clearTimeout(preparationTimer); }
 }
