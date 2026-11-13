@@ -55,6 +55,7 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
+const CART_RESTORE_TIMEOUT_MS = 15000;
 
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -206,10 +207,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const seed = seedRef.current;
     const restoration = !matching?.choices.length && seed?.key === contextKey
       ? Promise.resolve({items: [], removed: 0, discounts: seed.discounts})
-      : restoreCartAction({ brandId: brand.id, locationId: location.id, deliveryType, choices: matching?.choices || [] });
+      : Promise.resolve().then(() => restoreCartAction({ brandId: brand.id, locationId: location.id, deliveryType, choices: matching?.choices || [] }));
+    // Server Actions cannot be aborted by this client. Bound the wait and
+    // invalidate the generation so a late reply cannot overwrite a retry/cart.
+    const deadline = window.setTimeout(() => {
+      if (generation.current !== request) return;
+      generation.current++;
+      setRestoreError(true);
+    }, CART_RESTORE_TIMEOUT_MS);
     restoration
       .then(result => {
         if (generation.current !== request) return;
+        if (!result || !Array.isArray(result.items) || !Array.isArray(result.discounts)
+          || !Number.isSafeInteger(result.removed) || result.removed < 0
+          || result.items.some(item => !item || item.brandId !== brand.id)) throw new Error('Invalid cart response');
+        window.clearTimeout(deadline);
         seedRef.current = null;
         setCartItems(result.items);
         setStandardDiscounts(result.discounts);
@@ -221,9 +233,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
         readyRef.current = true;
         setReadyKey(contextKey);
       }).catch(() => {
+        window.clearTimeout(deadline);
         if (generation.current === request) setRestoreError(true);
       });
-    return () => { generation.current++; };
+    return () => { window.clearTimeout(deadline); generation.current++; };
   }, [brand?.id, location?.id, deliveryType, isInitialized, retry]);
 
   useEffect(() => {
@@ -278,6 +291,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCartItems([]);
     setAppliedDiscount(null);
     setIncludeBagFee(true);
+    // A verified receipt can clear its saved basket before hydration finishes.
+    // The superseded read must not keep that context permanently unready.
+    if (!readyRef.current) setRetry(value => value + 1);
   }, []);
 
   const { subtotal, itemCount, itemDiscount, automaticCartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, cartTotal, checkoutTotal, vatAmount, finalDiscount } = useMemo(() => {
@@ -404,11 +420,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   return <CartContext.Provider value={value}>
     {children}
-    {contextKey && !cartReady && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6" role="status" aria-live="polite">
+    {contextKey && !cartReady && <div className="fixed left-4 right-4 top-20 z-40 mx-auto max-w-lg rounded border bg-background p-4 shadow-lg" role={restoreError ? 'alert' : 'status'} aria-live="polite">
       {restoreError ? <div className="text-center">
         <p>Kurven kunne ikke indlæses. Prøv igen for at hente aktuelle priser.</p>
         <button className="mt-4 rounded bg-primary px-4 py-2 text-primary-foreground" onClick={() => setRetry(value => value + 1)}>Prøv igen</button>
-      </div> : <span className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" aria-label="Indlæser" />}
+      </div> : <div className="flex items-center gap-3"><span aria-hidden="true" className="h-5 w-5 shrink-0 animate-spin rounded-full border-2 border-muted border-t-primary" /><p>Indlæser kurven og kontrollerer aktuelle priser…</p></div>}
     </div>}
     {cartReady && cartNotice && <div role="status" className="fixed left-4 right-4 top-4 z-[90] rounded border bg-background p-4 shadow-lg">
       {cartNotice}<button className="ml-4 underline" onClick={() => setCartNotice('')}>Luk</button>

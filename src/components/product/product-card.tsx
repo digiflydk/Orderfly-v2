@@ -8,8 +8,7 @@ import { productPriceData } from '@/lib/product-price';
 import type { StandardDiscount, ProductForMenu } from '@/types';
 import { memo, useState, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { publicRead } from '@/lib/public-read';
-import type { Topping, ToppingGroup } from '@/types';
+import { readProductOptions } from '@/lib/product-options-read';
 const ProductDialog = dynamic(() => import('./product-dialog').then(module => module.ProductDialog));
 import { useCart } from "@/context/cart-context";
 import { Badge } from "@/components/ui/badge";
@@ -57,12 +56,14 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
   const [allToppings, setAllToppings] = useState<any[]>([]);
   const [isPending, setIsPending] = useState(false);
   const [optionError, setOptionError] = useState(false);
+  const [loadedOptionKey, setLoadedOptionKey] = useState('');
   const pending = useRef(false);
   const upsellAdded = useRef(false);
   const generation = useRef(0);
   const { toast } = useToast();
 
   const { deliveryType, location, cartReady, cartItems, addToCart } = useCart();
+  const optionKey = `${product.brandId}/${location?.id}/${product.id}`;
   const {trackEvent} = useAnalytics();
   const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
   const onAdded = (directAdd = false) => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id,interactionId:upsellInteractionId,locationId:location?.id}); onProductAdded?.(directAdd);};
@@ -93,7 +94,10 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
 
   const badgeText = getBadgeText();
   
-  useEffect(() => () => { generation.current++; pending.current = false; }, [product.id, location?.id]);
+  useEffect(() => {
+    pending.current = false;setIsPending(false);setOptionError(false);setIsDialogOpen(false);
+    return () => { generation.current++; pending.current = false; };
+  }, [optionKey]);
   const handleCardClick = async () => {
     if (!location || pending.current) return;
     const request = ++generation.current;
@@ -101,11 +105,11 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
     setIsPending(true); setOptionError(false);
     try {
       const options = product.toppingGroupIds?.length
-        ? await publicRead<{toppings: Topping[]; groups: ToppingGroup[]}>(`/api/public/product-options?${new URLSearchParams({brandId: product.brandId, locationId: location.id})}`)
+        ? await readProductOptions(product.brandId, location.id)
         : {toppings: [], groups: []};
       if (request !== generation.current) return;
       if (!Array.isArray(options.toppings) || !Array.isArray(options.groups)) throw new Error('Invalid option response');
-      setAllToppings(options.toppings); setAllToppingGroups(options.groups); setIsDialogOpen(true);
+      setAllToppings(options.toppings); setAllToppingGroups(options.groups);setLoadedOptionKey(optionKey); setIsDialogOpen(true);
     } catch { if (request === generation.current) setOptionError(true); }
     finally { if (request === generation.current) {pending.current = false; setIsPending(false);} }
   };
@@ -182,7 +186,7 @@ export const ProductCard = memo(function ProductCard({ product, activeDiscounts,
         </div>
       </article>
       {optionError && <p role="alert" className="text-sm text-destructive">Tilvalg kunne ikke indlæses. <button className="underline" onClick={handleCardClick}>Prøv igen</button></p>}
-      {isDialogOpen && <ProductDialog
+      {isDialogOpen && loadedOptionKey === optionKey && <ProductDialog
         product={productForDialog}
         allToppingGroups={allToppingGroups}
         allToppings={allToppings}

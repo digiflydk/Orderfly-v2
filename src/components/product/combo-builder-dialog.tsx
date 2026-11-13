@@ -1,7 +1,7 @@
 
 'use client';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
-import { publicRead } from '@/lib/public-read';
+import { readProductOptions } from '@/lib/product-options-read';
 import { ProductOptionGroup } from './product-option-group';
 import { activeToppingGroupIds } from '@/lib/topping-conditions';
 import { resolveToppingOptions, reconcileToppingQuantities, cartTopping, type EffectiveTopping } from '@/lib/topping-options';
@@ -102,7 +102,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
     let cancelled = false;
     setOptionError(false);
     const needsOptions = configureProducts && combo.productGroups.some(g => brandProducts.some(p => g.productIds.includes(p.id) && p.toppingGroupIds?.length));
-    const read = needsOptions ? publicRead<{groups: ToppingGroup[]; toppings: Topping[]}>(`/api/public/product-options?${new URLSearchParams({brandId: combo.brandId, locationId: location.id})}`) : Promise.resolve({groups: [], toppings: []});
+    const read = needsOptions ? readProductOptions(combo.brandId, location.id) : Promise.resolve({groups: [], toppings: []});
     read
       .then(data => { if (!Array.isArray(data.groups) || !Array.isArray(data.toppings)) throw Error('Invalid options'); if (!cancelled) setOptionCatalog({...data, key: optionKey}); })
       .catch(() => {if (!cancelled) setOptionError(true);});
