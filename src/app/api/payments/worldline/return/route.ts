@@ -118,12 +118,13 @@ export async function GET(request: Request) {
         return worldlineNativeTerminalOutcome(current, expected) === terminal
           && (terminal === 'canceled' || current?.refundedAmountOre === refundMinor) ? terminal : null;
       };
-      if (isWorldlineCallbackFinanciallyComplete(order, expected)) return { expected, ref, target, terminalOutcome, complete: true };
+      if (isWorldlineCallbackFinanciallyComplete(order, expected)) return { expected, ref, target, terminalOutcome, complete: true, observeOnly: false };
       if (worldlineNativeTerminalOutcome(order, expected)) {
-        if (await terminalOutcome(order)) return { expected, ref, target, terminalOutcome, complete: true };
+        if (await terminalOutcome(order)) return { expected, ref, target, terminalOutcome, complete: true, observeOnly: false };
         fail(409);
       }
-      if (order.status === 'Canceled' || order.paymentStatus === 'Failed') fail(409);
+      const terminalInFlight = (order.status === 'Canceled' || order.paymentStatus === 'Failed') && !!order.paymentOperation;
+      if ((order.status === 'Canceled' || order.paymentStatus === 'Failed') && !terminalInFlight) fail(409);
       const original = await account();
       stage = 'transaction';
       const rawObservation = await read(() => readWorldlineTransaction(original.credentials, binding.mode, transactionId));
@@ -132,9 +133,21 @@ export async function GET(request: Request) {
         orderId, transactionId, merchantNumber: binding.merchantNumber, mode: binding.mode, amountMinor, currency: 'DKK',
       }); } catch { fail(409); }
       active();
-      if (observation.status.toLowerCase() !== 'approved' || observation.total.credited !== 0) {
-        if (await terminalOutcome((await read(() => ref.get())).data())) return { expected, ref, target, terminalOutcome, complete: true };
+      if (observation.status.toLowerCase() !== 'approved') {
+        if (await terminalOutcome((await read(() => ref.get())).data())) return { expected, ref, target, terminalOutcome, complete: true, observeOnly: false };
         fail(409);
+      }
+      if (observation.total.credited !== 0 || terminalInFlight) {
+        const current = (await read(() => ref.get())).data();
+        if (await terminalOutcome(current)) return { expected, ref, target, terminalOutcome, complete: true, observeOnly: false };
+        // Provider credit can precede the atomic native refund accounting. Wait
+        // for its original native outcome; never capture/reconcile this payment
+        // merely because a browser returned during that narrow window.
+        if (!current || current.id !== orderId || current.brandId !== order.brandId || current.locationId !== order.locationId
+          || current.paymentMethod !== 'Worldline' || current.psp?.provider !== 'worldline' || current.psp.transactionId !== transactionId
+          || current.receiptTokenHash !== order.receiptTokenHash || current.totalAmount !== order.totalAmount
+          || !isDeepStrictEqual(current.paymentAgreement, binding)) fail(409);
+        return { expected, ref, target, terminalOutcome, complete: false, observeOnly: true };
       }
       stage = 'admission';
       const job = db.collection('worldlinePaymentJobs').doc(orderId);
@@ -154,11 +167,11 @@ export async function GET(request: Request) {
         if (!value.psp.transactionId) tx.update(ref, { 'psp.transactionId': transactionId });
       }); } catch (error) {
         if (error instanceof ReturnFailure && error.status === 409 && await terminalOutcome((await read(() => ref.get())).data()))
-          return { expected, ref, target, terminalOutcome, complete: true };
+          return { expected, ref, target, terminalOutcome, complete: true, observeOnly: false };
         throw error;
       }
       active();
-      return { expected, ref, target, terminalOutcome, complete: false };
+      return { expected, ref, target, terminalOutcome, complete: false, observeOnly: false };
     };
     const prepared = await Promise.race([
       prepare(),
@@ -172,7 +185,7 @@ export async function GET(request: Request) {
       // without issuing another financial request or retrying an uncertain write.
       stage = 'settlement';
       let gateFinished = false;
-      const work = (async () => {
+      const work = prepared.observeOnly ? Promise.resolve() : (async () => {
         // There is one normal reconciliation. Every later pass is explicitly
         // observation-only: it can confirm a lost capture reply's original
         // journal and commit verified settlement, never send another capture.

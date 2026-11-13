@@ -15,6 +15,11 @@ never captures, refunds or cancels merely to display that outcome. Partial refun
 or locked outcomes cannot masquerade as a completed full
 refund or approved checkout.
 
+If the provider credit becomes visible before native refund accounting finishes,
+the return observes that existing accounting work without starting financial
+reconciliation or creating a payment job. It waits for matching native counters
+and a fresh provider observation before presenting a final refund.
+
 The guest projection exposes only server-derived `paymentOutcome` display state.
 The receipt shows refund/cancellation rather than “Tak for din bestilling!”. A
 fully or partially refunded or canceled outcome does not emit a purchase conversion or celebrate a

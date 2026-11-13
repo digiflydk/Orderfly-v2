@@ -119,3 +119,9 @@ test('changed credited amount after provider observation cannot authorize a term
  const f=fixture({patch:{paymentStatus:'Paid',status:'Received',psp:{provider:'worldline',transactionId:'123',captured:true},refundedAmountOre:2500,refundedAt:new Date()},observation:{total:{authorized:12500,captured:12500,credited:2500}},onProvider:rows=>{rows.set('orders/ORD-123',{...rows.get('orders/ORD-123'),refundedAmountOre:3000});}});
  const response=await f.api.GET(f.request());assert.equal(response.status,409);assert.equal(response.headers.get('Location'),null);assert.equal(f.calls.reconcile,0);
 });
+
+test('credit visible before native refund accounting waits in display-only mode without financial reconciliation',async()=>{
+ const f=fixture({patch:{paymentStatus:'Paid',status:'Pending',psp:{provider:'worldline',transactionId:'123',captured:true},paymentOperation:'delivery-refund:existing'},observation:{total:{authorized:12500,captured:12500,credited:12500}}});
+ setTimeout(()=>{const row=f.rows.get('orders/ORD-123');f.rows.set('orders/ORD-123',{...row,status:'Canceled',refundedAmountOre:12500,refundedAt:new Date(),paymentOperation:null});},5);
+ const response=await f.api.GET(f.request());assert.equal(response.status,302);assert.equal(f.calls.reconcile,0);assert.equal(f.calls.observations,0);assert.equal(f.rows.has('worldlinePaymentJobs/ORD-123'),false);
+});
