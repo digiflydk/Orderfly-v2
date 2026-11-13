@@ -78,6 +78,7 @@ provider result stays unknown; never turn an unknown cancellation into a claimed
 success. Actual admin refund/void, physical print and iOS Safari require their
 own authenticated/device evidence. Isolated tests do not fill those gaps.
 
-Worldline controls the separate hosted page and its loader scheduling. No
-documented API setting removes the observed one-second loader scheduling gap.
-That provider boundary is documented, not falsely marked as a merchant-code fix.
+Worldline controls the separate hosted page and its loader scheduling. The
+inspected public frontend schedules its loader one second later; actual blank
+repaint duration was not measured. No documented merchant API setting controls
+that timer. This boundary is documented, not falsely marked as a merchant-code fix.
