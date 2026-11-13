@@ -8,10 +8,30 @@ const identity = { provider: 'firebase', subject: 'employee' };
 const actorId = principalKey(identity);
 
 async function paymentFixture(options = {}) {
+  const providerSessions = new Map();
   const created = await checkout({ ...options, realReservations: true,
     brandOverrides: { companyRegNo: '12345678', companyName: 'Fixture ApS', street: 'Testvej 1', zipCode: '2300', city: 'København', country: 'DK', currency: 'DKK', ...options.brandOverrides },
     locationOverrides: { paymentMethods: { online: true, payAtPickup: true }, ...options.locationOverrides },
-    customerOverrides: { paymentMethod: 'pay_at_pickup', ...options.customerOverrides } });
+    customerOverrides: { paymentMethod: 'pay_at_pickup', ...options.customerOverrides },
+    configureMocks: context => {
+      options.configureMocks?.(context);
+      const Original = context.mocks.stripe.default;
+      context.mocks.stripe = { default: class extends Original {
+        constructor(...args) {
+          super(...args);
+          const create = this.checkout.sessions.create;
+          this.checkout.sessions.create = async (...input) => {
+            const session = await create(...input);
+            const order = context.records.get('orders/' + input[0].metadata.orderId);
+            providerSessions.set(session.id, { id: session.id, mode: 'payment', status: 'complete', payment_status: 'paid',
+              currency: 'dkk', livemode: String(args[0]).startsWith('sk_live_'),
+              amount_total: Math.round(order.totalAmount * 100), metadata: structuredClone(input[0].metadata) });
+            return session;
+          };
+        }
+      } };
+    },
+  });
   const { records } = created;
   records.set('platformAdminControl/access-v1', {
     principals: [{ id: actorId, active: true, name: 'Testmedarbejder' }],
@@ -41,6 +61,12 @@ async function paymentFixture(options = {}) {
     return result.grants.map(grant => ({ brandId: grant.tenantId, locationIds: grant.locationIds }));
   };
   const mocks = { 'server-only': {},
+    stripe: { default: class {
+      checkout = { sessions: { retrieve: async id => {
+        if (!providerSessions.has(id)) throw Error('Synthetic provider session is unavailable');
+        return structuredClone(providerSessions.get(id));
+      } } };
+    } },
     '@/lib/firebase-admin': { getAdminDb: () => db, getAdminFieldValue: () => ({ serverTimestamp: () => new Date() }) },
     '@/lib/access/orderfly-session': { orderflySession: async () => ({ identity, actorId, name: 'Testmedarbejder', superuser: false, permissions: [] }), verifiedOrderflyIdentity: async () => identity, orderflyReadGrants: grants },
     './orderfly-session': { verifiedOrderflyIdentity: async () => identity, orderflyReadGrants: grants },

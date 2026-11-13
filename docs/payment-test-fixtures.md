@@ -15,6 +15,12 @@ WeakMaps keep their required identity. Separate graphs remain independent. The
 merchant payment fixture uses a fresh graph per fixture, avoiding repeated server
 graph evaluation and retaining native capability identity.
 
+The merchant browser fixture snapshots its synthetic Stripe session at checkout
+creation. Later server verification retrieves an independent copy of that original
+provider observation; it does not derive a payment observation from a subsequently
+edited order or call the real Stripe API with fixture keys. Production account,
+session and settlement validation still execute.
+
 `test-loader-isolation.cjs` verifies independent mocks/handles, unchanged-source
 graph identity and source-change invalidation. The historical Stripe lifecycle
 fixture now mocks the server-only import sentinel, and the price validation
