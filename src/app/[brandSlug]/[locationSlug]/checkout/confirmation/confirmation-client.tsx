@@ -178,18 +178,14 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         )
     }
     
-    const worldlineOrderCanceled = order.paymentMethod === 'Worldline' && order.status === 'Canceled';
-    const inlineWorldlinePending = order.paymentMethod === 'Worldline' && order.paymentStatus === 'Pending'
-      && !worldlineOrderCanceled && order.managedDeliveryTracking?.paymentStatus !== 'refunded'
-      && order.managedDeliveryTracking?.deliveryStatus !== 'cancelled';
-    if (order.paymentStatus !== 'Paid' && !pickupAccepted && !inlineWorldlinePending) {
+    if (order.paymentStatus !== 'Paid' && !pickupAccepted) {
         const pickupCanceled = order.paymentMethod === 'PayAtPickup' && order.status === 'Canceled';
-        const failed = order.paymentStatus === 'Failed' || pickupCanceled || worldlineOrderCanceled;
+        const failed = order.paymentStatus === 'Failed' || pickupCanceled;
         const refunded=order.managedDeliveryTracking?.paymentStatus==='refunded';
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
-            <h1 className="text-2xl font-bold">{refunded?'Betalingen er refunderet':pickupCanceled || worldlineOrderCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
-            <p className="my-4">{refunded?'Betalingen for leveringen er refunderet. Se leveringsstatus nedenfor.':pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : worldlineOrderCanceled ? 'Ordren er annulleret. Kontakt restauranten, hvis du har spørgsmål til betalingen.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
+            <h1 className="text-2xl font-bold">{refunded?'Betalingen er refunderet':pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
+            <p className="my-4">{refunded?'Betalingen for leveringen er refunderet. Se leveringsstatus nedenfor.':pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
@@ -225,8 +221,8 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     const cancellationPending = tracking?.cancellationState === 'unknown' || tracking?.cancellationState === 'submitting';
     const rejected = tracking?.bookingState === 'rejected';
     const unconfirmed = !!tracking && tracking.bookingState !== 'accepted';
-    const receiptTitle = refunded ? 'Din betaling er refunderet' : worldlineOrderCanceled ? 'Ordren er annulleret' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : inlineWorldlinePending ? 'Din bestilling' : unconfirmed && order.paymentMethod !== 'Worldline' ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
-    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : worldlineOrderCanceled ? ' er annulleret.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : inlineWorldlinePending ? ' er oprettet.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
+    const receiptTitle = refunded ? 'Din betaling er refunderet' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
+    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
 
     return (
         <div className="min-h-screen w-full bg-background">
@@ -234,9 +230,9 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
             <main className="flex-1 py-12 px-4">
                 <div className="w-full max-w-3xl mx-auto space-y-8">
                      <div className="text-center">
-                        {!inlineWorldlinePending && <div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${worldlineOrderCanceled?'bg-amber-100':'bg-green-100'} mb-4`}>
-                           {worldlineOrderCanceled?<AlertTriangle className="h-10 w-10 text-amber-700"/>:order.managedDeliveryTracking&&(order.managedDeliveryTracking.bookingState!=='accepted'||cancelled||cancellationPending)?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
-                        </div>}
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
+                           {order.managedDeliveryTracking&&(order.managedDeliveryTracking.bookingState!=='accepted'||cancelled||cancellationPending)?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
+                        </div>
                         <h1 data-order-receipt-title tabIndex={-1} className="text-3xl font-bold tracking-tight">{receiptTitle}</h1>
                         {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
@@ -267,16 +263,15 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                 )}
                                 <InfoItem icon={Hash} label="Ordrestatus"><Badge>{tracking?.paymentStatus==='paid'&&status==='Pending'?'Afventer levering':{Pending:'Afventer betaling',Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Afventer betaling'}</Badge></InfoItem>
                                 <InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
-                                {order.paymentMethod === 'Worldline' && <InfoItem icon={CreditCard} label="Betalingsstatus"><Badge role="status" aria-live="polite">{refunded ? 'Refunderet' : inlineWorldlinePending ? 'Behandles' : order.paymentStatus === 'Paid' ? 'Betalt' : 'Ikke bekræftet'}</Badge></InfoItem>}
                              </CardContent>
                         </Card>
                     </div>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>{pickupAccepted || inlineWorldlinePending ? 'Din ordreoversigt' : 'Din faktura'}</CardTitle>
+                            <CardTitle>{pickupAccepted ? 'Din ordreoversigt' : 'Din faktura'}</CardTitle>
                             <CardDescription>
-                                {!inlineWorldlinePending && order.invoice ? `Faktura ${order.invoice.number} · ` : ''}Bestilt den {formattedCreatedAt}
+                                {order.invoice ? `Faktura ${order.invoice.number} · ` : ''}Bestilt den {formattedCreatedAt}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -355,7 +350,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                     <span>{formatPrice(vatAmount)}</span>
                                 </div>
                                 )}
-                                {!inlineWorldlinePending && order.invoice && <div className="mt-5 border-t pt-4 text-xs text-muted-foreground">
+                                {order.invoice && <div className="mt-5 border-t pt-4 text-xs text-muted-foreground">
                                     <p className="font-medium text-foreground">{order.invoice.seller.legalName} · CVR {order.invoice.seller.registrationNumber}</p>
                                     <p>{order.invoice.seller.address}</p>
                                     <p>Fakturadato: {new Intl.DateTimeFormat('da-DK', { dateStyle: 'long', timeZone: 'Europe/Copenhagen' }).format(new Date(order.invoice.issuedAt))}</p>
@@ -365,10 +360,9 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                     </Card>
 
                     <div className="text-center space-x-4">
-                         {!inlineWorldlinePending && <Button asChild variant="outline">
+                         <Button asChild variant="outline">
                             <Link href={`/feedback?orderId=${order.id}&customerId=${order.customerDetails.id}`}>Giv feedback</Link>
-                        </Button>}
-                        {inlineWorldlinePending && <Button variant="outline" disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
+                        </Button>
                         <Button asChild>
                             <Link href={storefront(location.slug)}>Tilbage til menuen</Link>
                         </Button>
