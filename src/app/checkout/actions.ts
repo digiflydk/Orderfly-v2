@@ -899,7 +899,7 @@ export async function createStripeCheckoutSessionAction(
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         ...(nativeFree?{freeCheckout:{version:1,kind:'discount_card'}}:{}),
-        ...(paymentMethod === 'online' && !nativeFree ? { psp: { provider: agreement?.provider || 'stripe' }, ...(agreement ? {paymentAgreement:agreement.provider==='stripe'?agreement.binding:worldlineBindingSchema.parse({provider:'worldline',mode:agreement.mode,owner:agreement.owner,reference:agreement.reference,merchantNumber:agreement.merchantNumber,revision:agreement.revision})} : {}) } : {}),
+        ...(paymentMethod === 'online' && !nativeFree ? { psp: { provider: agreement?.provider || 'stripe', ...(agreement?.provider==='worldline' && totalAmount>0 ? {captureMode:'provider_instant'} : {}) }, ...(agreement ? {paymentAgreement:agreement.provider==='stripe'?agreement.binding:worldlineBindingSchema.parse({provider:'worldline',mode:agreement.mode,owner:agreement.owner,reference:agreement.reference,merchantNumber:agreement.merchantNumber,revision:agreement.revision})} : {}) } : {}),
         ...(managedQuote ? {managedDelivery:{version:1,providerId:managedQuote.binding.providerId,quoteRef:managedQuote.quoteRef,requestDigest:managedQuote.contentDigest},...(managedStripeAccount?{managedStripeAccount}:{})} : {}),
     });
     // Six-digit order references can collide. Never overwrite another order or

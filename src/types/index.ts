@@ -405,6 +405,8 @@ export type OrderDetail = OrderSummary & {
   paidAt?: Date;
   psp?: {
       provider: 'stripe' | 'worldline';
+      /** Immutable for new Worldline sessions; absence preserves legacy server capture. */
+      captureMode?: 'provider_instant';
       transactionId?: string;
       checkoutSessionId?: string;
       paymentIntentId?: string;
