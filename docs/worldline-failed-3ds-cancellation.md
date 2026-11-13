@@ -76,7 +76,7 @@ exact diagnostic case, test mode, merchant and original owner-hash/version,
 then reads that exact version into memory. Google Bearer authentication goes
 only to the two fixed Google APIs; original agreement Basic authentication goes
 only to the fixed Europe Data catalog. Redirects and retries are disabled; all
-requests are GETs. No payment/session endpoint is invoked and nothing is changed.
+requests are GETs. In this default catalog mode, no payment/session endpoint is invoked and nothing is changed.
 
 Output is limited to the official static operator labels, exact source/code and
 optional parent-code fields. Private order/customer data, secret references,
@@ -89,3 +89,36 @@ request always uses the original reference.
 
 This is a narrowly scoped diagnostic step. Do not infer paid/unpaid/canceled
 status from the catalog label or modify a financial record based on this tool.
+
+
+## Explicit original-expiry diagnostic after catalog404
+
+The operator catalog request returned `CATALOG_READ_HTTP_404` for BEC/40200,
+after the Google order and pinned-key reads succeeded. The catalog therefore
+did not supply the needed definition. The optional `--inspect-expiry-rejection`
+mode obtains a redacted operator explanation from **one expiry attempt** on the
+original test session:
+
+```sh
+python3 scripts/worldline-response-code-diagnostic.py --order ORD-286357 --inspect-expiry-rejection
+```
+
+This flag is **not read-only**: it can expire the original hosted test window.
+It cannot capture, refund, create another checkout or write the native database.
+It is restricted to the fixed Esmeralda test scope and the exact BEC/40200 case.
+Before any provider request it requires native Pending/Pending, no captured,
+voided or expired marker, no known transaction, and the original session-expiry
+operation lock matching the hash of the stored session token. It rereads the
+same masked order immediately before the request and rejects any watched scope,
+binding, revision, status, token or lock change. These are preflight checks,
+not an atomic lock against concurrent workers; the operation itself is a
+terminal session expiry and never a financial mutation.
+
+Only an expected HTTP403/BEC40200 rejection can return the bounded merchant
+explanation to this authenticated operator. OAuth/API/MD5 values, secret
+references, original session token and authentication encodings are redacted
+case-insensitively; URLs are removed and controls/oversized messages rejected.
+This message is not exposed by the public checkout. A successful expiry reports
+only provider session closure and the need for native backend reconciliation;
+it must not be represented as a native cancellation or proof of no earlier
+payment. Unknown responses are not retried automatically.

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Read one official static response-code definition using a pinned TEST agreement.
 
-No payment/session endpoint, mutation, key creation, raw response, or secret output.
+Default mode only reads the official static catalog. The explicit
+--inspect-expiry-rejection option makes ONE expiry DELETE for the original
+already-locked TEST session. It cannot capture/refund or update the native order.
+No key creation, raw response, or secret output.
 Run explicitly in an operator's authenticated Cloud Shell; standard library only.
 """
 import argparse
@@ -90,6 +93,34 @@ def get_json(url, authorization, limit):
         fail('READ_UNAVAILABLE')
 
 
+def delete_expiry_json(url, authorization, limit):
+    """Exactly one original-session expiry request; never retry an unknown reply."""
+    if re.fullmatch(r'https://api\.v1\.checkout\.bambora\.com/sessions/[A-Za-z0-9_-]{1,256}', url) is None:
+        fail('EXPIRY_ENDPOINT_INVALID')
+    try:
+        request = urllib.request.Request(url, headers={
+            'Authorization': authorization, 'Accept': 'application/json'}, method='DELETE')
+        opener = urllib.request.build_opener(NoRedirect())
+        try:
+            response = opener.open(request, timeout=8)
+        except urllib.error.HTTPError as error:
+            # Only this explicit diagnostic request may inspect its bounded
+            # rejection body. Google/catalog errors are never read or printed.
+            response = error
+        with response:
+            status = response.status
+            if type(status) is not int or not 100 <= status <= 599:
+                fail('EXPIRY_RESPONSE_INVALID')
+            payload = response.read(limit + 1)
+            if len(payload) > limit:
+                fail('EXPIRY_RESPONSE_INVALID')
+            return status, json.loads(payload.decode('utf-8'))
+    except DiagnosticError:
+        raise
+    except Exception:
+        fail('EXPIRY_RESPONSE_UNAVAILABLE')
+
+
 def decode_fields(fields):
     if not isinstance(fields, dict):
         fail('ORDER_INVALID')
@@ -98,21 +129,82 @@ def decode_fields(fields):
         if not isinstance(value, dict) or len(value) != 1:
             fail('ORDER_INVALID')
         if 'stringValue' in value:
+            if not isinstance(value['stringValue'], str):
+                fail('ORDER_INVALID')
             result[key] = value['stringValue']
         elif 'integerValue' in value:
             raw = value['integerValue']
-            if not isinstance(raw, str) or not re.fullmatch(r'[1-9][0-9]{0,14}', raw):
+            if not isinstance(raw, str) or not re.fullmatch(r'(?:0|[1-9][0-9]{0,14})', raw):
                 fail('ORDER_INVALID')
             result[key] = int(raw)
         elif 'mapValue' in value and isinstance(value['mapValue'], dict):
             result[key] = decode_fields(value['mapValue'].get('fields', {}))
+        elif 'booleanValue' in value and type(value['booleanValue']) is bool:
+            result[key] = value['booleanValue']
+        elif 'nullValue' in value and value['nullValue'] is None:
+            result[key] = None
         else:
             fail('ORDER_INVALID')
     return result
 
 
+def validate_expiry_lock(order):
+    psp = order.get('psp', {})
+    session = psp.get('checkoutSessionId')
+    if (order.get('status') != 'Pending' or order.get('paymentStatus') != 'Pending'
+            or not isinstance(session, str) or re.fullmatch(r'[A-Za-z0-9_-]{1,256}', session) is None):
+        fail('EXPIRY_ORDER_INELIGIBLE')
+    for field in ['captured', 'voided', 'sessionExpired']:
+        value = psp.get(field)
+        if value is not None and (type(value) is not bool or value):
+            fail('EXPIRY_ORDER_INELIGIBLE')
+    if psp.get('transactionId') is not None:
+        fail('EXPIRY_KNOWN_TRANSACTION_REQUIRES_RECONCILIATION')
+    revision = order.get('paymentRevision', 0)
+    if type(revision) is not int or revision < 0:
+        fail('EXPIRY_ORDER_INELIGIBLE')
+    expected = 'session-expiry:' + hashlib.sha256(session.encode('utf-8')).hexdigest()
+    if order.get('paymentOperation') != expected:
+        fail('EXPIRY_ORIGINAL_LOCK_REQUIRED')
+    return session
+
+
+def expiry_diagnostic(status, body, private_values):
+    if not isinstance(body, dict) or not isinstance(body.get('meta'), dict):
+        fail('EXPIRY_RESPONSE_INVALID')
+    meta = body['meta']
+    action = meta.get('action')
+    if not isinstance(action, dict) or action.get('source') != 'BEC':
+        fail('EXPIRY_RESPONSE_IDENTITY_MISMATCH')
+    if (type(meta.get('result')) is not bool or not isinstance(action.get('type'), str) or action.get('type') not in
+            {'success', 'validationerror', 'generalerror', 'systemerror', 'acquirererror'}):
+        fail('EXPIRY_RESPONSE_INVALID')
+    if meta['result'] is True:
+        if (not 200 <= status < 300 or not isinstance(action.get('code'), str)
+                or action['code'] not in {'2000', '20000'} or action['type'] != 'success'):
+            fail('EXPIRY_RESPONSE_IDENTITY_MISMATCH')
+        return {'httpStatus': status, 'source': 'BEC', 'actioncode': action['code'], 'type': 'success',
+                'result': True, 'sessionExpiryConfirmed': True, 'backendReconciliationRequired': True}
+    if status != 403 or action.get('code') != '40200' or action['type'] == 'success':
+        fail('EXPIRY_RESPONSE_IDENTITY_MISMATCH')
+    message = meta.get('message')
+    reason = message.get('merchant') if isinstance(message, dict) else None
+    if not text(reason):
+        fail('EXPIRY_MESSAGE_INVALID')
+    expanded = set(value for value in private_values if isinstance(value, str) and value)
+    expanded.update(base64.b64encode(value.encode('utf-8')).decode('ascii') for value in list(expanded))
+    for private in sorted(expanded, key=len, reverse=True):
+        reason = re.sub(re.escape(private), '[REDACTED]', reason, flags=re.IGNORECASE)
+    reason = re.sub(r'https?://[^\s<>"\']+', '[REDACTED_URL]', reason, flags=re.IGNORECASE)
+    if len(reason) > 512:
+        fail('EXPIRY_MESSAGE_INVALID')
+    return {'httpStatus': 403, 'source': 'BEC', 'actioncode': '40200', 'type': action['type'],
+            'result': False, 'operatorMerchantMessage': reason, 'backendReconciliationRequired': True}
+
+
 def diagnose(order_id, expected_brand=BRAND, expected_location=LOCATION,
-             token_getter=oauth_token, read_json=get_json):
+             token_getter=oauth_token, read_json=get_json, inspect_expiry_rejection=False,
+             expiry_request=delete_expiry_json):
     def read(stage, url, authorization, limit):
         try:
             return read_json(url, authorization, limit)
@@ -128,13 +220,19 @@ def diagnose(order_id, expected_brand=BRAND, expected_location=LOCATION,
         fail('ORDER_ID_INVALID')
     if not identifier(expected_brand) or not identifier(expected_location):
         fail('SCOPE_INVALID')
+    if inspect_expiry_rejection and (expected_brand != BRAND or expected_location != LOCATION):
+        fail('EXPIRY_ESMERALDA_SCOPE_REQUIRED')
     token = token_getter()
     if not text(token, 8192):
         fail('GOOGLE_AUTH_UNAVAILABLE')
     document = f'projects/{PROJECT}/databases/(default)/documents/orders/{order_id}'
-    mask = urllib.parse.urlencode([('mask.fieldPaths', path) for path in [
-        'brandId', 'locationId', 'paymentAgreement', 'psp.provider', 'psp.cancellationErrorCode']])
-    raw = read('ORDER', f'https://firestore.googleapis.com/v1/{document}?{mask}', 'Bearer ' + token, 32768)
+    fields = ['brandId', 'locationId', 'paymentAgreement', 'psp.provider', 'psp.cancellationErrorCode']
+    if inspect_expiry_rejection:
+        fields += ['status', 'paymentStatus', 'paymentRevision', 'paymentOperation', 'psp.checkoutSessionId',
+                   'psp.captured', 'psp.voided', 'psp.sessionExpired', 'psp.transactionId']
+    mask = urllib.parse.urlencode([('mask.fieldPaths', path) for path in fields])
+    order_url = f'https://firestore.googleapis.com/v1/{document}?{mask}'
+    raw = read('ORDER', order_url, 'Bearer ' + token, 32768)
     if not isinstance(raw, dict) or raw.get('name') != document:
         fail('ORDER_INVALID')
     order = decode_fields(raw.get('fields'))
@@ -146,6 +244,7 @@ def diagnose(order_id, expected_brand=BRAND, expected_location=LOCATION,
     error = psp.get('cancellationErrorCode')
     if not isinstance(error, str) or not (error == ERROR_PREFIX or error.startswith(ERROR_PREFIX + '_REASON_')):
         fail('DIAGNOSTIC_CASE_MISMATCH')
+    session = validate_expiry_lock(order) if inspect_expiry_rejection else None
     binding = order.get('paymentAgreement')
     if not isinstance(binding, dict) or set(binding) != {'provider', 'mode', 'owner', 'reference', 'merchantNumber', 'revision'}:
         fail('AGREEMENT_INVALID')
@@ -179,7 +278,8 @@ def diagnose(order_id, expected_brand=BRAND, expected_location=LOCATION,
         encoded = secret_response['payload']['data']
         if not isinstance(encoded, str) or len(encoded) > 12000:
             fail('KEYS_INVALID')
-        keys = json.loads(base64.b64decode(encoded, validate=True).decode('utf-8'))
+        secret_json = base64.b64decode(encoded, validate=True).decode('utf-8')
+        keys = json.loads(secret_json)
     except DiagnosticError:
         raise
     except Exception:
@@ -189,6 +289,25 @@ def diagnose(order_id, expected_brand=BRAND, expected_location=LOCATION,
             or keys['merchantNumber'] != merchant):
         fail('KEYS_INVALID')
     basic = base64.b64encode((keys['accessToken'] + '@' + merchant + ':' + keys['secretToken']).encode('utf-8')).decode('ascii')
+    if inspect_expiry_rejection:
+        fresh = read('ORDER_RECHECK', order_url, 'Bearer ' + token, 32768)
+        if not isinstance(fresh, dict) or fresh.get('name') != document:
+            fail('EXPIRY_ORDER_CHANGED')
+        fresh_order = decode_fields(fresh.get('fields'))
+        if json.dumps(fresh_order, sort_keys=True) != json.dumps(order, sort_keys=True):
+            fail('EXPIRY_ORDER_CHANGED')
+        validate_expiry_lock(fresh_order)
+        try:
+            status, response = expiry_request('https://api.v1.checkout.bambora.com/sessions/' + session,
+                                             'Basic ' + basic, 16384)
+        except DiagnosticError:
+            raise
+        except Exception:
+            fail('EXPIRY_RESPONSE_UNAVAILABLE')
+        private_values = [token, basic, 'Basic ' + basic, encoded, secret_json, reference, canonical_reference, session, *keys.values(),
+                          keys['accessToken'] + '@' + merchant + ':' + keys['secretToken']]
+        result = expiry_diagnostic(status, response, private_values)
+        return {'order': order_id, 'mode': 'test', 'operation': 'original_session_expiry_attempt', **result}
     catalog = read('CATALOG', CATALOG_URL, 'Basic ' + basic, 16384)
     if (not isinstance(catalog, dict) or not isinstance(catalog.get('meta'), dict)
             or catalog['meta'].get('result') is not True or not isinstance(catalog.get('responsecode'), dict)):
@@ -217,8 +336,11 @@ def main(argv=None):
         parser.add_argument('--order', required=True)
         parser.add_argument('--expected-brand', default=BRAND)
         parser.add_argument('--expected-location', default=LOCATION)
+        parser.add_argument('--inspect-expiry-rejection', action='store_true',
+                            help='Make ONE original locked TEST-session expiry DELETE; not read-only. Never retry automatically.')
         args = parser.parse_args(argv)
-        result = diagnose(args.order, args.expected_brand, args.expected_location)
+        result = diagnose(args.order, args.expected_brand, args.expected_location,
+                          inspect_expiry_rejection=args.inspect_expiry_rejection)
         print(json.dumps(result, ensure_ascii=True, sort_keys=True))
         return 0
     except DiagnosticError as error:

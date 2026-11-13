@@ -28,6 +28,10 @@ def encode(value):
         return {'mapValue': {'fields': {key: encode(item) for key, item in value.items()}}}
     if type(value) is int:
         return {'integerValue': str(value)}
+    if type(value) is bool:
+        return {'booleanValue': value}
+    if value is None:
+        return {'nullValue': None}
     return {'stringValue': value}
 
 
@@ -61,6 +65,28 @@ class Fixture:
 
     def run(self):
         return tool.diagnose(ORDER, token_getter=lambda: TOKEN, read_json=self.read)
+
+
+class ExpiryFixture(Fixture):
+    def __init__(self):
+        super().__init__()
+        self.session = 'synthetic-original-session-private'
+        self.order.update(status='Pending', paymentStatus='Pending', paymentRevision=0,
+                          paymentOperation='session-expiry:' + hashlib.sha256(self.session.encode()).hexdigest())
+        self.order['psp'].update(checkoutSessionId=self.session, captured=False, voided=False,
+                                 sessionExpired=False, transactionId=None)
+        self.deletes = []
+        self.rejection = {'meta': {'result': False, 'action': {'source': 'BEC', 'code': '40200', 'type': 'validationerror'},
+                                  'message': {'merchant': 'The current session status does not allow expiry',
+                                              'enduser': 'MUST NOT BE OUTPUT'}}}
+
+    def delete(self, url, authorization, limit):
+        self.deletes.append((url, authorization, limit))
+        return 403, copy.deepcopy(self.rejection)
+
+    def inspect(self, read=None, delete=None):
+        return tool.diagnose(ORDER, token_getter=lambda: TOKEN, read_json=read or self.read,
+                             inspect_expiry_rejection=True, expiry_request=delete or self.delete)
 
 
 class DiagnosticTests(unittest.TestCase):
@@ -294,6 +320,175 @@ class DiagnosticTests(unittest.TestCase):
             self.assertEqual(tool.main(['--order', ORDER]), 1)
         self.assertEqual(out.getvalue().strip(), '{"error":"DIAGNOSTIC_UNAVAILABLE"}')
         self.assertEqual(err.getvalue(), '')
+
+    def test_default_mode_never_attempts_expiry_even_for_an_eligible_locked_order(self):
+        f = ExpiryFixture()
+        result = tool.diagnose(ORDER, token_getter=lambda: TOKEN, read_json=f.read, expiry_request=f.delete)
+        self.assertEqual(result['actioncode'], '40200')
+        self.assertEqual(f.deletes, [])
+        self.assertEqual(len(f.calls), 3)
+        self.assertNotIn('psp.checkoutSessionId', f.calls[0][0])
+
+    def test_explicit_flag_requires_original_lock_and_pending_unpaid_no_transaction(self):
+        for name, value in [('status', 'Canceled'), ('paymentStatus', 'Paid'), ('paymentOperation', None),
+                            ('paymentOperation', 'other-lock'), ('paymentRevision', False),
+                            ('psp.captured', True), ('psp.voided', True), ('psp.sessionExpired', True),
+                            ('psp.captured', 0), ('psp.transactionId', '123'),
+                            ('psp.checkoutSessionId', 'unsafe/session')]:
+            with self.subTest(name=name, value=value):
+                f = ExpiryFixture()
+                if name.startswith('psp.'): f.order['psp'][name.split('.')[1]] = value
+                else: f.order[name] = value
+                with self.assertRaises(tool.DiagnosticError): f.inspect()
+                self.assertEqual(len(f.calls), 1)
+                self.assertEqual(f.deletes, [])
+
+    def test_explicit_flag_scope_cannot_be_changed_to_another_test_tenant(self):
+        f = ExpiryFixture()
+        with self.assertRaisesRegex(tool.DiagnosticError, '^EXPIRY_ESMERALDA_SCOPE_REQUIRED$'):
+            tool.diagnose(ORDER, expected_brand='other-brand', token_getter=lambda: TOKEN,
+                          read_json=f.read, inspect_expiry_rejection=True, expiry_request=f.delete)
+        self.assertEqual(f.calls, [])
+        self.assertEqual(f.deletes, [])
+
+    def test_original_order_rechecked_immediately_before_exactly_one_expiry_request(self):
+        f = ExpiryFixture(); output = f.inspect()
+        self.assertEqual(len(f.calls), 3)
+        self.assertEqual(f.calls[0][0], f.calls[2][0])
+        for watched in ['status', 'paymentStatus', 'paymentRevision', 'paymentOperation', 'psp.checkoutSessionId', 'psp.transactionId']:
+            self.assertIn('mask.fieldPaths=' + watched, f.calls[0][0])
+        self.assertEqual(len(f.deletes), 1)
+        url, auth, limit = f.deletes[0]
+        self.assertEqual(url, 'https://api.v1.checkout.bambora.com/sessions/' + f.session)
+        self.assertTrue(auth.startswith('Basic ')); self.assertNotIn(TOKEN, auth)
+        self.assertEqual(limit, 16384)
+        self.assertEqual(output['operatorMerchantMessage'], f.rejection['meta']['message']['merchant'])
+        self.assertEqual(output['operation'], 'original_session_expiry_attempt')
+        self.assertFalse(output['result'])
+        self.assertTrue(output['backendReconciliationRequired'])
+        self.assertNotIn('sessionExpiryConfirmed', output)
+        self.assertNotIn('MUST NOT BE OUTPUT', json.dumps(output))
+        self.assertNotIn(f.session, json.dumps(output))
+
+    def test_revision_callback_capture_and_binding_races_abort_before_delete(self):
+        for change in ['revision', 'callback', 'capture', 'paid', 'lock', 'agreement', 'session', 'bool-type']:
+            with self.subTest(change=change):
+                f = ExpiryFixture(); count = []
+                def read(url, auth, limit):
+                    count.append(url)
+                    if len(count) == 3:
+                        if change == 'revision': f.order['paymentRevision'] = 1
+                        if change == 'callback': f.order['psp']['transactionId'] = '123'
+                        if change == 'capture': f.order['psp']['captured'] = True
+                        if change == 'paid': f.order['paymentStatus'] = 'Paid'
+                        if change == 'lock': f.order['paymentOperation'] = None
+                        if change == 'agreement': f.order['paymentAgreement']['revision'] = 2
+                        if change == 'session': f.order['psp']['checkoutSessionId'] = 'different'
+                        if change == 'bool-type': f.order['psp']['captured'] = 0
+                    return f.read(url, auth, limit)
+                with self.assertRaisesRegex(tool.DiagnosticError, '^EXPIRY_ORDER_CHANGED$'): f.inspect(read=read)
+                self.assertEqual(f.deletes, [])
+
+    def test_original_rejection_message_redacts_credentials_oauth_session_and_base64(self):
+        for value in [TOKEN, *KEYS.values(), Fixture().reference,
+                      Fixture().reference.replace(tool.PROJECT, tool.PROJECT_NUMBER),
+                      ExpiryFixture().session,
+                      base64.b64encode(KEYS['md5Key'].encode()).decode(),
+                      base64.b64encode((KEYS['accessToken'] + '@' + KEYS['merchantNumber'] + ':' + KEYS['secretToken']).encode()).decode()]:
+            with self.subTest(kind=len(value)):
+                f = ExpiryFixture(); f.rejection['meta']['message']['merchant'] = 'Provider reason reflects ' + value.upper()
+                output = f.inspect()
+                self.assertIn('[REDACTED]', output['operatorMerchantMessage'])
+                self.assertNotIn(value.lower(), json.dumps(output).lower())
+                self.assertEqual(len(f.deletes), 1)
+
+    def test_original_rejection_requires_expected_identity_finite_type_and_safe_message(self):
+        for changed, value in [('source', 'Other'), ('code', '40200\n'), ('code', '999'), ('type', 'private-type'),
+                               ('type', 'success'), ('type', []), ('result', 'false'), ('message', 'x' * 513),
+                               ('message', 'private\nmessage'), ('message', 'private\u202emessage')]:
+            with self.subTest(changed=changed):
+                f = ExpiryFixture()
+                if changed == 'result': f.rejection['meta']['result'] = value
+                elif changed == 'message': f.rejection['meta']['message']['merchant'] = value
+                else: f.rejection['meta']['action'][changed] = value
+                with self.assertRaises(tool.DiagnosticError): f.inspect()
+                self.assertEqual(len(f.deletes), 1)
+
+    def test_provider_reason_cannot_emit_a_url_or_session_capability(self):
+        f = ExpiryFixture()
+        f.rejection['meta']['message']['merchant'] = 'Inspect https://api.v1.checkout.bambora.com/sessions/' + f.session
+        output = f.inspect()
+        self.assertEqual(output['operatorMerchantMessage'], 'Inspect [REDACTED_URL]')
+        self.assertNotIn('https://', json.dumps(output))
+
+    def test_success_reports_only_session_expiry_and_requires_backend_reconciliation(self):
+        f = ExpiryFixture()
+        def success(url, auth, limit):
+            f.deletes.append(url)
+            return 200, {'meta': {'result': True, 'action': {'source': 'BEC', 'code': '2000', 'type': 'success'},
+                                  'message': {'merchant': TOKEN}}}
+        output = f.inspect(delete=success)
+        self.assertTrue(output['sessionExpiryConfirmed'])
+        self.assertTrue(output['backendReconciliationRequired'])
+        self.assertNotIn('operatorMerchantMessage', output)
+        self.assertNotIn(TOKEN, json.dumps(output))
+        self.assertEqual(len(f.deletes), 1)
+        self.assertEqual(f.order['status'], 'Pending')
+
+    def test_current_checkout_success_code_20000_is_also_recognized(self):
+        f = ExpiryFixture()
+        def success(url, auth, limit):
+            f.deletes.append(url)
+            return 200, {'meta': {'result': True, 'action': {'source': 'BEC', 'code': '20000', 'type': 'success'}}}
+        output = f.inspect(delete=success)
+        self.assertTrue(output['sessionExpiryConfirmed'])
+        self.assertTrue(output['backendReconciliationRequired'])
+        self.assertEqual(output['actioncode'], '20000')
+        self.assertEqual(len(f.deletes), 1)
+
+    def test_unknown_or_contradictory_success_metadata_is_not_a_financial_claim(self):
+        for code, source, action_type, status in [('999', 'BEC', 'success', 200),
+                                                   ('20000', 'Other', 'success', 200),
+                                                   ('2000', 'BEC', 'validationerror', 200),
+                                                   ('20000', 'BEC', 'success', 403)]:
+            f = ExpiryFixture()
+            def success(url, auth, limit):
+                f.deletes.append(url)
+                return status, {'meta': {'result': True, 'action': {'source': source, 'code': code, 'type': action_type}}}
+            with self.assertRaisesRegex(tool.DiagnosticError, '^EXPIRY_RESPONSE_IDENTITY_MISMATCH$'):
+                f.inspect(delete=success)
+            self.assertEqual(len(f.deletes), 1)
+
+    def test_expiry_transport_reads_only_one_bounded_http_error_body_and_never_redirects(self):
+        payload = json.dumps(ExpiryFixture().rejection).encode()
+        body_stream = io.BytesIO(payload)
+        failure = urllib.error.HTTPError('https://api.v1.checkout.bambora.com/sessions/original', 403, 'private-error', {}, body_stream)
+        opener = unittest.mock.Mock(); opener.open.side_effect = failure
+        with patch.object(tool.urllib.request, 'build_opener', return_value=opener) as build:
+            status, body = tool.delete_expiry_json('https://api.v1.checkout.bambora.com/sessions/original', 'Basic original-test-key', 16384)
+        self.assertEqual(status, 403)
+        self.assertEqual(body['meta']['action']['code'], '40200')
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_method(), 'DELETE')
+        self.assertIsNone(request.data)
+        self.assertEqual(opener.open.call_args.kwargs['timeout'], 8)
+        self.assertIsInstance(build.call_args.args[0], tool.NoRedirect)
+        self.assertEqual(opener.open.call_count, 1)
+
+    def test_expiry_bad_json_oversize_redirect_or_timeout_is_redacted_without_retry(self):
+        for status, payload in [(403, b'not-json'), (403, b'x' * 16385), (302, b'private-redirect')]:
+            opener = unittest.mock.Mock()
+            opener.open.side_effect = urllib.error.HTTPError('https://api.v1.checkout.bambora.com/sessions/original', status, 'private-error', {}, io.BytesIO(payload))
+            with patch.object(tool.urllib.request, 'build_opener', return_value=opener):
+                with self.assertRaises(tool.DiagnosticError): tool.delete_expiry_json('https://api.v1.checkout.bambora.com/sessions/original', 'Basic private', 16384)
+            self.assertEqual(opener.open.call_count, 1)
+        opener = unittest.mock.Mock(); opener.open.side_effect = TimeoutError('private-token')
+        with patch.object(tool.urllib.request, 'build_opener', return_value=opener):
+            with self.assertRaisesRegex(tool.DiagnosticError, '^EXPIRY_RESPONSE_UNAVAILABLE$'):
+                tool.delete_expiry_json('https://api.v1.checkout.bambora.com/sessions/original', 'Basic private', 16384)
+        self.assertEqual(opener.open.call_count, 1)
+        with self.assertRaisesRegex(tool.DiagnosticError, '^EXPIRY_ENDPOINT_INVALID$'):
+            tool.delete_expiry_json('https://foreign.test/sessions/original', 'Basic private', 16384)
 
 
 if __name__ == '__main__':
