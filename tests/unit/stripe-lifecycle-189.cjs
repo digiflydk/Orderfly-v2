@@ -16,6 +16,7 @@ function fixture() {
   let event, settlements=0;
   class Stripe {webhooks={constructEventAsync:async()=>event};}
   const route=loadTs('src/app/api/stripe/webhook/route.ts',{
+    'server-only':{},
     // Legacy webhook cases use the primary Stripe verifier; managed fallback has its own native tests.
     '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('Unexpected managed webhook fallback');}},
     'stripe':{default:Stripe},'next/headers':{headers:async()=>({get:()=> 'signed'})},
@@ -58,6 +59,7 @@ test('#189 expired session respects location/session scope and leaves paid order
 test('#189 superadmin cannot cancel or prepare an unpaid Stripe session by changing status',async()=>{
   const f=fixture(),db={collection:()=>({doc:()=>({get:async()=>({exists:true,data:()=>f.rows.get('orders/ORD-NEW')})})}),runTransaction:async callback=>callback({get:async()=>({data:()=>f.rows.get('orders/ORD-NEW')}),update:()=>{throw Error('must not update')}})};
   const api=loadTs('src/app/superadmin/sales/orders/actions.ts',{
+    'server-only':{},
     // A fully authorized operator: the payment-state guard, not authorization, must reject.
     '@/lib/access/scoped-data':{authorizeTransaction:async()=>{}},
     '@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>'server-time'})},

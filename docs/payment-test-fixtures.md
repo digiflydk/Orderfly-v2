@@ -1,0 +1,72 @@
+# Payment fixture execution
+
+Payment tests execute production TypeScript with only external transport,
+identity and persistence replaced by synthetic fixtures. These tests do not
+establish actual Stripe/Worldline merchant acceptance or physical printing.
+
+`tests/helpers/load-ts.cjs` caches compiled JavaScript by absolute filename and
+exact source text. Each `loadTs` call still evaluates a new module with that
+call's mocks and independent opaque handles. A source edit invalidates the
+compiled entry; no executed exports or customer/provider state are shared.
+
+`moduleGraph` uses that same compilation cache while retaining its existing
+per-graph CommonJS module cache. Within one graph, financial and print capability
+WeakMaps keep their required identity. Separate graphs remain independent. The
+merchant payment fixture uses a fresh graph per fixture, avoiding repeated server
+graph evaluation and retaining native capability identity.
+
+The merchant browser fixture snapshots its synthetic Stripe session at checkout
+creation. Later server verification retrieves an independent copy of that original
+provider observation; it does not derive a payment observation from a subsequently
+edited order or call the real Stripe API with fixture keys. Production account,
+session and settlement validation still execute.
+
+`test-loader-isolation.cjs` verifies independent mocks/handles, unchanged-source
+graph identity and source-change invalidation. The historical Stripe lifecycle
+fixture now mocks the server-only import sentinel, and the price validation
+fixture provides a valid scoped Stripe agreement so valid prices reach customer
+validation. Their product assertions remain unchanged.
+
+Run the relevant fixture regressions locally:
+
+```sh
+node tests/unit/test-loader-isolation.cjs
+node tests/unit/checkout-price-validation.cjs
+node tests/unit/stripe-lifecycle-189.cjs
+node tests/unit/payment-confirmation-job.cjs
+node tests/unit/printing-stripe-transition-proof.cjs
+node tests/unit/printing-stripe-settlement-integration.cjs
+node tests/unit/worldline-settlement.cjs
+```
+
+Report actual completion and case counts. A process stopped by a time limit is
+not a passing test, and a mocked provider observation is not a real payment.
+
+The in-memory Admin adapter supports both `db.doc(path)` and collection-based
+document references, including child collections. The real modular server bridge
+uses `db.doc(path)`; omitting it previously stopped the compound scoped-Stripe
+checkout/receipt probes before their product assertions. The compound probes now
+execute original-account checkout, settlement and guest readback after settings
+rotation for inherited brand and own-location agreements. No current/global key
+may be read, and invoice/customer accounting must remain single-application.
+
+The managed-delivery browser harness loads imported CSS into a real style element.
+Tests that inspect debounce boundaries explicitly pause Playwright's clock before
+input. `clock.install()` alone advances with wall time, so slow browser IPC could
+previously invoke the request before the zero-request assertion. Explicit clock
+advancement and the original debounce/focus/replay assertions remain unchanged.
+The native managed-provider mutation test expects the current safe provider error
+for a changed provider while preserving its no-write and no-invoice assertions.
+The merchant browser harness also prepares its synthetic `createOnly` database
+and server modules before navigation. This prevents cold TypeScript evaluation
+from blocking the local server's resource responses and exhausting the unchanged
+browser load deadline. Checkout/order creation still happens through the UI.
+
+Additional focused checks:
+
+```sh
+node tests/unit/fixture-firestore-reference.cjs
+node tests/unit/stripe-pinned-checkout-flow.cjs
+node tests/unit/managed-delivery-checkout-ui-browser.cjs
+node tests/unit/delivery-native-lifecycle.cjs
+```

@@ -176,7 +176,7 @@ test('managed settlement transaction rejects concurrent PSP binding edits',async
  for(const field of ['provider','checkoutSessionId','paymentIntentId']){
   const f=await fixture({afterAccountRead:f=>{f.order().psp[field]='changed';}});
   f.order().paymentStatus='Pending';delete f.order().psp.paymentIntentId;f.records.delete('deliveryDispatchJobs/'+f.orderId);
-  await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session),/Managed delivery payment changed/);
+  await assert.rejects(f.settlement.settlePaidCheckoutSession(f.session),{message:field==='provider'?'delivery_payment_provider':'delivery_payment_changed'});
   assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.records.has('deliveryDispatchJobs/'+f.orderId),false);assert.equal(f.order().invoice,undefined);
  }
 });

@@ -151,6 +151,11 @@ before(async () => {
 });
 after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 async function pageFor(t, name, url = '/', mobile = false) {
+  // Prepare synthetic database/modules before navigating. Compiling a cold
+  // server fixture on the first state request can block this local HTTP server
+  // (and its image/style responses), consuming the browser's load deadline.
+  // createOnly seeds data and exposes actions; the UI still creates the order.
+  await getCase(name);
   const context = await browser.newContext({ viewport: { width: mobile ? 390 : 1280, height: 900 } }); t.after(() => context.close());
   const page = await context.newPage(), errors = []; page.setDefaultTimeout(7000); page.on('pageerror', error => errors.push(error.message));
   t.after(() => assert.deepEqual(errors, [])); await page.goto(origin + url + (url.includes('?') ? '&' : '?') + 'case=' + name); return page;

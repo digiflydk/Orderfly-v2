@@ -1,19 +1,16 @@
-const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
+const { compileFixture } = require('./load-ts.cjs');
 
 // Cache before evaluation, as CommonJS does. This preserves production module
 // identity/opaque WeakMaps when the outbox lazily imports its financial writer.
-// Existing noncached loadTs is deliberately unchanged.
+// loadTs still evaluates fresh exports; only its compilation output is shared.
 exports.moduleGraph = (mocks = {}) => {
   const modules = new Map();
   const load = filename => {
     const absolute = path.resolve(filename);
     if (modules.has(absolute)) return modules.get(absolute).exports;
     const mod = { exports: {} }; modules.set(absolute, mod);
-    const code = ts.transpileModule(fs.readFileSync(absolute, 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-    }).outputText;
+    const code = compileFixture(absolute);
     new Function('require', 'module', 'exports', code)(name => {
       if (name in mocks) return mocks[name];
       const local = name.startsWith('@/') ? path.resolve('src', name.slice(2))
