@@ -10,6 +10,7 @@ function fixture(options={}){
  const events=[];let fetchCalls=0;
  const requireMock={
   'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},
+  './worldline-response-diagnostics':{worldlineExpiryDiagnostic:async()=>options.diagnosticSuffix??''},
   './worldline-client':{readWorldlineTransaction:async()=>{options.duringTransactionRead?.(rows);if(options.transactionReadError)throw Error('synthetic private provider error');return {id:'123',orderid:'ORD-123',merchantnumber:options.merchantNumber??'T123',status:options.transactionStatus??'approved',currency:{code:'DKK',minorunits:2},total:{authorized:options.authorized??12500,captured:options.captured??0,credited:options.credited??0}};}},
   './worldline-verification':{assertWorldlineTransaction:(value,expected)=>{assert.equal(value.orderid,expected.orderId);assert.equal(value.merchantnumber,expected.merchantNumber);assert.equal(value.total.authorized,expected.amountMinor);return value;}},
   './worldline-store':{readPinnedWorldlineAgreement:async()=>({binding,credentials:{merchantNumber:'T123',accessToken:'test-access',secretToken:'test-secret'}})},
@@ -40,7 +41,7 @@ test('uncertain expiry records only safe diagnostics and schedules the original 
   [{timeout:true},'WORLDLINE_CANCEL_EXPIRY_NETWORK_OR_TIMEOUT'],
   [{http:false,httpStatus:401,body:{meta:{result:false,message:{merchant:'synthetic-secret'}}}},'WORLDLINE_CANCEL_EXPIRY_HTTP_401'],
   [{http:false,httpStatus:404},'WORLDLINE_CANCEL_EXPIRY_HTTP_404'],
-  [{body:{meta:{result:false,action:{code:'40005'},message:{merchant:'synthetic-secret'}}}},'WORLDLINE_CANCEL_EXPIRY_REJECTED_PROVIDER_40005'],
+  [{diagnosticSuffix:'_PROVIDER_40005',body:{meta:{result:false,action:{code:'40005'},message:{merchant:'synthetic-secret'}}}},'WORLDLINE_CANCEL_EXPIRY_REJECTED_PROVIDER_40005'],
   [{body:{meta:{result:false,action:{code:'synthetic-secret'}}}},'WORLDLINE_CANCEL_EXPIRY_REJECTED'],
   [{jsonError:true},'WORLDLINE_CANCEL_EXPIRY_INVALID_RESPONSE'],
  ]){
@@ -95,4 +96,13 @@ test('captured totals with a nonapproved provider status remain unresolved rathe
   const f=fixture({psp:{transactionId:'123'},captured:12500,transactionStatus:status});
   assert.equal(await f.cancel(),'unknown');assert.equal(f.rows.get('orders/ORD-123').psp.cancellationErrorCode,'WORLDLINE_CANCEL_CAPTURE_REQUIRES_RECONCILIATION');assert.deepEqual(f.events,[]);assert.equal(f.rows.get('orders/ORD-123').discountReservation,'held');
  }
+});
+
+test('a diagnostic expired-session category never proves cancellation or releases capacity',async()=>{
+ const f=fixture({http:false,httpStatus:403,diagnosticSuffix:'_PROVIDER_40200_SRC_BEC_REASON_SESSION_EXPIRED'});
+ assert.equal(await f.cancel(),'unknown');
+ const order=f.rows.get('orders/ORD-123');
+ assert.equal(order.status,'Pending');assert.equal(order.paymentStatus,'Pending');assert.equal(order.discountReservation,'held');
+ assert.match(order.paymentOperation,/^session-expiry:/);assert.equal(f.events.includes('release'),false);assert.equal(f.events.includes('void'),false);
+ assert.equal(order.psp.cancellationErrorCode,'WORLDLINE_CANCEL_EXPIRY_HTTP_403_PROVIDER_40200_SRC_BEC_REASON_SESSION_EXPIRED');
 });

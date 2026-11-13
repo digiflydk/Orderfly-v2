@@ -27,7 +27,7 @@ function fixture(options={}){
  const reference=path=>{const parts=path.split('/'),id=parts.pop();return {...collection(parts.join('/')).doc(id),collection:child=>db.collection(path+'/'+child)};};
  db.doc=reference;
  db.collection=name=>({...collection(name),doc:id=>reference(name+'/'+id)});
- let afterCancelUsed=false,expiryCalls=0;
+ let afterCancelUsed=false,expiryCalls=0,catalogCalls=0;
  db.runTransaction=async run=>{
   const result=await transact(async tx=>{
    let writes=false;
@@ -50,13 +50,21 @@ function fixture(options={}){
   './worldline-operations':{runWorldlineOperation:async()=>{throw Error('No money operation belongs to session expiry');}},
  });
  const transport=async(url,input)=>{
+  if(url==='https://data-v1.api-eu.bambora.com/responsecodes/BEC/40200'){
+   catalogCalls++;assert.equal(input.method,'GET');assert.equal(input.redirect,'error');
+   assert.equal(input.headers.Authorization,'Basic '+Buffer.from('synthetic-access@T123:synthetic-secret').toString('base64'));
+   assert.match(rows.get('orders/ORD-CAPACITY').paymentOperation,/^session-expiry:/);
+   options.duringCatalog?.(rows.get('orders/ORD-CAPACITY'));
+   return Response.json({meta:{result:true},responsecode:{source:'BEC',actioncode:'40200',merchantlabel:options.catalogLabel,enduserlabel:'Error'}});
+  }
   assert.equal(url,'https://api.v1.checkout.bambora.com/sessions/synthetic-window');assert.equal(input.method,'DELETE');expiryCalls++;
   options.duringExpiry?.(rows.get('orders/ORD-CAPACITY'));
+  if(options.catalogLabel)return Response.json({meta:{result:false,action:{source:'BEC',code:'40200',type:'generalerror'}}},{status:403});
   return Response.json({meta:{result:true}});
  };
  const cancel=async()=>{const previous=global.fetch;global.fetch=transport;try{return await load('src/lib/payments/worldline-expiry.ts').cancelWorldlineCheckout('ORD-CAPACITY');}finally{global.fetch=previous;}};
  const capacities=()=>[...rows].filter(([path])=>path.startsWith('checkout_'));
- return {rows,cancel,capacities,original,other,expiryCalls:()=>expiryCalls,load};
+ return {rows,cancel,capacities,original,other,expiryCalls:()=>expiryCalls,catalogCalls:()=>catalogCalls,load};
 }
 async function unresolved(run){let result;try{result=await run();}catch{result='error';}assert.ok(result==='unknown'||result==='error','unproven cancellation stays unresolved');return result;}
 test('real cancellation releases original customer/discount counters once after provider expiry',async()=>{
@@ -106,4 +114,22 @@ test('generic Stripe capacity release keeps its existing default calling contrac
  const f=fixture({order:{paymentMethod:'Stripe',psp:{provider:'stripe',checkoutSessionId:'synthetic-window'}}});
  await f.load('src/lib/discount-reservations.ts').releaseDiscount('ORD-CAPACITY','b','synthetic-window','l');
  assert.equal(f.rows.get(f.original[0]).held,0);assert.equal(f.rows.get(f.original[0]).firstTimeHeld,false);assert.equal(f.rows.get('orders/ORD-CAPACITY').discountReservation,'released');assert.equal(f.expiryCalls(),0);
+});
+
+test('real diagnostic catalog cannot release held capacity or prove unpaid cancellation after a 403',async()=>{
+ for(const [label,category] of [['Session has expired','SESSION_EXPIRED'],['Invalid session status','SESSION_STATE'],['Access denied','ACCESS_DENIED']]){
+  const f=fixture({catalogLabel:label}),before=structuredClone(f.capacities());assert.equal(await f.cancel(),'unknown');
+  assert.equal(f.expiryCalls(),1);assert.equal(f.catalogCalls(),1);assert.deepEqual(f.capacities(),before);
+  const order=f.rows.get('orders/ORD-CAPACITY');assert.equal(order.paymentStatus,'Pending');assert.equal(order.status,'Pending');assert.equal(order.discountReservation,'held');
+  assert.equal(order.psp.sessionExpired,undefined);assert.match(order.paymentOperation,/^session-expiry:/);
+  assert.equal(order.psp.cancellationErrorCode,'WORLDLINE_CANCEL_EXPIRY_HTTP_403_PROVIDER_40200_SRC_BEC_REASON_'+category);
+  assert.doesNotMatch(JSON.stringify([...f.rows]),/synthetic-secret|synthetic-access|merchantlabel|enduserlabel/);
+ }
+});
+
+test('payment that completes during the diagnostic read remains paid and is not reclassified pending',async()=>{
+ const f=fixture({catalogLabel:'Session has expired',duringCatalog:order=>{order.paymentStatus='Paid';}}),before=structuredClone(f.capacities());
+ assert.equal(await f.cancel(),'paid');assert.deepEqual(f.capacities(),before);assert.equal(f.expiryCalls(),1);assert.equal(f.catalogCalls(),1);
+ assert.equal(f.rows.get('orders/ORD-CAPACITY').psp.cancellationErrorCode,undefined);
+ assert.equal(f.rows.get('orders/ORD-CAPACITY').paymentStatus,'Paid');
 });
