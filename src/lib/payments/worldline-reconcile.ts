@@ -8,20 +8,12 @@ import { assertWorldlineTransaction } from './worldline-verification';
 import { runWorldlineOperation } from './worldline-operations';
 import { settleWorldlineOrder } from '@/lib/server/settle-checkout';
 
-/** An early authorization callback is not evidence that provider-side capture completed. */
-export class WorldlineCapturePendingError extends Error {
-  readonly code = 'worldline_capture_pending';
-  constructor() { super('Worldline capture is not complete'); this.name = 'WorldlineCapturePendingError'; }
-}
-
 /** Jobs remain durable until the authoritative settlement (including print) commits. */
 export async function reconcileWorldlineOrder(orderId:string){
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(orderId))throw Error('Invalid order');
   const db=getAdminDb(),ref=db.collection('orders').doc(orderId),job=db.collection('worldlinePaymentJobs').doc(orderId);
   const order=(await ref.get()).data();
   if(!order||order.psp?.provider!=='worldline'||!order.psp.transactionId)throw Error('Worldline order unavailable');
-  const captureMode=order.psp.captureMode;
-  if(captureMode!==undefined && captureMode!=='provider_instant')throw Error('Unknown Worldline capture mode');
   const {binding,credentials}=await readPinnedWorldlineAgreement(order.paymentAgreement);
   if(binding.owner.brandId!==order.brandId||binding.owner.locationId&&binding.owner.locationId!==order.locationId)throw Error('Worldline scope mismatch');
   const transactionId=order.psp.transactionId,amountMinor=Math.round(order.totalAmount*100);
@@ -37,19 +29,12 @@ export async function reconcileWorldlineOrder(orderId:string){
     await job.set({state:'canceled',nextAttemptAt:8640000000000000,updatedAt:Date.now()},{merge:true});return;
   }
   if(transaction.status.toLowerCase()!=='approved')throw Error('Payment is not authorized');
-  if(captureMode==='provider_instant'){
-    // The hosted session owns capture. Its authorization callback can arrive first;
-    // a second capture here would race Worldline and could charge twice.
-    if(order.paymentOperation)throw Error('Another operation requires reconciliation');
-    if(transaction.total.captured!==amountMinor)throw new WorldlineCapturePendingError();
-  }else{
-    // Existing authorization-only sessions retain their original server capture journal.
-    const captureJournal=createHash('sha256').update('initial-capture').digest('hex');
-    if(order.paymentOperation&&order.paymentOperation!==captureJournal)throw Error('Another operation requires reconciliation');
-    if(transaction.total.captured!==amountMinor||order.paymentOperation===captureJournal){
-      const result=order.managedDelivery?await captureManagedWorldlineOrder(orderId):await runWorldlineOperation({orderId,transactionId,requestId:'initial-capture',operation:'capture',amountMinor,actorId:'worldline-worker'});
-      if(result.state!=='confirmed')throw Error('Capture requires reconciliation');
-    }
+  // Match existing automatic Stripe capture; an authorization never becomes Paid.
+  const captureJournal=createHash('sha256').update('initial-capture').digest('hex');
+  if(order.paymentOperation&&order.paymentOperation!==captureJournal)throw Error('Another operation requires reconciliation');
+  if(transaction.total.captured!==amountMinor||order.paymentOperation===captureJournal){
+    const result=order.managedDelivery?await captureManagedWorldlineOrder(orderId):await runWorldlineOperation({orderId,transactionId,requestId:'initial-capture',operation:'capture',amountMinor,actorId:'worldline-worker'});
+    if(result.state!=='confirmed')throw Error('Capture requires reconciliation');
   }
   await settleWorldlineOrder(orderId,transactionId);
   await job.set({orderId,brandId:order.brandId,locationId:order.locationId,transactionId,state:'settled',nextAttemptAt:8640000000000000,updatedAt:Date.now()},{merge:true});

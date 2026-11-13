@@ -93,9 +93,11 @@ outboxes. Worldline uses its own opaque print transition and private settlement
 capability; it is never represented as a Stripe session. Financial and original
 print-intent writes commit together, and replay cannot duplicate either.
 
-A return/accept page is display/read capability only. Token-only Worldline receipts
-poll the server, preserve Pending during an outage, and clear the cart/emit purchase
-analytics only after authoritative Paid. Stripe session receipts remain supported.
+Worldline's accept URL is a server-only return endpoint, described below. It may
+redirect to the receipt only after authoritative Paid. Receipt capabilities and
+browser parameters cannot mark an order paid. Existing direct/legacy receipts
+retain secure Pending recovery during an outage; cart clearing and purchase
+analytics still require Paid. Stripe session receipts remain supported.
 
 ## Money operations and cancellation
 
@@ -223,20 +225,35 @@ correct merchant agreement rather than changing account or weakening URL checks.
 New sessions explicitly set `url.immediateredirecttoaccept=1`. The official Europe
 Checkout contract defaults this option to `0` (automatic return disabled); `1`
 redirects to the configured accept URL after completion without requiring a
-"Back to shop" click. The accept URL keeps the original order ID and dedicated
-receipt capability. A browser return never marks the order Paid: signed callback,
-server transaction verification, capture and shared settlement remain authoritative.
-Callback-before-return and return-before-callback continue to use the existing
-Pending receipt/polling path.
+"Back to shop" click. The accept URL is
+`/api/payments/worldline/return?order_id=...&receipt_token=...`.
+The endpoint validates the original private receipt capability before provider
+access. Any returned transaction ID is only a lookup selector: the server checks
+the transaction against the original pinned merchant, environment, order, amount
+and currency before linking a durable recovery job. It reuses the existing locked
+server capture and shared settlement; hosted sessions remain authorization-only
+(`instantcaptureamount: 0`). No new capture strategy or browser payment proof is
+introduced.
 
-The confirmation route includes a visible loading state. Its first server render
-validates the original receipt capability and tenant scope, then reads the native
-Worldline status without waiting for provider lookup/capture. Pending Worldline
-reconciliation stays with the normal guest-status API and durable workers so the
-page can appear promptly while the payment is checked. The server-only deferral
-option does not affect Stripe, Free, pickup or the default guest API behavior and
-never permits a client return to mark a payment Paid. Worldline still owns its
-own short processing screen before it initiates the redirect.
+The endpoint serves no intermediate HTML. It waits up to ten seconds for native
+financial Paid, then redirects to the canonical confirmation URL derived from
+stored brand/location slugs. Worldline remains the visible page while this HTTP
+request completes. A timeout returns a fixed non-success response and keeps the
+durable recovery job; it never redirects an unresolved payment to a success page
+or encourages another payment. The normal receipt no longer has a separate
+"Vi kontrollerer betalingen" loading page. Legacy direct receipt URLs retain their
+safe Pending/error recovery if the payment genuinely remains unresolved.
+
+The signed callback also starts the same durable reconciliation immediately and
+briefly observes financial readiness within Worldline's five-second callback
+limit. Duplicate callbacks do not create another job or start another capture.
+If work fails or cannot finish in budget, a successful callback acknowledgement
+still means durable admission, with the existing worker owning recovery. Long
+managed-delivery booking continues after financial settlement and does not block
+the return; its paid receipt explicitly says when delivery is not yet confirmed.
+The native read projection does not await provider reconciliation a second time.
+Stripe, Free and pay-at-pickup behavior stays unchanged. Worldline controls its
+own hosted markup and any short provider-side processing screen.
 
 This applies when creating a session. The current official API exposes no update
 operation for an existing hosted session; an already completed window can use its

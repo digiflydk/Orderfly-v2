@@ -2,7 +2,8 @@ import {test,expect} from '@playwright/test';
 import fs from 'node:fs';
 import ts from 'typescript';
 const order={id:'ORD-123',brandId:'b',locationId:'l',createdAt:'2026-11-12T12:00:00Z',customerName:'Synthetic guest',customerContact:'synthetic@example.test',deliveryType:'Pickup',deliveryTime:'12:30',status:'Pending',paymentStatus:'Pending',paymentMethod:'Worldline',totalAmount:125,productItems:[],customerDetails:{id:'c',address:'For Pickup'},paymentDetails:{subtotal:125,taxes:0,deliveryFee:0,discountTotal:0,tips:0}};
-async function mount(page:any,{missing=false,outage=false}={}){
+async function mount(page:any,{missing=false,outage=false,paid=false,delivery=false}={}){
+ const initialOrder={...order,...(paid?{paymentStatus:'Paid',status:delivery?'Pending':'Received'}:{}),...(delivery?{deliveryType:'Delivery',managedDeliveryTracking:{paymentStatus:'paid',bookingState:'pending',deliveryStatus:'pending'}}:{})};
  await page.route('https://checkout.test/**',(route:any)=>route.fulfill({contentType:'text/html',body:'<main id="root"></main>'}));
  await page.goto('https://checkout.test/brand/location/checkout/confirmation?status=approved');
  await page.addScriptTag({content:fs.readFileSync('node_modules/react/umd/react.development.js','utf8')});
@@ -14,8 +15,8 @@ async function mount(page:any,{missing=false,outage=false}={}){
   await route.fulfill({status:outage?503:200,contentType:'application/json',body:JSON.stringify(outage?{found:false,retryable:true}:{found:true,order:{...order,paymentStatus:ready?'Paid':'Pending',status:ready?'Received':'Pending'}})});
  });
  const code=ts.transpileModule(fs.readFileSync('src/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.React}}).outputText;
- await page.evaluate(({code,order,missing}:any)=>{
-  const w=window as any,R=w.React;w.completed=[];w.purchases=[];w.paymentReady=false;
+ await page.evaluate(({code,order,missing,paid}:any)=>{
+  const w=window as any,R=w.React;w.completed=[];w.purchases=[];w.paymentReady=paid;
   const complete=(...args:any[])=>w.completed.push(args);
   const primitive=(tag:string)=>(props:any)=>R.createElement(tag,{...props,variant:undefined,asChild:undefined},props.children);
   const ui=new Proxy({}, {get:(_,name:string)=>primitive(name.includes('Title')?'h2':name.includes('Button')?'button':'div')});
@@ -35,7 +36,7 @@ async function mount(page:any,{missing=false,outage=false}={}){
   };
   const exports:any={};new Function('require','exports','React',code)(require,exports,R);
   w.ReactDOM.createRoot(document.getElementById('root')).render(R.createElement(exports.ConfirmationClient,{order:missing?null:order,brand:{id:'b',slug:'brand',name:'Synthetic brand',currency:'DKK'},location:{id:'l',slug:'location',name:'Synthetic location',brandId:'b'},orderId:'ORD-123',receiptToken:'a'.repeat(64)}));
- },{code,order,missing});
+ },{code,order:initialOrder,missing,paid});
  return requests;
 }
 test('Worldline token-only return waits for server Paid before receipt, analytics and clearing cart',async({page})=>{
@@ -46,4 +47,19 @@ test('Worldline token-only return waits for server Paid before receipt, analytic
 });
 test('outage and browser approved parameter cannot mark an unresolved order paid',async({page})=>{
  const requests=await mount(page,{outage:true});await expect.poll(()=>requests.length).toBeGreaterThan(0);await expect(page.getByRole('heading',{name:'Afventer bekræftelse af betaling'})).toBeVisible();expect(await page.evaluate(()=>(window as any).completed)).toHaveLength(0);expect(await page.evaluate(()=>(window as any).purchases)).toHaveLength(0);
+});
+test('verified Paid Worldline return renders the receipt immediately without a payment waiting screen',async({page})=>{
+ const requests=await mount(page,{paid:true});
+ await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Afventer bekræftelse af betaling'})).toHaveCount(0);
+ await expect(page.getByText('Din faktura',{exact:true})).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>(window as any).completed.length)).toBeGreaterThan(0);
+ expect(requests).toHaveLength(0);
+});
+test('Paid Worldline delivery shows the receipt while keeping pending booking explicit',async({page})=>{
+ await mount(page,{paid:true,delivery:true});
+ await expect(page.getByRole('heading',{name:'Tak for din bestilling!'})).toBeVisible();
+ await expect(page.getByText('er betalt. Leveringen er endnu ikke bekræftet.',{exact:false})).toBeVisible();
+ await expect(page.getByText('Afventer levering',{exact:true})).toBeVisible();
+ await expect(page.getByRole('heading',{name:'Afventer bekræftelse af betaling'})).toHaveCount(0);
 });

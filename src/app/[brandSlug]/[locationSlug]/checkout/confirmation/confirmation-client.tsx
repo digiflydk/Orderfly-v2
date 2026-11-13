@@ -221,7 +221,8 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     const cancellationPending = tracking?.cancellationState === 'unknown' || tracking?.cancellationState === 'submitting';
     const rejected = tracking?.bookingState === 'rejected';
     const unconfirmed = !!tracking && tracking.bookingState !== 'accepted';
-    const receiptTitle = refunded ? 'Din betaling er refunderet' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
+    const paidWorldline = order.paymentMethod === 'Worldline' && order.paymentStatus === 'Paid';
+    const receiptTitle = refunded ? 'Din betaling er refunderet' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed && !paidWorldline ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
     const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
 
     return (
