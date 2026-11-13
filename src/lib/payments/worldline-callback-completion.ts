@@ -35,11 +35,11 @@ export function isWorldlineCallbackFinanciallyComplete(value: unknown, expected:
  */
 export async function waitForWorldlineCallbackFinancialCompletion(input: {
   expected: Expected; readOrder: () => Promise<unknown>; work?: Promise<unknown>;
-  timeoutMs?: number; pollIntervalMs?: number; stopWhenWorkFinishes?: boolean;
+  timeoutMs?: number; pollIntervalMs?: number; stopWhenWorkFinishes?: boolean; retryReadFailures?: boolean;
 }): Promise<boolean> {
-  const timeoutMs = Number.isFinite(input.timeoutMs) ? Math.max(0, Math.min(10000, input.timeoutMs!)) : 3500;
+  const timeoutMs = Number.isFinite(input.timeoutMs) ? Math.max(0, Math.min(60000, input.timeoutMs!)) : 3500;
   if (!timeoutMs) return false;
-  const pollIntervalMs = Number.isFinite(input.pollIntervalMs) ? Math.max(1, Math.min(100, input.pollIntervalMs!)) : 100;
+  const pollIntervalMs = Number.isFinite(input.pollIntervalMs) ? Math.max(1, Math.min(1000, input.pollIntervalMs!)) : 100;
   let stopped = false, workFinished = false;
   let deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -47,7 +47,7 @@ export async function waitForWorldlineCallbackFinancialCompletion(input: {
   const observe = async (): Promise<boolean> => {
     while (!stopped) {
       let row: unknown;
-      try { row = await input.readOrder(); } catch { return false; }
+      try { row = await input.readOrder(); } catch { if (!input.retryReadFailures) return false; }
       if (stopped) return false;
       if (isWorldlineCallbackFinanciallyComplete(row, input.expected)) return true;
       if (workFinished && input.stopWhenWorkFinishes !== false) return false;

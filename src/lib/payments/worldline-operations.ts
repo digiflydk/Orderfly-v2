@@ -1,29 +1,41 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { readPinnedWorldlineAgreement } from './worldline-store';
 import { readWorldlineTransaction, mutateWorldlineTransaction } from './worldline-client';
 import { assertWorldlineTransaction } from './worldline-verification';
+import { readWorldlinePaymentState } from './worldline-read-retry';
 
 /** Durable single-flight money operation. Unknown results are read back, never sent again automatically. */
-export async function runWorldlineOperation(input:{orderId:string;transactionId:string;requestId:string;operation:'capture'|'credit'|'delete';amountMinor?:number;actorId:string},managedAuthority?:unknown){
+export async function runWorldlineOperation(input:{orderId:string;transactionId:string;requestId:string;operation:'capture'|'credit'|'delete';amountMinor?:number;actorId:string},managedAuthority?:unknown,options:{observationOnly?:boolean;retryReadFailures?:boolean}={}){
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(input.orderId)||!/^[A-Za-z0-9_-]{1,128}$/.test(input.requestId)||!input.actorId)throw Error('Invalid operation');
+  if(options.observationOnly&&input.operation!=='capture')throw Error('Observation recovery only supports capture');
   const db=getAdminDb(),ref=db.collection('orders').doc(input.orderId);
   const journal=ref.collection('paymentOperations').doc(createHash('sha256').update(input.requestId).digest('hex'));
-  const order=(await ref.get()).data();
-  if(!order||order.psp?.provider!=='worldline'||order.psp.transactionId!==input.transactionId||(order.managedDelivery&&!managedAuthority))throw Error('Payment scope mismatch');
-  const {binding,credentials}=await readPinnedWorldlineAgreement(order.paymentAgreement);
+  const observe = <T,>(read: () => Promise<T>) => readWorldlinePaymentState(read, options.retryReadFailures);
+  const order=(await observe(()=>ref.get())).data();
+  if(!order||order.paymentMethod!=='Worldline'||order.psp?.provider!=='worldline'||order.psp.transactionId!==input.transactionId||(order.managedDelivery&&!managedAuthority))throw Error('Payment scope mismatch');
+  const {binding,credentials}=await observe(()=>readPinnedWorldlineAgreement(order.paymentAgreement));
   if(binding.owner.brandId!==order.brandId||binding.owner.locationId&&binding.owner.locationId!==order.locationId)throw Error('Payment scope mismatch');
   const expected={orderId:input.orderId,transactionId:input.transactionId,merchantNumber:binding.merchantNumber,mode:binding.mode,amountMinor:Math.round(order.totalAmount*100),currency:'DKK'};
-  const read=async()=>assertWorldlineTransaction(await readWorldlineTransaction(credentials,binding.mode,input.transactionId),expected);
+  const read=async()=>assertWorldlineTransaction(await observe(()=>readWorldlineTransaction(credentials,binding.mode,input.transactionId)),expected);
   const before=await read();
   const fingerprint=createHash('sha256').update(JSON.stringify([input.orderId,input.transactionId,input.operation,input.amountMinor??null,input.actorId])).digest('hex');
   const claim=await db.runTransaction(async tx=>{
     const [current,previous]=await Promise.all([tx.get(ref),tx.get(journal)]);
     const value=current.data();
-    if(!value||value.psp?.transactionId!==input.transactionId||JSON.stringify(value.paymentAgreement)!==JSON.stringify(order.paymentAgreement))throw Error('Payment binding changed');
+    if(!value||value.brandId!==order.brandId||value.locationId!==order.locationId||value.totalAmount!==order.totalAmount
+      ||value.paymentMethod!==order.paymentMethod||value.psp?.provider!=='worldline'||value.psp.transactionId!==input.transactionId
+      ||JSON.stringify(value.paymentAgreement)!==JSON.stringify(order.paymentAgreement))throw Error('Payment binding changed');
     if(value.managedDelivery)await (await import('@/lib/delivery/payments/worldline-operation-authority')).assertManagedWorldlineOperation(tx,value,input,managedAuthority);
-    if(previous.exists){if(previous.data()?.fingerprint!==fingerprint)throw Error('Operation conflict');return {send:false,record:previous.data()!};}
+    if(previous.exists){
+      if(previous.data()?.fingerprint!==fingerprint||options.observationOnly&&!isDeepStrictEqual(previous.data()?.binding,order.paymentAgreement))throw Error('Operation conflict');
+      return {send:false,record:previous.data()!};
+    }
+    // Recovery may finish an existing operation and its financial settlement,
+    // but can never create a journal or send a new capture, even after deletion.
+    if(options.observationOnly)throw Error('Capture observation requires an existing journal');
     if((value.paymentRevision??0)!==(order.paymentRevision??0))throw Error('Payment state changed; reload');
     if(value.paymentOperation)throw Error('Another payment operation requires reconciliation');
     const amount=input.amountMinor;

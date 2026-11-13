@@ -41,3 +41,7 @@ test('an exhausted callback budget skips all further reads and provider work',as
 test('return gate can observe another callback financial commit after its own work ends',async()=>{
  let reads=0;assert.equal(await api.waitForWorldlineCallbackFinancialCompletion({expected,work:Promise.resolve(),stopWhenWorkFinishes:false,timeoutMs:50,pollIntervalMs:1,readOrder:async()=>++reads===1?{...paid,paymentStatus:'Pending'}:paid}),true);assert.equal(reads,2);
 });
+test('return-only observation survives temporary native read errors without changing callback behavior',async()=>{
+ let reads=0;
+ assert.equal(await api.waitForWorldlineCallbackFinancialCompletion({expected,work:Promise.resolve(),stopWhenWorkFinishes:false,retryReadFailures:true,timeoutMs:100,pollIntervalMs:1,readOrder:async()=>{if(++reads<3)throw Error('temporary native read');return paid;}}),true);assert.equal(reads,3);
+});

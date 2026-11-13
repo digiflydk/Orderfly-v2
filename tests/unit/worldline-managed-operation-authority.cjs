@@ -41,3 +41,8 @@ test('expired order marked Failed can void a late authorization while capture re
  const f=fixture();Object.assign(f.rows.get('orders/order'),{status:'Canceled',paymentStatus:'Failed'});f.rows.get('orders/order').psp.sessionExpired=true;
  await assert.rejects(f.authority.captureManagedWorldlineOrder('order'));assert.equal((await f.authority.cancelManagedWorldlineAuthorization('order','123')).state,'confirmed');assert.equal(f.creates,1);
 });
+test('managed capture observation uses its existing protected journal and never creates another capture',async()=>{
+ const f=fixture({failFinal:true});assert.equal((await f.authority.captureManagedWorldlineOrder('order')).state,'unknown');assert.equal(f.creates,1);
+ assert.equal((await f.authority.captureManagedWorldlineOrder('order',{observationOnly:true})).state,'confirmed');assert.equal(f.creates,1);
+ const missing=fixture();await assert.rejects(missing.authority.captureManagedWorldlineOrder('order',{observationOnly:true}));assert.equal(missing.creates,0);
+});
