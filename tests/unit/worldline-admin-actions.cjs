@@ -8,7 +8,7 @@ function fixture(){
   const rows=new Map([['orders/o',order]]), db=memoryDb(rows),collection=db.collection;
   db.collection=name=>{const value=collection(name),doc=value.doc;return {...value,doc:id=>{const r=doc(id);return {...r,collection:child=>db.collection(r.path+'/'+child)};}};};
   const calls=[],finalized=[];let denied=false,state='confirmed';
-  const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/access/orderfly-session':{orderflySession:async()=>({actorId:'real-actor',identity:{provider:'firebase',subject:'real-user'}})},'@/lib/access/scoped-data':{authorizeTransaction:async(tx,identity,scope,permission,level)=>{calls.push({identity,scope,permission,level});if(denied)throw Error('forbidden');assert.equal(scope.brandId,'b');assert.equal(scope.locationId,'l');}},'@/lib/payments/worldline-operations':{runWorldlineOperation:async input=>{calls.push({operation:input});return {state};}},'@/lib/payments/worldline-expiry':{finalizeWorldlineVoid:async(...args)=>finalized.push(args)}};
+  const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/access/orderfly-session':{orderflySession:async()=>({actorId:'real-actor',identity:{provider:'firebase',subject:'real-user'}})},'@/lib/access/scoped-data':{authorizeTransaction:async(tx,identity,scope,permission,level)=>{calls.push({identity,scope,permission,level});if(denied)throw Error('forbidden');assert.equal(scope.brandId,'b');assert.equal(scope.locationId,'l');}},'@/lib/payments/worldline-operations':{runWorldlineOperation:async input=>{calls.push({operation:input});return {state};}},'@/lib/payments/worldline-expiry':{prepareWorldlineCancellationCapacity:async(orderId,expected)=>{calls.push({prepare:orderId,expected});assert.equal(expected.brandId,'b');assert.equal(expected.locationId,'l');},finalizeWorldlineVoid:async(...args)=>finalized.push(args)}};
   const api=loadTs('src/app/superadmin/payments/worldline-operations-actions.ts',mocks);
   return {api,rows,order,calls,finalized,deny:()=>denied=true,state:value=>state=value};
 }
@@ -21,7 +21,7 @@ test('active own operation can be recovered; another employee operation never ex
  f.rows.get('orders/o/paymentOperations/'+f.order.paymentOperation).actorId='different-actor';view=await f.api.loadWorldlineOrderPayment('o');assert.equal(view.pending,null);assert.equal(view.locked,true);
 });
 test('load and mutation require current scoped authorization before provider I/O',async()=>{
- const f=fixture();f.deny();await assert.rejects(f.api.loadWorldlineOrderPayment('o'));await assert.rejects(f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'credit',amountMinor:100}));assert.equal(f.calls.filter(c=>c.operation).length,0);
+ const f=fixture();f.deny();await assert.rejects(f.api.loadWorldlineOrderPayment('o'));await assert.rejects(f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'credit',amountMinor:100}));assert.equal(f.calls.filter(c=>c.operation).length,0);assert.equal(f.calls.filter(c=>c.prepare).length,0);
 });
 test('server derives transaction, employee and tenant; browser cannot add or alter authority fields',async()=>{
  const f=fixture();for(const extra of [{transactionId:'evil'},{actorId:'evil'},{brandId:'evil'}])await assert.rejects(f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'credit',amountMinor:100,...extra}));
@@ -35,7 +35,8 @@ test('refund and void preconditions reject managed delivery, unpaid refunds, mal
 });
 test('confirmed void finalizes order/reservation; unknown void never releases it',async()=>{
  const f=fixture();f.order.paymentStatus='Pending';f.state('unknown');assert.equal((await f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'delete'})).state,'unknown');assert.equal(f.finalized.length,0);
- f.state('confirmed');assert.equal((await f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'delete'})).state,'confirmed');assert.deepEqual(f.finalized,[['o','123']]);
+ assert.deepEqual(f.calls.map(c=>c.permission?'authorized':c.prepare?'prepared':'operation'),['authorized','prepared','operation']);
+ f.state('confirmed');assert.equal((await f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'delete'})).state,'confirmed');assert.deepEqual(f.finalized,[['o','123',f.order]]);
 });
 
 test('an amount above the stored remaining balance is rejected before provider I/O',async()=>{const f=fixture();const result=await f.api.worldlineOrderOperation({orderId:'o',requestId:REQUEST,operation:'credit',amountMinor:12501});assert.equal(result.state,'rejected');assert.match(result.message,/resterende betaling/);assert.equal(f.calls.filter(c=>c.operation).length,0);});

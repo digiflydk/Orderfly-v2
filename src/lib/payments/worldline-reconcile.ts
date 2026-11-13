@@ -7,19 +7,22 @@ import { readWorldlineTransaction } from './worldline-client';
 import { assertWorldlineTransaction } from './worldline-verification';
 import { runWorldlineOperation } from './worldline-operations';
 import { settleWorldlineOrder } from '@/lib/server/settle-checkout';
+import { readWorldlinePaymentState } from './worldline-read-retry';
 
 /** Jobs remain durable until the authoritative settlement (including print) commits. */
-export async function reconcileWorldlineOrder(orderId:string){
+export async function reconcileWorldlineOrder(orderId:string,options:{observationOnly?:boolean;retryReadFailures?:boolean}={}){
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(orderId))throw Error('Invalid order');
   const db=getAdminDb(),ref=db.collection('orders').doc(orderId),job=db.collection('worldlinePaymentJobs').doc(orderId);
-  const order=(await ref.get()).data();
+  const observe = <T,>(read: () => Promise<T>) => readWorldlinePaymentState(read, options.retryReadFailures);
+  const order=(await observe(()=>ref.get())).data();
   if(!order||order.psp?.provider!=='worldline'||!order.psp.transactionId)throw Error('Worldline order unavailable');
-  const {binding,credentials}=await readPinnedWorldlineAgreement(order.paymentAgreement);
+  const {binding,credentials}=await observe(()=>readPinnedWorldlineAgreement(order.paymentAgreement));
   if(binding.owner.brandId!==order.brandId||binding.owner.locationId&&binding.owner.locationId!==order.locationId)throw Error('Worldline scope mismatch');
   const transactionId=order.psp.transactionId,amountMinor=Math.round(order.totalAmount*100);
-  const transaction=assertWorldlineTransaction(await readWorldlineTransaction(credentials,binding.mode,transactionId),{orderId,transactionId,merchantNumber:binding.merchantNumber,mode:binding.mode,amountMinor,currency:'DKK'});
+  const transaction=assertWorldlineTransaction(await observe(()=>readWorldlineTransaction(credentials,binding.mode,transactionId)),{orderId,transactionId,merchantNumber:binding.merchantNumber,mode:binding.mode,amountMinor,currency:'DKK'});
   if(transaction.total.credited!==0)throw Error('Payment requires operator reconciliation');
   if(order.status==='Canceled'){
+    if(options.observationOnly)throw Error('Canceled payment requires its cancellation worker');
     if((order.psp.sessionExpired!==true&&order.cancellationReason!=='worldline_authorization_cancel_requested'&&!(order.psp.voided===true&&transaction.status.toLowerCase()==='deleted'))||transaction.total.captured!==0)throw Error('Canceled payment requires operator reconciliation');
     const voidJournal=createHash('sha256').update('canceled-authorization').digest('hex');
     if(transaction.status.toLowerCase()==='approved'||order.paymentOperation===voidJournal){
@@ -33,7 +36,7 @@ export async function reconcileWorldlineOrder(orderId:string){
   const captureJournal=createHash('sha256').update('initial-capture').digest('hex');
   if(order.paymentOperation&&order.paymentOperation!==captureJournal)throw Error('Another operation requires reconciliation');
   if(transaction.total.captured!==amountMinor||order.paymentOperation===captureJournal){
-    const result=order.managedDelivery?await captureManagedWorldlineOrder(orderId):await runWorldlineOperation({orderId,transactionId,requestId:'initial-capture',operation:'capture',amountMinor,actorId:'worldline-worker'});
+    const result=order.managedDelivery?await captureManagedWorldlineOrder(orderId,options):await runWorldlineOperation({orderId,transactionId,requestId:'initial-capture',operation:'capture',amountMinor,actorId:'worldline-worker'},undefined,options);
     if(result.state!=='confirmed')throw Error('Capture requires reconciliation');
   }
   await settleWorldlineOrder(orderId,transactionId);

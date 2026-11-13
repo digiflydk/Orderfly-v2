@@ -131,6 +131,9 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     }, [sessionId, receiptToken, brand?.id, location?.id, order?.id, order?.deliveryType, order?.paymentStatus, !!trackingStatus, deliveryFinished, retry]);
     const { completeCheckout } = useCart();
     const storefront = useStorefrontPath(brand?.slug);
+    const terminalRefund = order?.paymentOutcome === 'refunded' || order?.managedDeliveryTracking?.paymentStatus === 'refunded';
+    const partialRefund = order?.paymentOutcome === 'partially_refunded';
+    const terminalCancellation = order?.paymentOutcome === 'canceled';
     const pickupAccepted = order?.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
     useEffect(() => {
         if (pickupAccepted && order && brand && location) completeCheckout(order.id, brand.id, location.id);
@@ -139,6 +142,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     useEffect(() => {
         if (order?.paymentStatus === 'Paid' && brand && location) {
             completeCheckout(order.id, brand.id, location.id);
+            if (terminalRefund || partialRefund || terminalCancellation || order.status === 'Canceled') return;
             const sendPurchase = () => pushPaidPurchase({
                 orderId: order.id, value: order.totalAmount, brandId: brand.id, locationId: location.id, currency: order.invoice?.currency || brand.currency || 'DKK',
                 ...(!brand.gtmContainerId && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel
@@ -150,7 +154,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
             window.addEventListener('orderfly:consent', sendPurchase);
             return () => { window.removeEventListener('orderfly:tracking-ready', sendPurchase); window.removeEventListener('orderfly:consent', sendPurchase); };
         }
-    }, [order, brand, location, completeCheckout]);
+    }, [order, brand, location, completeCheckout, terminalRefund, partialRefund, terminalCancellation]);
 
     if (!order || !brand || !location) {
         return (
@@ -181,16 +185,17 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     if (order.paymentStatus !== 'Paid' && !pickupAccepted) {
         const pickupCanceled = order.paymentMethod === 'PayAtPickup' && order.status === 'Canceled';
         const failed = order.paymentStatus === 'Failed' || pickupCanceled;
-        const refunded=order.managedDeliveryTracking?.paymentStatus==='refunded';
+        const refunded=terminalRefund;
+        const canceled = terminalCancellation;
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
-            <h1 className="text-2xl font-bold">{refunded?'Betalingen er refunderet':pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
-            <p className="my-4">{refunded?'Betalingen for leveringen er refunderet. Se leveringsstatus nedenfor.':pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
+            <h1 className="text-2xl font-bold">{refunded?'Betalingen er refunderet':canceled ? 'Ordren er annulleret' : pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
+            <p className="my-4">{refunded?'Betalingen er refunderet. Se oplysningerne nedenfor.':canceled ? 'Ordren er annulleret. Der er ikke hævet nogen betaling.' : pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
             {order.managedDeliveryTracking&&<ManagedDeliveryTracking enabled orderId={order.id} data={order.managedDeliveryTracking} fallbackDeliveryTime={order.expectedDeliveryAt} loading={deliveryLoading} error={deliveryError} onRefresh={() => setRetry(value => value + 1)}/>}
-            {!failed&&!refunded && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
+            {!failed&&!refunded&&!canceled && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
             <Button asChild variant="outline" className="ml-2"><Link href={storefront(location.slug)}>Tilbage til menuen</Link></Button>
         </main>;
     }
@@ -216,18 +221,19 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
 
     const fullAddress = customerDetails.address;
     const tracking = order.managedDeliveryTracking;
-    const refunded = tracking?.paymentStatus === 'refunded';
+    const refunded = terminalRefund;
     const cancelled = tracking?.deliveryStatus === 'cancelled';
+    const nativeWorldlineCanceled = order.paymentMethod === 'Worldline' && status === 'Canceled';
     const cancellationPending = tracking?.cancellationState === 'unknown' || tracking?.cancellationState === 'submitting';
     const rejected = tracking?.bookingState === 'rejected';
     const unconfirmed = !!tracking && tracking.bookingState !== 'accepted';
     const paidWorldline = order.paymentMethod === 'Worldline' && order.paymentStatus === 'Paid';
-    const receiptTitle = refunded ? 'Din betaling er refunderet' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed && !paidWorldline ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
-    const receiptSummary = refunded ? ' er annulleret, og betalingen er refunderet.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
+    const receiptTitle = partialRefund ? 'Din betaling er delvist refunderet' : refunded ? 'Din betaling er refunderet' : nativeWorldlineCanceled ? 'Ordren er annulleret' : cancelled ? 'Leveringen er annulleret' : cancellationPending ? 'Vi afklarer din annullering' : rejected ? 'Leveringen kunne ikke bestilles' : unconfirmed && !paidWorldline ? 'Vi kontrollerer din levering' : 'Tak for din bestilling!';
+    const receiptSummary = partialRefund ? (status === 'Canceled' ? ' er annulleret. En del af betalingen er refunderet.' : ' har fået en del af betalingen refunderet.') : refunded ? (status === 'Canceled' ? ' er annulleret, og betalingen er refunderet.' : ' har fået betalingen refunderet.') : nativeWorldlineCanceled ? ' er annulleret. Se betalingsstatus nedenfor.' : cancelled ? ' har fået annulleret kurérleveringen. Se betalingsstatus nedenfor.' : cancellationPending ? ' har en annullering, som endnu ikke er afklaret. Se leveringsstatus nedenfor.' : rejected ? ' kunne ikke leveres. Se betalingsstatus nedenfor.' : unconfirmed ? ' er betalt. Leveringen er endnu ikke bekræftet.' : ' er bekræftet.';
 
     return (
         <div className="min-h-screen w-full bg-background">
-            {order.paymentStatus === 'Paid' && order.status !== 'Canceled' && !refunded && !cancelled && <StampCelebration slug={brand.slug} orderId={order.id} />}
+            {order.paymentStatus === 'Paid' && order.status !== 'Canceled' && !refunded && !partialRefund && !cancelled && <StampCelebration slug={brand.slug} orderId={order.id} />}
             <main className="flex-1 py-12 px-4">
                 <div className="w-full max-w-3xl mx-auto space-y-8">
                      <div className="text-center">
@@ -235,6 +241,9 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                            {order.managedDeliveryTracking&&(order.managedDeliveryTracking.bookingState!=='accepted'||cancelled||cancellationPending)?<Clock className="h-10 w-10 text-amber-700"/>:<CheckCircle2 className="h-10 w-10 text-green-600"/>}
                         </div>
                         <h1 data-order-receipt-title tabIndex={-1} className="text-3xl font-bold tracking-tight">{receiptTitle}</h1>
+                        {(refunded || partialRefund) && Number.isSafeInteger(order.refundedAmountMinor) && order.refundedAmountMinor! > 0 && order.refundedAmountMinor! <= Math.round(totalAmount * 100) && <p role="status" className="mt-4 rounded-lg border p-4">
+                            Refunderet: {formatPrice(order.refundedAmountMinor! / 100)}. Oprindelig betaling: {formatPrice(totalAmount)}. Resterende betaling: {formatPrice((Math.round(totalAmount * 100) - order.refundedAmountMinor!) / 100)}.
+                        </p>}
                         {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
                            Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span>{receiptSummary}

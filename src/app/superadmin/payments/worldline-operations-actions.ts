@@ -61,15 +61,19 @@ export async function worldlineOrderOperation(input: unknown) {
     if (!previous && value.operation === 'delete' && order.paymentStatus !== 'Pending' && !order.psp.voided) throw new Error('En hævet betaling skal refunderes.');
     const maximum = Math.round(Number(order.totalAmount) * 100) - Number(order.refundedAmountOre ?? 0);
     const rejection = !previous && value.operation === 'credit' && (!Number.isSafeInteger(maximum) || value.amountMinor > maximum) ? 'Beløbet overstiger ordrens resterende betaling. Genindlæs betalingsstatus.' : null;
-    return { transactionId: order.psp.transactionId as string, rejection };
+    return { transactionId: order.psp.transactionId as string, rejection, cancellationExpected:value.operation==='delete'?order:undefined };
   });
   if (authorized.rejection) return { state: 'rejected' as const, message: authorized.rejection };
   const transactionId = authorized.transactionId;
   try {
+    if(value.operation==='delete'){
+      const {prepareWorldlineCancellationCapacity}=await import('@/lib/payments/worldline-expiry');
+      await prepareWorldlineCancellationCapacity(value.orderId,authorized.cancellationExpected);
+    }
     const result = await runWorldlineOperation({ ...value, transactionId, actorId: actor.actorId });
     if (result.state === 'confirmed' && value.operation === 'delete') {
       const { finalizeWorldlineVoid } = await import('@/lib/payments/worldline-expiry');
-      await finalizeWorldlineVoid(value.orderId, transactionId);
+      await finalizeWorldlineVoid(value.orderId, transactionId, authorized.cancellationExpected);
     }
     return result;
   } catch {

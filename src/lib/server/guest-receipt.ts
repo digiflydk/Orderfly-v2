@@ -1,4 +1,6 @@
 import 'server-only';
+import { worldlineNativeTerminalOutcome } from '@/lib/payments/worldline-callback-completion';
+import { worldlineBindingSchema } from '@/lib/payments/worldline-verification';
 import { z } from 'zod';
 import { readReceiptDeliveryTracking } from '@/lib/delivery/tracking-server';
 import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
@@ -16,6 +18,9 @@ export type GuestReceipt = Pick<OrderDetail,
   'id' | 'brandId' | 'locationId' | 'customerName' | 'customerContact' | 'deliveryType' |
   'deliveryTime' | 'status' | 'paymentStatus' | 'paymentMethod' | 'totalAmount' | 'productItems'> & {
   managedDeliveryTracking?: CustomerDeliveryTracking;
+  /** Server-derived native terminal display state; never accepted from browser parameters. */
+  paymentOutcome?: 'refunded' | 'partially_refunded' | 'canceled';
+  refundedAmountMinor?: number;
   expectedDeliveryAt?: string;
   createdAt: string;
   customerDetails: Pick<OrderDetail['customerDetails'], 'id' | 'address'>;
@@ -96,11 +101,17 @@ export async function readGuestReceipt(proof: ReceiptProof, options: { reconcile
 
   if (!order) return null;
   const managedDeliveryTracking = await readReceiptDeliveryTracking(order).catch(() => null);
+  const originalBinding = worldlineBindingSchema.safeParse(order.paymentAgreement);
+  const refundedAmountMinor = (order as OrderDetail & {refundedAmountOre?: unknown}).refundedAmountOre;
+  const paymentOutcome = worldline && originalBinding.success && typeof order.psp?.transactionId === 'string'
+    ? worldlineNativeTerminalOutcome(order, { orderId: order.id, brandId: order.brandId, locationId: order.locationId,
+      transactionId: order.psp.transactionId, amountMinor: Math.round(order.totalAmount * 100), binding: originalBinding.data }) : null;
   const payment = order.paymentDetails;
   const expectedDeliveryAt = managedDeliveryTracking ? receiptExpectedDeliveryAt((order as OrderDetail & {expectedDeliveryAt?: unknown}).expectedDeliveryAt) : undefined;
   // Explicit projection: no PSP identifiers, cancel hashes or arbitrary DB fields.
   return {
     ...(managedDeliveryTracking ? {managedDeliveryTracking} : {}),
+    ...(paymentOutcome ? {paymentOutcome, ...(paymentOutcome !== 'canceled' && typeof refundedAmountMinor === 'number' ? {refundedAmountMinor} : {})} : {}),
     ...(expectedDeliveryAt ? {expectedDeliveryAt} : {}),
     id: order.id, brandId: order.brandId, locationId: order.locationId,
     customerName: order.customerName, customerContact: order.customerContact,

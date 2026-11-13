@@ -1,0 +1,274 @@
+{
+  "baseline": "985cbfdcb2ba480a2786c9f1a6f562c839cfb3e3",
+  "infrastructurePrerequisite": "3bdfa401c040ed71ed1ebda2d72bfdbc7c71d4e4",
+  "reviewedProductSource": "e70e5f6c455370fd17995a9e87c353ac4c9c5b72",
+  "testedHead": "2692acfa018e59eb085389bf4700357cd0834e48",
+  "productSourceChangedAfterReview": false,
+  "mode": "Local isolated unit/integration and Chromium tests; external provider/cloud I/O mocked. Not actual provider acceptance.",
+  "unitIntegration": {
+    "files": 49,
+    "cases": 398,
+    "latestPerFilePassed": true,
+    "results": [
+      {
+        "file": "tests/unit/worldline-admin-actions.cjs",
+        "exit": 0,
+        "cases": 7
+      },
+      {
+        "file": "tests/unit/worldline-admin-settings.cjs",
+        "exit": 0,
+        "cases": 7
+      },
+      {
+        "file": "tests/unit/worldline-api-key.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/worldline-callback-completion.cjs",
+        "exit": 0,
+        "cases": 10
+      },
+      {
+        "file": "tests/unit/worldline-callback-ingress.cjs",
+        "exit": 0,
+        "cases": 6
+      },
+      {
+        "file": "tests/unit/worldline-callback.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/worldline-capacity-release-identity.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/worldline-checkout.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/worldline-client.cjs",
+        "exit": 0,
+        "cases": 14
+      },
+      {
+        "file": "tests/unit/worldline-delivery-acceptance.cjs",
+        "exit": 0,
+        "cases": 7
+      },
+      {
+        "file": "tests/unit/worldline-delivery-dispatcher.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/worldline-delivery-recovery.cjs",
+        "exit": 0,
+        "cases": 5
+      },
+      {
+        "file": "tests/unit/worldline-delivery-refund.cjs",
+        "exit": 0,
+        "cases": 6
+      },
+      {
+        "file": "tests/unit/worldline-expiry-queue.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/worldline-expiry.cjs",
+        "exit": 0,
+        "cases": 21
+      },
+      {
+        "file": "tests/unit/worldline-managed-checkout.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/worldline-managed-lifecycle.cjs",
+        "exit": 0,
+        "cases": 5
+      },
+      {
+        "file": "tests/unit/worldline-managed-operation-authority.cjs",
+        "exit": 0,
+        "cases": 8
+      },
+      {
+        "file": "tests/unit/worldline-money-lifecycle.cjs",
+        "exit": 0,
+        "cases": 10,
+        "verification": "Reran directly after test-only fixture commit 2692acf; 10/10 passed."
+      },
+      {
+        "file": "tests/unit/worldline-operations.cjs",
+        "exit": 0,
+        "cases": 21
+      },
+      {
+        "file": "tests/unit/worldline-return.cjs",
+        "exit": 0,
+        "cases": 19
+      },
+      {
+        "file": "tests/unit/worldline-save-results.cjs",
+        "exit": 0,
+        "cases": 13
+      },
+      {
+        "file": "tests/unit/worldline-settings.cjs",
+        "exit": 0,
+        "cases": 8
+      },
+      {
+        "file": "tests/unit/worldline-settlement.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/worldline-stale-holds.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/worldline-verification.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/payment-guest-receipt.cjs",
+        "exit": 0,
+        "cases": 12
+      },
+      {
+        "file": "tests/unit/payment-heartbeat.cjs",
+        "exit": 0,
+        "cases": 2
+      },
+      {
+        "file": "tests/unit/stripe-merchant-pinning.cjs",
+        "exit": 0,
+        "cases": 6
+      },
+      {
+        "file": "tests/unit/delivery-stripe-modes.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/printing-stripe-transition-proof.cjs",
+        "exit": 0,
+        "cases": 17
+      },
+      {
+        "file": "tests/unit/printing-stripe-settlement-integration.cjs",
+        "exit": 0,
+        "cases": 42
+      },
+      {
+        "file": "tests/unit/payment-confirmation-job.cjs",
+        "exit": 0,
+        "cases": 17
+      },
+      {
+        "file": "tests/unit/checkout-price-validation.cjs",
+        "exit": 0,
+        "cases": 4
+      },
+      {
+        "file": "tests/unit/stripe-lifecycle-189.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/test-loader-isolation.cjs",
+        "exit": 0,
+        "cases": 3
+      },
+      {
+        "file": "tests/unit/fixture-firestore-reference.cjs",
+        "exit": 0,
+        "cases": 2
+      },
+      {
+        "file": "tests/unit/stripe-pinned-checkout-flow.cjs",
+        "exit": 0,
+        "cases": 2
+      },
+      {
+        "file": "tests/unit/checkout-attempt.cjs",
+        "exit": 0,
+        "cases": 5
+      },
+      {
+        "file": "tests/unit/native-free-checkout.cjs",
+        "exit": 0,
+        "cases": 5
+      },
+      {
+        "file": "tests/unit/native-free-checkout-integration.cjs",
+        "exit": 0,
+        "cases": 2
+      },
+      {
+        "file": "tests/unit/native-free-recovery.cjs",
+        "exit": 0,
+        "cases": 5
+      },
+      {
+        "file": "tests/unit/loyalty-stamp-card-counter.cjs",
+        "exit": 0,
+        "cases": 16
+      },
+      {
+        "file": "tests/unit/upsell-sequence.cjs",
+        "exit": 0,
+        "cases": 6
+      },
+      {
+        "file": "tests/unit/cart-cancel.cjs",
+        "exit": 0,
+        "cases": 2
+      },
+      {
+        "file": "tests/unit/delivery-checkout-cancel.cjs",
+        "exit": 0,
+        "cases": 10
+      },
+      {
+        "file": "tests/integration/worldline-cancellation-capacity.cjs",
+        "exit": 0,
+        "cases": 9
+      },
+      {
+        "file": "tests/integration/worldline-completion-flow.cjs",
+        "exit": 0,
+        "cases": 14
+      },
+      {
+        "file": "tests/integration/worldline-terminal-return-acceptance.cjs",
+        "exit": 0,
+        "cases": 9
+      }
+    ]
+  },
+  "browser": {
+    "paymentsDesktopMobile": 36,
+    "administrationDesktopMobile": 6,
+    "passed": true
+  },
+  "typecheck": "passed",
+  "initialRun": {
+    "head": "e70e5f6c455370fd17995a9e87c353ac4c9c5b72",
+    "failedFile": "tests/unit/worldline-money-lifecycle.cjs",
+    "cause": "Fixture mocked the whole reservation module without its new production identity helpers. Test-only correction imports actual pure helpers and strengthens expected snapshot assertions.",
+    "historicalLog": "/tmp/orderfly-final-payment-suite/worldline-money-lifecycle.log"
+  },
+  "runtimeVerification": "Pending merge/deployment approval. No new provider keys or provider writes in this implementation validation."
+}
