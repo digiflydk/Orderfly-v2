@@ -93,9 +93,10 @@ outboxes. Worldline uses its own opaque print transition and private settlement
 capability; it is never represented as a Stripe session. Financial and original
 print-intent writes commit together, and replay cannot duplicate either.
 
-Worldline's accept URL is a server-only return endpoint, described below. It may
-redirect to the receipt only after authoritative Paid. Receipt capabilities and
-browser parameters cannot mark an order paid. Existing direct/legacy receipts
+Worldline's accept URL is a server-only return endpoint, described below. Normal
+checkout confirmation requires authoritative, fully captured Paid. Verified
+refunds and voids have separate truthful final receipts, not successful checkout.
+Receipt capabilities and browser parameters cannot mark an order paid. Existing direct/legacy receipts
 retain secure Pending recovery during an outage; cart clearing and purchase
 analytics still require Paid. Stripe session receipts remain supported.
 
@@ -235,12 +236,13 @@ server capture and shared settlement; hosted sessions remain authorization-only
 (`instantcaptureamount: 0`). No new capture strategy or browser payment proof is
 introduced.
 
-The endpoint serves no intermediate HTML. It waits up to ten seconds for native
+The normal return serves no intermediate HTML. It waits up to sixty seconds for native
 financial Paid, then redirects to the canonical confirmation URL derived from
 stored brand/location slugs. Worldline remains the visible page while this HTTP
-request completes. A timeout returns a fixed non-success response and keeps the
-durable recovery job; it never redirects an unresolved payment to a success page
-or encourages another payment. The normal receipt no longer has a separate
+request completes. A timeout keeps the durable recovery job and returns an
+accessible non-success page with a fixed support code and a link to check the
+same payment. The link never creates a new checkout or reflects provider card/hash
+parameters. An unresolved payment is never redirected to a success page. The normal receipt no longer has a separate
 "Vi kontrollerer betalingen" loading page. Legacy direct receipt URLs retain their
 safe Pending/error recovery if the payment genuinely remains unresolved.
 
@@ -254,6 +256,24 @@ the return; its paid receipt explicitly says when delivery is not yet confirmed.
 The native read projection does not await provider reconciliation a second time.
 Stripe, Free and pay-at-pickup behavior stays unchanged. Worldline controls its
 own hosted markup and any short provider-side processing screen.
+
+Transient observations may be retried within the return budget. After the one
+normal reconciliation, recovery may only observe the original capture journal;
+it cannot create another journal or send another capture request. A successful
+readback may commit the original verified settlement and its invoice/print effects.
+Capture, credit and void requests are not blindly repeated after an uncertain reply.
+
+New operation journals store an immutable order/account/customer snapshot and,
+for credits, the original invoice number. Claim, replay and final accounting
+recheck that identity. An unknown historical credit without this original identity
+requires explicit operator reconciliation instead of guessing today's customer.
+Historical confirmed operations and verified capture readback remain supported.
+
+See [terminal receipts](worldline-terminal-receipts.md) and
+[follow-up verification](payment-reliability-followup.md) for exact full/partial
+refund, cancellation and release contracts. Worldline's own separate-origin
+loader timer is outside the documented merchant API; this change does not claim
+to remove every brief provider-side blank repaint.
 
 This applies when creating a session. The current official API exposes no update
 operation for an existing hosted session; an already completed window can use its
