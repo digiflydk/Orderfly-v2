@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useCart } from '@/context/cart-context';
 import { useStorefrontCatalog } from '@/context/storefront-catalog';
-import { publicRead } from '@/lib/public-read';
+import { readProductOptions } from '@/lib/product-options-read';
 import type { Topping, ToppingGroup } from '@/types';
 import { Button } from '@/components/ui/button';
 const ProductDialog = dynamic(() => import('../product/product-dialog').then(m => m.ProductDialog));
@@ -36,10 +36,7 @@ export function CartEditor() {
             return;
         }
         const read = product.toppingGroupIds?.length
-            ? publicRead<{
-                toppings: Topping[];
-                groups: ToppingGroup[];
-            }>(`/api/public/product-options?${new URLSearchParams({ brandId: product.brandId, locationId: location.id })}`)
+            ? readProductOptions(product.brandId, location.id)
             : Promise.resolve({ toppings: [], groups: [] });
         void read.then(data => {
             if (!Array.isArray(data.groups) || !Array.isArray(data.toppings))

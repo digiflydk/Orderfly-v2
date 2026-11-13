@@ -8,7 +8,7 @@ const http = require('node:http');
 const ts = require('typescript');
 const { chromium } = require('@playwright/test');
 const f = require('../helpers/cart-fixture.cjs');
-let browser, server, origin, catalog;
+let browser, server, origin, catalog, styles;
 
 const app = `
 import React, { useEffect } from 'react';
@@ -29,6 +29,8 @@ function Flow() {
   const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,includeBagFee:cart.includeBagFee,brandId:cart.brand?.id,selectedTime:cart.selectedTime};
   return React.createElement('div',null,
     React.createElement('pre',{id:'state'},JSON.stringify(output)),
+    React.createElement('button',{id:'cookie-consent',style:{position:'fixed',bottom:0,left:0,zIndex:50,background:'white',padding:12},onClick:()=>window.cookieDismissed=true},'Afvis valgfrie'),
+    React.createElement('button',{id:'complete-verified',onClick:()=>cart.completeCheckout('ORD-ONE','b','l')},'Verified receipt'),
     React.createElement('button',{id:'edit-line',onClick:()=>cart.addToCart(product,2,[{id:'t',name:'Cheese',price:10}],75,75,cart.cartItems[0])},'Edit line'),
     React.createElement('button',{id:'pizza',onClick:()=>cart.addToCart(product,1,[],75,75)},'Add pizza'),
     React.createElement('button',{id:'topping',onClick:()=>cart.addToCart(product,1,[{name:'Cheese',price:10}],75,75)},'Add with cheese'),
@@ -55,10 +57,12 @@ const html = `<!doctype html><div id="root"></div>
 <script type="importmap">{"imports":{"react":"/react-module","react/jsx-runtime":"/jsx-runtime","zod":"/zod/v3/index.js","js-cookie":"/cookies","next/navigation":"/navigation"}}</script>
 <script type="module" src="/fixture.js"></script>`;
 before(async () => {
+  styles=(await require('postcss')([require('tailwindcss')({config:path.join(process.cwd(),'tailwind.config.ts')})]).process(fs.readFileSync('src/app/globals.css','utf8'),{from:path.join(process.cwd(),'src/app/globals.css')})).css;
   server = http.createServer(async (req, res) => {
     try {
       const route = new URL(req.url, 'http://localhost').pathname;
       res.setHeader('Cache-Control', 'no-store');
+      if(route==='/styles.css'){res.setHeader('Content-Type','text/css');return res.end(styles);}
       if (route === '/restore') {
         let raw = ''; for await (const chunk of req) raw += chunk;
         const input = JSON.parse(raw);
@@ -80,7 +84,7 @@ before(async () => {
         const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
         return res.end(code.replaceAll("'@/", "'/src/"));
       }
-      res.setHeader('Content-Type', 'text/html'); res.end(html);
+      res.setHeader('Content-Type', 'text/html'); res.end(req.url.includes('realcss=1')?html.replace('<div id="root">','<meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="root">'):html);
     } catch (error) { res.statusCode = 500; res.end(String(error)); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -101,6 +105,63 @@ const state = page => page.locator('#state').textContent().then(JSON.parse);
 const ready = page => page.waitForFunction(() => JSON.parse(document.querySelector('#state')?.textContent || '{}').ready);
 const saved = page => page.evaluate(key => JSON.parse(localStorage.getItem(key)), f.CART_STORAGE_KEY);
 const count = (page, quantity) => page.waitForFunction(q => JSON.parse(document.querySelector('#state').textContent).items.reduce((sum, item) => sum + item.quantity, 0) === q, quantity);
+
+for (const width of [390,1280]) test(`stalled restoration remains safe, leaves consent usable and recovers without reload (${width}px)`, async t => {
+  catalog=f.catalog();const context=await browser.newContext({viewport:{width,height:844}});t.after(()=>context.close());
+  const page=await context.newPage();let waiting;const staleResponse=new Promise(resolve=>waiting=resolve);let calls=0,retryAllowed=false,retryReads=0;
+  await page.clock.install({time:new Date('2026-11-13T12:00:00Z')});await page.clock.pauseAt(new Date('2026-11-13T12:01:00Z'));
+  await page.route('**/restore',async route=>{
+    calls++;
+    if(!retryAllowed){await staleResponse;return route.fulfill({json:{items:[],discounts:[],removed:0}}).catch(()=>{});}retryReads++;
+    const input=route.request().postDataJSON();const restored=f.restoreCartItems(input.choices,catalog,{...input,now:f.scope.now});
+    return route.fulfill({json:{...restored,discounts:[]}});
+  });
+  const snapshot={version:1,brandId:'b',locationId:'l',deliveryType:'pickup',choices:[f.choice],includeBagFee:true,savedAt:Date.now()};
+  await page.addInitScript(({key,snapshot})=>localStorage.setItem(key,JSON.stringify(snapshot)),{key:f.CART_STORAGE_KEY,snapshot});
+  await page.goto(origin+'/?realcss=1');await page.getByRole('status').waitFor();
+  assert.equal((await state(page)).ready,false);
+  assert.equal(await page.locator('#cookie-consent').evaluate(n=>{const b=n.getBoundingClientRect();return document.elementFromPoint(b.x+b.width/2,b.y+b.height/2)===n;}),true,'real stylesheet must leave consent above the nonmodal loading notice');
+  await page.getByRole('button',{name:'Afvis valgfrie',exact:true}).click();assert.equal(await page.evaluate(()=>window.cookieDismissed),true);
+  await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…').waitFor();
+  await page.click('#pizza');assert.equal((await state(page)).items.length,0,'unpriced cart cannot be changed');
+  await page.clock.runFor(15001);await page.getByRole('alert').waitFor();assert.equal((await state(page)).ready,false);
+  assert.deepEqual(await saved(page),snapshot,'timeout must retain the saved choices');
+  retryAllowed=true;await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await ready(page);await count(page,2);
+  await page.click('#pizza');await count(page,3);
+  const late=page.waitForResponse(response=>response.url().endsWith('/restore'));waiting();await(await late).finished();await page.clock.runFor(32);
+  assert.equal((await state(page)).items[0].quantity,3,'late original response cannot erase the retried/edited basket');
+  assert.ok(calls>=2);assert.equal(retryReads,1);
+});
+
+test('malformed or wrong-brand restore cannot make a cart ready; changing scope discards late replies',async t=>{
+  const page=await setup(t);await page.click('#pizza');await count(page,1);const snapshot=await saved(page);
+  for(const reply of [{items:null,discounts:[],removed:0},{items:[{brandId:'foreign'}],discounts:[],removed:0}]){
+    await page.route('**/restore',route=>route.fulfill({json:reply}));await page.reload();await page.getByRole('alert').waitFor();
+    assert.equal((await state(page)).ready,false);assert.deepEqual(await saved(page),snapshot);await page.unroute('**/restore');
+  }
+  await page.getByRole('button',{name:'Prøv igen',exact:true}).click();await ready(page);await count(page,1);
+  let release;const gate=new Promise(resolve=>release=resolve);
+  await page.route('**/restore',async route=>{
+    const input=route.request().postDataJSON();if(input.deliveryType==='delivery'){await gate;return route.fulfill({json:{items:[],discounts:[],removed:0}}).catch(()=>{});}
+    const restored=f.restoreCartItems(input.choices,catalog,{...input,now:f.scope.now});return route.fulfill({json:{...restored,discounts:[]}});
+  });
+  await page.click('#delivery');await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…').waitFor();
+  await page.click('#pickup');await ready(page);await count(page,1);
+  const late=page.waitForResponse(response=>response.url().endsWith('/restore')&&response.request().postDataJSON().deliveryType==='delivery');release();await(await late).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));
+  assert.equal((await state(page)).deliveryType,'pickup');assert.equal((await state(page)).items.length,1);
+});
+
+test('matching verified receipt during hydration clears only its basket and rehydrates without being stuck',async t=>{
+ const page=await setup(t);await page.click('#pizza');await count(page,1);await page.click('#pay');await page.waitForURL('**/stripe');
+ let release;const held=new Promise(resolve=>release=resolve);
+ await page.route('**/restore',async route=>{
+  const input=route.request().postDataJSON();if(input.choices.length)await held;
+  const restored=f.restoreCartItems(input.choices,catalog,{...input,now:f.scope.now});return route.fulfill({json:{...restored,discounts:[]}}).catch(()=>{});
+ });
+ await page.goto(origin+'/checkout');await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…').waitFor();
+ await page.click('#complete-verified');await ready(page);await count(page,0);assert.equal(await saved(page),null);
+ const late=page.waitForResponse(response=>response.url().endsWith('/restore')&&response.request().postDataJSON().choices.length>0);release();await(await late).finished();await page.evaluate(()=>new Promise(requestAnimationFrame));assert.equal((await state(page)).ready,true);assert.equal((await state(page)).items.length,0);
+});
 
 test('menu refresh and direct checkout restore quantities, toppings, combos and current prices', async t => {
   const page = await setup(t, '/?deliveryMethod=pickup');
@@ -245,7 +306,7 @@ test('#187 a chosen slot survives reload and invalidates an old paid confirmatio
   assert.equal((await state(cartTab)).selectedTime, 'asap');
 });
 
-test('cart restoration uses a spinner without loading copy and still waits for current prices', async t => {
+test('cart restoration explains loading without blocking consent and still waits for current prices', async t => {
   const page = await setup(t); await page.click('#pizza'); await count(page, 1);
   let release;
   const held = new Promise(resolve => { release = resolve; });
@@ -253,8 +314,8 @@ test('cart restoration uses a spinner without loading copy and still waits for c
   try {
     await page.reload();
     // This provider fixture has no Tailwind CSS; check mounting and readiness.
-    await page.locator('[aria-label="Indlæser"]').waitFor({ state: 'attached' });
-    assert.equal(await page.getByText('Indlæser kurv og aktuelle priser…', { exact: true }).count(), 0);
+    await page.getByText('Indlæser kurven og kontrollerer aktuelle priser…', { exact: true }).waitFor();
+    await page.getByRole('button',{name:'Afvis valgfrie',exact:true}).click();assert.equal(await page.evaluate(()=>window.cookieDismissed),true);
     assert.equal((await state(page)).ready, false);
   } finally { release(); }
   await ready(page); await count(page, 1);
