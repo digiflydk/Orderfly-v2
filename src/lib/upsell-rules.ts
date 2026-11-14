@@ -1,5 +1,6 @@
 import type { MinimalCartItem, Upsell } from '@/types';
 import type { CatalogPriceLine } from './checkout-price-validation';
+import { ore } from './money';
 
 /** Shared by recommendations and final checkout. Other items alone qualify the offer. */
 export function upsellTriggered(upsell: Upsell, offeredProductId: string, items: Pick<MinimalCartItem, 'quantity' | 'totalPrice'>[], catalog: CatalogPriceLine[], standardPrices: number[]): boolean {
@@ -8,7 +9,17 @@ export function upsellTriggered(upsell: Upsell, offeredProductId: string, items:
 function matchingUpsellQuantities(upsell: Upsell, offeredProductId: string, items: Pick<MinimalCartItem, 'quantity' | 'totalPrice'>[], catalog: CatalogPriceLine[], standardPrices: number[]): number[] {
   const others = catalog.map((record,i)=>({record,i})).filter(x=>x.record.id !== offeredProductId);
   return upsell.triggerConditions.flatMap(t => {
-    if(t.type === 'cart_value_over') return others.reduce((sum,{i})=>sum+Math.max(0,Math.min(items[i].totalPrice,standardPrices[i]*items[i].quantity)),0)>Number(t.referenceId) ? [others.reduce((n,{i})=>n+items[i].quantity,0)] : [];
+    if(t.type === 'cart_value_over') {
+      if (typeof t.referenceId !== 'string' || !t.referenceId.trim()) return [];
+      const threshold = Number(t.referenceId);
+      if (!Number.isFinite(threshold) || threshold < 0 || threshold > Number.MAX_SAFE_INTEGER / 100) return [];
+      // Recommendation and checkout use this one rule. Options do not inflate
+      // eligibility; each line is capped by standard-discounted unit price.
+      const eligibleOre = others.reduce((sum,{i}) => sum + Math.min(
+        Math.max(0,ore(items[i].totalPrice)), ore(standardPrices[i]) * items[i].quantity,
+      ), 0);
+      return eligibleOre > ore(threshold) ? [others.reduce((n,{i})=>n+items[i].quantity,0)] : [];
+    }
     const count=others.reduce((n,{record,i})=>n+((t.type === 'product_in_cart' ? !record.isCombo && record.id === t.referenceId : t.type === 'category_in_cart' ? record.categoryId === t.referenceId : t.type === 'combo_in_cart' ? record.isCombo && record.id === t.referenceId : t.type === 'product_tag_in_cart' && record.tags.includes(t.referenceId)) ? items[i].quantity : 0),0);
     return count >= (t.minQuantity ?? 1) && count <= (t.maxQuantity ?? Infinity) ? [count] : [];
   });

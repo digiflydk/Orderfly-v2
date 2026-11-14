@@ -87,3 +87,31 @@ No shared cross-request product cache or change to checkout pricing is introduce
 Validation: typecheck; upsell rule/public catalog tests; Playwright synthetic mobile
 and desktop flows, slow responses with and without prefetch, quantity invalidation,
 failed service and bounded hanging-service fallback. No GitHub Actions are used.
+
+### Cart-value threshold consistency (8 November 2026)
+
+The current storefront sends cart line identities, quantities, totals and menu
+selections. The public upsell endpoint reconstructs native brand/location/channel
+prices and active standard item discounts on the server. The browser-supplied
+aggregate `cartTotal` is not authoritative. Each reported line is capped at its
+native channel unit price times quantity in whole øre; the shared
+`upsellTriggered` rule additionally caps it at its standard-discounted price.
+Paid options and fees cannot increase the qualifying value. Combos and verified
+menu supplements do count. The offered item cannot trigger itself.
+
+Recommendation and checkout both use the same strictly-greater-than comparison
+in integer øre. This avoids floating-point boundary errors (0.1 + 0.2 at a
+0.3 threshold) and rejects invalid threshold text. Missing legacy line totals
+fail closed. A consistent Danish message explains a changed checkout quote.
+The previous client-side `cartTotal` patch in PR #856 is obsolete under this
+server-side flow; do not restore that logic.
+
+Regression tests: `tests/unit/upsell-cart-value.cjs` compares reconstructed
+server offers with `validateCheckoutPrices` for options, discounted products,
+combos and native supplements, pickup/delivery channel prices, quantities,
+precise thresholds, and exaggerated browser totals. Missing or understated
+browser totals fail closed; blank and malformed saved thresholds never unlock
+an offer.
+Run with checkout/upsell test suites, TypeScript check, production build and
+relevant storefront browser scenarios before release. GitHub Actions remain
+disabled by PM instruction. No campaign/data changes or migrations are needed.

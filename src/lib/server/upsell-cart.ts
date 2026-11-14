@@ -4,7 +4,7 @@ import type { ComboMenu, ComboSelection, ProductForMenu, StandardDiscount, Minim
 import { comboSelectionAdjustments } from '@/lib/combo-pricing';
 import { comboEligible } from '@/lib/combo-eligibility';
 import { minimumCheckoutPrices, type CatalogPriceLine } from '@/lib/checkout-price-validation';
-import { money } from '@/lib/money';
+import { money, ore } from '@/lib/money';
 
 export type UpsellCartItem = {
   upsellId?: string;
@@ -38,7 +38,11 @@ export async function upsellCart(db: Firestore, input: UpsellCartItem[], scope: 
     if (!Number.isSafeInteger(quantity) || quantity < 1 || quantity > 999 || !Number.isFinite(price) || price < 0) continue;
     catalog.push({id:item.id, isCombo:!!combo, price, categoryId:product?.categoryId,
       tags:product ? [...(product.isPopular ? ['Popular'] : []), ...(product.isFeatured ? ['Recommended'] : []), ...(product.isNew ? ['Campaign'] : [])] : []});
-    items.push({upsellId:item.upsellId,id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.max(0, Math.min(item.totalPrice ?? 0, price * quantity))});
+    // Match checkout's integer-øre unit rounding. Paid options in browser totals
+    // may never increase the amount eligible for an upsell trigger.
+    const submittedOre = ore(item.totalPrice ?? 0);
+    const nativeOre = ore(price) * quantity;
+    items.push({upsellId:item.upsellId,id:item.id, name:'', quantity, unitPrice:price, totalPrice:Math.max(0,Math.min(submittedOre, nativeOre)) / 100});
   }
   return {items, catalog, standardPrices: minimumCheckoutPrices(items, catalog, discounts, [], scope)};
 }
