@@ -13,3 +13,15 @@ Validation: typecheck, SEO route unit tests (scope, inactive/suspended, XML, can
 Release is PM-authorized; use existing [skip ci] guards and local checks, never GitHub Actions. No secrets, production data, payment code, Firestore rules or apphosting.yaml changes. The user-facing report must contain readable findings and results, not only a raw Lighthouse HTML app.
 
 Independent review identified location slugs that collide with the brand or app-wide paths. Metadata and sitemap now both use storefrontPath, preserving the required prefix for supported names such as esmeralda and feedback. Regression tests cover both cases.
+
+## Brand with one restaurant (2026-11-15)
+
+PO decision: when a brand has exactly one orderable restaurant, the brand root (`esmeralda.orderfly.dk/`, or `orderfly.dk/{brand}`) skips the "Vælg restaurant" page and redirects to that restaurant's menu.
+
+- An orderable restaurant is active, belongs to the brand, has a valid slug, and is not a reserved path. The rule lives in `src/lib/storefront-single-location.ts` and is the same one the sitemap uses.
+- The menu itself asks for pickup or delivery when none is chosen yet, so the customer saves a click.
+- The redirect is temporary (Next.js `redirect()`, 307). It keeps the request's query string, such as campaign parameters.
+- With two or more active restaurants, or none, the picker page renders as before. The change takes effect automatically, without code changes.
+- The sitemap leaves the brand root out while it only redirects. It lists the root again once there are several restaurants.
+
+Tests: `tests/unit/storefront-seo.cjs` covers the redirect target and query on the subdomain and on orderfly.dk, the picker for two, one inactive or no restaurants, and the sitemap for one and two restaurants.

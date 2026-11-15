@@ -13,7 +13,9 @@ import { getBrandBySlug } from "@/lib/data/brand-location";
 import { getLocationsForBrand } from "@/lib/data/brand-location";
 import type { Brand, Location } from "@/types";
 import { LocationCard } from "@/components/location-card";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { storefrontHref } from "@/lib/server/storefront-path";
+import { forwardedQuery, singleOrderableLocation } from "@/lib/storefront-single-location";
 
 interface PageProps {
   brand: Brand;
@@ -48,7 +50,7 @@ function BrandPageComponent({ brand, locations }: PageProps) {
 }
 
 
-export default async function BrandPage({ params }: { params: Promise<{ brandSlug: string }> }) {
+export default async function BrandPage({ params, searchParams }: { params: Promise<{ brandSlug: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const { brandSlug } = await params;
   const brand = await getBrandBySlug(brandSlug);
 
@@ -57,6 +59,10 @@ export default async function BrandPage({ params }: { params: Promise<{ brandSlu
   }
 
   const locationsData = await getLocationsForBrand(brand.id);
+  // One restaurant: go straight to its menu, which asks for pickup or delivery itself. A temporary
+  // redirect, so the picker returns as soon as a second restaurant opens. Campaign parameters are kept.
+  const only = singleOrderableLocation(brand.id, locationsData);
+  if (only) redirect(await storefrontHref(brand.slug, only.slug) + forwardedQuery(await searchParams));
 
   const locations = locationsData.map(location => ({
     ...location,
