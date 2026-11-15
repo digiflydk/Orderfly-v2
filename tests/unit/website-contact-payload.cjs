@@ -5,9 +5,11 @@ const zlib=require('node:zlib');
 const crypto=require('node:crypto');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const manifest=require('../../preview/esmeralda/manifest.json');
+const {landingBaseline}=require('../helpers/website-landing-baseline.cjs');
 const entries=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`)))));
 test('packaged contact disables native GET, only owns exact contact form, preserves cookie form',()=>{
- const html=Buffer.from(entries['/kontakt'].data,'base64').toString();
+ // The original packaged contract, before the landing repairs replaced the form (checked below).
+ const html=landingBaseline('/kontakt',Buffer.from(entries['/kontakt'].data,'base64'),manifest).toString();
  const forms=[...html.matchAll(/<form\b[^>]*>/g)].map(m=>m[0]);
  const owned=forms.filter(f=>f.includes('data-website-contact='));assert.equal(owned.length,1);
  assert.match(owned[0],/method="post"/);assert.doesNotMatch(owned[0],/\saction=|data-wf-|data-turnstile-|data-website-contact-(enabled|sitekey)/);
@@ -32,4 +34,15 @@ test('only exact public contact path permits owned contact providers; preview re
  const server=loadTs('src/lib/web-design-preview-server.ts',{'../../preview/esmeralda/manifest.json':{default:manifest}});
  const response=await server.webDesignPreviewResponse(new Request('https://web.orderfly.dk/kontakt',{headers:{host:'web.orderfly.dk'}}));
  const csp=response.headers.get('content-security-policy');assert.doesNotMatch(csp,/website-contact|challenges.cloudflare.com/);assert.match(csp,/connect-src 'self';/);assert.match(csp,/frame-src 'none'/);
+});
+test('landing repair replaces the disabled contact form with direct phone and e-mail actions',()=>{
+ const html=Buffer.from(entries['/kontakt'].data,'base64').toString();
+ assert.equal(manifest.landing_repairs.contact,'direct-phone-email');
+ assert.ok(!html.includes('data-website-contact'),'no contact form a visitor could submit without effect');
+ assert.ok(!/<input[^>]*type="submit"/.test(html.match(/<section class="contact-form-section-dark"[\s\S]*?<\/section>/)[0]));
+ const section=html.match(/<section class="contact-form-section-dark" id="kontaktformular">[\s\S]*?<\/section>/)[0];
+ assert.match(section,/<a class="contact-form-submit" href="tel:\+4532505040"[^>]*>Ring 32 50 50 40<\/a>/);
+ assert.match(section,/<a class="contact-form-submit" href="mailto:info@esmeraldapizza\.dk"[^>]*>Skriv til info@esmeraldapizza\.dk<\/a>/);
+ assert.match(section,/Ring eller skriv til os/);assert.doesNotMatch(section,/Udfyld formularen/);
+ const forms=[...html.matchAll(/<form\b[^>]*>/g)].map(m=>m[0]);assert.equal(forms.length,1);assert.match(forms[0],/flowappz-cookie/,'the cookie settings form stays');
 });

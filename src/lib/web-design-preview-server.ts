@@ -9,11 +9,14 @@ import { join } from 'node:path';
 import manifest from '../../preview/esmeralda/manifest.json';
 import { resolveLegacyMpanelRedirect, MPANEL_HEADERS } from '@/lib/mpanel-host';
 import discovery from '../../preview/esmeralda/production-discovery.json';
+import variants from '../../preview/esmeralda/variants.json';
+import { WEBSITE_NOT_FOUND_HTML } from '@/lib/website-not-found';
 import { isEsmeraldaPublicHost, esmeraldaPublicEnabled, esmeraldaCanonicalRedirect, esmeraldaPublicHeaders, ESMERALDA_UNAVAILABLE_HEADERS } from '@/lib/esmeralda-public-host';
 import { isWebDesignPreviewHost, WEB_PREVIEW_HEADERS } from '@/lib/web-design-preview';
 
 type Entry = { data: string; file: string; sha256: string; size: number };
 const routes: Record<string, Omit<Entry, 'data'>> = manifest.routes;
+const variantRoutes: Record<string, {sha256: string; size: number}> = variants.routes;
 const mime: Record<string, string> = {html:'text/html; charset=utf-8', txt:'text/plain; charset=utf-8', js:'application/javascript; charset=utf-8', css:'text/css; charset=utf-8', json:'application/json', svg:'image/svg+xml', png:'image/png', jpg:'image/jpeg', jpeg:'image/jpeg', webp:'image/webp', avif:'image/avif', gif:'image/gif', ico:'image/x-icon', woff:'font/woff', woff2:'font/woff2', ttf:'font/ttf', otf:'font/otf'};
 let payload: Promise<Record<string, Entry>> | undefined;
 const sha = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -92,8 +95,28 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
     const script=await readFile(join(process.cwd(),'preview/esmeralda/adapters/website-reviews.js'));
     return new Response(request.method==='HEAD'?null:script,{headers:{'Content-Type':'application/javascript; charset=utf-8','Cache-Control':'public, max-age=300'}});
   }
+  // Smaller dish-image variants beside the pinned payload (scripts/preview-image-variants.cjs).
+  // Exact keys only, each file checked against its recorded hash before it is served.
+  if (Object.hasOwn(variantRoutes, path)) {
+    try {
+      const expected = variantRoutes[path];
+      const bytes = await readFile(join(process.cwd(), 'preview/esmeralda/variants', path.slice('/_assets/'.length)));
+      if (bytes.length !== expected.size || sha(bytes) !== expected.sha256) throw new Error('Variant integrity mismatch');
+      headers.set('Content-Type', 'image/avif');
+      headers.set('Content-Length', String(bytes.length));
+      return new Response(request.method === 'HEAD' ? null : new Uint8Array(bytes), {headers});
+    } catch {
+      return new Response(request.method === 'HEAD' ? null : 'Website unavailable', {status:503,headers:{...Object.fromEntries(headers),...ESMERALDA_UNAVAILABLE_HEADERS}});
+    }
+  }
   // Exact route keys only: no decoding, path joining, extension fallback or SPA fallback.
-  if (!Object.hasOwn(routes,path)) { headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive'); return new Response(request.method === 'HEAD' ? null : 'Not found', {status:404,headers}); }
+  // Unknown paths get a branded, noindex page with ways back into the site.
+  if (!Object.hasOwn(routes,path)) {
+    headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', 'no-store');
+    return new Response(request.method === 'HEAD' ? null : WEBSITE_NOT_FOUND_HTML, {status:404,headers});
+  }
   try {
     const entry = (await loadPayload())[path];
     const expected = routes[path];
