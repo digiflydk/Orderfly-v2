@@ -23,3 +23,8 @@ test('reserved app paths and brand-named locations retain their required brand p
   assert.ok((await r.text()).includes('<loc>'+expected+'</loc>'));
  }
 });
+test('names typed with stray spaces never leak into titles or descriptions',()=>{
+ const m=storefrontMenuMetadata({slug:'esmeralda',name:'Esmeralda Pizza '},{slug:'amager',name:'Esmeralda Pizza Amager '});
+ assert.equal(m.title.absolute,'Menukort og takeaway | Esmeralda Pizza Amager');assert.match(m.description,/hos Esmeralda Pizza Amager\. /);assert.equal(m.openGraph.siteName,'Esmeralda Pizza');
+ assert.equal(storefrontMenuMetadata({slug:'esmeralda',name:'Esmeralda Pizza'},{slug:'amager',name:'  '}).title.absolute,'Menukort og takeaway | Esmeralda Pizza');
+});
