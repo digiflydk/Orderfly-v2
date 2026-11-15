@@ -176,3 +176,34 @@ The PO reported 6–9 s between "Gå til betaling" and the payment page. Before 
 **Measurement.** Every request logs `checkout_timing` with `provider` (`worldline` or `stripe`): milliseconds since start at `tenant`, `pricing`, `agreement`, `customer`, `order`, `reservation`, `pre_session`, `session` and `linked`. A failed request logs them on `checkout_failed`. No customer data is logged. Use these logs to decide on the next step, such as moving hosting to a European region.
 
 **Test.** `tests/unit/checkout-critical-path.cjs` (CI) runs the real action with every I/O call delayed equally. It counts the rounds that wait on each other: 18 before this change, and at most 11 required now. It also asserts which reads start together, and that an unchanged fulfilment time is not written twice. A Worldline case asserts the same overlap, with at most 10 rounds and no Stripe call. A further case makes the restaurant stop taking orders during coupon creation and asserts that no Stripe session is created.
+
+### Production measurement and follow-up (2026-11-15, evening)
+
+**Production measurement.** The first production `checkout_timing` line was a Worldline pickup order on release `a0ef9e2`. The milestones below are milliseconds since the request started:
+
+| tenant | pricing | agreement | customer | order | reservation | session | linked |
+|---|---|---|---|---|---|---|---|
+| 667 | 2415 | 4678 | 5555 | 5830 | 6300 | 6776 | 6903 |
+
+- The Worldline session itself took about 480 ms.
+- The cause is geography. Firestore runs in project `orderfly-39325`, location **eur3** (Europe), while the server runs in **us-central1**, so every database round trip costs about 300–450 ms.
+
+**Changes.**
+- **Merchant agreement.**
+  - `resolveMerchantAgreement` read brand, location and both settings records one after another.
+  - For Worldline, `resolveWorldlineAgreement` then read all four again.
+  - `readAgreementRecords` now reads them once, together. The checks and error order are unchanged, and the records are passed on to the Worldline resolver.
+  - Secret payloads are deliberately **not** cached: a disabled or destroyed version must stop working at once (`stripe-merchant-pinning.cjs`).
+- **Customer reference.**
+  - `resolveCheckoutCustomerRef` starts the integrated lookup and both id candidates (scoped and legacy) together, and decides in the original order. The candidate ids are computed inside the lazy reads.
+  - The upsert reuses the price check's resolved reference instead of resolving it again. The transaction still re-validates identity and scope.
+- **Option lists.** Toppings and topping groups for the location are read with the catalog lines. They are used only when a line has options.
+
+**Tests.**
+- `stripe-merchant-pinning.cjs`:
+  - A Worldline agreement takes 4 record reads, all in flight together. The old code made 8.
+  - It takes one secret access.
+  - A destroyed secret is rejected.
+- `checkout-price-validation.cjs`: a valid price is now proven by the logged failure stage `customer`, instead of a second customer lookup that no longer exists.
+
+**Remaining lever.** Moving the server next to the database, to a European region, removes the transatlantic round trips from every step.

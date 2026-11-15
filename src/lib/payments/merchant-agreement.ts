@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {isDeepStrictEqual} from 'node:util';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { worldlineScopeSchema, worldlineSettingsRecordSchema, selectWorldlineAgreement, validateStripeCredentials, stripeCredentialsSchema, type WorldlineScope, type WorldlineSettingsRecord } from './worldline-settings';
-import { worldlineSettingsRef, readStripeSecret, resolveWorldlineAgreement } from './worldline-store';
+import { worldlineSettingsRef, readStripeSecret, resolveWorldlineAgreement, readAgreementRecords } from './worldline-store';
 
 export const stripeBindingSchema = z.object({ provider: z.literal('stripe'), mode: z.enum(['test','live']), owner: worldlineScopeSchema,
   reference: z.string().regex(/^(projects\/[a-z][a-z0-9-]{4,62}\/secrets\/orderfly-stripe-[a-f0-9]{64}-(test|live)\/versions\/[1-9][0-9]*|platform_settings\/stripe-legacy-[a-f0-9]{64})$/), revision: z.number().int().positive() }).strict().superRefine((value, context) => {
@@ -13,22 +13,15 @@ export type StripeBinding = z.infer<typeof stripeBindingSchema>;
 /** null means no merchant configuration exists. An explicit incomplete/disabled agreement never falls back. */
 export async function resolveMerchantAgreement(input: WorldlineScope) {
   const scope = worldlineScopeSchema.parse(input);
-  const db = getAdminDb();
-  const brand = await db.collection('brands').doc(scope.brandId).get();
-  if (!brand.exists) throw new Error('Brand findes ikke.');
-  if (scope.locationId) {
-    const location = await db.collection('locations').doc(scope.locationId).get();
-    if (!location.exists || location.data()?.brandId !== scope.brandId) throw new Error('Ugyldig lokation.');
-  }
-  const rawBrand = (await worldlineSettingsRef({brandId:scope.brandId}).get()).data();
-  const rawLocation = scope.locationId ? (await worldlineSettingsRef(scope).get()).data() : undefined;
+  const records = await readAgreementRecords(scope);
+  const { rawBrand, rawLocation } = records;
   const brandSettings = rawBrand ? worldlineSettingsRecordSchema.parse(rawBrand) : undefined;
   const locationSettings = rawLocation ? worldlineSettingsRecordSchema.parse(rawLocation) : undefined;
   if (brandSettings && brandSettings.source !== 'own') throw new Error('Brandets betalingsaftale er ugyldig.');
   const selected = selectWorldlineAgreement(brandSettings || null, locationSettings);
   if (!selected) {if(locationSettings)throw new Error('Brandets betalingsaftale mangler.');return null;}
   if (selected.mode === 'disabled') throw new Error('Betalingsaftalen er deaktiveret.');
-  if (selected.provider === 'worldline') return resolveWorldlineAgreement(scope);
+  if (selected.provider === 'worldline') return resolveWorldlineAgreement(scope, records);
   const owner = locationSettings?.source === 'own' ? scope : {brandId:scope.brandId};
   const reference = selected.mode === 'test' ? selected.stripeTest : selected.stripeLive;
   if (!reference) throw new Error('Stripe-aftalen mangler nøgler.');
