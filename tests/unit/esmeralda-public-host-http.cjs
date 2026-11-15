@@ -49,3 +49,11 @@ test('actual HTTP production content, discovery, exact-host routing and mPanel i
  const head=await get('/','www.esmeraldapizza.dk',{method:'HEAD'});assert.equal(head.status,200);assert.equal(await head.text(),'');
  const preview=await get('/robots.txt','web.orderfly.dk');assert.match(await preview.text(),/Disallow: \//);assert.match(preview.headers.get('content-security-policy'),/form-action 'none'; frame-src 'none'/);
 }));
+test('actual HTTP serves pinned dish image variants and the branded 404 page',async()=>withServer('true',async get=>{
+ const variants=require('../../preview/esmeralda/variants.json').routes;
+ const [route,v]=Object.entries(variants)[0];
+ const image=await get(route);assert.equal(image.status,200);assert.equal(image.headers.get('content-type'),'image/avif');
+ assert.equal(crypto.createHash('sha256').update(Buffer.from(await image.arrayBuffer())).digest('hex'),v.sha256);
+ const missing=await get('/findes-ikke');assert.equal(missing.status,404);assert.match(missing.headers.get('x-robots-tag'),/noindex/);
+ assert.match(missing.headers.get('content-type'),/text\/html/);assert.match(await missing.text(),/Siden findes ikke/);
+}));

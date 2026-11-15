@@ -1,6 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),zlib=require('node:zlib'),crypto=require('node:crypto');
 const {assertConsentOwner}=require('../helpers/website-consent-owner.cjs');
 const {menuFilterBaseline}=require('../helpers/website-menu-filter-baseline.cjs');
+const {landingBaseline}=require('../helpers/website-landing-baseline.cjs');
 const sharp=require('sharp'),baseline=require('../fixtures/website-home-delivery-baseline.json'),manifest=require('../../preview/esmeralda/manifest.json');
 const payload=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`))))),bytes=k=>Buffer.from(payload[k].data,'base64'),html=bytes('/').toString(),sha=b=>crypto.createHash('sha256').update(b).digest('hex');
 test('homepage avoids stylesheet roundtrips with byte-identical pinned CSS and retains first consent bootstrap',()=>{
@@ -18,7 +19,7 @@ test('every original deep page and asset remains exact; only homepage changes an
   if(route==='/')continue;
   assert.equal(manifest.routes[route].file,entry.file,route);
   if(route===consentRoute){assert.equal(entry.sha256,gtm.previous_consent_sha256);assert.equal(sha(bytes(route)),gtm.consent_sha256);assert.equal(manifest.routes[route].sha256,gtm.consent_sha256);continue;}
-  let body=menuFilterBaseline(route,bytes(route),manifest);
+  let body=menuFilterBaseline(route,landingBaseline(route,bytes(route),manifest),manifest);
   if(entry.file.endsWith('.html')&&route!=='/bordbooking'){const page=body.toString();assert.equal(page.split(footerFixed).length,2,route);assert.ok(!page.includes(footerOld),route);body=Buffer.from(page.replace(footerFixed,footerOld));}
   assert.equal(body.length,entry.size,route);assert.equal(sha(body),entry.sha256,route);
  }
