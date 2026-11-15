@@ -15,7 +15,8 @@ import type { Brand, Location } from "@/types";
 import { LocationCard } from "@/components/location-card";
 import { notFound, redirect } from "next/navigation";
 import { storefrontHref } from "@/lib/server/storefront-path";
-import { forwardedQuery, singleOrderableLocation } from "@/lib/storefront-single-location";
+import { forwardedQuery, ORIGINAL_QUERY_HEADER, singleOrderableLocation } from "@/lib/storefront-single-location";
+import { headers } from "next/headers";
 
 interface PageProps {
   brand: Brand;
@@ -62,7 +63,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
   // One restaurant: go straight to its menu, which asks for pickup or delivery itself. A temporary
   // redirect, so the picker returns as soon as a second restaurant opens. Campaign parameters are kept.
   const only = singleOrderableLocation(brand.id, locationsData);
-  if (only) redirect(await storefrontHref(brand.slug, only.slug) + forwardedQuery(await searchParams));
+  if (only) redirect(await storefrontHref(brand.slug, only.slug) + forwardedQuery(await searchParams, (await headers()).get(ORIGINAL_QUERY_HEADER)));
 
   const locations = locationsData.map(location => ({
     ...location,

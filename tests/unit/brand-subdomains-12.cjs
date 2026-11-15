@@ -389,3 +389,27 @@ test('Esmeralda server layout passes the scoped consent text and request-cookie 
   }
   assert.equal(lib.brandSubdomainRewrite('/kds-special', 'esmeralda'), '/esmeralda/kds-special');
 });
+
+test('brand root requests carry the original query to the page; client copies of the header are replaced', () => {
+  const seen = [];
+  const NextResponse = {
+    next: options => { seen.push(['next', options?.request?.headers?.get('x-orderfly-original-query') ?? null]); return { kind: 'next' }; },
+    rewrite: (url, options) => { seen.push(['rewrite', url.pathname, options?.request?.headers?.get('x-orderfly-original-query') ?? null]); return { kind: 'rewrite' }; },
+    redirect: (url, status) => ({ kind: 'redirect', url: String(url), status }),
+  };
+  const mw = loadTs('src/middleware.ts', { 'next/server': { NextResponse } });
+  const run = (url, headers = {}) => {
+    const u = new URL(url);
+    const nextUrl = Object.assign(new URL(url), { clone: () => new URL(url) });
+    return mw.middleware({ url, nextUrl, headers: new Headers({ host: u.host, 'x-forwarded-proto': 'https', ...headers }) });
+  };
+  run('https://esmeralda.orderfly.dk/?utm_source=facebook&b=2', { 'x-orderfly-original-query': '?evil=1' });
+  run('https://orderfly.dk/esmeralda?utm_source=mail');
+  run('https://esmeralda.orderfly.dk/amager?deliveryMethod=pickup', { 'x-orderfly-original-query': '?evil=1' });
+  assert.deepEqual(seen, [
+    ['rewrite', '/esmeralda', '?utm_source=facebook&b=2'],
+    ['next', '?utm_source=mail'],
+    // Other storefront paths are rewritten without the header (the client's copy is not forwarded as ours).
+    ['rewrite', '/esmeralda/amager', null],
+  ]);
+});
