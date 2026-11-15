@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { Truck, Store, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { PrefetchKind } from 'next/dist/client/components/router-reducer/router-reducer-types';
 import { useCart } from '@/context/cart-context';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -29,12 +30,23 @@ export default function DeliveryMethodContent({ payload, onClose }: { payload: D
     window.addEventListener('pageshow', restored);
     return () => window.removeEventListener('pageshow', restored);
   }, [onClose]);
+  const menuUrl = (mode: 'pickup' | 'delivery') => payload ? `${browserOrderEntryUrl(payload.brandSlug, payload.locationSlug)}?deliveryMethod=${mode}` : null;
+  // Start rendering the menu while the customer decides. The server renders pickup and delivery separately
+  // (prices and discounts differ), so each offered method is fetched under its own exact address; the
+  // navigation then reuses the page for the method actually chosen. Full page loads (orderfly.dk) skip this.
+  const pickupUrl = activeLocation?.deliveryTypes.includes('pickup') ? menuUrl('pickup') : null;
+  const deliveryUrl = activeLocation?.deliveryTypes.includes('delivery') ? menuUrl('delivery') : null;
+  useEffect(() => {
+    for (const url of [pickupUrl, deliveryUrl]) if (url && !/^https?:/.test(url)) {
+      try { router.prefetch(url, { kind: PrefetchKind.FULL }); } catch { /* Prefetching is only a speed-up. */ }
+    }
+  }, [router, pickupUrl, deliveryUrl]);
   function choose(mode: 'pickup' | 'delivery') {
     if (!payload || chosenRef.current || !activeLocation?.deliveryTypes.includes(mode)) return;
     setDeliveryType(mode);
     chosenRef.current = mode;
     setChosen(mode);
-    const target = `${browserOrderEntryUrl(payload.brandSlug, payload.locationSlug)}?deliveryMethod=${mode}`;
+    const target = menuUrl(mode)!;
     // From orderfly.dk the order continues on the brand subdomain, a full page load; the sheet stays until it unloads.
     if (/^https?:/.test(target)) { window.location.assign(target); return; }
     started.current = true;

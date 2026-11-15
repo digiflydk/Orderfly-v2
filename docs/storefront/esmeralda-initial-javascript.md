@@ -79,3 +79,13 @@ The sheet (`src/components/modals/delivery-method-content.tsx`, Esmeralda `Order
 - From orderfly.dk the jump to the brand subdomain is a full page load. The sheet stays until the page unloads; a back/forward-cache restore closes it.
 
 `tests/unit/delivery-sheet-loading-browser.cjs` (CI, storefront browser step) renders the real sheet with a route that suspends for 1.2 s, at 390 and 1280 px and for the generic dialog. It checks the loading state, locked options, one push, no fallback, and that the sheet closes only after the route is shown. It fails against the previous sheet.
+
+### Menu prepared while the customer chooses (2026-11-15)
+
+The menu route renders pickup and delivery separately: `initialDeliveryType` and the standard discounts are read from `?deliveryMethod=`, so prices and offers differ per method. When the delivery-method sheet opens, `delivery-method-content.tsx` calls `router.prefetch(url, {kind: PrefetchKind.FULL})` once for each method the location offers, each under its own exact address (`/amager?deliveryMethod=pickup` and `/amager?deliveryMethod=delivery`). The navigation then reuses the page for the method actually chosen. One method can never be shown with the other's prices, because the router cache is keyed by the full address including the query.
+
+- Cost: up to two extra server renders per sheet opening (one per offered method).
+- Freshness: a prepared page is reused within Next's router-cache window for full prefetches (5 minutes). That is no older than a menu a customer keeps open, and the ordering flow's own server checks are unchanged.
+- From orderfly.dk the jump to the brand subdomain is a full page load, so nothing is prefetched there.
+
+Tests: `delivery-sheet-loading-browser.cjs` asserts both full prefetches on open. `brand-subdomains-12.cjs` asserts the exact addresses on the subdomain, and that no prefetch happens on orderfly.dk.

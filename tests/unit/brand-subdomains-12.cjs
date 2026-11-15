@@ -320,13 +320,13 @@ test('#282 "Bestil nu" on orderfly.dk continues on the brand subdomain; other ho
 
 test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.dk and an in-app push elsewhere', () => {
   const run = (host, brandSlug) => {
-    let state = null; const pushes = [], assigns = [], types = [];
-    global.window = { location: { host, assign: url => assigns.push(url) } };
+    let state = null; const pushes = [], assigns = [], types = [], prefetches = [];
+    global.window = { location: { host, assign: url => assigns.push(url) }, addEventListener() {}, removeEventListener() {} };
     try {
       const mod = loadTsx('src/components/modals/delivery-method-content.tsx', {
-        react: { useState: () => [state, next => { state = next; }], useEffect: () => {}, useRef: () => ({ current: null }), useTransition: () => [false, fn => fn()] },
+        react: { useState: () => [state, next => { state = next; }], useEffect: fn => { fn(); }, useRef: () => ({ current: null }), useTransition: () => [false, fn => fn()] },
         'react/jsx-runtime': require('react/jsx-runtime'),
-        'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
+        'next/navigation': { useRouter: () => ({ push: path => pushes.push(path), prefetch: (path, options) => prefetches.push(path + ' ' + options.kind) }) },
         '@/context/cart-context': { useCart: () => ({ location: null, setDeliveryType: type => types.push(type) }) },
         '@/components/ui/dialog': {}, '@/components/ui/button': {}, '@/components/storefront/OrderModal': { OrderModal: () => null },
         '@/components/storefront/DeliveryMethodLabel': { DeliveryMethodLabel: () => null },
@@ -343,12 +343,16 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
       }
       // The generic dialog: [header, Afhentning, Levering].
       else sheet.props.children.props.children.filter(child => child.props?.onClick)[1].props.onClick();
-      return { pushes, assigns, types };
+      return { pushes, assigns, types, prefetches };
     } finally { delete global.window; }
   };
-  assert.deepEqual(run('orderfly.dk', 'esmeralda'), { pushes: [], assigns: ['https://esmeralda.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery'], types: ['delivery'] });
-  assert.deepEqual(run('esmeralda.orderfly.dk', 'esmeralda'), { pushes: ['/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
-  assert.deepEqual(run('localhost:3000', 'esmeralda'), { pushes: ['/esmeralda/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
+  const strip = ({ prefetches, ...rest }) => rest;
+  // Both menus are rendered ahead under their own address; a full page load to the subdomain prefetches nothing.
+  assert.deepEqual(run('esmeralda.orderfly.dk', 'esmeralda').prefetches, ['/esmeralda-pizza-amager?deliveryMethod=pickup full', '/esmeralda-pizza-amager?deliveryMethod=delivery full']);
+  assert.deepEqual(run('orderfly.dk', 'esmeralda').prefetches, []);
+  assert.deepEqual(strip(run('orderfly.dk', 'esmeralda')), { pushes: [], assigns: ['https://esmeralda.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery'], types: ['delivery'] });
+  assert.deepEqual(strip(run('esmeralda.orderfly.dk', 'esmeralda')), { pushes: ['/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
+  assert.deepEqual(strip(run('localhost:3000', 'esmeralda')), { pushes: ['/esmeralda/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
   // The generic dialog of other brands follows the same rule.
   assert.deepEqual(run('orderfly.dk', 'cph-qa').assigns, ['https://cph-qa.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery']);
 });

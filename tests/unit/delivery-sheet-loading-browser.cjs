@@ -10,11 +10,11 @@ function fixture(name,code){const file=path.join(dir,name+'.js');fs.writeFileSyn
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'delivery-sheet-loading-'));
  // router.push updates the route inside the caller's transition; the new route suspends while the "server" renders it.
- const navigation=fixture('navigation',`export const useRouter=()=>({push:href=>{window.fixturePushes.push(href);window.fixtureNavigate(href);}});
+ const navigation=fixture('navigation',`export const useRouter=()=>({push:href=>{window.fixturePushes.push(href);window.fixtureNavigate(href);},prefetch:(href,options)=>{window.fixturePrefetches.push([href,options?.kind]);}});
  export const usePathname=()=>location.pathname;export const useSearchParams=()=>new URLSearchParams(location.search);export const useParams=()=>({});`);
  const entry=fixture('entry',`import React,{Suspense,useState} from 'react';import{createRoot}from'react-dom/client';
  import DeliveryMethodModal,{openDeliveryModal} from '@/components/modals/DeliveryMethodModal';
- window.fixturePushes=[];const pending=new Map(),done=new Set();
+ window.fixturePushes=[];window.fixturePrefetches=[];const pending=new Map(),done=new Set();
  const load=href=>{if(done.has(href))return;if(!pending.has(href))pending.set(href,new Promise(r=>setTimeout(r,1200)).then(()=>done.add(href)));throw pending.get(href);};
  function Route({href}){if(href)load(href);return <main id="route">{href||'landing'}</main>;}
  function App(){const [href,setHref]=useState(null);window.fixtureNavigate=setHref;
@@ -45,6 +45,8 @@ for(const width of [390,1280]) test(`Esmeralda sheet shows loading until the men
  const page=await browser.newPage({viewport:{width,height:844}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(origin+'/');await page.click('#card');
  const sheet=page.locator('[data-commerce-panel="delivery"]');await sheet.waitFor();
+ // Both menus are requested while the customer decides, each under its own address (prices differ per method).
+ assert.deepEqual(await page.evaluate(()=>window.fixturePrefetches),[['/esmeralda/amager?deliveryMethod=pickup','full'],['/esmeralda/amager?deliveryMethod=delivery','full']]);
  const pickup=sheet.getByRole('button',{name:/Jeg tager med/});const delivery=sheet.getByRole('button',{name:/Leverer til mig/});
  const started=Date.now();await pickup.click();
  // Immediately: sheet still open, chosen option busy with a visible status, both options locked.
