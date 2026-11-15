@@ -1022,15 +1022,19 @@ export async function createStripeCheckoutSessionAction(
     }
     if(agreement?.provider==='worldline'){
       if(totalAmount<=0)throw Error('Worldline kan ikke bruges til en ordre uden restbetaling.');
+      mark('pre_session');
       stage='worldline_session';sessionRequestStarted=true;
       try {
         const session=await createWorldlineCheckoutSession(agreement.credentials,agreement.mode,{orderId,amountMinor:ore(totalAmount),currency:'DKK',
           acceptUrl:`${origin}/api/payments/worldline/return?order_id=${orderId}&receipt_token=${receiptToken}`,
           cancelUrl:`${origin}${checkoutPath}/cancel?order_id=${orderId}&token=${cancelToken}`,
           callbackUrl:`${origin}/api/payments/worldline/callback`});
+        mark('session');
         const patch={'psp.checkoutSessionId':session.token,updatedAt:serverTimestamp()};
         // Retry only the idempotent native link write, never the provider session request.
         try{await updateDoc(orderRef,patch);}catch{await updateDoc(orderRef,patch);}
+        mark('linked');
+        console.info(JSON.stringify({ event: 'checkout_timing', provider: 'worldline', brandId, locationId, deliveryType, discount: !!appliedDiscountIdForOrder, timings }));
         return {success:true,url:session.url,orderId};
       }catch(error){if(error instanceof WorldlineRequestError&&error.outcome==='rejected')sessionRequestStarted=false;throw error;}
     }
@@ -1144,7 +1148,7 @@ export async function createStripeCheckoutSessionAction(
       throw error;
     }
     mark('linked');
-    console.info(JSON.stringify({ event: 'checkout_timing', brandId, locationId, deliveryType, discount: !!appliedDiscountIdForOrder, timings }));
+    console.info(JSON.stringify({ event: 'checkout_timing', provider: 'stripe', brandId, locationId, deliveryType, discount: !!appliedDiscountIdForOrder, timings }));
     if (customerInfo.analyticsConsent && customerInfo.analyticsSessionId) {
       try { await trackServerEvent('payment_session_created', {brandId, locationId, orderId, sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice, cartValue: totalAmount}); } catch { /* Optional. */ }
     }
