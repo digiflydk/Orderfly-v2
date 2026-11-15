@@ -324,7 +324,7 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
     global.window = { location: { host, assign: url => assigns.push(url) } };
     try {
       const mod = loadTsx('src/components/modals/delivery-method-content.tsx', {
-        react: { useState: () => [state, next => { state = next; }], useEffect: fn => fn() },
+        react: { useState: () => [state, next => { state = next; }], useEffect: () => {}, useRef: () => ({ current: null }), useTransition: () => [false, fn => fn()] },
         'react/jsx-runtime': require('react/jsx-runtime'),
         'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
         '@/context/cart-context': { useCart: () => ({ location: null, setDeliveryType: type => types.push(type) }) },
@@ -332,8 +332,15 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
         '@/components/storefront/DeliveryMethodLabel': { DeliveryMethodLabel: () => null },
         'lucide-react': {}, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
       });
-      const sheet = mod.default({ payload: { brandSlug, locationSlug: 'esmeralda-pizza-amager', location: { deliveryTypes: ['pickup', 'delivery'] } }, onClose: () => {} });
-      if (brandSlug === 'esmeralda') sheet.props.onDeliveryMethodSelected('delivery');
+      let closes = 0;
+      const sheet = mod.default({ payload: { brandSlug, locationSlug: 'esmeralda-pizza-amager', location: { deliveryTypes: ['pickup', 'delivery'] } }, onClose: () => { closes++; } });
+      if (brandSlug === 'esmeralda') {
+        sheet.props.onDeliveryMethodSelected('delivery');
+        // The sheet asks to close in the same click, and an impatient second tap follows: both are ignored while the menu loads.
+        sheet.props.onOpenChange(false);
+        sheet.props.onDeliveryMethodSelected('takeaway');
+        assert.equal(closes, 0);
+      }
       // The generic dialog: [header, Afhentning, Levering].
       else sheet.props.children.props.children.filter(child => child.props?.onClick)[1].props.onClick();
       return { pushes, assigns, types };
