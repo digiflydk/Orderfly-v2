@@ -8,6 +8,7 @@ const crypto=require('node:crypto');
 const manifest=require('../../preview/esmeralda/manifest.json');
 // / is served with the review section inserted at response time (src/lib/website-reviews-section.ts).
 const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
+const {WEBSITE_REDIRECTS}=require('../helpers/website-redirects.cjs');
 
 test('real Next middleware-to-handler flow serves pinned paths, never client path query',async()=>{
  const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -22,6 +23,10 @@ test('real Next middleware-to-handler flow serves pinned paths, never client pat
   for(const [route,entry] of Object.entries(manifest.routes)) {
    if(route === '/book-bord') {
     const r=await get(route);assert.equal(r.status,307);assert.equal(r.headers.get('location'),'/bordbooking');
+    continue;
+   }
+   if(Object.hasOwn(WEBSITE_REDIRECTS,route)) {
+    const r=await get(route);assert.equal(r.status,308,route);assert.equal(new URL(r.headers.get('location'),'https://web.orderfly.dk').pathname,WEBSITE_REDIRECTS[route]);
     continue;
    }
    const r=await get(route);assert.equal(r.status,200,route);

@@ -3,6 +3,9 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 const manifest=require('../../preview/esmeralda/manifest.json'),variants=require('../../preview/esmeralda/variants.json');
 const payload=JSON.parse(zlib.gunzipSync(Buffer.concat([0,1,2].map(i=>fs.readFileSync(`preview/esmeralda/payload.json.gz.part-00${i}`)))));
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex'),html=route=>Buffer.from(payload[route].data,'base64').toString();
+// Count variant images as the landing repair left them: the later content fix removed one duplicate dessert card.
+const {reverseContentFixes}=require('../../scripts/website-content-fixes.cjs');
+const landingHtml=route=>manifest.content_fixes?reverseContentFixes(route,html(route)):html(route);
 const pages=Object.keys(payload).filter(r=>payload[r].file.endsWith('.html'));
 test('every dish image variant is a pinned, smaller 760 px AVIF of a payload image',()=>{
  assert.ok(Object.keys(variants.routes).length>=70);
@@ -18,7 +21,7 @@ test('every dish image variant is a pinned, smaller 760 px AVIF of a payload ima
 test('pages offer only existing variants for their own image and drop the Webflow CDN',()=>{
  let tagged=0;
  for(const route of pages){
-  const page=html(route);assert.ok(!page.includes('cdn.prod.website-files.com'),route);
+  const page=landingHtml(route);assert.ok(!page.includes('cdn.prod.website-files.com'),route);
   for(const tag of page.match(/<img data-es-variant="1"[^>]*>/g)||[]){
    tagged++;const [,small,src,width]=tag.match(/srcset="(\/_assets\/[^ ]+) 760w, (\/_assets\/[^ ]+) (\d+)w"/);
    assert.equal(variants.routes[small].source,src,route);assert.match(tag,new RegExp(`\\bsrc="${src}"`));assert.equal(Number(width),variants.routes[small].sourceWidth);

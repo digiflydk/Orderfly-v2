@@ -6,6 +6,7 @@ const {loadTs} = require('../helpers/load-ts.cjs');
 const manifest = require('../../preview/esmeralda/manifest.json');
 // / is served with the review section inserted at response time (src/lib/website-reviews-section.ts).
 const expectedSha = require('../helpers/website-served-sha.cjs').servedSha(manifest);
+const {WEBSITE_REDIRECTS}=require('../helpers/website-redirects.cjs');
 const lib = loadTs('src/lib/web-design-preview.ts');
 const server = loadTs('src/lib/web-design-preview-server.ts', {'../../preview/esmeralda/production-discovery.json':{default:require('../../preview/esmeralda/production-discovery.json')},'../../preview/esmeralda/manifest.json':{default:manifest}});
 function req(path, method='GET', host='web.orderfly.dk') {
@@ -49,6 +50,11 @@ test('103 served HTML and301 assets retain exact hashes, plus robots; legacy boo
     if(path === '/book-bord') {
       const r=await server.webDesignPreviewResponse(req(path));
       assert.equal(r.status,307);assert.equal(r.headers.get('location'),'/bordbooking');
+      continue;
+    }
+    if(Object.hasOwn(WEBSITE_REDIRECTS,path)) {
+      const r=await server.webDesignPreviewResponse(req(path));
+      assert.equal(r.status,308,path);assert.equal(r.headers.get('location'),WEBSITE_REDIRECTS[path]);
       continue;
     }
     const r=await server.webDesignPreviewResponse(req(path));assert.equal(r.status,200,path);

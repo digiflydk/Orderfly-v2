@@ -11,6 +11,7 @@ import { resolveLegacyMpanelRedirect, MPANEL_HEADERS } from '@/lib/mpanel-host';
 import discovery from '../../preview/esmeralda/production-discovery.json';
 import variants from '../../preview/esmeralda/variants.json';
 import { WEBSITE_NOT_FOUND_HTML } from '@/lib/website-not-found';
+import { WEBSITE_REDIRECTS } from '@/lib/website-redirects';
 import { isEsmeraldaPublicHost, esmeraldaPublicEnabled, esmeraldaCanonicalRedirect, esmeraldaPublicHeaders, ESMERALDA_UNAVAILABLE_HEADERS } from '@/lib/esmeralda-public-host';
 import { isWebDesignPreviewHost, WEB_PREVIEW_HEADERS } from '@/lib/web-design-preview';
 
@@ -62,7 +63,7 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
       }
       const body = path === '/robots.txt'
         ? 'User-agent: *\nAllow: /\n' + ['mpanel','hr','finance-admin','kunder-admin','produktion-admin','admin-v2','bordbooking-admin','bordbooking-iframe'].map(route => `Disallow: /${route}\n`).join('') + 'Sitemap: https://www.esmeraldapizza.dk/sitemap.xml\n'
-        : '<?xml version="1.0" encoding="utf-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + discovery.public_urls.map(value => `<url><loc>${value}</loc></url>`).join('') + '</urlset>\n';
+        : '<?xml version="1.0" encoding="utf-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + discovery.public_urls.filter(value => !Object.hasOwn(WEBSITE_REDIRECTS, new URL(value).pathname)).map(value => `<url><loc>${value}</loc></url>`).join('') + '</urlset>\n';
       headers.set('Content-Type', path === '/robots.txt' ? 'text/plain; charset=utf-8' : 'application/xml; charset=utf-8');
       headers.set('Content-Length', String(Buffer.byteLength(body)));
       return new Response(request.method === 'HEAD' ? null : body, {headers});
@@ -81,6 +82,10 @@ export async function webDesignPreviewResponse(request: Request): Promise<Respon
   // Restore the source-owned legacy handoff instead of serving its inert mount.
   // A relative Location keeps the preview host; omitting a fragment lets browsers
   // carry the original fragment forward. Keep encoded query bytes untouched.
+  if (Object.hasOwn(WEBSITE_REDIRECTS, path)) {
+    headers.set('Location', WEBSITE_REDIRECTS[path] + rawSearch);
+    return new Response(null, {status:308, headers});
+  }
   if (path === '/book-bord') {
     headers.set('Location', '/bordbooking' + rawSearch);
     return new Response(null, {status:307, headers});
