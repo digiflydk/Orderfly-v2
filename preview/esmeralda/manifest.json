@@ -738,7 +738,7 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "55017340378a1a6b517bb2e0a0189bf1d81bcc51e07d59ece9f89e98460a8145",
+  "payload_sha256": "e19074e4b156142c8924969b9a93f457d321c7145ed82808f811372cca3e61cf",
   "routes": {
     "/": {
       "file": "index.html",
@@ -2201,9 +2201,9 @@
       "size": 36637
     },
     "/dishes/3-retters-menu": {
-      "sha256": "d594454f7ad7bb1680eb17ccb2eef06bf911cd42ec431d41e832280e4e3e1bd9",
+      "sha256": "86f0b690cf8dd7fb09f21058e0976632d97593146700b53638aac911212f4deb",
       "file": "dishes/3-retters-menu.html",
-      "size": 36543
+      "size": 36547
     },
     "/dishes/30-fettuccine-ai-funghi-misti-e-tartuffo": {
       "sha256": "dc999e1cd24b03b0a53a32a9452ca34da5fe81ff733a5d721f355016574afcbb",

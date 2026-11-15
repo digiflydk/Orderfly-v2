@@ -51,7 +51,8 @@ function paragraphs(html) {
 function seoMeta(route, html) {
   if (!html.includes(GENERIC_TITLE)) return null;
   if (route.startsWith('/dishes/')) {
-    const name = tidy(h1(html).replace(/^\d+\.?\s+/, ''));
+    // Menu numbers always end in a period ("1. Margherita"); a number without one is part of the name ("3 Retters Menu").
+    const name = tidy(h1(html).replace(/^\d+\.\s+/, ''));
     const b = body(html), start = b.search(/<h1\b/);
     const after = b.slice(start, start + 6000);
     const long = after.match(/<(?:p|div)\b[^>]*class="[^"]*text-size-regular text-color-primary[^"]*"[^>]*>([^<]{30,600})</);

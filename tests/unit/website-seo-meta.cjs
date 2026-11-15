@@ -26,12 +26,15 @@ test('dish metadata comes from the page itself and share images exist in the pay
   assert.ok(meta,route);assert.ok(h.includes(`<title>${meta.title.replace(/&/g,'&amp;')}</title>`),route);
   const og=content(h,/<meta property="og:image" content="([^"]+)"/);
   if(og){images++;assert.ok(og.startsWith('https://www.esmeraldapizza.dk/_assets/'),og);assert.ok(Object.hasOwn(manifest.routes,og.slice('https://www.esmeraldapizza.dk'.length)),route);assert.match(h,/<meta name="twitter:card" content="summary_large_image"/);}
-  if(route.startsWith('/dishes/')){assert.doesNotMatch(meta.title,/^\d/,'no menu number in the title');assert.doesNotMatch(meta.title,/\b(\p{L}+) \1\b/iu,route);}
+  if(route.startsWith('/dishes/')){assert.doesNotMatch(meta.title,/^\d+\. /,'no menu number in the title');assert.doesNotMatch(meta.title,/\b(\p{L}+) \1\b/iu,route);}
  }
  assert.ok(images>=80,'most pages have a share image');
  const margherita=pages.find(([r])=>r==='/dishes/1-margherita-v')[1];
  assert.match(margherita,/<title>Stenovnspizza Margherita \(V\) \| Esmeralda Pizza Amager<\/title>/);
  assert.match(margherita,/<meta name="description" content="En enkel italiensk klassiker[^"]*"/);
+ // A number without a period is part of the dish name, not a menu number.
+ assert.match(pages.find(([r])=>r==='/dishes/3-retters-menu')[1],/<title>3 Retters Menu \| Esmeralda Pizza Amager<\/title>/);
+ assert.match(pages.find(([r])=>r==='/dishes/15-pastrami-speciale')[1],/<title>Stenovnspizza Pastrami Speciale \| Esmeralda Pizza Amager<\/title>/);
  const pizza=pages.find(([r])=>r==='/menu/pizza')[1];assert.match(pizza,/<title>Pizza – menukort \| Esmeralda Pizza Amager<\/title>/);
 });
 test('pages that already had their own title and description are untouched',()=>{
