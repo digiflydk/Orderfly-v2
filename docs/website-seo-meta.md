@@ -15,8 +15,7 @@ PageSpeed Insights scored the homepage 100 for SEO, but it tests only the URL en
 Each page gets a `<title>`, `meta description`, Open Graph title, description, type and image, and a Twitter card. The canonical links were already correct and are unchanged. Pages that already had their own title and description (home, `/menu`, `/kontakt`, `/faq`, etc.) are untouched.
 
 ## Known content issues (not metadata)
-- `/menu/desserter` lists "Hjemmelavet Tiramisu" twice (`/dishes/hjemmelavet-tiramisu` and `/dishes/hjemmelavet-tiramisu-2`, 99 % identical). Both therefore share one title. Remove the duplicate dish, or make it a different product.
-- The Pastrami Speciale dish page's visible heading reads "15. Stenovnspizza Stenovnspizza Pastrami Speciale". The title drops the repeated word; the visible heading is unchanged.
+- Fixed 2026-11-15 (see `docs/website-content-fixes.md`): the duplicate "Hjemmelavet Tiramisu" card is removed and `/dishes/hjemmelavet-tiramisu-2` redirects to `/dishes/hjemmelavet-tiramisu`; the repeated word in the Pastrami Speciale heading is removed. The retired page keeps its old title in the payload, but it is never served.
 - Seven pages have no content image (e.g. `/produkter/tiramisu`, `/pages/spin-og-vind-med-esmeralda`, some dishes). They share with a summary card and no image.
 
 ## How it is built

@@ -8,6 +8,7 @@ const crypto=require('node:crypto');
 const manifest=require('../../preview/esmeralda/manifest.json');
 const discovery=require('../../preview/esmeralda/production-discovery.json');
 const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
+const {WEBSITE_REDIRECTS,sitemapUrls}=require('../helpers/website-redirects.cjs');
 const mpanel=require('../../mpanel/esmeralda/manifest.json');
 async function withServer(enabled,fn){
  const probe=net.createServer();await new Promise(r=>probe.listen(0,'127.0.0.1',r));const port=probe.address().port;await new Promise(r=>probe.close(r));
@@ -24,10 +25,11 @@ test('actual HTTP production switch defaults closed on every private/public path
 test('actual HTTP production content, discovery, exact-host routing and mPanel integration',async()=>withServer('true',async get=>{
  for(const [p,e]of Object.entries(manifest.routes)) {
   if(p==='/robots.txt'||p==='/book-bord')continue;
+  if(Object.hasOwn(WEBSITE_REDIRECTS,p)){const r=await get(p+'?utm_source=x');assert.equal(r.status,308,p);const target=new URL(r.headers.get('location'),'https://www.esmeraldapizza.dk');assert.equal(target.pathname+target.search,WEBSITE_REDIRECTS[p]+'?utm_source=x');continue;}
   const r=await get(p+'?path=/api/health');assert.equal(r.status,200,p);assert.equal(r.headers.get('x-robots-tag'),null,p);
   assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),expectedSha(p),p);
  }
- const sitemap=await get('/sitemap.xml');assert.equal(sitemap.status,200);assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),discovery.public_urls);
+ const sitemap=await get('/sitemap.xml');assert.equal(sitemap.status,200);assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),sitemapUrls(discovery));
  assert.match(await(await get('/robots.txt')).text(),/Allow: \/\n/);
  const redirect=(response,status,target,query)=>{assert.equal(response.status,status);const actual=new URL(response.headers.get('location'),'https://www.esmeraldapizza.dk');assert.equal(actual.origin+actual.pathname,target);assert.deepEqual([...actual.searchParams],[...new URLSearchParams(query)],query);};
  for(const q of ['','?next=%2Fmenu%3Fx%3D1&literal=%252F&a=1&a=2', '?space=a%20b&lower=%2f&tilde=~&empty=&a=1&a=2&plus=%2B&percent=%252F&callback=https%3A%2F%2Fexample.test%2Freturn%3Fa%3D1%26b%3D2&state=a%2Bb%2Fc%3D']){

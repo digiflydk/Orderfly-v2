@@ -5,6 +5,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 const manifest=require('../../preview/esmeralda/manifest.json');
 const discovery=require('../../preview/esmeralda/production-discovery.json');
 const expectedSha=require('../helpers/website-served-sha.cjs').servedSha(manifest);
+const {WEBSITE_REDIRECTS,sitemapUrls}=require('../helpers/website-redirects.cjs');
 const mocks={'../../preview/esmeralda/manifest.json':{default:manifest},'../../preview/esmeralda/production-discovery.json':{default:discovery}};
 const lib=loadTs('src/lib/esmeralda-public-host.ts');
 const server=loadTs('src/lib/web-design-preview-server.ts',mocks);
@@ -29,10 +30,11 @@ test('production discovery preserves reviewed104URLs; public content hashes matc
  try {
   const sitemap=await server.webDesignPreviewResponse(req('/sitemap.xml'));
   assert.equal(sitemap.status,200);assert.equal(sitemap.headers.get('x-robots-tag'),null);
-  assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),discovery.public_urls);
+  assert.deepEqual([...((await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g))].map(x=>x[1]),sitemapUrls(discovery));
   const robots=await server.webDesignPreviewResponse(req('/robots.txt'));const txt=await robots.text();assert.match(txt,/Allow: \/\n/);assert.doesNotMatch(txt,/Disallow: \/\n/);assert.match(txt,/Disallow: \/mpanel/);
   for(const [p,e]of Object.entries(manifest.routes)) {
    if(p==='/robots.txt'||p==='/book-bord')continue;
+   if(Object.hasOwn(WEBSITE_REDIRECTS,p)){const r=await server.webDesignPreviewResponse(req(p+'?utm_source=x'));assert.equal(r.status,308,p);assert.equal(r.headers.get('location'),WEBSITE_REDIRECTS[p]+'?utm_source=x');continue;}
    const r=await server.webDesignPreviewResponse(req(p+'?path=/api/health'));assert.equal(r.status,200,p);assert.equal(r.headers.get('x-robots-tag'),null,p);
    assert.equal(crypto.createHash('sha256').update(Buffer.from(await r.arrayBuffer())).digest('hex'),expectedSha(p),p);
   }

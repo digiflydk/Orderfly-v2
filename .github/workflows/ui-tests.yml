@@ -302,7 +302,7 @@ jobs:
       # www.esmeraldapizza.dk is served from the pinned payload in preview/esmeralda.
       - name: Esmeralda website payload, policy and consent regressions
         run: |
-          node --test tests/unit/esmeralda-public-host.cjs tests/unit/web-design-preview.cjs tests/unit/website-tracking-policy.cjs tests/unit/website-consent.cjs tests/unit/website-consent-payload.cjs tests/unit/website-contact-payload.cjs tests/unit/website-critical-bootstrap.cjs tests/unit/website-footer-booking-label.cjs tests/unit/website-home-delivery.cjs tests/unit/website-menu-filter.cjs tests/unit/website-performance-payload.cjs tests/unit/website-response-encoding.cjs tests/unit/website-review-rotation.cjs tests/unit/website-landing-repairs.cjs tests/unit/website-seo-meta.cjs
+          node --test tests/unit/esmeralda-public-host.cjs tests/unit/web-design-preview.cjs tests/unit/website-tracking-policy.cjs tests/unit/website-consent.cjs tests/unit/website-consent-payload.cjs tests/unit/website-contact-payload.cjs tests/unit/website-critical-bootstrap.cjs tests/unit/website-footer-booking-label.cjs tests/unit/website-home-delivery.cjs tests/unit/website-menu-filter.cjs tests/unit/website-performance-payload.cjs tests/unit/website-response-encoding.cjs tests/unit/website-review-rotation.cjs tests/unit/website-landing-repairs.cjs tests/unit/website-seo-meta.cjs tests/unit/website-content-fixes.cjs
           python3 -m unittest discover -s tests/unit -p 'test_preview_*.py'
           node scripts/test-mpanel-host.cjs
 

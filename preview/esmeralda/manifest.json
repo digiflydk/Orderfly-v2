@@ -738,7 +738,7 @@
       "removed_eager_omnisend": 0
     }
   },
-  "payload_sha256": "e19074e4b156142c8924969b9a93f457d321c7145ed82808f811372cca3e61cf",
+  "payload_sha256": "6eef0b9828cccceb7f5760fe90b27d898971d35003a54cbdde06ed10c3ea168c",
   "routes": {
     "/": {
       "file": "index.html",
@@ -2131,9 +2131,9 @@
       "size": 36986
     },
     "/dishes/15-pastrami-speciale": {
-      "sha256": "fcd5e950ab0ce49929d6b3893d94e17d5535336c23ef347c920b2123e6deb1fa",
+      "sha256": "f3d270d84271c88478acd58f13d351c727d1d5e8b6d99aaf8846cf87ca86aae6",
       "file": "dishes/15-pastrami-speciale.html",
-      "size": 36867
+      "size": 36839
     },
     "/dishes/16-gorgonzola": {
       "sha256": "62108c1cb7967c3d0fd55430866ef3088cba74dbf0ca0040981cf9730745523b",
@@ -2491,9 +2491,9 @@
       "size": 34413
     },
     "/menu": {
-      "sha256": "e60938157260f742c0bd0d6ad9b591c1cf7704bd55a41386b1485f72d7e19420",
+      "sha256": "933159778f17c4d9ee83e80f3d2db404be59306e5931c5cc904e4073c4de7b58",
       "file": "menu.html",
-      "size": 154097
+      "size": 154083
     },
     "/menu/a-la-carte": {
       "sha256": "dd8e5345caf4bd09ec762b6500c095e442fdcea7d3faabcb74e3440d8c3d0464",
@@ -2511,9 +2511,9 @@
       "size": 32180
     },
     "/menu/desserter": {
-      "sha256": "2892fa4735c1e67bcd0ef51e2bdf8e00a56539ead4fc7fc24cfe52dd656062bf",
+      "sha256": "98b075d07144792940a7dd8b3048f9afc0e9f907d9b83d4daf262382e01c4b6b",
       "file": "menu/desserter.html",
-      "size": 32832
+      "size": 31995
     },
     "/menu/drikkevarer": {
       "sha256": "6660d065a8eb3a7f513c5e1799cca3913bc4651b1bcdc736983f51daf3030af1",
@@ -2536,9 +2536,9 @@
       "size": 37050
     },
     "/menu/pizza": {
-      "sha256": "f8df103069cd5fa7ca3c76e58dacccbfe83cc827312e33452f2c6f935785c973",
+      "sha256": "812dffd23d801a6b892af7e17c09b32fdbc5b5885c5e6273ff0743df5d15476b",
       "file": "menu/pizza.html",
-      "size": 45784
+      "size": 45756
     },
     "/menu/salat": {
       "sha256": "1c6b19defd9190aa1fe5779007fc4d59e864986313e6751b0affb56d8b2563ee",
@@ -3358,5 +3358,19 @@
     "version": 1,
     "pages": 91,
     "source": "page heading, description and image"
+  },
+  "content_fixes": {
+    "version": 1,
+    "pages": [
+      "/dishes/15-pastrami-speciale",
+      "/menu",
+      "/menu/desserter",
+      "/menu/pizza"
+    ],
+    "pastrami_heading": "repeated word removed",
+    "duplicate_tiramisu": {
+      "removed_card": "/menu/desserter",
+      "redirect": "/dishes/hjemmelavet-tiramisu-2 -> /dishes/hjemmelavet-tiramisu"
+    }
   }
 }
