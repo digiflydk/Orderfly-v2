@@ -28,3 +28,31 @@ test('names typed with stray spaces never leak into titles or descriptions',()=>
  assert.equal(m.title.absolute,'Menukort og takeaway | Esmeralda Pizza Amager');assert.match(m.description,/hos Esmeralda Pizza Amager\. /);assert.equal(m.openGraph.siteName,'Esmeralda Pizza');
  assert.equal(storefrontMenuMetadata({slug:'esmeralda',name:'Esmeralda Pizza'},{slug:'amager',name:'  '}).title.absolute,'Menukort og takeaway | Esmeralda Pizza');
 });
+test('one orderable restaurant: the brand root is not in the sitemap; with two it is',async()=>{
+ const locs=extra=>[{brandId:'b',slug:'amager',isActive:true},{brandId:'b',slug:'closed',isActive:false},{brandId:'other',slug:'foreign',isActive:true},...extra];
+ const one=await (await route('src/app/sitemap.xml/route.ts','esmeralda.orderfly.dk',{id:'b',slug:'esmeralda',status:'active'},locs([]),[]).GET()).text();
+ assert.deepEqual([...one.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]),['https://esmeralda.orderfly.dk/amager']);
+ const two=await (await route('src/app/sitemap.xml/route.ts','esmeralda.orderfly.dk',{id:'b',slug:'esmeralda',status:'active'},locs([{brandId:'b',slug:'borgergade',isActive:true}]),[]).GET()).text();
+ assert.deepEqual([...two.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]),['https://esmeralda.orderfly.dk/','https://esmeralda.orderfly.dk/amager','https://esmeralda.orderfly.dk/borgergade']);
+});
+test('brand root goes straight to the only restaurant, keeping campaign parameters; the picker stays for several',async()=>{
+ const React=require('react');
+ const loadTsx=(file,mocks)=>{const ts=require('typescript'),fs=require('node:fs');const mod={exports:{}};
+  const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:{},mod,mod.exports);return mod.exports;};
+ const page=(host,locations)=>{const redirects=[];const mod=loadTsx('src/app/[brandSlug]/page.tsx',{'@/lib/storefront-single-location':loadTs('src/lib/storefront-single-location.ts'),react:React,'react/jsx-runtime':require('react/jsx-runtime'),
+  'next/headers':{headers:async()=>new Headers({host})},
+  'next/navigation':{notFound:()=>{throw Error('not found');},redirect:href=>{redirects.push(href);throw Object.assign(Error('NEXT_REDIRECT'),{href});}},
+  '@/lib/server/storefront-path':loadTs('src/lib/server/storefront-path.ts',{'server-only':{},'next/headers':{headers:async()=>new Headers({host})}}),
+  '@/lib/data/brand-location':{getBrandBySlug:async()=>({id:'b',slug:'esmeralda',name:'Esmeralda'}),getLocationsForBrand:async()=>locations,getBrandAndLocation:async()=>({})},
+  '@/lib/server/catalog':{},'@/lib/log':{},'@/components/catalog/product-grid':{default:()=>null},'@/components/ui/empty-state':{default:()=>null},'@/components/location-card':{LocationCard:()=>null},'@/lib/menu-helpers':{},'@/lib/next/resolve-props':{}});
+  return {redirects,render:search=>mod.default({params:Promise.resolve({brandSlug:'esmeralda'}),searchParams:Promise.resolve(search)})};};
+ const amager={brandId:'b',slug:'amager',isActive:true,deliveryTypes:['pickup','delivery']},closed={brandId:'b',slug:'closed',isActive:false,deliveryTypes:['pickup']};
+ let p=page('esmeralda.orderfly.dk',[amager,closed]);
+ await assert.rejects(p.render({utm_source:'facebook',tag:['a','b']}),/NEXT_REDIRECT/);
+ assert.deepEqual(p.redirects,['/amager?utm_source=facebook&tag=a&tag=b']);
+ // On orderfly.dk the brand prefix stays.
+ p=page('orderfly.dk',[amager]);await assert.rejects(p.render({}),/NEXT_REDIRECT/);assert.deepEqual(p.redirects,['/esmeralda/amager']);
+ // Two active restaurants, or none: the picker page renders, no redirect.
+ for(const list of [[amager,{...amager,slug:'borgergade'}],[closed],[]]){p=page('esmeralda.orderfly.dk',list);const tree=await p.render({});assert.ok(tree);assert.deepEqual(p.redirects,[]);}
+});
