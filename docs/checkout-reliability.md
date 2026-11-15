@@ -150,3 +150,29 @@ contains the current release and targeted QA contract for these changed paths.
 The coordinated P1/P2 release is documented in [commerce-p1-67.md](commerce-p1-67.md)
 and [commerce-p2-67.md](commerce-p2-67.md), including integer-øre pricing, scoped
 read caching, optional telemetry and the exact-release QA handoff.
+
+## Time to the payment page (2026-11-15)
+
+The PO reported 6–9 s between "Gå til betaling" and the payment page. Before Stripe is called, the checkout request (`createStripeCheckoutSessionAction`) did 19 database or provider calls strictly one after another. Production runs in `us-central1`, so each round trip is slow. The rules, their order and their error messages are unchanged; only independent reads overlap.
+
+- **Price check (`resolveAuthoritativeCheckoutPricing`).** These reads start together:
+  - customer lookup
+  - Club mode
+  - cookies
+  - standard discounts
+  - catalog lines (`resolveCheckoutLines`)
+  - upsells
+
+  They are awaited in the original order (`early()`), so the first error is still the one the sequential code raised. An early read whose result is never used cannot become an unhandled rejection.
+- **Request start.** Brand and location are read together with the managed-delivery checks.
+- **Payment agreement.** It is read alongside the price check for online payments without a discount-card cookie. With a discount card, the order can become free, which must never touch provider credentials (`native-free-checkout-integration`), so the read still waits for the price.
+- **Stale discount-hold reconciliation (best effort, never throws).** It runs alongside the customer, Club and newsletter writes.
+- **Customer upsert.** The consent link starts with the customer lookup. The transaction reads the e-mail identity, phone identity and customer in one round. Its decisions are unchanged.
+- **Before the session.**
+  - The one-off Stripe coupon is created while the final checks run. An unused coupon has no effect.
+  - The fulfilment time is written again only if the recheck moved it.
+- **Browser.** The checkout page preconnects to `https://checkout.stripe.com`, so the hosted page loads sooner after the redirect.
+
+**Measurement.** Every request logs `checkout_timing`: milliseconds since start at `tenant`, `pricing`, `agreement`, `customer`, `order`, `reservation`, `pre_session`, `session` and `linked`. A failed request logs them on `checkout_failed`. No customer data is logged. Use these logs to decide on the next step, such as moving hosting to a European region.
+
+**Test.** `tests/unit/checkout-critical-path.cjs` (CI) runs the real action with every I/O call delayed equally. It counts the rounds that wait on each other: 18 before this change, and at most 11 required now. It also asserts which reads start together, and that an unchanged fulfilment time is not written twice.
