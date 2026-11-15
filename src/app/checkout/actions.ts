@@ -885,6 +885,15 @@ export async function createStripeCheckoutSessionAction(
       await reconcileHolds;
     }
     mark('customer');
+    // A Stripe cart discount needs a one-off coupon. Create it once the customer is accepted, while the order
+    // and reservation are written; it is awaited before the final checks. An unused coupon has no effect.
+    const stripeForCoupon = stripe;
+    const couponCreate = stripeForCoupon && cartDiscountTotal > 0 ? early(() => stripeForCoupon.coupons.create({
+        amount_off: ore(cartDiscountTotal),
+        currency: 'dkk',
+        duration: 'once',
+        name: serverPaymentDetails.cartDiscountName || 'Discount',
+    })) : null;
 
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
@@ -1081,14 +1090,12 @@ export async function createStripeCheckoutSessionAction(
         },
     };
 
-    // The one-off Stripe coupon is created while the final checks run; an unused coupon has no effect.
-    const stripeClient = stripe;
-    const couponCreate = cartDiscountTotal > 0 ? early(() => stripeClient.coupons.create({
-            amount_off: ore(cartDiscountTotal),
-            currency: 'dkk',
-            duration: 'once',
-            name: serverPaymentDetails.cartDiscountName || 'Discount',
-        })) : null;
+    // The coupon must exist before the final time-sensitive checks, so nothing can change after them.
+    stage = 'coupon';
+    if (couponCreate) {
+        const coupon = await couponCreate;
+        sessionParams.discounts = [{ coupon: coupon.id }];
+    }
 
     // Retry network failures with the same parameters/idempotency key in the SDK.
     // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
@@ -1100,11 +1107,6 @@ export async function createStripeCheckoutSessionAction(
     // The order was written moments ago; write again only when the recheck moved the time.
     if (fulfillmentPatch.fulfillmentAt !== orderData.fulfillmentAt || fulfillmentPatch.deliveryTime !== orderData.deliveryTime) await updateDoc(orderRef, fulfillmentPatch);
     if (discountCard) await assertDiscountCardCheckoutCurrent(getAdminDb(),{...discountCardInput,now:Date.now()},discountCard);
-    stage = 'coupon';
-    if (couponCreate) {
-        const coupon = await couponCreate;
-        sessionParams.discounts = [{ coupon: coupon.id }];
-    }
     mark('pre_session');
     stage = 'stripe_session';
     sessionRequestStarted = true;

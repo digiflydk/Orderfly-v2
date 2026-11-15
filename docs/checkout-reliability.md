@@ -168,11 +168,10 @@ The PO reported 6–9 s between "Gå til betaling" and the payment page. Before 
 - **Payment agreement.** It is read alongside the price check for online payments without a discount-card cookie. With a discount card, the order can become free, which must never touch provider credentials (`native-free-checkout-integration`), so the read still waits for the price.
 - **Stale discount-hold reconciliation (best effort, never throws).** It runs alongside the customer, Club and newsletter writes.
 - **Customer upsert.** The consent link starts with the customer lookup. The transaction reads the e-mail identity, phone identity and customer in one round. Its decisions are unchanged.
-- **Before the session.**
-  - The one-off Stripe coupon is created while the final checks run. An unused coupon has no effect.
-  - The fulfilment time is written again only if the recheck moved it.
+- **Stripe coupon.** The one-off coupon for a cart discount is created once the customer is accepted, alongside the order write and the discount reservation. Nothing is created at Stripe for a checkout rejected at the customer step. The coupon is awaited before the final time-sensitive checks: fulfilment time and discount card. A change during coupon creation is therefore still caught before any payable session exists. An unused coupon has no effect.
+- **Before the session.** The fulfilment time is written again only if the recheck moved it.
 - **Browser.** The checkout page preconnects to `https://checkout.stripe.com`, so the hosted page loads sooner after the redirect.
 
 **Measurement.** Every request logs `checkout_timing`: milliseconds since start at `tenant`, `pricing`, `agreement`, `customer`, `order`, `reservation`, `pre_session`, `session` and `linked`. A failed request logs them on `checkout_failed`. No customer data is logged. Use these logs to decide on the next step, such as moving hosting to a European region.
 
-**Test.** `tests/unit/checkout-critical-path.cjs` (CI) runs the real action with every I/O call delayed equally. It counts the rounds that wait on each other: 18 before this change, and at most 11 required now. It also asserts which reads start together, and that an unchanged fulfilment time is not written twice.
+**Test.** `tests/unit/checkout-critical-path.cjs` (CI) runs the real action with every I/O call delayed equally. It counts the rounds that wait on each other: 18 before this change, and at most 11 required now. It also asserts which reads start together, and that an unchanged fulfilment time is not written twice. A further case makes the restaurant stop taking orders during coupon creation and asserts that no Stripe session is created.

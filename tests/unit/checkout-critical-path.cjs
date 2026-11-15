@@ -34,8 +34,22 @@ test('online pickup reaches Stripe in few dependent rounds: independent reads ru
  const beforeSession=calls.filter(c=>c.start<startOf('stripe.sessions.create'));
  assert.equal(beforeSession.filter(c=>c.name==='firebase/firestore.updateDoc').length,0);
 });
-test('a cart discount creates the Stripe coupon alongside the final checks, not before them',async()=>{
+test('a cart discount creates the Stripe coupon alongside the order writes, ready before the final checks',async()=>{
  const {calls,startOf}=await timeline({kind:'automatic'});
  const coupon=calls.find(c=>c.name==='stripe.coupons.create');assert.ok(coupon,'coupon created');
+ assert.ok(coupon.start<startOf('@/lib/discount-reservations.reserveDiscount'),'coupon starts before the reservation');
  assert.ok(coupon.end<=startOf('stripe.sessions.create')+1,'coupon ready before the session');
+});
+test('a change during coupon creation is still caught by the final checks before payment',async()=>{
+ // The restaurant stops taking orders while Stripe creates the coupon: no payable session may be created.
+ let location=null;const events=[];
+ const r=await checkout({kind:'automatic',customerOverrides:{paymentMethod:'online'},existing:true,configureMocks:({mocks,events:log})=>{
+  const read=mocks['@/app/superadmin/locations/actions'].getLocationById;
+  mocks['@/app/superadmin/locations/actions']={...mocks['@/app/superadmin/locations/actions'],getLocationById:async(...a)=>(location=await read(...a))};
+  const Base=mocks.stripe.default;mocks.stripe={default:class extends Base{constructor(...a){super(...a);const create=this.coupons.create;
+   this.coupons={create:async(...args)=>{const coupon=await create(...args);await new Promise(r=>setTimeout(r,20));location.isActive=false;return coupon;}};}}};
+  events.push(log);
+ }});
+ assert.equal(r.result.success,false);assert.equal(r.result.url,undefined);
+ assert.ok(r.events.includes('coupon'));assert.ok(!r.events.includes('stripe'),'no Stripe session after the failed recheck');
 });
