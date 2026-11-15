@@ -12,3 +12,12 @@ test('delivery bridge preserves brand/location and does not replay stale request
   assert.deepEqual(next,[]);
   state.openDeliveryModal(latest);assert.deepEqual(next,[latest]);stopNext();
 });
+test('a request made before the modal host first subscribes (menu effect runs first) is delivered once',()=>{
+  const state=loadTs('src/lib/delivery-modal-state.ts');
+  const early={brandSlug:'esmeralda',locationSlug:'amager'};
+  state.openDeliveryModal(early);
+  const received=[];const stop=state.subscribeDeliveryModal(value=>received.push(value));
+  assert.deepEqual(received,[early]);
+  // Delivered once: a later host does not see it again.
+  stop();const again=[];state.subscribeDeliveryModal(value=>again.push(value));assert.deepEqual(again,[]);
+});

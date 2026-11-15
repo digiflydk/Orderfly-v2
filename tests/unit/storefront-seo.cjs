@@ -40,8 +40,8 @@ test('brand root goes straight to the only restaurant, keeping campaign paramete
  const loadTsx=(file,mocks)=>{const ts=require('typescript'),fs=require('node:fs');const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(file,'utf8'),{fileName:file,compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:{},mod,mod.exports);return mod.exports;};
- const page=(host,locations)=>{const redirects=[];const mod=loadTsx('src/app/[brandSlug]/page.tsx',{'@/lib/storefront-single-location':loadTs('src/lib/storefront-single-location.ts'),react:React,'react/jsx-runtime':require('react/jsx-runtime'),
-  'next/headers':{headers:async()=>new Headers({host})},
+ const page=(host,locations,originalQuery)=>{const redirects=[];const mod=loadTsx('src/app/[brandSlug]/page.tsx',{'@/lib/storefront-single-location':loadTs('src/lib/storefront-single-location.ts'),react:React,'react/jsx-runtime':require('react/jsx-runtime'),
+  'next/headers':{headers:async()=>new Headers({host,...(originalQuery!==undefined?{'x-orderfly-original-query':originalQuery}:{})})},
   'next/navigation':{notFound:()=>{throw Error('not found');},redirect:href=>{redirects.push(href);throw Object.assign(Error('NEXT_REDIRECT'),{href});}},
   '@/lib/server/storefront-path':loadTs('src/lib/server/storefront-path.ts',{'server-only':{},'next/headers':{headers:async()=>new Headers({host})}}),
   '@/lib/data/brand-location':{getBrandBySlug:async()=>({id:'b',slug:'esmeralda',name:'Esmeralda'}),getLocationsForBrand:async()=>locations,getBrandAndLocation:async()=>({})},
@@ -53,6 +53,9 @@ test('brand root goes straight to the only restaurant, keeping campaign paramete
  assert.deepEqual(p.redirects,['/amager?utm_source=facebook&tag=a&tag=b']);
  // On orderfly.dk the brand prefix stays.
  p=page('orderfly.dk',[amager]);await assert.rejects(p.render({}),/NEXT_REDIRECT/);assert.deepEqual(p.redirects,['/esmeralda/amager']);
+ // Production can render the brand root without searchParams; the middleware's recorded query is used, re-encoded.
+ p=page('esmeralda.orderfly.dk',[amager],'?utm_source=facebook&x=%22a%20b%22');await assert.rejects(p.render({}),/NEXT_REDIRECT/);assert.deepEqual(p.redirects,['/amager?utm_source=facebook&x=%22a+b%22']);
+ p=page('esmeralda.orderfly.dk',[amager],'');await assert.rejects(p.render({}),/NEXT_REDIRECT/);assert.deepEqual(p.redirects,['/amager']);
  // Two active restaurants, or none: the picker page renders, no redirect.
  for(const list of [[amager,{...amager,slug:'borgergade'}],[closed],[]]){p=page('esmeralda.orderfly.dk',list);const tree=await p.render({});assert.ok(tree);assert.deepEqual(p.redirects,[]);}
 });

@@ -89,7 +89,10 @@ import {
   FormDescription
 } from '@/components/ui/form';
 
-const STRIPE_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
+// Hosted payment pages the checkout can redirect to: Worldline (src/lib/payments/worldline-client.ts
+// accepts only this origin) and Stripe. The page does not know a restaurant's provider, and a
+// preconnect is only a connection handshake, so both are prepared.
+const HOSTED_PAYMENT_ORIGINS = ['https://v1.checkout.bambora.com', 'https://checkout.stripe.com'];
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Indtast dit navn"),
@@ -1340,7 +1343,7 @@ export function CheckoutClient({ brand, location, managedDeliveryEnabled=false }
   React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
   // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements. Open the connection
   // to the payment page while the customer fills in the form, so it appears sooner after the click.
-  React.useEffect(() => { (ReactDOM as { preconnect?: (href: string) => void }).preconnect?.(STRIPE_CHECKOUT_ORIGIN); }, []);
+  React.useEffect(() => { for (const origin of HOSTED_PAYMENT_ORIGINS) (ReactDOM as { preconnect?: (href: string) => void }).preconnect?.(origin); }, []);
   if (!cartReady) {
     return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
   }

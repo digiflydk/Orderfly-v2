@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getM3PizzaOrderEntryUrl } from '@/lib/m3pizza-order-flow';
 import { brandSlugFromHost, brandSubdomainRewrite } from '@/lib/brand-subdomain';
+import { ORIGINAL_QUERY_HEADER } from '@/lib/storefront-single-location';
 
 import { isWebDesignPreviewHost, WEB_PREVIEW_INTERNAL, WEB_PREVIEW_HEADERS } from '@/lib/web-design-preview';
 
@@ -97,6 +98,8 @@ export function middleware(request: NextRequest) {
     if (!target) return NextResponse.next();
     const rewritten = request.nextUrl.clone();
     rewritten.pathname = target;
+    // A brand root may redirect to its only restaurant; give the page the original query to keep.
+    if (target === `/${brandSlug}`) return NextResponse.rewrite(rewritten, { request: { headers: withOriginalQuery(request) } });
     return NextResponse.rewrite(rewritten);
   }
 
@@ -114,7 +117,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(websiteUrl);
   }
 
+  // orderfly.dk/{brand}: the brand root may redirect to its only restaurant (see above).
+  if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(pathname)) return NextResponse.next({ request: { headers: withOriginalQuery(request) } });
   return NextResponse.next();
+}
+
+/** Request headers for the page with the incoming query string, set only here (never from the client). */
+function withOriginalQuery(request: NextRequest) {
+  const headers = new Headers(request.headers);
+  headers.set(ORIGINAL_QUERY_HEADER, request.nextUrl.search);
+  return headers;
 }
 
 export const config = {

@@ -53,3 +53,15 @@ test('a change during coupon creation is still caught by the final checks before
  assert.equal(r.result.success,false);assert.equal(r.result.url,undefined);
  assert.ok(r.events.includes('coupon'));assert.ok(!r.events.includes('stripe'),'no Stripe session after the failed recheck');
 });
+test('Worldline (the provider Esmeralda uses) gets the same overlapped path before its session',async()=>{
+ const reference=`projects/orderfly-39325/secrets/orderfly-worldline-${'a'.repeat(64)}-test/versions/7`;
+ const agreement={provider:'worldline',mode:'test',owner:{brandId:'b'},reference,merchantNumber:'T123',revision:2,credentials:{merchantNumber:'T123',accessToken:'synthetic-access',secretToken:'synthetic-secret',md5Key:'synthetic-md5'}};
+ const {rounds,calls,startOf}=await timeline({configureMocks:({mocks})=>{
+  mocks['@/lib/payments/merchant-agreement']={resolveMerchantAgreement:async()=>agreement};
+  mocks['@/lib/payments/worldline-client']={...mocks['@/lib/payments/worldline-client'],createWorldlineCheckoutSession:async()=>({token:'wl-token',url:'https://v1.checkout.bambora.com/wl-token'})};
+ }});
+ assert.ok(calls.some(c=>c.name==='@/lib/payments/worldline-client.createWorldlineCheckoutSession'),'Worldline session created');
+ assert.ok(!calls.some(c=>c.name.startsWith('stripe.')),'no Stripe call');
+ assert.ok(Math.abs(startOf('@/lib/payments/merchant-agreement.resolveMerchantAgreement')-startOf('@/app/superadmin/standard-discounts/actions.getActiveStandardDiscounts'))<IO_MS/2,'agreement read alongside the price check');
+ assert.ok(rounds<=10,`dependent I/O rounds: ${rounds}\n${calls.map(c=>`${c.start} ${c.name}`).join('\n')}`);
+});

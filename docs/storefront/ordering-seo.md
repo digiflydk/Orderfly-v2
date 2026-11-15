@@ -25,3 +25,12 @@ PO decision: when a brand has exactly one orderable restaurant, the brand root (
 - The sitemap leaves the brand root out while it only redirects. It lists the root again once there are several restaurants.
 
 Tests: `tests/unit/storefront-seo.cjs` covers the redirect target and query on the subdomain and on orderfly.dk, the picker for two, one inactive or no restaurants, and the sitemap for one and two restaurants.
+
+**Follow-up after release (2026-11-15).** The live check found two gaps:
+- **Query string.** In production the brand root page received no `searchParams`, so `?utm_source=…` was dropped on the redirect. A local build kept it. The middleware now records the incoming query in the `x-orderfly-original-query` request header, and only on brand-root requests (subdomain `/` and `orderfly.dk/{brand}`). The value always overwrites any copy sent by the client. The page uses `searchParams` when present and otherwise this header, parsed and re-encoded.
+- **Delivery sheet on the menu.** The menu asks for the pickup/delivery sheet in its first effect. That effect runs before the layout's modal host subscribes, because child effects run first, so the request was lost. Before, customers had always chosen on the picker page, so it never showed. `src/lib/delivery-modal-state.ts` now keeps only that initial request and delivers it once on the first subscription. Requests made after a host has existed are still dropped as stale.
+
+Tests:
+- `brand-subdomains-12.cjs`: the header is set on brand roots, the client's copy is replaced, and other paths get no header.
+- `storefront-seo.cjs`: the header fallback.
+- `delivery-modal-state.cjs`: the early request is delivered exactly once.
