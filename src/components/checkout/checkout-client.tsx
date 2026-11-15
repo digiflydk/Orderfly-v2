@@ -1,4 +1,5 @@
 'use client';
+import * as ReactDOM from 'react-dom';
 import { useStorefrontV2 } from '@/context/storefront-v2-context';
 import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
 import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
@@ -87,6 +88,8 @@ import {
   FormMessage,
   FormDescription
 } from '@/components/ui/form';
+
+const STRIPE_CHECKOUT_ORIGIN = 'https://checkout.stripe.com';
 
 const checkoutSchema = z.object({
   name: z.string().min(2, "Indtast dit navn"),
@@ -1335,7 +1338,9 @@ export function CheckoutClient({ brand, location, managedDeliveryEnabled=false }
   // Keep form state across cart re-pricing (e.g. delivery -> pickup), in memory only.
   React.useEffect(() => { form.reset(); }, [brand.id,location.id,form]);
   React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
-  // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements.
+  // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements. Open the connection
+  // to the payment page while the customer fills in the form, so it appears sooner after the click.
+  React.useEffect(() => { (ReactDOM as { preconnect?: (href: string) => void }).preconnect?.(STRIPE_CHECKOUT_ORIGIN); }, []);
   if (!cartReady) {
     return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
   }

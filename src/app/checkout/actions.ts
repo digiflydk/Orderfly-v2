@@ -91,6 +91,17 @@ function scopedCustomerId(brandId: string, normalizedEmail: string): string {
     return `cust-v2-${digest}`;
 }
 
+/**
+ * Starts an independent read now and lets the caller await it later, in the original order.
+ * Errors therefore surface exactly where the sequential code raised them; an early read whose
+ * result is never awaited (an earlier step failed) cannot become an unhandled rejection.
+ */
+function early<T>(start: () => Promise<T>): Promise<T> {
+  const pending = Promise.resolve().then(start);
+  pending.catch(() => {});
+  return pending;
+}
+
 async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: string) {
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
@@ -133,6 +144,8 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
 
 async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, newsletterDiscountId?: string): Promise<string> {
     try {
+        // Request UUIDs are untrusted; only the server cookie capability can link consent.
+        const consentLink = early(() => optionalCheckoutValue(() => linkCheckoutConsent(brandId), undefined));
         const { customerRef, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
         const normalizedPhone = normalizePhone(customerInfo.phone);
         const emailHash = createHash('sha256')
@@ -145,13 +158,16 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         const phoneIdentityRef = phoneHash
             ? doc(db, 'integrationConsumerCustomerPhoneIdentities', phoneHash)
             : null;
-        // Request UUIDs are untrusted; only the server cookie capability can link consent.
-        const cookieConsentData = await optionalCheckoutValue(() => linkCheckoutConsent(brandId), undefined);
+        const cookieConsentData = await consentLink;
         const now = Date.now();
 
         return await runTransaction(db, async tx => {
-            const emailIdentitySnapshot = await tx.get(emailIdentityRef);
-            const phoneIdentitySnapshot = phoneIdentityRef ? await tx.get(phoneIdentityRef) : null;
+            // One round trip for all three reads; the decisions below are unchanged.
+            const [emailIdentitySnapshot, phoneIdentitySnapshot, initialCustomerSnapshot] = await Promise.all([
+                tx.get(emailIdentityRef),
+                phoneIdentityRef ? tx.get(phoneIdentityRef) : null,
+                tx.get(customerRef),
+            ]);
             const identitySnapshots = [
                 { snapshot: emailIdentitySnapshot, identity: 'email' as const },
                 ...(phoneIdentitySnapshot ? [{ snapshot: phoneIdentitySnapshot, identity: 'phone' as const }] : []),
@@ -170,7 +186,6 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
 
             const indexedCustomerId = uniqueIndexedCustomerIds[0] || null;
             let targetRef = customerRef;
-            const initialCustomerSnapshot = await tx.get(customerRef);
             if (indexedCustomerId && indexedCustomerId !== customerRef.id) {
                 if (initialCustomerSnapshot.exists())
                     throw new Error('Customer email and phone point to different profiles.');
@@ -478,45 +493,8 @@ export async function getDiscountCardCheckoutOfferAction(brandId: string, brandS
 }
 function zEmailValid(email:string) { return typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
 
-async function resolveAuthoritativeCheckoutPricing(input: {
-  cartItems: MinimalCartItem[]; customerInfo: CustomerInfo; deliveryType:'delivery'|'pickup';
-  brandId:string;locationId:string;brandSlug:string;brand:Brand;location:Location;
-  paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;
-  enforceLegacyDeliveryMinimum?:boolean;
-}) {
-  let {cartItems}=input;
-  const {customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId}=input;
-    const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
-    const existingCustomer = resolvedCustomer.customerDoc.exists()
-      ? resolvedCustomer.customerDoc.data() as Customer
-      : null;
-
-    const checkoutMode = await checkoutModeForBrand(brandId);
-    const discountCardToken = (await cookies()).get(SESSION_COOKIE)?.value;
-    if (customerInfo.subscribeToClub && discountCardToken && await readDiscountCardCheckout(getAdminDb(), {brandId,brandSlug,locationId,token:discountCardToken,now:Date.now()})) {
-      throw new Error('Du har allerede et aktivt rabatkort. Genindlæs kassen uden Club-tilmelding.');
-    }
-    if (customerInfo.subscribeToClub && checkoutMode !== 'club') throw new Error('Club-tilmelding er ikke aktiv i checkout. Genindlæs siden.');
-    const clubSignupInput = () => ({db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
-      newsletterConsent:customerInfo.subscribeToNewsletter,termsAccepted:customerInfo.clubTermsAccepted === true,
-      consentVersion:customerInfo.clubConsentVersion || '',termsVersion:customerInfo.clubTermsVersion || '',campaignVersion:customerInfo.clubCampaignVersion,now:Date.now()});
-    let clubPreflight: {eligible:boolean;customerId?:string} | null = null;
-
-    const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
-      const lineTotal = toNumber(item.totalPrice);
-      if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Ugyldig mængde eller pris i kurven.');
-      return sumMoney([sum, lineTotal]);
-    }, 0);
-
-    const activeStandardDiscounts = await getActiveStandardDiscounts({
-      brandId,
-      locationId,
-      deliveryType,
-    });
-
-    // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
-    const quantityLines: OfferLine[] = [];
-    const resolvedLines = await Promise.all(cartItems.map(async item => {
+async function resolveCheckoutLines(cartItems: MinimalCartItem[], {brandId, locationId, deliveryType}: {brandId: string; locationId: string; deliveryType: 'delivery' | 'pickup'}) {
+  return Promise.all(cartItems.map(async item => {
       if (!item.id) throw new Error('Opdater din kurv, før du går til betaling.');
       let [productSnap, comboSnap] = await Promise.all([
         getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
@@ -532,7 +510,52 @@ async function resolveAuthoritativeCheckoutPricing(input: {
         : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price);
       if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) throw new Error('Varen har ingen tilgængelig pris. Genindlæs menuen.');
       return { productSnap, catalog, combo, price };
-    }));
+  }));
+}
+
+async function resolveAuthoritativeCheckoutPricing(input: {
+  cartItems: MinimalCartItem[]; customerInfo: CustomerInfo; deliveryType:'delivery'|'pickup';
+  brandId:string;locationId:string;brandSlug:string;brand:Brand;location:Location;
+  paymentDetails:Omit<PaymentDetails,'paymentRefId'>;appliedDiscountId:string|null;
+  enforceLegacyDeliveryMinimum?:boolean;
+}) {
+  let {cartItems}=input;
+  const {customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId}=input;
+    // These reads are independent of each other: start them together and await them in the
+    // original order, so the payment page opens sooner with unchanged validation and errors.
+    const resolvedCustomerRead = early(() => resolveCheckoutCustomerRef(customerInfo, brand.id));
+    const checkoutModeRead = early(() => checkoutModeForBrand(brandId));
+    const cookieRead = early(() => cookies());
+    const standardDiscountsRead = early(() => getActiveStandardDiscounts({ brandId, locationId, deliveryType }));
+    const linesRead = early(() => resolveCheckoutLines(cartItems, { brandId, locationId, deliveryType }));
+    const upsellsRead = early(() => getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true))));
+    const resolvedCustomer = await resolvedCustomerRead;
+    const existingCustomer = resolvedCustomer.customerDoc.exists()
+      ? resolvedCustomer.customerDoc.data() as Customer
+      : null;
+
+    const checkoutMode = await checkoutModeRead;
+    const discountCardToken = (await cookieRead).get(SESSION_COOKIE)?.value;
+    if (customerInfo.subscribeToClub && discountCardToken && await readDiscountCardCheckout(getAdminDb(), {brandId,brandSlug,locationId,token:discountCardToken,now:Date.now()})) {
+      throw new Error('Du har allerede et aktivt rabatkort. Genindlæs kassen uden Club-tilmelding.');
+    }
+    if (customerInfo.subscribeToClub && checkoutMode !== 'club') throw new Error('Club-tilmelding er ikke aktiv i checkout. Genindlæs siden.');
+    const clubSignupInput = () => ({db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
+      newsletterConsent:customerInfo.subscribeToNewsletter,termsAccepted:customerInfo.clubTermsAccepted === true,
+      consentVersion:customerInfo.clubConsentVersion || '',termsVersion:customerInfo.clubTermsVersion || '',campaignVersion:customerInfo.clubCampaignVersion,now:Date.now()});
+    let clubPreflight: {eligible:boolean;customerId?:string} | null = null;
+
+    const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
+      const lineTotal = toNumber(item.totalPrice);
+      if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Ugyldig mængde eller pris i kurven.');
+      return sumMoney([sum, lineTotal]);
+    }, 0);
+
+    const activeStandardDiscounts = await standardDiscountsRead;
+
+    // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
+    const quantityLines: OfferLine[] = [];
+    const resolvedLines = await linesRead;
     const selectedProductIds = [...new Set(cartItems.flatMap(item => item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || []))];
     if (selectedProductIds.length > 400) throw new Error('Too many combo selections.');
     const needsOptions = selectedProductIds.length > 0 || resolvedLines.some(line => line.catalog?.toppingGroupIds?.length);
@@ -570,7 +593,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
       throw new Error(`Levering kræver varer for mindst ${Number(location.minOrder).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr. før rabatter og gebyrer.`);
     }
     const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
-    const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
+    const upsellRows = await upsellsRead;
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
     const verifiedUpsellLines = new Set<number>();
     const verifiedUpsellIds = validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
@@ -741,6 +764,9 @@ export async function createStripeCheckoutSessionAction(
   let reservedOrderId: string | undefined;
   let sessionRequestStarted = false;
   let stage = 'configuration';
+  // Milliseconds since the request started at each step; logged without customer data to find slow steps.
+  const startedAt = Date.now(), timings: Record<string, number> = {};
+  const mark = (step: string) => { timings[step] = Date.now() - startedAt; };
   try {
 
     const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
@@ -748,8 +774,10 @@ export async function createStripeCheckoutSessionAction(
     [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
     if(managedDeliveryAcceptance!==undefined&&!managedDeliveryAcceptanceSchema.safeParse(managedDeliveryAcceptance).success)return {success:false,retryable:true,error:'Leveringstilbuddet er ugyldigt. Beregn levering igen.'};
     if(managedDeliveryAcceptance){try{customerInfo={...customerInfo,phone:normalizeDeliveryPhone(customerInfo.phone)};}catch{return {success:false,retryable:true,error:deliveryPhoneMessage};}}
+    const tenantRead = early(() => Promise.all([getBrandById(brandId), getLocationById(locationId)]));
+    const requiresManagedRead = deliveryType === 'delivery' ? early(() => managedDeliveryRequired({brandId,locationId})) : null;
     const managedRuntime = deliveryType === 'delivery' ? await managedDeliveryRuntimeAvailable({brandId,locationId}) : null;
-    const requiresManaged = deliveryType === 'delivery' && await managedDeliveryRequired({brandId,locationId});
+    const requiresManaged = !!requiresManagedRead && await requiresManagedRead;
     if (requiresManaged && !managedRuntime) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
     if ((managedRuntime || requiresManaged) && !managedDeliveryAcceptance) return {success:false,retryable:true,error:'Beregn og acceptér leveringstilbuddet før betaling.'};
     if (managedDeliveryAcceptance !== undefined && (deliveryType!=='delivery' || !managedRuntime)) return {success:false,retryable:true,error:'Levering er ikke tilgængelig lige nu. Vælg afhentning.'};
@@ -759,10 +787,8 @@ export async function createStripeCheckoutSessionAction(
     // Return addresses stay short on the brand's own subdomain (#282), unchanged on orderfly.dk.
     const checkoutPath = storefrontPath(brandSlug, brandSlugFromHost(origin.split('://').pop()) === brandSlug, locationSlug, 'checkout');
     
-    const [brand, location] = await Promise.all([
-        getBrandById(brandId),
-        getLocationById(locationId),
-    ]);
+    const [brand, location] = await tenantRead;
+    mark('tenant');
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     const paymentMethod = customerInfo.paymentMethod || 'online';
     assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
@@ -780,9 +806,14 @@ export async function createStripeCheckoutSessionAction(
     }
     
     if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
+    // Read the payment agreement while prices are verified; it is used only for an online payment below.
+    // A discount card can make the order free (no provider at all), so with one the read waits for the price.
+    const resolveAgreement = async () => await resolveMerchantAgreement({brandId,locationId}) ?? await resolveLegacyStripeAgreement({brandId,locationId},managedEnvironment?managedEnvironment==='production'?'live':'test':undefined);
+    const agreementRead = paymentMethod === 'online' && !(await cookies()).get(SESSION_COOKIE)?.value ? early(resolveAgreement) : null;
     let fulfillmentAt = managedDeliveryAcceptance ? '' : resolveFulfillmentTime(location, deliveryType, deliveryTime);
     const priced = await resolveAuthoritativeCheckoutPricing({cartItems,customerInfo,deliveryType,brandId,locationId,brandSlug,brand,location,paymentDetails,appliedDiscountId,enforceLegacyDeliveryMinimum:!managedDeliveryAcceptance});
     cartItems=priced.cartItems;
+    mark('pricing');
     const {discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,appliedDiscountIdForOrder,
       cartDiscountTotal,serverPaymentDetails}=priced;
     let totalAmount=priced.totalAmount;
@@ -804,7 +835,8 @@ export async function createStripeCheckoutSessionAction(
     const nativeFree = paymentMethod==='online' && totalAmount===0 && !!discountCard && !managedQuote;
     if(paymentMethod==='online'&&!nativeFree){
       stage='configuration';
-      agreement=await resolveMerchantAgreement({brandId,locationId}) ?? await resolveLegacyStripeAgreement({brandId,locationId},managedEnvironment?managedEnvironment==='production'?'live':'test':undefined);
+      agreement=await (agreementRead ?? resolveAgreement());
+      mark('agreement');
       if(agreement?.provider==='worldline'){
         if(agreement.mode==='live'&&process.env.ORDERFLY_WORLDLINE_LIVE_ENABLED!=='true')throw Error('Worldline live kræver gennemført sandboxtest og aktivering.');
         if(managedEnvironment&&(agreement.mode==='live')!==(managedEnvironment==='production'))throw Error('delivery_payment_environment_mismatch');
@@ -828,6 +860,8 @@ export async function createStripeCheckoutSessionAction(
       ore(paymentDetails.adminFee || 0) !== ore(serverPaymentDetails.adminFee || 0)
     )) throw new Error('Priser eller tilbud er ændret. Opdatér kurven og kontrollér beløbet, før du fortsætter.');
 
+    // Independent of the customer profile: run the discount-hold reconciliation alongside it.
+    const reconcileHolds = appliedDiscountIdForOrder ? early(() => reconcileStaleDiscountHolds(brandId, appliedDiscountIdForOrder)) : null;
     stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
@@ -848,8 +882,18 @@ export async function createStripeCheckoutSessionAction(
     // without leaving a canceled order behind.
     if (appliedDiscountIdForOrder) {
       stage = 'reservation_reconcile';
-      await reconcileStaleDiscountHolds(brandId, appliedDiscountIdForOrder);
+      await reconcileHolds;
     }
+    mark('customer');
+    // A Stripe cart discount needs a one-off coupon. Create it once the customer is accepted, while the order
+    // and reservation are written; it is awaited before the final checks. An unused coupon has no effect.
+    const stripeForCoupon = stripe;
+    const couponCreate = stripeForCoupon && cartDiscountTotal > 0 ? early(() => stripeForCoupon.coupons.create({
+        amount_off: ore(cartDiscountTotal),
+        currency: 'dkk',
+        duration: 'once',
+        name: serverPaymentDetails.cartDiscountName || 'Discount',
+    })) : null;
 
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
@@ -923,9 +967,11 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
+    mark('order');
     stage = 'reservation';
     reservedOrderId = orderId;
     await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+    mark('reservation');
 
     if(nativeFree){
       sessionRequestStarted=true; // A lost financial commit response cannot authorize a second free order.
@@ -1044,25 +1090,24 @@ export async function createStripeCheckoutSessionAction(
         },
     };
 
+    // The coupon must exist before the final time-sensitive checks, so nothing can change after them.
     stage = 'coupon';
-    if (cartDiscountTotal > 0) {
-        const coupon = await stripe.coupons.create({
-            amount_off: ore(cartDiscountTotal),
-            currency: 'dkk',
-            duration: 'once',
-            name: serverPaymentDetails.cartDiscountName || 'Discount',
-        });
+    if (couponCreate) {
+        const coupon = await couponCreate;
         sessionParams.discounts = [{ coupon: coupon.id }];
     }
-    
+
     // Retry network failures with the same parameters/idempotency key in the SDK.
     // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
     stage = 'validation';
     // Optional reads/customer creation may take time. Recheck immediately before payment.
     if(managedQuote){if(Date.now()+60000>=managedQuote.expiresAtMs)throw Error('Leveringstilbuddet er udløbet. Beregn levering igen.');}
     else fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
-    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt) });
+    const fulfillmentPatch = { fulfillmentAt, deliveryTime: displayFulfillmentTime(managedQuote?.fulfillment.desiredDelivery.kind==='scheduled'?managedQuote.fulfillment.desiredDelivery.interval.earliest:fulfillmentAt) };
+    // The order was written moments ago; write again only when the recheck moved the time.
+    if (fulfillmentPatch.fulfillmentAt !== orderData.fulfillmentAt || fulfillmentPatch.deliveryTime !== orderData.deliveryTime) await updateDoc(orderRef, fulfillmentPatch);
     if (discountCard) await assertDiscountCardCheckoutCurrent(getAdminDb(),{...discountCardInput,now:Date.now()},discountCard);
+    mark('pre_session');
     stage = 'stripe_session';
     sessionRequestStarted = true;
     let session: Stripe.Checkout.Session;
@@ -1080,6 +1125,7 @@ export async function createStripeCheckoutSessionAction(
       stripe.off('request', countSessionRequest);
     }
 
+    mark('session');
     stage = 'session_link';
     try {
       if (!session.url) throw new Error('Stripe did not return a hosted payment URL.');
@@ -1097,6 +1143,8 @@ export async function createStripeCheckoutSessionAction(
       } catch { /* Keep the reservation until signed Stripe reconciliation. */ }
       throw error;
     }
+    mark('linked');
+    console.info(JSON.stringify({ event: 'checkout_timing', brandId, locationId, deliveryType, discount: !!appliedDiscountIdForOrder, timings }));
     if (customerInfo.analyticsConsent && customerInfo.analyticsSessionId) {
       try { await trackServerEvent('payment_session_created', {brandId, locationId, orderId, sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice, cartValue: totalAmount}); } catch { /* Optional. */ }
     }
@@ -1110,7 +1158,7 @@ export async function createStripeCheckoutSessionAction(
     }
     // Correlate stages without logging customer details, secrets or session URLs.
     const diagnosticCode = checkoutFailureCode(stage, e);
-    console.error(JSON.stringify({ event: 'checkout_failed', stage, orderId: reservedOrderId, code: diagnosticCode, retryable }));
+    console.error(JSON.stringify({ event: 'checkout_failed', stage, orderId: reservedOrderId, code: diagnosticCode, retryable, timings: { ...timings, failed: Date.now() - startedAt } }));
     const identityMessage = checkoutCustomerIdentityMessage(e);
     const errorMessage = !retryable
       ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''} Fejlkode: ${diagnosticCode}.`
