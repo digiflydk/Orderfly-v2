@@ -61,3 +61,18 @@ test('pinned webhook uses original signing secret and rejects bad signatures, wr
  f.event({type:'checkout.session.completed',livemode:false,data:{object:f.session({metadata:{orderId:'o',brandId:'other',locationId:'l'}})}});await assert.rejects(f.order.verifyPinnedStripeWebhook(raw,'signed'));
  f.denySignature();await assert.rejects(f.order.verifyPinnedStripeWebhook(raw,'signed'));
 });
+test('Worldline agreement reads brand, location and both settings once, together, then the pinned secret',async()=>{
+ const f=fixture();const reads=[];let inFlight=0,maxInFlight=0;
+ const original=f.db.collection;f.db.collection=name=>{const col=original(name);return {...col,doc:id=>{const ref=col.doc(id);return {...ref,get:async()=>{reads.push(`${name}/${id}`);inFlight++;maxInFlight=Math.max(maxInFlight,inFlight);await new Promise(r=>setTimeout(r,10));inFlight--;return ref.get();}};}};};
+ const scope={brandId:'b',locationId:'l'},id=f.store.worldlineSettingsId({brandId:'b'});
+ const reference=`projects/orderfly-39325/secrets/orderfly-worldline-${id}-test/versions/3`;
+ f.secrets.set(reference,{merchantNumber:'T123',accessToken:'synthetic-access',secretToken:'synthetic-secret',md5Key:'synthetic-md5'});
+ f.config({brandId:'b'},{provider:'worldline',test:reference});
+ const selected=await f.agreement.resolveMerchantAgreement(scope);
+ assert.equal(selected.provider,'worldline');assert.equal(selected.reference,reference);assert.equal(selected.credentials.merchantNumber,'T123');
+ // Four records, each read once and all in flight together (one round), then one secret access.
+ assert.equal(reads.length,4,reads.join(', '));assert.equal(new Set(reads).size,4);assert.equal(maxInFlight,4);
+ assert.deepEqual(f.accesses,[reference]);
+ // Not cached: a destroyed secret version stops working at once.
+ f.secrets.delete(reference);await assert.rejects(f.agreement.resolveMerchantAgreement(scope));
+});

@@ -66,10 +66,13 @@ test('actual checkout action rejects tampering before side effects, allows valid
   'firebase/firestore':{doc:(_,collection,id)=>({collection,id}),getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100,isActive:true,productName:'Pizza'})}),collection:()=>({}),where:()=>({}),query:()=>({}),getDocs:async()=>({docs:[]}),setDoc:async()=>{writes++;}},
  });
  const api=load(path,mocks);
- async function run(line){identityCalls=0;return api.createStripeCheckoutSessionAction([line],{email:'test@example.test',name:'Test',phone:'12345678',subscribeToNewsletter:false,acceptTerms:true},'pickup','b','l',{subtotal:300,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location');}
- const bad=await run({...item,unitPrice:1,totalPrice:3});assert.equal(bad.success,false);assert.match(bad.error,/Basket prices/);assert.equal(identityCalls,1);assert.equal(writes,0);
+ // The action logs the stage it failed in; 'customer' proves the price check was passed.
+ let stages=[];const logError=console.error;
+ async function run(line){identityCalls=0;stages=[];console.error=(...a)=>{try{const e=JSON.parse(a[0]);if(e.event==='checkout_failed')stages.push(e.stage);}catch{logError(...a);}};try{return await runAction(line);}finally{console.error=logError;}}
+ async function runAction(line){return api.createStripeCheckoutSessionAction([line],{email:'test@example.test',name:'Test',phone:'12345678',subscribeToNewsletter:false,acceptTerms:true},'pickup','b','l',{subtotal:300,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location');}
+ const bad=await run({...item,unitPrice:1,totalPrice:3});assert.equal(bad.success,false);assert.match(bad.error,/Basket prices/);assert.equal(identityCalls,1);assert.equal(writes,0);assert.deepEqual(stages,['validation']);
  // Customer persistence failures now return a safe public error rather than the
- // injected internal exception. Reaching the second lookup proves the valid
- // price passed validation, while no customer/order write was attempted.
- const valid=await run({...item,unitPrice:80,totalPrice:240});assert.equal(valid.success,false);assert.equal(valid.retryable,true);assert.equal(identityCalls,2);assert.equal(writes,0);
+ // injected internal exception. Failing in the customer stage proves the valid price passed
+ // validation (the price check's customer lookup is reused, not repeated), while no customer/order write was attempted.
+ const valid=await run({...item,unitPrice:80,totalPrice:240});assert.equal(valid.success,false);assert.equal(valid.retryable,true);assert.equal(identityCalls,1);assert.deepEqual(stages,['customer']);assert.equal(writes,0);
 });

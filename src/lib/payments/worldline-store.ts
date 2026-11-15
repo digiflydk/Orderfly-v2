@@ -5,6 +5,12 @@ import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
 import { worldlineCredentialsSchema, worldlineSettingsRecordSchema, worldlineScopeSchema, validateWorldlineCredentials, validateStripeCredentials, type WorldlineCredentials, type WorldlineScope, type WorldlineSettingsRecord, selectWorldlineAgreement, stripeCredentialsSchema, type StripeCredentials } from './worldline-settings';
 let client: SecretManagerServiceClient | undefined;
 const secretClient = () => client ??= new SecretManagerServiceClient();
+// Not cached: a version disabled or destroyed in Secret Manager must stop working at once.
+async function accessPinnedSecret(reference: string): Promise<string> {
+  const [version] = await secretClient().accessSecretVersion({ name: reference });
+  const bytes = version.payload?.data;
+  return typeof bytes === 'string' ? Buffer.from(bytes, 'base64').toString() : Buffer.from(bytes || []).toString();
+}
 export const worldlineSettingsId = (scope: WorldlineScope) => createHash('sha256').update(JSON.stringify([scope.brandId, scope.locationId || null])).digest('hex');
 export const worldlineSettingsRef = (scope: WorldlineScope) => getAdminDb().collection('platform_settings').doc(`worldline-${worldlineSettingsId(scope)}`);
 function name(scope: WorldlineScope, mode: 'test' | 'live') {
@@ -27,21 +33,31 @@ export async function writeWorldlineSecret(scope: WorldlineScope, mode: 'test' |
 export async function readWorldlineSecret(scope: WorldlineScope, mode: 'test' | 'live', reference: string) {
   const prefix = `${name(scope, mode)}/versions/`;
   if (!reference.startsWith(prefix) || !/^[1-9][0-9]*$/.test(reference.slice(prefix.length))) throw new Error('Ugyldig nøglereference.');
-  const [version] = await secretClient().accessSecretVersion({ name: reference });
-  const bytes = version.payload?.data;
-  const json = typeof bytes === 'string' ? Buffer.from(bytes, 'base64').toString() : Buffer.from(bytes || []).toString();
-  return worldlineCredentialsSchema.parse(JSON.parse(json));
+  return worldlineCredentialsSchema.parse(JSON.parse(await accessPinnedSecret(reference)));
 }
 /** Internal only. Checkout must explicitly adopt this resolver in the payment integration. */
-export async function resolveWorldlineAgreement(scope: WorldlineScope) {
+/**
+ * The brand, location and both settings records an agreement depends on, read in one round.
+ * The checks run in the same order as before, so the same error is raised for the same data.
+ */
+export async function readAgreementRecords(scope: WorldlineScope) {
+  const db = getAdminDb();
+  const [brand, location, brandSettings, locationSettings] = await Promise.all([
+    db.collection('brands').doc(scope.brandId).get(),
+    scope.locationId ? db.collection('locations').doc(scope.locationId).get() : null,
+    worldlineSettingsRef({ brandId: scope.brandId }).get(),
+    scope.locationId ? worldlineSettingsRef(scope).get() : null,
+  ]);
+  if (!brand.exists) throw new Error('Brand findes ikke.');
+  if (location && (!location.exists || location.data()?.brandId !== scope.brandId)) throw new Error('Ugyldig lokation.');
+  return { rawBrand: brandSettings.data(), rawLocation: locationSettings?.data() };
+}
+export type AgreementRecords = Awaited<ReturnType<typeof readAgreementRecords>>;
+
+export async function resolveWorldlineAgreement(scope: WorldlineScope, records?: AgreementRecords) {
   scope=worldlineScopeSchema.parse(scope);
-  if (!(await getAdminDb().collection('brands').doc(scope.brandId).get()).exists) throw new Error('Brand findes ikke.');
-  if (scope.locationId) {
-    const location = await getAdminDb().collection('locations').doc(scope.locationId).get();
-    if (!location.exists || location.data()?.brandId !== scope.brandId) throw new Error('Ugyldig lokation.');
-  }
-  const rawBrand = (await worldlineSettingsRef({ brandId: scope.brandId }).get()).data();
-  const rawLocation = scope.locationId ? (await worldlineSettingsRef(scope).get()).data() : undefined;
+  // A caller that has just read the records (resolveMerchantAgreement) passes them instead of a second read.
+  const { rawBrand, rawLocation } = records ?? await readAgreementRecords(scope);
   const brand = rawBrand ? worldlineSettingsRecordSchema.parse(rawBrand) : undefined;
   const location = rawLocation ? worldlineSettingsRecordSchema.parse(rawLocation) : undefined;
   if(brand && brand.source!=='own')throw new Error('Brandets betalingsaftale er ugyldig.');
@@ -81,7 +97,5 @@ export async function writeStripeSecret(scope: WorldlineScope, mode: 'test' | 'l
 export async function readStripeSecret(scope: WorldlineScope, mode: 'test' | 'live', reference: string) {
   const prefix = `${stripeName(scope, mode)}/versions/`;
   if (!reference.startsWith(prefix) || !/^[1-9][0-9]*$/.test(reference.slice(prefix.length))) throw new Error('Ugyldig nøglereference.');
-  const [version] = await secretClient().accessSecretVersion({ name: reference });
-  const bytes = version.payload?.data;
-  return stripeCredentialsSchema.parse(JSON.parse(typeof bytes === 'string' ? Buffer.from(bytes, 'base64').toString() : Buffer.from(bytes || []).toString()));
+  return stripeCredentialsSchema.parse(JSON.parse(await accessPinnedSecret(reference)));
 }

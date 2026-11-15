@@ -106,6 +106,9 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
+    // The three candidate reads are independent: start them together, then decide in the original order.
+    const scopedRead = early(async () => { const ref = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail)); return { ref, snapshot: await getDoc(ref) }; });
+    const legacyRead = early(async () => { const ref = doc(db, 'customers', `cust-${simpleHash(customerInfo.email)}`); return { ref, snapshot: await getDoc(ref) }; });
     const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone).catch(error => {
         if (checkoutCustomerIdentityMessage(error)) throw error;
         throw new Error('Kundeoplysningerne kunne ikke kontrolleres. Prøv igen.');
@@ -118,8 +121,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
         return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
     }
 
-    const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
-    const scopedDoc = await getDoc(scopedRef);
+    const { ref: scopedRef, snapshot: scopedDoc } = await scopedRead;
     if (scopedDoc.exists()) {
         const scopedData = scopedDoc.data() as Customer;
         if (scopedData.brandId !== brandId || !customerHasEmail(scopedData, normalizedEmail)) {
@@ -130,8 +132,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
 
     // Backward compatibility: older checkout customers used an email-only hash.
     // Reuse that native id only when the existing document belongs to this exact brand.
-    const legacyRef = doc(db, 'customers', `cust-${simpleHash(customerInfo.email)}`);
-    const legacyDoc = await getDoc(legacyRef);
+    const { ref: legacyRef, snapshot: legacyDoc } = await legacyRead;
     if (legacyDoc.exists()) {
         const legacyData = legacyDoc.data() as Customer;
         if (legacyData.brandId === brandId && customerHasEmail(legacyData, normalizedEmail)) {
@@ -142,11 +143,12 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
 }
 
-async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, newsletterDiscountId?: string): Promise<string> {
+async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, newsletterDiscountId?: string, resolved?: Awaited<ReturnType<typeof resolveCheckoutCustomerRef>>): Promise<string> {
     try {
         // Request UUIDs are untrusted; only the server cookie capability can link consent.
         const consentLink = early(() => optionalCheckoutValue(() => linkCheckoutConsent(brandId), undefined));
-        const { customerRef, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
+        // The price check resolved the same reference moments ago; the transaction below re-validates the identity.
+        const { customerRef, normalizedEmail } = resolved ?? await resolveCheckoutCustomerRef(customerInfo, brandId);
         const normalizedPhone = normalizePhone(customerInfo.phone);
         const emailHash = createHash('sha256')
             .update(`${brandId}\n${normalizedEmail}`, 'utf8')
@@ -529,6 +531,9 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     const standardDiscountsRead = early(() => getActiveStandardDiscounts({ brandId, locationId, deliveryType }));
     const linesRead = early(() => resolveCheckoutLines(cartItems, { brandId, locationId, deliveryType }));
     const upsellsRead = early(() => getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true))));
+    // Option lists for this restaurant; used only when a line has options, but read with the lines to save a round.
+    const toppingsRead = early(() => getDocs(query(collection(db, 'toppings'), where('locationIds', 'array-contains', locationId))));
+    const groupsRead = early(() => getDocs(query(collection(db, 'topping_groups'), where('locationIds', 'array-contains', locationId))));
     const resolvedCustomer = await resolvedCustomerRead;
     const existingCustomer = resolvedCustomer.customerDoc.exists()
       ? resolvedCustomer.customerDoc.data() as Customer
@@ -561,8 +566,8 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     const needsOptions = selectedProductIds.length > 0 || resolvedLines.some(line => line.catalog?.toppingGroupIds?.length);
     const [comboProducts, toppingRows, groupRows] = await Promise.all([
       Promise.all(selectedProductIds.map(id => getDoc(doc(db, 'products', id)))),
-      needsOptions ? getDocs(query(collection(db, 'toppings'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
-      needsOptions ? getDocs(query(collection(db, 'topping_groups'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
+      needsOptions ? toppingsRead : { docs: [] },
+      needsOptions ? groupsRead : { docs: [] },
     ]);
     const catalogProducts = new Map(resolvedLines.flatMap(line => line.catalog ? [[line.catalog.id, line.catalog] as const] : []));
     for (const snapshot of comboProducts) if (snapshot.exists()) {
@@ -698,7 +703,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     return {productId:item.id,upsellId:campaign.id,step:campaign.afterUpsellId?2:1,quantity:item.quantity,
       amount:money(item.totalPrice),itemDiscount:money(Math.max(0,catalogPrice-item.unitPrice)*item.quantity)};
   });
-  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,
+  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,resolvedCustomer,
     appliedDiscountIdForOrder,cartDiscountTotal,serverPaymentDetails,totalAmount,subtotalAfterDiscount,
     freeDeliveryCampaignIds:activeStandardDiscounts.filter(d=>d.discountType==='free_delivery'&&subtotalAfterDiscount>=(d.minOrderValue||0)).map(d=>d.id).sort()};
 }
@@ -863,7 +868,7 @@ export async function createStripeCheckoutSessionAction(
     // Independent of the customer profile: run the discount-hold reconciliation alongside it.
     const reconcileHolds = appliedDiscountIdForOrder ? early(() => reconcileStaleDiscountHolds(brandId, appliedDiscountIdForOrder)) : null;
     stage = 'customer';
-    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
+    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined, priced.resolvedCustomer);
 
     if (discountCard && customerId !== discountCard.customerId) throw new Error('Kundeidentiteten er ændret. Opdatér kassen.');
     if (customerInfo.subscribeToClub) {
