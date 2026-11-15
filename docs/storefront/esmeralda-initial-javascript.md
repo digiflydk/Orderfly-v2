@@ -55,3 +55,15 @@ The next small change preloads the existing Inter font only on the Esmeralda loc
 ## Route content hydration (2026-11-10)
 
 An intermittent #418 on repeat visits was traced to route content suspending directly under the brand layout's host `Content` element. The vendored React 19.2 canary replays that element without resetting hydration. `BrandLayoutClient` now renders `children` through `RouteContent`. Details and the regression test are in [route-content-hydration-2026-11-10.md](route-content-hydration-2026-11-10.md).
+
+## Menu in the first paint (2026-11-15)
+
+PageSpeed mobile for `/amager?deliveryMethod=pickup` scored 89–90 with LCP 3.3 s; the LCP element is a category description and 77 % of it was render delay. Cause: `src/app/[brandSlug]/loading.tsx` wrapped the location layout and menu in a Suspense boundary. The server streamed a skeleton first and put the menu in a hidden `S:0` div that React's `$RC` script reveals only at the end of the ~230 KB document (after its reveal throttle). The live Lighthouse trace showed FCP 949 ms (skeleton) but LCP 2486 ms, right after DOMContentLoaded (2289 ms).
+
+Change: the brand-level `loading.tsx` is removed, so the location header and menu are in place in the initial HTML. Loading behaviour:
+- First load: the server waits for the menu data before sending the route content; there is no skeleton. The brand layout and its `RouteContent` wrapper (route-content hydration fix, 2026-11-10) are unchanged.
+- Client navigation within the storefront (e.g. location list → menu, menu → checkout): the current page stays visible until the next one is ready, the Next.js default, instead of switching to a skeleton.
+
+Also: brand and location names are trimmed in menu and product metadata. A trailing space in the location name had produced titles like `Esmeralda Pizza Amager ` and descriptions like `…Amager . Vælg…` (`tests/unit/storefront-seo.cjs`).
+
+Validation before merge was local only: a same-origin mirror serving the captured live HTML with brotli and the live assets, in two variants (as served, and with the `S:0` content inlined in place of the skeleton), with Lighthouse 12 mobile, three runs each. Observed LCP moved from 291 ms (after FCP 86 ms) to equal FCP (139 ms). The lab scores in the mirror were noisy (as served 84–89, inlined 84–93), so they are not a production result. Production Lighthouse runs after the release are recorded in the release PR. The post-release check also repeats the route-content hydration sequence (several loads in one context at 390 and 1280 px, no React error).
