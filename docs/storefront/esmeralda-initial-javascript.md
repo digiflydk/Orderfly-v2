@@ -67,3 +67,15 @@ Change: the brand-level `loading.tsx` is removed, so the location header and men
 Also: brand and location names are trimmed in menu and product metadata. A trailing space in the location name had produced titles like `Esmeralda Pizza Amager ` and descriptions like `…Amager . Vælg…` (`tests/unit/storefront-seo.cjs`).
 
 Validation before merge was local only: a same-origin mirror serving the captured live HTML with brotli and the live assets, in two variants (as served, and with the `S:0` content inlined in place of the skeleton), with Lighthouse 12 mobile, three runs each. Observed LCP moved from 291 ms (after FCP 86 ms) to equal FCP (139 ms). The lab scores in the mirror were noisy (as served 84–89, inlined 84–93), so they are not a production result. Production Lighthouse runs after the release are recorded in the release PR. The post-release check also repeats the route-content hydration sequence (several loads in one context at 390 and 1280 px, no React error).
+
+### Delivery-method sheet waits for the menu (2026-11-15)
+
+Without the skeleton, a client navigation keeps the current page until the menu has rendered on the server (about 1–3 s on mobile). The delivery-method sheet used to close at once, so the customer saw the location list unchanged and could tap again.
+
+The sheet (`src/components/modals/delivery-method-content.tsx`, Esmeralda `OrderModal` and the generic dialog) now stays open after a choice:
+- The chosen option shows "Henter menuen…" (`role="status"`, `aria-busy`), and both options are locked.
+- `router.push` runs in a transition, and the sheet closes when the transition ends, i.e. when the menu is shown.
+- Repeat taps and close requests during loading are ignored, so there is exactly one navigation.
+- From orderfly.dk the jump to the brand subdomain is a full page load. The sheet stays until the page unloads; a back/forward-cache restore closes it.
+
+`tests/unit/delivery-sheet-loading-browser.cjs` (CI, storefront browser step) renders the real sheet with a route that suspends for 1.2 s, at 390 and 1280 px and for the generic dialog. It checks the loading state, locked options, one push, no fallback, and that the sheet closes only after the route is shown. It fails against the previous sheet.

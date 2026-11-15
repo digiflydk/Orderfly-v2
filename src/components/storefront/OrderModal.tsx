@@ -2,7 +2,7 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useRef } from "react";
-import { ShoppingBag, Truck } from "lucide-react";
+import { Loader2, ShoppingBag, Truck } from "lucide-react";
 import type { Location } from "@/types";
 import { DeliveryMethodLabel } from "./DeliveryMethodLabel";
 
@@ -14,23 +14,33 @@ interface OrderModalProps {
   onDeliveryMethodSelected: (method: 'takeaway' | 'delivery') => void;
   /** Highlighted and focused when the sheet opens, if that mode is available. */
   preferredMode?: 'pickup' | 'delivery';
+  /**
+   * Set by a parent that keeps the sheet open while the chosen method loads: the sheet then shows
+   * "Henter menuen…" on that option, locks both options and leaves closing to the parent.
+   */
+  loading?: 'takeaway' | 'delivery';
 }
 
-export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes = ['pickup', 'delivery'], location, preferredMode }: OrderModalProps) {
+export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes = ['pickup', 'delivery'], location, preferredMode, loading }: OrderModalProps) {
   const preferred = preferredMode && modes.includes(preferredMode) ? preferredMode : undefined;
   const deliveryRef = useRef<HTMLButtonElement>(null);
   const pickupRef = useRef<HTMLButtonElement>(null);
   const highlight = ' ring-2 ring-[#e8bf69]';
 
   const handlePickup = () => {
+    if (loading) return;
     onDeliveryMethodSelected('takeaway');
     onOpenChange(false);
   };
 
   const handleDelivery = () => {
+    if (loading) return;
     onDeliveryMethodSelected('delivery');
     onOpenChange(false);
   };
+  const busy = (method: 'takeaway' | 'delivery') => loading === method
+    ? <span role="status" className="mt-3 inline-flex items-center justify-center gap-2 text-sm font-semibold text-white"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />Henter menuen…</span>
+    : null;
 
   const content = (
     <>
@@ -42,11 +52,12 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 px-6 pb-6">
         <button
-          disabled={!modes.includes('delivery')}
+          disabled={!!loading || !modes.includes('delivery')}
+          aria-busy={loading === 'delivery' || undefined}
           ref={deliveryRef}
           data-preferred={preferred === 'delivery' || undefined}
           onClick={handleDelivery}
-          className={`disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'delivery' ? highlight : ''}`}
+          className={`disabled:opacity-40 disabled:cursor-not-allowed aria-busy:opacity-100 aria-busy:cursor-progress relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'delivery' ? highlight : ''}`}
         >
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
@@ -57,14 +68,16 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
             <p className="text-white/70 text-xs leading-relaxed max-w-[280px] mx-auto mt-1">
               Vi leverer din ordre til din adresse til det valgte tidspunkt.
             </p>
+            {busy('delivery')}
           </div>
         </button>
         <button
-          disabled={!modes.includes('pickup')}
+          disabled={!!loading || !modes.includes('pickup')}
+          aria-busy={loading === 'takeaway' || undefined}
           ref={pickupRef}
           data-preferred={preferred === 'pickup' || undefined}
           onClick={handlePickup}
-          className={`disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'pickup' ? highlight : ''}`}
+          className={`disabled:opacity-40 disabled:cursor-not-allowed aria-busy:opacity-100 aria-busy:cursor-progress relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden${preferred === 'pickup' ? highlight : ''}`}
         >
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
@@ -75,6 +88,7 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
             <p className="text-white/70 text-xs leading-relaxed max-w-[280px] mx-auto mt-1">
               Vi har din ordre klar til det valgte tidspunkt og pakket i take-away poser.
             </p>
+            {busy('takeaway')}
           </div>
         </button>
       </div>
