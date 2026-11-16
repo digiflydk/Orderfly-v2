@@ -36,12 +36,20 @@ boundary are synthetic in the focused ProductCard test; the existing product
 dialog regressions retain their own choice/pricing assertions. No production
 credentials, orders or provider writes are used by these local tests.
 
+Combo option reads go through `readProductOptions`, which imports
+`./public-read` by relative path, so an `@/lib/public-read` alias in a browser
+fixture no longer reaches them. `combo-modifiers-browser.cjs` therefore serves
+`/api/public/product-options` from its loopback server: the real facade,
+validation and retry run, and the test page's query string (sent as `Referer`)
+selects the scenario. `?failure` answers HTTP503 on both attempts.
+
 ```sh
 node tests/unit/public-read-recovery.cjs
 node tests/unit/cart-browser.cjs
 node tests/unit/product-options-recovery-browser.cjs
 node tests/unit/cart-restore.cjs
 node tests/unit/tilvalg-storefront-browser.cjs
+node --test tests/unit/combo-modifiers-browser.cjs
 npm run typecheck
 ```
 

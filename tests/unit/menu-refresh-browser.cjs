@@ -52,8 +52,8 @@ before(async()=>{
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
 after(async()=>{await browser?.close();await new Promise(r=>server?.close(r));console.log('QA screenshots: '+dir);});
-async function setup(t,width,query=''){
- const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(8000);const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup'+query);await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor().catch(async e=>{console.log('DOM failure',await page.locator('body').innerText(),errors);await page.screenshot({path:path.join(dir,'failure-'+width+'.png')});throw e});await page.waitForFunction(()=>document.querySelector('button[aria-label="Tilføj Margherita"]')?.disabled===false);await page.evaluate(()=>document.fonts.ready);return page;
+async function setup(t,width,query='',now){
+ const context=await browser.newContext({viewport:{width,height:900},reducedMotion:'reduce'});t.after(()=>context.close());const page=await context.newPage();if(now)await page.clock.setFixedTime(now);page.setDefaultTimeout(8000);const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));await page.goto(origin+'/esmeralda/amager?deliveryMethod=pickup'+query);await page.getByRole('button',{name:'Tilføj Margherita',exact:true}).waitFor().catch(async e=>{console.log('DOM failure',await page.locator('body').innerText(),errors);await page.screenshot({path:path.join(dir,'failure-'+width+'.png')});throw e});await page.waitForFunction(()=>document.querySelector('button[aria-label="Tilføj Margherita"]')?.disabled===false);await page.evaluate(()=>document.fonts.ready);return page;
 }
 for(const width of [320,390,768,1280,1600])test(`menu frame, Inter, sticky navigation and cart (${width}px)`,async t=>{
  const page=await setup(t,width);const header=page.locator('[data-storefront-header]'),hero=page.locator('[data-menu-hero]'),frame=page.locator('main .storefront-frame');
@@ -146,16 +146,19 @@ for(const width of [320,390,1280])test(`V2 compact menu and product-to-cart geom
 });
 
 test('V2 retains restaurant information, delivery context and searchable menu',async t=>{
- const page=await setup(t,390,'&v2&managed');
+ // Fixed Monday (12:00 Copenhagen) so the "I dag" marker always lands on Mandag, whatever day CI runs.
+ const page=await setup(t,390,'&v2&managed',new Date('2026-11-16T11:00:00Z'));
  const info=page.getByRole('button',{name:'Restaurantoplysninger',exact:true});
  await info.click();
  const popup=page.getByRole('dialog',{name:'Esmeralda Pizza Amager'});await popup.waitFor();
  await popup.getByText(/Albaniensgade 6/).waitFor();
  assert.match(await popup.getByRole('link',{name:'Vis rute'}).getAttribute('href'),/google\.com\/maps\/search\/.*Albaniensgade/);
  assert.equal(await popup.locator('[data-today]').count(),1,'today is marked');
+ assert.equal(await popup.locator('[data-today] dt').innerText(),'MandagI dag','today is Monday');
  await page.waitForTimeout(500);await page.screenshot({path:path.join(dir,'v2-info-390.png')});
  await page.setViewportSize({width:1280,height:900});await page.waitForTimeout(150);await page.screenshot({path:path.join(dir,'v2-info-1280.png')});await page.setViewportSize({width:390,height:900});
- assert.equal(await popup.getByText('Mandag',{exact:true}).count(),1);assert.equal(await popup.getByText('Søndag',{exact:true}).count(),1);
+ assert.deepEqual(await popup.locator('.v2-info-hours dt').evaluateAll(rows=>rows.map(dt=>dt.firstChild.textContent)),['Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag','Søndag']);
+ assert.equal(await popup.getByText('I dag',{exact:true}).count(),1);
  assert.equal(await popup.getByRole('link',{name:'+45 12 34 56 78'}).getAttribute('href'),'tel:+4512345678');
  assert.equal(await popup.getByRole('link',{name:'amager@example.test'}).getAttribute('href'),'mailto:amager@example.test');
  await page.keyboard.press('Escape');await popup.waitFor({state:'hidden'});
