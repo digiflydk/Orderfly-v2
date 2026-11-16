@@ -31,6 +31,8 @@ node --test tests/unit/brand-subdomains-12.cjs
 
 The new suite runs real menu/cart/header/category/editor components and a real browser against loopback catalog fixtures. It checks320/390/768/1280/1600px, actual loaded font, equal hero/menu widths, no document overflow, top-cart quantity and editing, category destination visibility, empty search/reset, delivery minimum rejection, pickup/time selection and checkout navigation. It also checks pickup-only and other-brand boundaries. Existing tests retain SSR/hydration route identity and modifier selection/rejection coverage. Fixture images are deliberately synthetic; screenshots are layout evidence, not live production acceptance.
 
+The V2 restaurant-information test pins the browser clock to a Monday (2026-11-16 12:00 Copenhagen). Today's opening-hours row carries an "I dag" marker inside its label, so an unpinned run failed on every Monday and Sunday, whatever the code. The test now asserts that the marker sits on Mandag and that all seven day labels appear in order.
+
 An independent Codex review must approve the final commit, then the coordinator checks current main, native PR gates/holds and own tests before serial merge/deploy under AGENTS.md and the user's standing agreement. Do not dispatch new Actions or claim absent checks are green. Verify `/api/health` release and read-only real menu/font/toolbar/hero behavior after rollout before closing #756. There are no schema changes; rollback is a revert of this PR.
 
 ## Follow-up outside this menu slice

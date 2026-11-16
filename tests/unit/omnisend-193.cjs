@@ -112,7 +112,7 @@ test('#193 existing notification heartbeat also runs the consent queue without s
  const route=loadTs('src/app/api/internal/feedback/send/route.ts',{
   '@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{dullyCalls++;return {accepted:1};}},
   '@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
-  '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},
+  '@/lib/payments/worldline-reconcile':{processWorldlineJobs:async()=>({state:'idle'})},'@/lib/payments/worldline-stale-holds':{processWorldlineStaleCheckouts:async()=>({state:'idle'})},'@/lib/payments/native-free-recovery':{processDueNativeFreeCheckouts:async()=>({state:'idle'})},'@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},
   '@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({})},
   '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},
   '@/lib/games/worker':{runGameOutbox:async()=>({})},
