@@ -47,3 +47,16 @@ A real Dully reply uses the same optional Google/Trustpilot step as other feedba
 ## Follow-up details in the feedback admin
 
 For `dully_order` feedback, the inbox shows the imported customer name and the detail page shows a **Dully-ordre** card with name, email, phone, order number, pickup/delivery, ordered and completed time (Europe/Copenhagen) and purchased lines with total. Details are read server-side from `dullyFeedbackSources` only for real (non-test) sources in the feedback's brand, behind the existing feedback access check. Sources imported without the optional fields show "ikke registreret". `tests/unit/feedback-dully.cjs` and `tests/unit/feedback-browser.cjs` cover storage, reimport, brand/test isolation and the 390/1280 px card.
+
+## Reminder (#931)
+
+The PM approved this on 2026-11-19. Each Dully order gets **one reminder 24 hours after the invitation was accepted**, for every unanswered order. A customer with two deliveries is asked about both.
+
+- **Planning:** when an invitation is accepted and reminders are enabled, the source gets `reminderState: 'pending'`, `reminderDueAt = acceptedAt + 24 h`, `reminderPlannedFor` and its own `reminderEventId`. Enabling reminders also plans them for this week's unanswered real invitations (from Monday 00:00 Copenhagen time). Each source is claimed in its own transaction, so repeated clicks plan nothing twice.
+- **Sending:** `runDullyFeedbackWorker` runs a separate reminder loop with the same lease, dispatch and uncertainty handling as invitations. The link is the invitation's own signed link. The template is `orderfly.feedback.reminder` with `sourceType: dully_order`.
+- **Never sent (`skipped`):** the order is answered (`invitationStatus: 'submitted'`), the link has expired, the invitation was not accepted, reminders are switched off, or the reminder is more than 48 hours past its planned slot.
+- **Postponed by 1 hour:** pause, the master customer-email switch is off, approval is missing or changed, or the Dully extract is older than 24 hours.
+- **Mail not accepted:** an ineligible recipient gets `failed`. An unknown provider result gets `uncertain` and is never retried automatically.
+- **Approval:** "Send test-påmindelse" sends a reminder to the approved test recipient and switches reminders off. "Aktivér påmindelser" requires that test reminder to be accepted and stores `reminderApprovedFingerprint`. A changed form or mail setup postpones reminders until a new test reminder is approved.
+- **Audit:** `reminder_test_requested`, `reminders_enabled`, `reminders_backfilled` (with the number planned) and `reminders_disabled` are written to `dullyFeedbackAudit`.
+- **Dependency:** the Esmeralda delivery gate must accept `orderfly.feedback.reminder` for `dully_order` (esmeralda-restaurant-operations #482).

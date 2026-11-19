@@ -298,3 +298,86 @@ test('held Dully customer purchases are listed to superadmins only, without cont
   assert.deepEqual(await f.adminDully.listDullyCustomerConflicts(scope), [{ externalOrderId: '777', code: 'customer_identity_conflict', updatedAt: 5 }]);
   f.rights.brandIds = [BRAND]; await assert.rejects(f.adminDully.listDullyCustomerConflicts(scope), /superadmin/);
 });
+
+// Dully reminders (#931)
+const H = 3600000;
+const ids = f => [...f.records.entries()].filter(([, v]) => v.sourceType === 'dully_order' && !v.isTest).map(([k]) => k.split('/')[1]).sort();
+const src = (f, id) => f.records.get('dullyFeedbackSources/' + id);
+const patch = (f, id, value) => f.records.set('dullyFeedbackSources/' + id, { ...src(f, id), ...value });
+function recorder() { const sends = []; return { sends, provider: () => ({ eligible: async () => true, send: async (...args) => { sends.push(args); } }) }; }
+async function testReminder(f) {
+  const r = recorder();
+  await f.adminDully.sendDullyReminderTest(scope);
+  await f.worker.runDullyFeedbackWorker(r.provider, NOW);
+  assert.equal(r.sends.length, 1); assert.equal(r.sends[0][1], 'reminder'); assert.equal(r.sends[0][2], 'ok@esmeraldapizza.dk');
+}
+async function remindersOn(f) { await approved(f); await testReminder(f); return f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: true }); }
+const rows2 = [row(), row({ externalOrderId: '2594109', orderNumber: '2155' })];
+test('reminder: one per unanswered order 24 h after the invitation, same link, never twice, answered orders skipped', async t => {
+  const f = setup(t); await remindersOn(f);
+  await f.adminDully.importDullyFeedback({ ...scope, rows: rows2 });
+  const r = recorder();
+  await f.worker.runDullyFeedbackWorker(r.provider, NOW);
+  assert.deepEqual(r.sends.map(s => s[1]), ['invitation', 'invitation']);
+  const links = Object.fromEntries(r.sends.map(s => [s[3].sourceId, s[3].feedbackUrl]));
+  const [answered, open] = ids(f);
+  for (const id of [answered, open]) { assert.equal(src(f, id).reminderState, 'pending'); assert.equal(src(f, id).reminderDueAt, src(f, id).acceptedAt + 24 * H); }
+  await f.worker.runDullyFeedbackWorker(r.provider, NOW + 23 * H);
+  assert.equal(r.sends.length, 2, 'not before 24 h');
+  patch(f, answered, { invitationStatus: 'submitted' });
+  Date.now = () => NOW + 25 * H; await f.adminDully.importDullyFeedback({ ...scope, rows: rows2 });
+  await Promise.all([f.worker.runDullyFeedbackWorker(r.provider, NOW + 25 * H), f.worker.runDullyFeedbackWorker(r.provider, NOW + 25 * H)]);
+  const reminders = r.sends.filter(s => s[1] === 'reminder');
+  assert.equal(reminders.length, 1); assert.equal(reminders[0][3].sourceId, open); assert.equal(reminders[0][2], 'guest@example.test');
+  assert.equal(reminders[0][0], src(f, open).reminderEventId); assert.equal(reminders[0][3].feedbackUrl, links[open], 'reminder reuses the invitation link');
+  assert.equal(src(f, open).reminderState, 'accepted'); assert.equal(src(f, answered).reminderState, 'skipped'); assert.equal(src(f, answered).reminderLastError, 'answered');
+  await f.worker.runDullyFeedbackWorker(r.provider, NOW + 30 * H);
+  assert.equal(r.sends.filter(s => s[1] === 'reminder').length, 1);
+  const state = await f.adminDully.getDullyFeedbackState(BRAND, 'l');
+  assert.equal(state.counts.remindersAccepted, 1); assert.equal(state.configuration.remindersEnabled, true); assert.equal(state.configuration.remindersApproved, true);
+});
+test('reminder: enabling needs an accepted test reminder and plans this week only; pause defers until too late', async t => {
+  const f = setup(t); await approved(f);
+  assert.equal(new Date(f.adminDully.dullyReminderWeekStart(NOW)).toISOString(), '2026-10-25T23:00:00.000Z');
+  const rows = [...rows2, row({ externalOrderId: '2594110', orderNumber: '2156' })];
+  await f.adminDully.importDullyFeedback({ ...scope, rows });
+  const r = recorder(); await f.worker.runDullyFeedbackWorker(r.provider, NOW);
+  assert.equal(r.sends.length, 3); assert.ok(ids(f).every(id => !src(f, id).reminderState), 'no reminder while reminders are off');
+  await assert.rejects(f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: true }), /test-påmindelse/);
+  const [thisWeek, older, answered] = ids(f);
+  patch(f, older, { acceptedAt: NOW - 7 * 24 * H }); patch(f, answered, { invitationStatus: 'submitted' });
+  f.rights.edit = false; await assert.rejects(f.adminDully.sendDullyReminderTest(scope)); f.rights.edit = true;
+  await testReminder(f);
+  const enabled = await f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: true });
+  assert.equal(enabled.planned, 1); assert.equal(src(f, thisWeek).reminderState, 'pending');
+  assert.equal(src(f, older).reminderState, undefined); assert.equal(src(f, answered).reminderState, undefined);
+  await f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: true });
+  assert.equal(ids(f).filter(id => src(f, id).reminderState).length, 1, 're-enabling does not plan twice');
+  await f.adminDully.setDullyFeedbackPaused({ ...scope, paused: true });
+  Date.now = () => NOW + 25 * H; await f.adminDully.importDullyFeedback({ ...scope, rows });
+  await f.worker.runDullyFeedbackWorker(r.provider, NOW + 25 * H);
+  assert.equal(src(f, thisWeek).reminderState, 'pending'); assert.equal(src(f, thisWeek).reminderLastError, 'paused_unapproved_changed_or_stale');
+  await f.worker.runDullyFeedbackWorker(r.provider, src(f, thisWeek).reminderPlannedFor + 49 * H);
+  assert.equal(src(f, thisWeek).reminderState, 'skipped'); assert.equal(src(f, thisWeek).reminderLastError, 'too_late');
+  assert.equal(r.sends.filter(s => s[1] === 'reminder').length, 0);
+});
+test('reminder: an ineligible recipient is not mailed and reminders switched off before the slot are cancelled', async t => {
+  const f = setup(t); await remindersOn(f);
+  const rows = [row(), row({ externalOrderId: '2594109', orderNumber: '2155', email: 'other@example.test' })];
+  await f.adminDully.importDullyFeedback({ ...scope, rows });
+  await f.worker.runDullyFeedbackWorker(recorder().provider, NOW);
+  Date.now = () => NOW + 25 * H; await f.adminDully.importDullyFeedback({ ...scope, rows });
+  const sends = []; await f.worker.runDullyFeedbackWorker(() => ({ eligible: async email => email !== 'other@example.test', send: async (...a) => sends.push(a) }), NOW + 25 * H);
+  const byEmail = Object.fromEntries(ids(f).map(id => [src(f, id).email, src(f, id)]));
+  assert.equal(sends.length, 1); assert.equal(byEmail['other@example.test'].reminderState, 'failed'); assert.equal(byEmail['other@example.test'].reminderLastError, 'recipient_ineligible');
+  assert.equal(byEmail['guest@example.test'].reminderState, 'accepted');
+});
+test('reminder: switching reminders off cancels planned reminders', async t => {
+  const f = setup(t); await remindersOn(f);
+  await f.adminDully.importDullyFeedback({ ...scope, rows: [row()] });
+  await f.worker.runDullyFeedbackWorker(recorder().provider, NOW);
+  await f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: false });
+  Date.now = () => NOW + 25 * H; await f.adminDully.importDullyFeedback({ ...scope, rows: [row()] });
+  const late = recorder(); await f.worker.runDullyFeedbackWorker(late.provider, NOW + 25 * H);
+  assert.equal(late.sends.length, 0); assert.equal(src(f, ids(f)[0]).reminderState, 'skipped'); assert.equal(src(f, ids(f)[0]).reminderLastError, 'reminders_disabled');
+});

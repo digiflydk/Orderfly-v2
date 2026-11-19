@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import {
   getDullyFeedbackState, configureDullyFeedback, importDullyFeedback, importDullyCustomers, listDullyCustomerConflicts,
-  sendDullyFeedbackTest, approveDullyFeedback, setDullyFeedbackPaused,
+  sendDullyFeedbackTest, approveDullyFeedback, setDullyFeedbackPaused, sendDullyReminderTest, setDullyRemindersEnabled,
 } from '@/lib/feedback/dully-admin';
 
 type Scope = { brandId: string; locationId: string };
@@ -61,6 +61,16 @@ export async function approveDullyTest(input: Scope & { testSourceId: string; co
 
 export async function pauseDullyFeedback(input: Scope & { paused: boolean }) {
   return changed(input, () => setDullyFeedbackPaused(input), input.paused ? 'Dully-afsendelse er sat på pause.' : 'Daglig Dully-afsendelse er aktiveret.');
+}
+
+export async function sendDullyReminderTestMail(input: Scope) {
+  return changed(input, () => sendDullyReminderTest(input), 'Test-påmindelsen er sat i kø til ok@esmeraldapizza.dk. Påmindelser er slået fra, indtil du har godkendt den.');
+}
+
+export async function setDullyReminders(input: Scope & { enabled: boolean; confirmed?: boolean }) {
+  if (input.enabled && input.confirmed !== true) return { ok: false as const, message: 'Bekræft først, at du har modtaget og godkendt test-påmindelsen.' };
+  return changed(input, () => setDullyRemindersEnabled(input), result => input.enabled
+    ? `Påmindelser er aktiveret. ${result.planned} ubesvarede invitationer fra denne uge får en påmindelse.` : 'Påmindelser er slået fra. Planlagte påmindelser sendes ikke.');
 }
 
 export async function loadDullyCustomerConflicts(scope: Scope) {
