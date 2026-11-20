@@ -24,3 +24,13 @@ Dully responses use `dully_order` in the inbox, detail view and quality report. 
 `node --test tests/unit/feedback-report-public.cjs` includes Dully versus commerce source isolation alongside existing access, metrics and report regressions. Run the TypeScript check and backend suite as part of integrated release verification.
 
 Production customer sending stays paused until the controlled test is actually sent and the user explicitly approves it. Deployment alone is not test acceptance.
+
+## 5. Reminder (#931)
+
+The "Påmindelse" section shows whether reminders are active and has three controls:
+
+- "Send test-påmindelse" is enabled once the invitation test is approved.
+- "Aktivér påmindelser" requires an accepted test reminder and the confirmation checkbox.
+- "Slå påmindelser fra" stops planned reminders.
+
+The counts gain "Påmindelser planlagt" and "Påmindelser sendt". Each order shows its reminder status.

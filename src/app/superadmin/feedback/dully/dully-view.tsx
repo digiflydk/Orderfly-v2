@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { DullyFeedbackState, DullyWaitingReason } from '@/lib/feedback/dully-admin';
-import { approveDullyTest, importDullyCustomerPurchases, loadDullyCustomerConflicts, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyTest } from './actions';
+import { approveDullyTest, importDullyCustomerPurchases, loadDullyCustomerConflicts, importDullyOrders, loadDullyFeedback, pauseDullyFeedback, saveDullyConfiguration, sendDullyReminderTestMail, sendDullyTest, setDullyReminders } from './actions';
 
 type Scope = { brandId: string; locationId: string };
 type Result = { ok: boolean; message?: string; state?: DullyFeedbackState | null };
@@ -15,7 +15,7 @@ const selectStyle = 'h-10 w-full min-w-0 rounded-md border bg-background px-3 te
 const states: Record<string, string> = {
   pending: 'I kø', preparing: 'Forberedes', dispatching: 'Afventer svar', accepted: 'Accepteret af mPanel',
   uncertain: 'Kræver kontrol', failed: 'Fejl', suppressed: 'Stoppet', waiting: 'Afventer afsendelse',
-  not_queued: 'Ikke sat i kø', none: 'Ikke sat i kø', completed: 'Gennemført', cancelled: 'Annulleret',
+  not_queued: 'Ikke sat i kø', none: 'Ikke sat i kø', completed: 'Gennemført', cancelled: 'Annulleret', skipped: 'Ikke sendt',
 };
 const label = (state: string) => states[state] || state || 'Ikke sat i kø';
 const waitingReasons: Record<Exclude<DullyWaitingReason, null>, string> = {
@@ -58,6 +58,7 @@ export function DullyFeedbackView({ brands, locations }: {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [experienceType, setExperienceType] = useState<'pickup' | 'delivery'>('pickup');
   const [confirmed, setConfirmed] = useState(false);
+  const [reminderConfirmed, setReminderConfirmed] = useState(false);
   const loadGeneration = useRef(0);
   const scope: Scope = { brandId, locationId };
   const configured = Boolean(state?.configuration);
@@ -66,6 +67,7 @@ export function DullyFeedbackView({ brands, locations }: {
   const apply = (next: DullyFeedbackState) => {
     setState(next);
     setConfirmed(false);
+    setReminderConfirmed(false);
     setAccountId(next.configuration?.accountId || '');
     setRestaurantId(next.configuration?.restaurantId || '');
   };
@@ -170,13 +172,21 @@ export function DullyFeedbackView({ brands, locations }: {
         <div className="flex flex-wrap items-center gap-3"><span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">{state.configuration?.paused === false ? (state.masterEmailEnabled ? 'Aktiv' : 'Stoppet: kundemails er slået fra') : 'På pause'}</span><Button type="button" variant={state.configuration?.paused === false ? 'outline' : 'default'} disabled={!canEdit || !configured || (state.configuration?.paused !== false && (!approved || !state.masterEmailEnabled))} onClick={() => void run(() => pauseDullyFeedback({ ...scope, paused: state.configuration?.paused === false }))}>{state.configuration?.paused === false ? 'Sæt på pause' : 'Aktivér daglig afsendelse'}</Button></div>
         {!approved && <p className="text-sm text-muted-foreground">Kundemails er spærret, indtil testen er godkendt.</p>}
       </section>
+      <section className="space-y-4 rounded-lg border p-5" aria-label="Påmindelse">
+        <h2 className="text-lg font-semibold">5. Påmindelse</h2>
+        <p className="text-sm">Kunder, der ikke har svaret, får <strong>én påmindelse 24 timer efter invitationen</strong> for hver ordre. Påmindelsen bruger samme link som invitationen og sendes ikke, hvis ordren er besvaret, linket er udløbet, eller afsendelsen er sat på pause i mere end to døgn.</p>
+        <div className="flex flex-wrap items-center gap-3"><span className="rounded-full bg-muted px-3 py-1 text-sm font-medium">{state.configuration?.remindersEnabled ? 'Aktiv' : 'Slået fra'}</span><Button type="button" variant="outline" disabled={!canEdit || !approved || Boolean(state.test?.reminderState && ['pending', 'preparing', 'dispatching', 'uncertain'].includes(state.test.reminderState))} onClick={() => void run(() => sendDullyReminderTestMail(scope))}>Send test-påmindelse</Button>{state.test?.reminderState && <span className="text-sm">Test-påmindelse: <strong>{label(state.test.reminderState)}</strong></span>}</div>
+        {!state.configuration?.remindersEnabled && <div className="space-y-3 border-t pt-4"><label className="flex items-start gap-3 text-sm"><input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={reminderConfirmed} disabled={!canEdit || state.test?.reminderState !== 'accepted'} onChange={event => setReminderConfirmed(event.target.checked)} /><span>Jeg har modtaget test-påmindelsen og godkendt indholdet. Ubesvarede invitationer fra denne uge får også en påmindelse.</span></label><Button type="button" disabled={!canEdit || !reminderConfirmed || state.test?.reminderState !== 'accepted'} onClick={() => void run(() => setDullyReminders({ ...scope, enabled: true, confirmed: reminderConfirmed }))}>Aktivér påmindelser</Button></div>}
+        {state.configuration?.remindersEnabled && <Button type="button" variant="outline" disabled={!canEdit} onClick={() => void run(() => setDullyReminders({ ...scope, enabled: false }))}>Slå påmindelser fra</Button>}
+        {state.configuration?.remindersEnabled && !state.configuration.remindersApproved && <p className="text-sm">Skema eller mailopsætning er ændret. Påmindelser afventer en ny godkendt test-påmindelse.</p>}
+      </section>
       <section className="space-y-4" aria-label="Afsendelseshistorik">
         <div><h2 className="text-lg font-semibold">Ordrer og afsendelser</h2><p className="text-sm text-muted-foreground">Status for de seneste 500 importerede ordrer på den valgte location. Tallene nedenfor gælder den viste historik. Testmails indgår ikke i kundetallene.</p>{state.hasMore && <p className="mt-2 text-sm font-medium">Der findes ældre historik. Den er ikke med i denne visning eller i tallene nedenfor.</p>}</div>
         <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{([
-          ['Importerede', state.counts.imported], ['Berettigede', state.counts.eligible], ['I kø', state.counts.pending], ['Accepteret', state.counts.accepted], ['Fejl', state.counts.failed], ['Kræver kontrol', state.counts.uncertain],
+          ['Importerede', state.counts.imported], ['Berettigede', state.counts.eligible], ['I kø', state.counts.pending], ['Accepteret', state.counts.accepted], ['Fejl', state.counts.failed], ['Kræver kontrol', state.counts.uncertain], ['Påmindelser planlagt', state.counts.remindersPending], ['Påmindelser sendt', state.counts.remindersAccepted],
         ] as const).map(([name, count]) => <div className="rounded-lg border p-3" key={name}><dt className="text-xs text-muted-foreground">{name}</dt><dd className="mt-1 text-xl font-semibold">{count}</dd></div>)}</dl>
         {state.rows.length === 0 && <p className="rounded-lg border p-5 text-sm text-muted-foreground">Ingen Dully-ordrer er importeret for denne location.</p>}
-        <ul className="space-y-3">{state.rows.map(row => <li key={row.id} className="space-y-2 rounded-lg border p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{row.isTest ? 'Testmail' : 'Ordre #' + row.orderNumber} · {row.experienceType === 'delivery' ? 'Levering' : 'Afhentning'}</strong><span>{label(row.mailState)}</span></div><p className="break-all text-muted-foreground">{row.email}</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Ordredato: {date(row.orderedAt)}</span><span>Ordrestatus: {label(row.status)}</span><span>Status opdateret: {date(row.updatedAt)}</span></div>{!row.isTest && <p className="text-xs text-muted-foreground">Sidst kontrolleret i Dully: {row.lastVerifiedAt > 0 ? date(row.lastVerifiedAt) : 'Ikke registreret'}</p>}{row.externalOrderId && <p className="break-all text-xs text-muted-foreground">Dully-ordre-ID: {row.externalOrderId}</p>}<p className="break-all text-xs text-muted-foreground">Orderfly-kilde-ID: {row.id}</p>{row.waitingReason && <p className="text-sm">{waitingReasons[row.waitingReason] || 'Afventer kontrol af afsendelsesstatus.'}</p>}</li>)}</ul>
+        <ul className="space-y-3">{state.rows.map(row => <li key={row.id} className="space-y-2 rounded-lg border p-4 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong>{row.isTest ? 'Testmail' : 'Ordre #' + row.orderNumber} · {row.experienceType === 'delivery' ? 'Levering' : 'Afhentning'}</strong><span>{label(row.mailState)}</span></div><p className="break-all text-muted-foreground">{row.email}</p><div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-muted-foreground"><span>Ordredato: {date(row.orderedAt)}</span><span>Ordrestatus: {label(row.status)}</span><span>Status opdateret: {date(row.updatedAt)}</span>{row.reminderState && <span>Påmindelse: {label(row.reminderState)}</span>}</div>{!row.isTest && <p className="text-xs text-muted-foreground">Sidst kontrolleret i Dully: {row.lastVerifiedAt > 0 ? date(row.lastVerifiedAt) : 'Ikke registreret'}</p>}{row.externalOrderId && <p className="break-all text-xs text-muted-foreground">Dully-ordre-ID: {row.externalOrderId}</p>}<p className="break-all text-xs text-muted-foreground">Orderfly-kilde-ID: {row.id}</p>{row.waitingReason && <p className="text-sm">{waitingReasons[row.waitingReason] || 'Afventer kontrol af afsendelsesstatus.'}</p>}</li>)}</ul>
       </section>
     </>}
     <Link href="/superadmin/feedback/settings" className="inline-block text-sm underline">Feedbackindstillinger</Link>

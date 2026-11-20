@@ -5,13 +5,13 @@ const {chromium}=require('@playwright/test');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin,current,calls,failImport;
 const scope={brandId:'esmeralda',locationId:'amager'};
-function initial(overrides={}){return {masterEmailEnabled:true,configuration:{accountId:'account',restaurantId:'restaurant',paused:true,approvedAt:null,testSourceId:null,approvedTestSourceId:null},test:null,rows:[],counts:{imported:0,eligible:0,pending:0,accepted:0,failed:0,uncertain:0},canEdit:true,...overrides};}
+function initial(overrides={}){return {masterEmailEnabled:true,configuration:{accountId:'account',restaurantId:'restaurant',paused:true,approvedAt:null,testSourceId:null,approvedTestSourceId:null},test:null,rows:[],counts:{imported:0,eligible:0,pending:0,accepted:0,failed:0,uncertain:0,remindersPending:0,remindersAccepted:0},canEdit:true,...overrides};}
 function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync(target,code);return target;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'dully-browser-'));
  const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';import{DullyFeedbackView}from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/dully/dully-view.tsx'))};createRoot(document.getElementById('root')).render(<DullyFeedbackView brands={[{id:'esmeralda',name:'Esmeralda'},{id:'other',name:'Other brand'}]} locations={[{id:'amager',brandId:'esmeralda',name:'Amager'},{id:'other-location',brandId:'other',name:'Other location'}]}/>);`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
- const actions=file('actions',`const send=async(kind,input)=>{const response=await fetch('/action/'+kind,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});if(!response.ok)throw Error('Transport failed');return response.json();};export const loadDullyFeedback=input=>send('load',input);export const saveDullyConfiguration=input=>send('configure',input);export const importDullyOrders=input=>send('import',input);export const sendDullyTest=input=>send('test',input);export const approveDullyTest=input=>send('approve',input);export const pauseDullyFeedback=input=>send('pause',input);`);
+ const actions=file('actions',`const send=async(kind,input)=>{const response=await fetch('/action/'+kind,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(input)});if(!response.ok)throw Error('Transport failed');return response.json();};export const loadDullyFeedback=input=>send('load',input);export const sendDullyReminderTestMail=input=>send('reminderTest',input);export const setDullyReminders=input=>send('reminders',input);export const saveDullyConfiguration=input=>send('configure',input);export const importDullyOrders=input=>send('import',input);export const sendDullyTest=input=>send('test',input);export const approveDullyTest=input=>send('approve',input);export const pauseDullyFeedback=input=>send('pause',input);`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},plugins:[new webpackModule.webpack.NormalModuleReplacementPlugin(/^\.\/actions$/,resource=>{if(resource.context===path.join(root,'src/app/superadmin/feedback/dully'))resource.request=actions;})],resolve:{alias:{'next/link':file('link',`import React from'react';export const useLinkStatus=()=>({pending:false});export default function Link(props){return <a {...props}/>;}`),'react$':require.resolve('next/dist/compiled/react'),'react/jsx-runtime$':require.resolve('next/dist/compiled/react/jsx-runtime'),'react-dom$':require.resolve('next/dist/compiled/react-dom'),'react-dom/client$':require.resolve('next/dist/compiled/react-dom/client'),'@':path.join(root,'src')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/dully-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  const css=await require('postcss')([require('tailwindcss')({config:path.join(root,'tailwind.config.ts')})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:path.join(root,'src/app/globals.css')});fs.writeFileSync(path.join(dir,'style.css'),css.css);
  server=http.createServer(async(req,res)=>{
@@ -23,6 +23,8 @@ before(async()=>{
    if(kind==='test'){current.test={sourceId:'test-source',experienceType:input.experienceType,state:'pending'};current.configuration.testSourceId='test-source';}
    if(kind==='approve'){assert.equal(input.confirmed,true);current.configuration.approvedAt=Date.now();current.configuration.approvedTestSourceId=input.testSourceId;}
    if(kind==='pause')current.configuration.paused=input.paused;
+   if(kind==='reminderTest')current.test.reminderState='pending';
+   if(kind==='reminders'){if(input.enabled)assert.equal(input.confirmed,true);current.configuration.remindersEnabled=input.enabled;}
    if(kind==='import'){current.counts.imported=1;current.counts.eligible=1;}
    const result=input.brandId==='other'?initial({configuration:null,canEdit:false}):current;
    res.setHeader('content-type','application/json');return res.end(JSON.stringify({ok:true,state:result,message:kind==='load'?undefined:'Handlingen er gemt.'}));
@@ -51,11 +53,11 @@ test('mobile workflow requires preview and server-approved test; no accidental s
  assert.equal(calls.filter(call=>['test','approve','pause'].includes(call.kind)).length,0);
  await page.getByRole('button',{name:'Send testmail'}).click();await page.getByText('Seneste test:').waitFor();
  assert.equal(await page.getByRole('button',{name:'Send testmail'}).isEnabled(),false);
- assert.equal(await page.getByRole('checkbox').isEnabled(),false);
- current.test.state='accepted';await page.getByRole('button',{name:'Opdatér status'}).click();await page.getByRole('checkbox').waitFor();
+ assert.equal(await page.getByRole('checkbox', { name: /testmailen/ }).isEnabled(),false);
+ current.test.state='accepted';await page.getByRole('button',{name:'Opdatér status'}).click();await page.getByRole('checkbox', { name: /testmailen/ }).waitFor();
  await page.waitForFunction(()=>!document.querySelector('input[type=checkbox]').disabled);
  assert.equal(await page.getByRole('button',{name:'Godkend test',exact:true}).isEnabled(),false);
- await page.getByRole('checkbox').check();await page.getByRole('button',{name:'Godkend test',exact:true}).click();await page.getByText('Testen er godkendt.',{exact:true}).waitFor();
+ await page.getByRole('checkbox', { name: /testmailen/ }).check();await page.getByRole('button',{name:'Godkend test',exact:true}).click();await page.getByText('Testen er godkendt.',{exact:true}).waitFor();
  assert.equal(current.configuration.paused,true);
  await page.getByRole('button',{name:'Aktivér daglig afsendelse'}).click();await page.getByRole('button',{name:'Sæt på pause'}).waitFor();assert.equal(current.configuration.paused,false);
  await page.getByRole('button',{name:'Sæt på pause'}).click();await page.getByRole('button',{name:'Aktivér daglig afsendelse'}).waitFor();assert.equal(current.configuration.paused,true);
@@ -99,5 +101,21 @@ test('history distinguishes Dully source verification from worker updates and ex
  await history.getByText('Ordren mangler en kontrol i Dully fra de seneste 24 timer. Indlæs en opdateret ordre.',{exact:true}).waitFor();
  assert.equal(await history.getByText('stale_source',{exact:true}).count(),0);
  assert.equal(calls.filter(call=>call.kind!=='load').length,0);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+});
+
+test('reminders need an approved invitation test and a confirmed, accepted test reminder before activation',async t=>{
+ const page=await setup(t,390,{configuration:{accountId:'account',restaurantId:'restaurant',paused:false,approvedAt:1,testSourceId:'test-source',approvedTestSourceId:'test-source',remindersEnabled:false,remindersApproved:false},test:{sourceId:'test-source',experienceType:'pickup',state:'accepted',reminderState:null}});
+ const section=page.getByRole('region',{name:'Påmindelse'});
+ assert.equal(await section.getByRole('button',{name:'Aktivér påmindelser'}).isEnabled(),false);
+ await section.getByRole('button',{name:'Send test-påmindelse'}).click();await section.getByText('Test-påmindelse:').waitFor();
+ assert.equal(await section.getByRole('button',{name:'Send test-påmindelse'}).isEnabled(),false);
+ assert.equal(calls.filter(c=>c.kind==='reminders').length,0);
+ current.test.reminderState='accepted';await page.getByRole('button',{name:'Opdatér status'}).click();
+ await page.waitForFunction(()=>!document.querySelector('[aria-label="Påmindelse"] input[type=checkbox]').disabled);
+ assert.equal(await section.getByRole('button',{name:'Aktivér påmindelser'}).isEnabled(),false);
+ await section.getByRole('checkbox').check();await section.getByRole('button',{name:'Aktivér påmindelser'}).click();
+ await section.getByRole('button',{name:'Slå påmindelser fra'}).waitFor();
+ assert.deepEqual(calls.filter(c=>c.kind==='reminders').map(c=>c.input),[{...scope,enabled:true,confirmed:true}]);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
 });

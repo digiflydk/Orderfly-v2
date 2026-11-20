@@ -7,16 +7,18 @@ import { ESMERALDA_FEEDBACK_BRAND } from './esmeralda-booking-setup';
 import { dullyConfigureSchema, dullyScopeSchema, dullyScopeId, dullySourceId, dullyImportRowSchema, dullySameIdentity, dullyEligible, dullyDueAt, dullyHash, dullyDetails, DULLY_NEVER, DULLY_TEST_EMAIL } from './dully-contract';
 import { feedbackAutomation } from './mail-config';
 import { dullyFingerprint } from './dully-source';
+import { reminderPlan } from './dully-worker';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { importDullyCustomerPurchases } from '@/lib/customers/dully-customers';
 export type { DullyImportRow } from './dully-contract';
 type Scope = { brandId: string; locationId: string };
 export type DullyWaitingReason = 'stale_source' | 'paused' | 'approval_required' | 'master_disabled' | 'waiting' | 'uncertain' | 'failed' | 'ineligible' | null;
 export type DullyFeedbackState = {
-  configuration: null | { accountId: string; restaurantId: string; paused: boolean; approvedAt: number | null; testSourceId: string | null; approvedTestSourceId: string | null };
-  test: null | { sourceId: string; experienceType: 'pickup' | 'delivery'; state: string };
-  rows: Array<{ id: string; orderNumber: string; experienceType: 'pickup' | 'delivery'; email: string; status: string; mailState: string; isTest: boolean; orderedAt: string; updatedAt: number; lastVerifiedAt: number; externalOrderId: string; waitingReason: DullyWaitingReason }>;
+  configuration: null | { accountId: string; restaurantId: string; paused: boolean; approvedAt: number | null; testSourceId: string | null; approvedTestSourceId: string | null; remindersEnabled: boolean; remindersApproved: boolean };
+  test: null | { sourceId: string; experienceType: 'pickup' | 'delivery'; state: string; reminderState: string | null };
+  rows: Array<{ id: string; orderNumber: string; experienceType: 'pickup' | 'delivery'; email: string; status: string; mailState: string; isTest: boolean; orderedAt: string; updatedAt: number; lastVerifiedAt: number; externalOrderId: string; waitingReason: DullyWaitingReason; reminderState: string | null }>;
   hasMore: boolean; masterEmailEnabled: boolean;
-  counts: { imported: number; eligible: number; pending: number; accepted: number; failed: number; uncertain: number }; canEdit: boolean;
+  counts: { imported: number; eligible: number; pending: number; accepted: number; failed: number; uncertain: number; remindersPending: number; remindersAccepted: number }; canEdit: boolean;
 };
 async function scope(input: Scope, edit = false) {
   const value = dullyScopeSchema.parse(input), access = await requireFeedbackAccess(edit ? 'feedback:edit' : 'feedback:view');
@@ -52,12 +54,14 @@ export async function getDullyFeedbackState(brandId: string, locationId: string)
   };
   return {
     hasMore: docs.docs.length > 500, masterEmailEnabled: masterSettings.emailEnabled,
-    configuration: config ? { accountId: config.accountId, restaurantId: config.restaurantId, paused: config.paused !== false, approvedAt: approvalValid ? config.approvedAt : null, testSourceId: config.testSourceId || null, approvedTestSourceId: config.approvedTestSourceId || null } : null,
-    test: lastTest ? { sourceId: lastTest.id, experienceType: lastTest.experienceType, state: lastTest.mailState } : null,
-    rows: rows.sort((a, b) => b.updatedAt - a.updatedAt).map(r => ({ id: r.id, orderNumber: r.orderNumber, experienceType: r.experienceType, email: r.email, status: r.status, mailState: r.mailState, isTest: r.isTest === true, orderedAt: r.orderedAt, updatedAt: r.updatedAt, lastVerifiedAt: Number.isFinite(r.lastVerifiedAt) ? r.lastVerifiedAt : 0, externalOrderId: typeof r.externalOrderId === 'string' ? r.externalOrderId : '', waitingReason: waitingReason(r) })),
+    configuration: config ? { accountId: config.accountId, restaurantId: config.restaurantId, paused: config.paused !== false, approvedAt: approvalValid ? config.approvedAt : null, testSourceId: config.testSourceId || null, approvedTestSourceId: config.approvedTestSourceId || null,
+      remindersEnabled: config.reminderEnabled === true, remindersApproved: Boolean(config.reminderApprovedFingerprint && config.reminderApprovedFingerprint === currentFingerprint?.fingerprint) } : null,
+    test: lastTest ? { sourceId: lastTest.id, experienceType: lastTest.experienceType, state: lastTest.mailState, reminderState: lastTest.reminderState || null } : null,
+    rows: rows.sort((a, b) => b.updatedAt - a.updatedAt).map(r => ({ id: r.id, orderNumber: r.orderNumber, experienceType: r.experienceType, email: r.email, status: r.status, mailState: r.mailState, isTest: r.isTest === true, orderedAt: r.orderedAt, updatedAt: r.updatedAt, lastVerifiedAt: Number.isFinite(r.lastVerifiedAt) ? r.lastVerifiedAt : 0, externalOrderId: typeof r.externalOrderId === 'string' ? r.externalOrderId : '', waitingReason: waitingReason(r), reminderState: r.reminderState || null })),
     counts: { imported: rows.filter(r => !r.isTest).length, eligible: rows.filter(r => !r.isTest && dullyEligible(r)).length,
       pending: rows.filter(r => !r.isTest && r.mailState === 'pending').length, accepted: rows.filter(r => !r.isTest && r.mailState === 'accepted').length,
-      failed: rows.filter(r => !r.isTest && r.mailState === 'failed').length, uncertain: rows.filter(r => !r.isTest && r.mailState === 'uncertain').length },
+      failed: rows.filter(r => !r.isTest && r.mailState === 'failed').length, uncertain: rows.filter(r => !r.isTest && r.mailState === 'uncertain').length,
+      remindersPending: rows.filter(r => !r.isTest && ['pending', 'preparing', 'dispatching'].includes(r.reminderState)).length, remindersAccepted: rows.filter(r => !r.isTest && r.reminderState === 'accepted').length },
     canEdit: canEditFeedbackBrand(s.access, brandId),
   };
 }
@@ -176,6 +180,62 @@ export async function setDullyFeedbackPaused(input: Scope & { paused: boolean })
     audit(s.db, tx, s.access.uid, s.scopeId, paused ? 'paused' : 'resumed');
   });
   return { ok: true as const };
+}
+
+// Dully reminders (#931). A test reminder to the approved test recipient comes first; enabling then also plans
+// reminders for this week's unanswered invitations (Monday 00:00 Copenhagen), as approved by the PM.
+export async function sendDullyReminderTest(input: Scope) {
+  const s = await scope(input, true), configRef = s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId), now = Date.now();
+  const config = (await configRef.get()).data(); if (!config) throw new Error('Dully-koblingen mangler.');
+  const prepared = await dullyFingerprint(s.brandId, s.locationId, config as any);
+  await s.db.runTransaction(async tx => {
+    const current = (await tx.get(configRef)).data(), id = current?.approvedTestSourceId;
+    const testRef = id ? s.db.collection('dullyFeedbackSources').doc(id) : null, test = testRef ? (await tx.get(testRef)).data() : null;
+    if (!current?.approvedAt || current.approvedFingerprint !== prepared.fingerprint || !test?.isTest || test.scopeId !== s.scopeId || test.email !== DULLY_TEST_EMAIL
+      || test.mailState !== 'accepted' || test.fingerprint !== prepared.fingerprint || !(test.expiresAt > now) || test.invitationStatus !== 'active') throw new Error('Godkend først en aktuel testinvitation.');
+    if (['preparing', 'dispatching', 'uncertain'].includes(test.reminderState)) throw new Error('Test-påmindelsens afsendelse er i gang eller ukendt.');
+    tx.update(testRef!, { ...reminderPlan(now, now, 0), updatedAt: now });
+    tx.update(configRef, { reminderEnabled: false, reminderApprovedFingerprint: null, updatedAt: now });
+    audit(s.db, tx, s.access.uid, s.scopeId, 'reminder_test_requested', { sourceId: id });
+  });
+  return { ok: true as const };
+}
+export function dullyReminderWeekStart(now: number) {
+  const day = Number(formatInTimeZone(now, 'Europe/Copenhagen', 'i')), date = formatInTimeZone(now - (day - 1) * 86400000, 'Europe/Copenhagen', 'yyyy-MM-dd');
+  return fromZonedTime(date + 'T00:00:00', 'Europe/Copenhagen').getTime();
+}
+export async function setDullyRemindersEnabled(input: Scope & { enabled: boolean }) {
+  const enabled = z.boolean().parse(input.enabled), s = await scope(input, true), configRef = s.db.collection('dullyFeedbackConfigurations').doc(s.scopeId), now = Date.now();
+  const config = (await configRef.get()).data(); if (!config) throw new Error('Dully-koblingen mangler.');
+  if (!enabled) {
+    await s.db.runTransaction(async tx => { tx.update(configRef, { reminderEnabled: false, updatedAt: now }); audit(s.db, tx, s.access.uid, s.scopeId, 'reminders_disabled'); });
+    return { ok: true as const, planned: 0 };
+  }
+  const prepared = await dullyFingerprint(s.brandId, s.locationId, config as any), since = dullyReminderWeekStart(now);
+  await s.db.runTransaction(async tx => {
+    const current = (await tx.get(configRef)).data(), id = current?.approvedTestSourceId;
+    const test = id ? (await tx.get(s.db.collection('dullyFeedbackSources').doc(id))).data() : null;
+    if (!current?.approvedAt || current.approvedFingerprint !== prepared.fingerprint || !test?.isTest || test.scopeId !== s.scopeId || test.fingerprint !== prepared.fingerprint || test.reminderState !== 'accepted')
+      throw new Error('Send og modtag først en test-påmindelse.');
+    tx.update(configRef, { reminderEnabled: true, reminderApprovedFingerprint: prepared.fingerprint, reminderApprovedAt: now, reminderApprovedBy: s.access.uid, updatedAt: now });
+    audit(s.db, tx, s.access.uid, s.scopeId, 'reminders_enabled', { since });
+  });
+  // Backfill outside the approval transaction: each source is claimed in its own transaction, so a concurrent worker or a second click cannot plan twice.
+  const docs = await s.db.collection('dullyFeedbackSources').where('historyKey', '>=', s.scopeId + ':').where('historyKey', '<=', s.scopeId + ':\uf8ff').orderBy('historyKey', 'desc').limit(500).get();
+  let planned = 0;
+  for (const doc of docs.docs) {
+    const r = doc.data();
+    if (r.isTest || r.mailState !== 'accepted' || r.invitationStatus !== 'active' || r.reminderState || !(Number(r.acceptedAt) >= since)) continue;
+    const ok = await s.db.runTransaction(async tx => {
+      const row = (await tx.get(doc.ref)).data();
+      if (!row || row.isTest || row.mailState !== 'accepted' || row.invitationStatus !== 'active' || row.reminderState || !(Number(row.acceptedAt) >= since)) return false;
+      tx.update(doc.ref, { ...reminderPlan(Number(row.acceptedAt), now), updatedAt: now });
+      return true;
+    });
+    if (ok) planned++;
+  }
+  await s.db.collection('dullyFeedbackAudit').doc().create({ actorId: s.access.uid, scopeId: s.scopeId, action: 'reminders_backfilled', since, planned, createdAt: Date.now() });
+  return { ok: true as const, planned };
 }
 
 // Customer/retention import (#834). Platform-wide access only: it links people across the brand's customer base.
