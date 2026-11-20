@@ -18,7 +18,7 @@ Orderfly follows the same PM / PO / Work lifecycle as Esmeralda:
 
 `[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
 
-Work branches from `main` and opens pull requests into `main`. Work does not merge or deploy its own change, except under the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy): all CI green and the Codex code review completed without unresolved findings on the head commit. Otherwise PO acceptance is required before merge. Deployment plus live verification are always required before an issue is Done.
+Work branches from `main` and opens pull requests into `main`. Work does not merge or deploy its own change, except under the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy): all CI green and an independent code review completed without unresolved blocking findings on the head commit (Codex, or a Claude review agent when Codex is unavailable). Otherwise PO acceptance is required before merge. Deployment plus live verification are always required before an issue is Done.
 
 See [Development workflow](development-workflow.md).
 
