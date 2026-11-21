@@ -123,7 +123,8 @@ async function runDullyReminders(makeProvider: (config: NonNullable<ReturnType<t
         reminderLastError: lastError, updatedAt: Date.now(), ...(state === 'accepted' ? { reminderAcceptedAt: Date.now() } : {}) });
     });
     // Final reasons never send: the order was answered, the link expired, reminders were switched off or the slot is long past.
-    const skip = (source: any, config: any) => source.invitationStatus === 'submitted' ? 'answered' : source.mailState !== 'accepted' ? 'invitation_not_accepted'
+    // The approved test source is normally already answered; its reminder is a content test and is still sent.
+    const skip = (source: any, config: any) => !source.isTest && source.invitationStatus === 'submitted' ? 'answered' : source.mailState !== 'accepted' ? 'invitation_not_accepted'
       : !(source.expiresAt > now) ? 'link_expired' : !source.isTest && config?.reminderEnabled !== true ? 'reminders_disabled'
       : !source.isTest && !(now - Number(source.reminderPlannedFor) <= REMINDER_LATEST_MS) ? 'too_late' : null;
     try {
@@ -133,7 +134,8 @@ async function runDullyReminders(makeProvider: (config: NonNullable<ReturnType<t
       const prepared = await dullyFingerprint(source.brandId, source.locationId, config as any);
       const [brand, location] = await Promise.all([db.collection('brands').doc(source.brandId).get(), db.collection('locations').doc(source.locationId).get()]);
       const approved = (row: any, settings: any, fingerprint: string) => row.isTest ? settings?.approvedTestSourceId === row.id : settings?.reminderApprovedFingerprint === fingerprint;
-      if ((!source.isTest && !prepared.emailEnabled) || !eligible(source, config, prepared.fingerprint, now) || !approved(source, config, prepared.fingerprint) || brand.data()?.status !== 'active' || location.data()?.brandId !== source.brandId || location.data()?.isActive === false) {
+      const asOpen = (row: any) => row.isTest ? { ...row, invitationStatus: 'active' } : row;
+      if ((!source.isTest && !prepared.emailEnabled) || !eligible(asOpen(source), config, prepared.fingerprint, now) || !approved(source, config, prepared.fingerprint) || brand.data()?.status !== 'active' || location.data()?.brandId !== source.brandId || location.data()?.isActive === false) {
         await finish('pending', 'paused_unapproved_changed_or_stale', 3600000); counts.remindersDeferred++; continue;
       }
       const mail = feedbackMailConfig(source.brandId); if (!mail) throw new FeedbackMailError('mail_configuration_required');
@@ -144,7 +146,7 @@ async function runDullyReminders(makeProvider: (config: NonNullable<ReturnType<t
         const row = current.data(), settings = currentConfig.data();
         const finalFingerprint = settings ? await dullyFingerprint(source.brandId, source.locationId, settings as any, tx) : null;
         if (!row || row.reminderLease !== lease || row.reminderState !== 'preparing' || row.email !== source.email || row.reminderEventId !== source.reminderEventId || skip(row, settings) ||
-          finalFingerprint?.fingerprint !== prepared.fingerprint || (!source.isTest && finalFingerprint?.emailEnabled !== true) || !eligible(row, settings, prepared.fingerprint, now) || !approved({ ...row, id: source.id }, settings, prepared.fingerprint)) return false;
+          finalFingerprint?.fingerprint !== prepared.fingerprint || (!source.isTest && finalFingerprint?.emailEnabled !== true) || !eligible(asOpen(row), settings, prepared.fingerprint, now) || !approved({ ...row, id: source.id }, settings, prepared.fingerprint)) return false;
         tx.update(ref, { reminderState: 'dispatching', reminderDueAt: now + leaseMs, reminderAttempts: Number(row.reminderAttempts || 0) + 1, updatedAt: now });
         return true;
       });

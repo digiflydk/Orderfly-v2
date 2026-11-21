@@ -192,7 +192,8 @@ export async function sendDullyReminderTest(input: Scope) {
     const current = (await tx.get(configRef)).data(), id = current?.approvedTestSourceId;
     const testRef = id ? s.db.collection('dullyFeedbackSources').doc(id) : null, test = testRef ? (await tx.get(testRef)).data() : null;
     if (!current?.approvedAt || current.approvedFingerprint !== prepared.fingerprint || !test?.isTest || test.scopeId !== s.scopeId || test.email !== DULLY_TEST_EMAIL
-      || test.mailState !== 'accepted' || test.fingerprint !== prepared.fingerprint || !(test.expiresAt > now) || test.invitationStatus !== 'active') throw new Error('Godkend først en aktuel testinvitation.');
+      || test.mailState !== 'accepted' || test.fingerprint !== prepared.fingerprint || !(test.expiresAt > now)) throw new Error('Godkend først en aktuel testinvitation.');
+    // The approved test is usually already answered (approval exercises the form); a content test still applies.
     if (['preparing', 'dispatching', 'uncertain'].includes(test.reminderState)) throw new Error('Test-påmindelsens afsendelse er i gang eller ukendt.');
     tx.update(testRef!, { ...reminderPlan(now, now, 0), updatedAt: now });
     tx.update(configRef, { reminderEnabled: false, reminderApprovedFingerprint: null, updatedAt: now });
