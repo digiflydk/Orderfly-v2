@@ -381,3 +381,17 @@ test('reminder: switching reminders off cancels planned reminders', async t => {
   const late = recorder(); await f.worker.runDullyFeedbackWorker(late.provider, NOW + 25 * H);
   assert.equal(late.sends.length, 0); assert.equal(src(f, ids(f)[0]).reminderState, 'skipped'); assert.equal(src(f, ids(f)[0]).reminderLastError, 'reminders_disabled');
 });
+test('reminder: the test reminder is still sent when the approved test invitation was already answered', async t => {
+  const f = setup(t); await approved(f);
+  const testId = [...f.records.entries()].find(([, v]) => v.isTest)[0].split('/')[1];
+  patch(f, testId, { invitationStatus: 'submitted' });
+  await testReminder(f);
+  assert.equal(src(f, testId).reminderState, 'accepted');
+  await f.adminDully.setDullyRemindersEnabled({ ...scope, enabled: true });
+  await f.adminDully.importDullyFeedback({ ...scope, rows: [row()] });
+  await f.worker.runDullyFeedbackWorker(recorder().provider, NOW);
+  const [id] = ids(f); patch(f, id, { invitationStatus: 'submitted' });
+  Date.now = () => NOW + 25 * H; await f.adminDully.importDullyFeedback({ ...scope, rows: [row()] });
+  const r = recorder(); await f.worker.runDullyFeedbackWorker(r.provider, NOW + 25 * H);
+  assert.equal(r.sends.length, 0, 'an answered customer order still gets no reminder'); assert.equal(src(f, id).reminderLastError, 'answered');
+});
