@@ -25,6 +25,9 @@ before(async()=>{
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/superadmin/brands/actions':actions,
+  // The forms embed the payment agreement panel (WorldlineSettings); its own behaviour is covered by
+  // worldline-admin-settings.cjs. Here it reports no access, as for a non-platform administrator.
+  '@/app/superadmin/payments/worldline-actions':file('worldline-actions',`export const loadWorldlineSettings=async()=>{throw new Error('forbidden');};export const saveWorldlineSettings=async()=>{throw new Error('not used in these tests');};`),
   '@/app/superadmin/locations/actions':file('location-action',`${transport} export const createOrUpdateLocation=(_,form)=>save('locations',form);`),
   '@/hooks/use-toast':file('toast',`const toast=message=>{window.lastToast=message;};export const useToast=()=>({toast});`),
   'next/navigation':file('navigation',`export const useRouter=()=>({push:href=>location.assign(href),refresh:()=>location.reload()});`),
