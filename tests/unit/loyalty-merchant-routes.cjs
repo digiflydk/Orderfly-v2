@@ -51,7 +51,9 @@ test('the worker heartbeat runs stamp-card work and isolates its failure from th
   const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{dullyCalls++;return {accepted:2};}},'@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
     '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
     '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>({})},
-    '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:worker}});
+    '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:worker},
+    // The heartbeat also runs payment recovery; its own behaviour is covered by payment-heartbeat.cjs.
+    '@/lib/payments/native-free-recovery':{processDueNativeFreeCheckouts:async()=>({state:'idle'})},'@/lib/payments/worldline-stale-holds':{processWorldlineStaleCheckouts:async()=>({state:'idle'})},'@/lib/payments/worldline-reconcile':{processWorldlineJobs:async()=>({state:'idle'})}});
   const call=route=>route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+'y'.repeat(32)}}));
   try{
     const normal=load(async()=>({expiry:{cards:2,rewards:1},mail:{accepted:1}}));
