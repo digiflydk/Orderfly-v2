@@ -18,8 +18,10 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
+  # One group per workflow, so a deployment of one kind never replaces a pending one of another.
   group: firestore-indexes
   cancel-in-progress: false
 
@@ -42,12 +44,17 @@ jobs:
         env:
           MANUAL: ${{ inputs.files }}
           BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
           AFTER: ${{ github.sha }}
         run: |
+          # Changes since the last successful automatic run, not only this push: GitHub keeps one pending
+          # run per concurrency group and cancels older pending ones, and a failed run must be retried.
+          BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/firestore-indexes.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' || true)
+          if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" "$AFTER" 2>/dev/null; then BASE="$BEFORE"; fi
           # The first push of a branch has no "before" commit; compare with the parent instead.
-          case "$BEFORE" in ""|0000000000000000000000000000000000000000) BEFORE="$AFTER~1";; esac
+          case "$BASE" in ""|0000000000000000000000000000000000000000) BASE="$AFTER~1";; esac
           if [ -n "$MANUAL" ]; then files="$MANUAL"
-          else files=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'docs/*-firestore-indexes.json' | tr '\n' ' '); fi
+          else files=$(git diff --name-only --diff-filter=AM "$BASE" "$AFTER" -- 'docs/*-firestore-indexes.json' | tr '\n' ' '); fi
           for f in $files; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
           echo "list=$files" >> "$GITHUB_OUTPUT"
       - name: Create missing indexes and wait until READY

@@ -37,7 +37,7 @@ Changes to the production data project `orderfly-39325` are deployed by GitHub w
 - **Firestore indexes** (`firestore-indexes.yml`): when a `docs/*-firestore-indexes.json` file is added or changed, creates its missing composite indexes and waits until they are READY. Additive only.
 - **Firestore data migration** (`firestore-migration.yml`): when a `scripts/migrations/<name>.mjs` is added or changed, plans, logs and applies exactly that plan (`auto`) and records it in `dataMigrationAudit`. Migrations are idempotent, so a re-run applies nothing.
 
-They share the concurrency group `firestore-production-writes` and use the repository secret `FIREBASE_SERVICE_ACCOUNT_JSON`. A manual run can preview (read only). Details: `docs/firestore-operations.md`.
+Each has its own concurrency group; the index and migration workflows deploy everything changed since their last successful automatic run, so a replaced or failed run is not lost. They use the repository secret `FIREBASE_SERVICE_ACCOUNT_JSON`. A manual run can preview (read only). Details: `docs/firestore-operations.md`.
 
 ## Production domain configuration (`orderfly.dk`)
 

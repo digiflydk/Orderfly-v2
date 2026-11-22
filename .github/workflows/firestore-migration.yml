@@ -24,9 +24,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
-  group: firestore-production-writes
+  # One group per workflow, so a deployment of one kind never replaces a pending one of another.
+  group: firestore-migrations
   cancel-in-progress: false
 
 jobs:
@@ -49,12 +51,17 @@ jobs:
           MANUAL: ${{ inputs.migration }}
           MODE: ${{ inputs.mode || 'auto' }}
           BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
           AFTER: ${{ github.sha }}
         run: |
+          # Changes since the last successful automatic run, not only this push: GitHub keeps one pending
+          # run per concurrency group and cancels older pending ones, and a failed run must be retried.
+          BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/firestore-migration.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' || true)
+          if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" "$AFTER" 2>/dev/null; then BASE="$BEFORE"; fi
           # The first push of a branch has no "before" commit; compare with the parent instead.
-          case "$BEFORE" in ""|0000000000000000000000000000000000000000) BEFORE="$AFTER~1";; esac
+          case "$BASE" in ""|0000000000000000000000000000000000000000) BASE="$AFTER~1";; esac
           if [ -n "$MANUAL" ]; then names="$MANUAL"
-          else names=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'scripts/migrations/*.mjs' | sed -n 's#^scripts/migrations/\(.*\)\.mjs$#\1#p'); fi
+          else names=$(git diff --name-only --diff-filter=AM "$BASE" "$AFTER" -- 'scripts/migrations/*.mjs' | sed -n 's#^scripts/migrations/\(.*\)\.mjs$#\1#p'); fi
           for name in $names; do
             echo "::group::$name"
             node scripts/firestore-migrate.mjs "$name" "$MODE"
