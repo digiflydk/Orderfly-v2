@@ -1,25 +1,26 @@
 name: Firestore data migration
 
-# Manually started. Runs one migration from scripts/migrations/ against orderfly-39325.
-# preview writes nothing and prints the planned changes with a manifest hash. apply runs only from
-# main, only after approval in the "production" environment, and only while the planned changes
-# still match the reviewed hash. Every apply is logged in dataMigrationAudit.
+# Deployment only (#934): GitHub Actions does not run tests; Work runs `npm run ci` before merging.
+# After a merge to main that adds or changes scripts/migrations/<name>.mjs, runs each such
+# migration against orderfly-39325 with `auto`: plan, print the plan, apply exactly that plan and
+# log it in dataMigrationAudit. Migrations are idempotent (scripts/migrations/README.md), so a
+# re-run reports nothing to apply. A manual run can preview (read only) or run one migration.
 # See docs/firestore-operations.md.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/migrations/*.mjs'
   workflow_dispatch:
     inputs:
       migration:
         description: "Migration name (scripts/migrations/<name>.mjs)"
         required: true
       mode:
-        description: "preview (read only) or apply (write after approval)"
+        description: "preview (read only) or auto (apply now)"
         type: choice
-        options: [preview, apply]
+        options: [preview, auto]
         default: preview
-      manifest_sha256:
-        description: "apply only: the manifest hash printed by the reviewed preview"
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -29,48 +30,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  preview:
-    if: inputs.mode == 'preview'
+  migrate:
+    if: github.ref == 'refs/heads/main' || inputs.mode == 'preview'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Plan the migration
+      - name: Run the merged migrations
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          MIGRATION: ${{ inputs.migration }}
-        run: node scripts/firestore-migrate.mjs "$MIGRATION" preview
-
-  apply:
-    if: inputs.mode == 'apply'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: production
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Require main and an approval-protected environment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            if (context.ref !== 'refs/heads/main') throw new Error('apply runs only from main.');
-            const {data} = await github.request('GET /repos/{owner}/{repo}/environments/{name}', {...context.repo, name: 'production'});
-            if (!(data.protection_rules || []).some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length)) throw new Error('The production environment has no required reviewers; refusing to write.');
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Apply the reviewed migration
-        env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          MIGRATION: ${{ inputs.migration }}
-          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
-        run: node scripts/firestore-migrate.mjs "$MIGRATION" apply
+          MANUAL: ${{ inputs.migration }}
+          MODE: ${{ inputs.mode || 'auto' }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # The first push of a branch has no "before" commit; compare with the parent instead.
+          case "$BEFORE" in ""|0000000000000000000000000000000000000000) BEFORE="$AFTER~1";; esac
+          if [ -n "$MANUAL" ]; then names="$MANUAL"
+          else names=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'scripts/migrations/*.mjs' | sed -n 's#^scripts/migrations/\(.*\)\.mjs$#\1#p'); fi
+          for name in $names; do
+            echo "::group::$name"
+            node scripts/firestore-migrate.mjs "$name" "$MODE"
+            echo "::endgroup::"
+          done

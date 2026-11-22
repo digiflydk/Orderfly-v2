@@ -11,7 +11,8 @@
     "postbuild": "echo skip postbuild on Replit",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/esmeralda-menu-thumbnails.cjs",
-    "predev": "node scripts/esmeralda-menu-thumbnails.cjs"
+    "predev": "node scripts/esmeralda-menu-thumbnails.cjs",
+    "ci": "node scripts/ci/run.mjs"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "7.3.4",

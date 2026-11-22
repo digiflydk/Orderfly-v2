@@ -1,31 +1,20 @@
 # Firestore production operations
 
-Three manual GitHub workflows change the production data project `orderfly-39325`. All use the repository secret `FIREBASE_SERVICE_ACCOUNT_JSON`; the key never leaves GitHub. The two that can change access or data, **Firestore rules** and **Firestore data migration**, write only after a person approves the run.
+Three GitHub workflows change the production data project `orderfly-39325`. Since #934 they run **automatically after a merge to `main`** that changes their files; there is no manual approval step. GitHub Actions is used only for these and other deployments, never for tests (Work runs `npm run ci` before merging). All use the repository secret `FIREBASE_SERVICE_ACCOUNT_JSON`; the key never leaves GitHub.
 
-| Workflow | Changes | Approval |
+| Workflow | Runs after a merge that changes | Does |
 |---|---|---|
-| **Firestore indexes** (`firestore-indexes.yml`) | Adds missing composite indexes from `docs/*-firestore-indexes.json`. Never deletes. See [firestore-schema.md](firestore-schema.md). | None (additive only) |
-| **Firestore rules** (`firestore-rules.yml`) | Publishes the rules file named in `firebase.access.json` (`firestore.access.rules`). | `production` environment |
-| **Firestore data migration** (`firestore-migration.yml`) | Runs one migration from `scripts/migrations/`. | `production` environment |
+| **Firestore rules** (`firestore-rules.yml`) | `firestore.access.rules` or `firebase.access.json` | `firestore-rules-release.mjs auto`: reads the live rules, publishes the candidate on top of exactly those (Google compiles it first; a syntax error stops the run) and verifies the published hash. Nothing is published when the candidate is already live. |
+| **Firestore indexes** (`firestore-indexes.yml`) | `docs/*-firestore-indexes.json` | Creates the missing composite indexes of the changed files and waits until READY. Never deletes. See [firestore-schema.md](firestore-schema.md). |
+| **Firestore data migration** (`firestore-migration.yml`) | `scripts/migrations/<name>.mjs` (added or changed) | `firestore-migrate.mjs <name> auto` for each: plans, prints the plan and its manifest SHA-256, applies exactly that plan and records the run in `dataMigrationAudit` (migration, manifest hash, item count, applied count, status `started`/`completed`/`failed`). Idempotent migrations then report nothing to apply. |
 
-The rules and migration workflows share the concurrency group `firestore-production-writes`, so two production writes never run at once.
+The rules and migration workflows share the concurrency group `firestore-production-writes`, so two production writes never run at once. Each workflow can also be started manually: `preview` reads only (rules: live and candidate hash and a diff; migration: the planned items), `auto` deploys from `main` now.
 
-## Preview, then apply
+**Merging is deploying.** Review and `npm run ci` therefore happen on the pull request:
 
-Both approval workflows run in two steps:
-
-1. **Preview** (`mode: preview`, any branch). Reads only.
-   - Rules: prints the live and candidate SHA-256 and a diff of live against the candidate.
-   - Migration: prints the planned items and their manifest SHA-256.
-2. **Apply** (`mode: apply`, from `main` only, with the hash from the reviewed preview).
-   - The job waits for approval in the GitHub environment `production`.
-   - Before writing, it checks that it runs from `main` and that `production` has required reviewers. Without them it stops without writing.
-   - Rules: re-reads the live rules and stops if their hash differs from `expected_live_sha256`. It publishes the candidate (Google compiles it first; a syntax error stops the run) and verifies the published hash. An unchanged candidate is not republished.
-   - Migration: plans again and stops if the manifest hash differs from `manifest_sha256`. It applies the items in order and records the run in `dataMigrationAudit` (migration, manifest hash, item count, applied count, status `started`/`completed`/`failed`, run URL, commit and actor). A failure stops at that item and is recorded as `failed`.
-
-Rerun a preview whenever production changed in between; an outdated hash is always refused.
-
-`firestore.access.rules` is the deny-all browser policy from #139. Publish it only when [freemium-rbac-139.md](freemium-rbac-139.md) step 4 allows it (the server migration is deployed and verified). The preview diff shows what the live rules lose.
+- **Rules:** the PR publishes the *whole* `firestore.access.rules` file, not only the changed lines. `firestore.access.rules` is the deny-all browser policy from #139; a PR that changes it must state that the complete file is ready to be live ([freemium-rbac-139.md](freemium-rbac-139.md) step 4). The emulator tests in `tests/firestore` (part of `npm run ci`) must cover the change.
+- **Migrations:** follow [`scripts/migrations/README.md`](../scripts/migrations/README.md) (idempotent, scoped, no personal data in items, unit test with a fake database). The plan is printed in the workflow log before it is applied.
+- After the merge Work checks that the deployment run succeeded before live verification; a failed run is reported and fixed or reverted at once.
 
 ## Runbooks for one-time migrations
 
@@ -39,7 +28,7 @@ The one-time permission rename (`orderfly.loyalty` → `orderfly.customer_score`
 
 ## One-time setup
 
-- **GitHub:** Settings → Environments → `production` with you (and any other approvers) as required reviewers. Leave "Prevent self-review" off if the person approving also starts the runs.
+- **GitHub:** Actions must be enabled for the repository (deployment workflows only). The former `production` environment approval is no longer used.
 - **Google Cloud IAM in `orderfly-39325`** for the service account in `FIREBASE_SERVICE_ACCOUNT_JSON` (its e-mail is printed as `account` at the start of each run; the key belongs to another Firebase project):
   - **Cloud Datastore Index Admin** – indexes.
   - **Firebase Rules Admin** – rules.

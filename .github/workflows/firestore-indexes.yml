@@ -1,8 +1,14 @@
 name: Firestore indexes
 
-# Manually started. Creates the composite indexes listed in the chosen docs/*-firestore-indexes.json
-# files in orderfly-39325. Additive only: existing indexes are kept and nothing is deleted.
+# Deployment only (#934): GitHub Actions does not run tests; Work runs `npm run ci` before merging.
+# After a merge to main that adds or changes docs/*-firestore-indexes.json, creates the composite
+# indexes listed in exactly those files in orderfly-39325 and waits until they are READY.
+# Additive only: existing indexes are kept and nothing is deleted. A manual run takes files.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/*-firestore-indexes.json'
   workflow_dispatch:
     inputs:
       files:
@@ -19,19 +25,34 @@ concurrency:
 
 jobs:
   indexes:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Select the index files
+        id: files
+        env:
+          MANUAL: ${{ inputs.files }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # The first push of a branch has no "before" commit; compare with the parent instead.
+          case "$BEFORE" in ""|0000000000000000000000000000000000000000) BEFORE="$AFTER~1";; esac
+          if [ -n "$MANUAL" ]; then files="$MANUAL"
+          else files=$(git diff --name-only --diff-filter=AM "$BEFORE" "$AFTER" -- 'docs/*-firestore-indexes.json' | tr '\n' ' '); fi
+          for f in $files; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
+          echo "list=$files" >> "$GITHUB_OUTPUT"
       - name: Create missing indexes and wait until READY
+        if: steps.files.outputs.list != ''
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          FILES: ${{ inputs.files }}
-        run: |
-          for f in $FILES; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
-          node scripts/firestore-indexes.mjs $FILES
+          FILES: ${{ steps.files.outputs.list }}
+        run: node scripts/firestore-indexes.mjs $FILES
