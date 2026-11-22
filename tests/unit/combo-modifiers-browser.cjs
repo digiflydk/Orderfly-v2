@@ -46,6 +46,8 @@ before(async()=>{
   'react-dom/client$':require.resolve('next/dist/compiled/react-dom/client'),
   '@':path.join(root,'src'),
  };
+ // product-options-read imports './public-read' relatively; alias its resolved path too, so the synthetic transport is used.
+ aliases[path.join(root,'src/lib/public-read')]=aliases['@/lib/public-read'];
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},
 
   resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/tilvalg-storefront-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
