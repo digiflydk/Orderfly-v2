@@ -71,3 +71,6 @@ coverage/
 /workspace/
 /usr/
 /src/workspace/
+
+# Python bytecode from test helpers run by npm run ci
+__pycache__/
