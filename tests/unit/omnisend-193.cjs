@@ -109,7 +109,7 @@ test('#193 active newsletter discount is unavailable until brand integration is 
 
 test('#193 existing notification heartbeat also runs the consent queue without starting campaigns',async()=>{
  let calls=0,dullyCalls=0;
- const route=loadTs('src/app/api/internal/feedback/send/route.ts',{
+ const route=loadTs('src/app/api/internal/feedback/send/route.ts',{...require('../helpers/payment-recovery-mocks.cjs'),
   '@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{dullyCalls++;return {accepted:1};}},
   '@/lib/qr/worker':{runQrRetentionWorker:async()=>({state:'completed'})},
   '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>({state:'idle'})},

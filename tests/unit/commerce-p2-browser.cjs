@@ -112,7 +112,9 @@ for(const width of [1280,390])test(`P2 landing order CTAs and delivery choice na
  assert.equal(new URL(page.url()).pathname,'/fixture/restaurant');
 });
 for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulfillment survive reload (${width})`,async t=>{
- restoreReads=0;optionReads=0;optionFailures=1;
+ // Product options retry one transient failure automatically (683cb40); fail both attempts so the
+ // customer-facing "Prøv igen" retry is still exercised.
+ restoreReads=0;optionReads=0;optionFailures=2;
  const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state')?.textContent||'{}').ready);
  assert.equal(restoreReads,0,'empty initial cart reuses server props');
@@ -147,7 +149,7 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
  assert.equal(await page.evaluate(()=>window.lastCartToast?.title),'Tilføjet til kurven');
- assert.equal(optionReads,2);
+ assert.equal(optionReads,3);
  if(width===390){
    await page.getByRole('button',{name:/Se kurv/}).click();
    const cartPanel=page.locator('[data-commerce-panel="cart"]');await cartPanel.waitFor();
@@ -155,7 +157,7 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
    const box=await cartPanel.boundingBox();assert.ok(Math.abs(box.y+box.height-900)<2);
    await page.keyboard.press('Escape');await cartPanel.waitFor({state:'hidden'});
  }
- await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();await page.getByRole('dialog').waitFor();assert.equal(optionReads,2,'second open reuses options');
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();await page.getByRole('dialog').waitFor();assert.equal(optionReads,3,'second open reuses options');
  // DOM visibility precedes Radix's effect-installed keyboard/focus lifecycle.
  // Exercise one Escape only after the reopened panel is actually ready.
  await page.waitForFunction(()=>{

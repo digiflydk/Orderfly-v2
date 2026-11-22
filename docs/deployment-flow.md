@@ -1,6 +1,6 @@
 # Orderfly deployment flow
 
-Last reviewed: 2026-09-09 (product-image project clarification #89)
+Last reviewed: 2026-11-22 (tests local, Actions for deployment only, #934)
 
 ## Firebase project roles
 
@@ -14,36 +14,30 @@ The hosting project and data project are intentionally different. Do not change 
 
 GitHub is the source of truth for application code, product issues, pull requests, CI evidence and documentation.
 
-Orderfly follows the same PM / PO / Work lifecycle as Esmeralda:
-
-`[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
-
-Work branches from `main` and opens pull requests into `main`. Work does not merge or deploy its own change, except under the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy): all CI green and an independent code review completed without unresolved blocking findings on the head commit (Codex, or a Claude review agent when Codex is unavailable). Otherwise PO acceptance is required before merge. Deployment plus live verification are always required before an issue is Done.
-
-See [Development workflow](development-workflow.md).
+Work branches from `main`, opens pull requests into `main`, runs the tests itself and merges under the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy). GitHub Actions is used **only for deployment**. See [Development workflow](development-workflow.md).
 
 ## Required development and release flow
 
-1. PM defines the product need, defect or priority.
-2. PO creates a complete GitHub issue and marks it `[READY FOR DEV]`.
-3. Work creates or resumes `work-issue-<number>` from current `main`, implements the issue, adds tests and updates documentation.
-4. Work opens or updates a PR into `main`.
-5. The existing Orderfly Playwright workflow must pass on the Work branch, including the build exercised by Playwright. Work also runs TypeScript typecheck before creating the PR.
-6. Independent code review must pass.
-7. If Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy), continue at step 10. Otherwise the issue moves to `[READY FOR PO]`.
-8. PO reviews acceptance criteria, PR/diff, CI, Playwright evidence, code review, documentation and unresolved risks.
-9. If accepted, the exact reviewed PR is merged to `main`, and the issue becomes `[AWAITING LIVE VERIFY]`.
-10. Firebase App Hosting deploys, or the release operator deploys, the merged `main` commit.
-11. Read-only live Playwright and any issue-specific controlled live verification are performed.
-12. Only PO may close the issue as `[DONE]` after confirming the approved change is live and all acceptance evidence is complete. PM is then notified.
+1. PM defines the product need, defect or priority; PO creates the issue.
+2. Work implements on a branch from current `main`, adds tests and updates documentation, and opens a PR into `main`.
+3. Work runs `npm run ci` on the exact head commit (every former CI test step, including the build) and posts the summary on the PR.
+4. Independent code review passes (Codex, or a Claude review agent when Codex is unavailable).
+5. Work merges under the automatic merge rule.
+6. Deployment is automatic: Firebase App Hosting deploys `main`, and the Firestore workflows deploy merged rules, indexes and migrations (below).
+7. Work waits until `/api/health` reports the merge commit (or a later `main` that contains it) as `release` and any Firestore deployment run has succeeded, then performs the live verification the issue requires.
+8. The issue is Done when the change is live and its live acceptance criteria are met; a failure leads to an immediate revert PR.
 
-A green pre-merge test run proves the candidate code passed its checks. It does not by itself prove that the same commit is live. Merge also does not mean Done.
-
-`/api/health` reports the deployed commit as `release`. `work-live-verification.yml` waits until CI on the merge commit is green and the live `release` is the merge commit or a later `main` that contains it (`.github/scripts/wait-for-release.cjs`, at most 40 minutes) before it runs the smoke tests, so live evidence always belongs to the merged change.
+A green `npm run ci` proves the candidate passed its checks. It does not prove that the same commit is live, and merge does not mean Done.
 
 ## Firestore indexes, rules and data migrations
 
-Changes to the production data project `orderfly-39325` go through manual GitHub workflows: **Firestore indexes** (additive), and **Firestore rules** and **Firestore data migration**, which preview first and write only from `main` after approval in the `production` environment. See [Firestore production operations](firestore-operations.md).
+Changes to the production data project `orderfly-39325` are deployed by GitHub workflows after the merge to `main`, with no manual step:
+
+- **Firestore rules** (`firestore-rules.yml`): when `firestore.access.rules` or `firebase.access.json` changes, publishes the rules on top of the live rules it has just read and verifies the published hash. A no-op when the rules are already live.
+- **Firestore indexes** (`firestore-indexes.yml`): when a `docs/*-firestore-indexes.json` file is added or changed, creates its missing composite indexes and waits until they are READY. Additive only.
+- **Firestore data migration** (`firestore-migration.yml`): when a `scripts/migrations/<name>.mjs` is added or changed, plans, logs and applies exactly that plan (`auto`) and records it in `dataMigrationAudit`. Migrations are idempotent, so a re-run applies nothing.
+
+Each has its own concurrency group; the index and migration workflows deploy everything changed since their last successful automatic run, so a replaced or failed run is not lost. They use the repository secret `FIREBASE_SERVICE_ACCOUNT_JSON`. A manual run can preview (read only). Details: `docs/firestore-operations.md`.
 
 ## Production domain configuration (`orderfly.dk`)
 
@@ -112,11 +106,7 @@ When changing host-dependent behavior, verify:
 
 ## Post-merge live verification
 
-`.github/workflows/work-live-verification.yml` runs for merged Work-managed PRs into `main`.
-
-The baseline verification is read-only and checks live endpoint/browser health, the public brand surface and a mobile overflow regression. It records evidence on the linked issue and leaves the issue in `[AWAITING LIVE VERIFY]`.
-
-A green generic smoke test is not allowed to close the issue automatically. PO must also verify deployment evidence and every issue-specific acceptance criterion.
+Work performs live verification after each deployment (no GitHub workflow runs tests). It is read-only by default: `/api/health` reports the merge commit, the changed pages and endpoints respond as the issue requires, and relevant browser checks pass against `https://orderfly.dk`. Evidence is posted on the PR or issue.
 
 Authentication, payments, orders, customer mutations or other state-changing scenarios may only be tested live when the issue defines a controlled, reversible and auditable procedure. Unattended automation must not mutate production data.
 
@@ -126,11 +116,10 @@ A Work-managed development issue is not Done until all applicable items are true
 
 - implementation completed
 - relevant automated tests added or updated
-- TypeScript/type validation green
-- Playwright green
+- `npm run ci` green on the merged head
 - independent code review green
 - documentation updated
-- PO acceptance recorded, or the automatic merge rule in AGENTS.md met
+- the automatic merge rule in AGENTS.md met (or explicit PO/PM acceptance)
 - PR merged to `main`
 - approved change deployed
 - read-only live verification green
@@ -153,7 +142,7 @@ The customer explicitly authorizes merge and deployment for this release after g
 
 Deploy the companion notification template migration and the matching `orderfly-notification-enqueue`, `notification-admin` and `notification-worker` sources through the connected Esmeralda operator route. Preserve the bridge's private machine-secret authentication and `verify_jwt=false`. Verify DA/EN publications for the mapped organization. Then merge the reviewed Orderfly candidate and wait for a successful Firebase App Hosting rollout check tied to the exact main merge SHA. The non-secret brand/organization/recipient binding is in `apphosting.yaml`; existing platform endpoint and integration-secret runtime configuration remain required.
 
-The issue-specific `Feedback Code Review` workflow reviews the exact same-repository candidate after Orderfly CI succeeds and records `Reviewed-Head`. A changed head invalidates the prior verdict. This bounded workflow is necessary because the older Work Quality Gate listens to the former CI workflow name. It does not merge, deploy, mutate business data or alter CI assertions.
+This historical release used an issue-specific `Feedback Code Review` workflow, removed with #934; reviews now follow the automatic merge rule in AGENTS.md.
 
 Live verification is read-only: check unauthenticated private worker/bridge rejection and the authenticated admin-link boundary, then inspect the scoped template/mapping and release evidence. Do not create a fake production booking, order or feedback. Record the first naturally received feedback's job and central provider status as operational delivery evidence, keeping customer details out of release comments. Queue acceptance alone cannot prove email receipt.
 

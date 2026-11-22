@@ -61,3 +61,28 @@ test('migration names cannot leave scripts/migrations', () => {
   assert.match(migrationFile('rename-field').pathname, /\/scripts\/migrations\/rename-field\.mjs$/);
   for (const name of ['../firestore-indexes', 'a/b', 'Upper', '', undefined]) assert.throws(() => migrationFile(name));
 });
+
+test('auto applies exactly its own plan once, audits it and finds nothing on a re-run (#934)', async () => {
+  const db = fakeDb(), done = new Set();
+  // Idempotent per the migration contract: applied items drop out of the next plan.
+  const migration = { plan: async () => ['a/1', 'a/2'].filter(path => !done.has(path)).map(path => ({ path })), applyItem: async (_, item) => { done.add(item.path); } };
+  const events = [];
+  const logged = { ...migration, applyItem: async (database, item) => { events.push('apply ' + item.path); await migration.applyItem(database, item); } };
+  const first = await runMigration({ ...base, db, migration: logged, apply: true, auto: true, onPlan: (manifest, hash) => { events.push(`plan ${manifest.items.length} ${hash}`); } });
+  // The exact plan is reported before the first write.
+  assert.deepEqual(events, [`plan 2 ${first.manifestSha256}`, 'apply a/1', 'apply a/2']);
+  assert.deepEqual([...done], ['a/1', 'a/2']);
+  assert.equal(db.docs[first.auditId].status, 'completed');
+  assert.equal(first.manifestSha256, manifestSha256({ version: 1, migration: base.name, project: base.project, items: [{ path: 'a/1' }, { path: 'a/2' }] }));
+  const again = await runMigration({ ...base, db, migration, apply: true, auto: true });
+  assert.equal(again.applied, 0);
+  assert.equal(Object.keys(db.docs).length, 1, 'a no-op re-run writes no audit row');
+  // Without auto the reviewed hash is still required.
+  await assert.rejects(runMigration({ ...base, db, migration: { ...migration, plan: async () => [{ path: 'b/1' }] }, apply: true }), /reviewed preview/);
+});
+
+test('rules auto publishes on top of the live rules it just read and skips a no-op', () => {
+  const live = 'rules_version = "2";', candidate = live + '\n// changed';
+  assert.equal(checkApply({ live, candidate, expectedLiveSha256: sha256(live) }), 'publish');
+  assert.equal(checkApply({ live: candidate, candidate, expectedLiveSha256: sha256(candidate) }), 'unchanged');
+});

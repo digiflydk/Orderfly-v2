@@ -1,9 +1,12 @@
 // Publishes the rules file named in firebase.access.json to the Firestore release of the
-// production data project. Used by the manual GitHub workflow "Firestore rules".
+// production data project. Used by the GitHub workflow "Firestore rules", which runs `auto`
+// after a merge to main that changes the rules (#934).
 // preview: prints the live and candidate hashes and a diff; changes nothing.
 // apply:   re-reads the live rules and refuses unless their hash equals the reviewed
 //          EXPECTED_LIVE_SHA256, publishes the candidate and verifies the published hash.
-// Usage: node scripts/firestore-rules-release.mjs preview|apply
+// auto:    publishes the candidate on top of the live rules it has just read (no reviewed
+//          hash: review happens on the pull request), then verifies the published hash.
+// Usage: node scripts/firestore-rules-release.mjs preview|apply|auto
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -42,7 +45,7 @@ async function liveRules(token) {
 }
 
 async function main(mode) {
-  if (!['preview', 'apply'].includes(mode)) throw new Error('Usage: node scripts/firestore-rules-release.mjs preview|apply');
+  if (!['preview', 'apply', 'auto'].includes(mode)) throw new Error('Usage: node scripts/firestore-rules-release.mjs preview|apply|auto');
   const file = JSON.parse(readFileSync('firebase.access.json', 'utf8')).firestore.rules;
   const candidate = readFileSync(file, 'utf8');
   const token = await accessToken();
@@ -60,7 +63,8 @@ async function main(mode) {
     return;
   }
 
-  if (checkApply({ live: live.source, candidate, expectedLiveSha256: process.env.EXPECTED_LIVE_SHA256 }) === 'unchanged') {
+  const expectedLiveSha256 = mode === 'auto' ? sha256(live.source) : process.env.EXPECTED_LIVE_SHA256;
+  if (checkApply({ live: live.source, candidate, expectedLiveSha256 }) === 'unchanged') {
     console.log('The candidate is already live; nothing published.');
     return;
   }

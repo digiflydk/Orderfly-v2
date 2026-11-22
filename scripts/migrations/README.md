@@ -1,6 +1,6 @@
 # Firestore data migrations
 
-Each file `scripts/migrations/<name>.mjs` is one migration for the production data project `orderfly-39325`. It runs only through the manual GitHub workflow **Firestore data migration** (`scripts/firestore-migrate.mjs`), and it must be merged to `main` before it can be applied. See `docs/firestore-operations.md`.
+Each file `scripts/migrations/<name>.mjs` is one migration for the production data project `orderfly-39325`. It runs through the GitHub workflow **Firestore data migration** (`scripts/firestore-migrate.mjs auto`), **automatically after the pull request that adds or changes it is merged to `main`** (#934). Merging is applying, so the plan, tests and review happen on the pull request. See `docs/firestore-operations.md`.
 
 A migration exports:
 

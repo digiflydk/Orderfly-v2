@@ -1,10 +1,12 @@
 // Runs one reviewed data migration from scripts/migrations/ against the production data project.
-// Used by the manual GitHub workflow "Firestore data migration"; the contract is in
-// scripts/migrations/README.md.
+// Used by the GitHub workflow "Firestore data migration", which runs `auto` for each migration a
+// merge to main adds or changes (#934); the contract is in scripts/migrations/README.md.
 // preview: plans the changes, prints them and their manifest hash; writes nothing.
 // apply:   plans again, refuses unless the manifest hash equals the reviewed MANIFEST_SHA256,
 //          applies each item and logs the run in dataMigrationAudit.
-// Usage: node scripts/firestore-migrate.mjs <name> preview|apply
+// auto:    plans, prints the plan and applies exactly that plan in the same run; idempotent
+//          migrations then report nothing to apply on a re-run.
+// Usage: node scripts/firestore-migrate.mjs <name> preview|apply|auto
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -23,14 +25,17 @@ export function migrationFile(name) {
   return new URL(`./migrations/${name}.mjs`, import.meta.url);
 }
 
-export async function runMigration({ db, name, migration, project, apply, expectedSha256, run }) {
+export async function runMigration({ db, name, migration, project, apply, expectedSha256, run, auto = false, onPlan }) {
   if (typeof migration.plan !== 'function' || typeof migration.applyItem !== 'function') throw new Error(`${name} must export plan(db) and applyItem(db, item).`);
   const items = await migration.plan(db);
   if (!Array.isArray(items)) throw new Error(`${name}: plan(db) must return an array.`);
   const manifest = { version: 1, migration: name, project, items };
   const hash = manifestSha256(manifest);
   if (!apply) return { mode: 'preview', items: items.length, manifestSha256: hash, manifest };
-  if (hash !== expectedSha256) throw new Error(`Planned changes differ from the reviewed preview (now ${hash}). Run a new preview and review it.`);
+  // Record the exact (non-personal) plan before the first write, so an automatic run leaves evidence of what it changes.
+  await onPlan?.(manifest, hash);
+  // auto applies the plan it has just made; apply needs the hash of a reviewed preview.
+  if (!auto && hash !== expectedSha256) throw new Error(`Planned changes differ from the reviewed preview (now ${hash}). Run a new preview and review it.`);
   if (!items.length) return { mode: 'apply', applied: 0, manifestSha256: hash };
 
   const audit = db.collection(AUDIT_COLLECTION).doc();
@@ -47,7 +52,7 @@ export async function runMigration({ db, name, migration, project, apply, expect
 }
 
 async function main(name, mode) {
-  if (!['preview', 'apply'].includes(mode)) throw new Error('Usage: node scripts/firestore-migrate.mjs <name> preview|apply');
+  if (!['preview', 'apply', 'auto'].includes(mode)) throw new Error('Usage: node scripts/firestore-migrate.mjs <name> preview|apply|auto');
   const file = migrationFile(name);
   if (!existsSync(file)) throw new Error(`No migration scripts/migrations/${name}.mjs.`);
   const { PROJECT, firestore, principal } = await import('./firestore-credentials.mjs');
@@ -57,7 +62,8 @@ async function main(name, mode) {
   const run = process.env.GITHUB_RUN_ID
     ? { url: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`, commit: process.env.GITHUB_SHA, actor: process.env.GITHUB_TRIGGERING_ACTOR || process.env.GITHUB_ACTOR }
     : { local: true };
-  const result = await runMigration({ db: firestore(), name, migration, project: PROJECT, apply: mode === 'apply', expectedSha256: process.env.MANIFEST_SHA256, run });
+  const result = await runMigration({ db: firestore(), name, migration, project: PROJECT, apply: mode !== 'preview', auto: mode === 'auto', expectedSha256: process.env.MANIFEST_SHA256, run,
+    onPlan: (manifest, hash) => { console.log(JSON.stringify(manifest.items, null, 2)); console.log(`${manifest.items.length} planned change(s), manifest sha256 ${hash}`); } });
   if (result.mode === 'preview') {
     console.log(JSON.stringify(result.manifest.items, null, 2));
     console.log(`${result.items} planned change(s). To apply, run the workflow from main with mode apply and manifest_sha256 ${result.manifestSha256}`);

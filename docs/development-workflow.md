@@ -1,6 +1,6 @@
 # PM / PO / Work development workflow
 
-Last reviewed: 2026-08-23
+Last reviewed: 2026-11-22 (#934)
 
 ## Principle
 
@@ -9,75 +9,34 @@ Orderfly uses the same product-development lifecycle as Esmeralda. The repositor
 ## Roles
 
 - **PM:** defines business goal, priority and product decisions.
-- **PO:** converts requests and bugs into GitHub issues with scope, priority, acceptance criteria, dependencies, test requirements and documentation impact. PO accepts or rejects completed implementation.
-- **Work:** automated implementation agent. It writes code, tests and documentation on a feature branch. It may merge its own PR only under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy), and it never declares the issue Done.
+- **PO:** converts requests and bugs into GitHub issues with scope, priority, acceptance criteria, dependencies, test requirements and documentation impact. PO approves plans; an explicit PO/PM instruction to merge is acceptance.
+- **Work:** the implementation agent (Claude Code sessions). It writes code, tests and documentation on a feature branch, runs the tests itself, and merges and verifies under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
 
 GitHub issues, pull requests, CI evidence and repository documentation are the operational source of truth.
 
-## Shared state machine
+## Flow
 
-`[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
+No step waits for a person unless the issue needs a product decision.
 
-`[BLOCKED]` is used when credentials, repeated CI/review failures, deployment problems or another external dependency requires intervention.
+1. PO creates an issue with scope and acceptance criteria. Work proposes a plan when the issue needs one and starts once it is approved.
+2. Work implements on a feature branch, adds or updates tests and documentation, and opens one PR into `main`.
+3. **Tests run in Work's environment, not in GitHub Actions.** Work runs `npm run ci` on the exact head commit. It runs every test step in `scripts/ci/steps.mjs` (typecheck, unit, browser and HTTP regressions, isolated Firestore emulator proofs, Firestore rules tests and the build) and stops at the first failure. Work posts the summary on the PR.
+4. Independent code review: Codex, or a separate Claude review agent when Codex is unavailable. Blocking findings are fixed; a new commit needs a new `npm run ci` run and a new review.
+5. Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
+6. **Deployment is automatic.** Firebase App Hosting deploys `main`; the Firestore deployment workflows publish merged rules, indexes and migrations (`docs/firestore-operations.md`). GitHub Actions is used only for these deployments.
+7. Work waits for `/api/health` to report the merge commit and for any Firestore deployment run to succeed, then performs the issue's live verification (read-only unless the issue defines a controlled, reversible scenario). A failure leads to an immediate revert PR.
+8. The issue is Done when the change is live and its live acceptance criteria are met.
 
-## Automated sequence
+## Commands
 
-1. PO creates a trusted, complete issue and prefixes it `[READY FOR DEV]`.
-2. `.github/workflows/work-developer.yml` checks out `main`, creates or resumes `work-issue-<number>` and runs the Work coding agent.
-3. Work implements only the issue scope and acceptance criteria, adds or updates tests, runs local verification and updates relevant documentation. Work may not change secrets or mutate production data, and may not merge or deploy outside the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
-4. Work pushes its branch and creates or updates one PR into `main` with `Work-Managed-Issue: #<number>` in the PR body.
-5. Work explicitly dispatches the existing `.github/workflows/ui-tests.yml` Playwright workflow on the Work branch. Explicit dispatch is used because bot-authored GitHub events do not recursively start ordinary workflows with the same `GITHUB_TOKEN`.
-6. Playwright CI failure records evidence, returns the issue to `[READY FOR DEV]` and explicitly dispatches Work again. Automatic retries are capped; repeated failures become `[BLOCKED]`.
-7. Green Playwright CI triggers `.github/workflows/work-quality-gate.yml`, which resolves the linked Work PR and runs a separate read-only Codex code review against the issue acceptance criteria and the diff to `main`.
-8. Blocking review findings are written back to the issue and Work is explicitly dispatched for a repair iteration. A clean review changes the issue to `[READY FOR PO]`.
-9. If Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy) (CI green, independent review without blocking findings on the current head — Codex, or a Claude review agent when Codex is unavailable — branch up to date with `main`), the issue goes directly to `[AWAITING LIVE VERIFY]` and steps 10–11 are skipped. The GitHub Actions pipeline does not do this automatically.
-10. Otherwise PO inspects the issue, PR, diff, Playwright evidence, review findings, documentation and unresolved risks. If acceptance criteria are not proven, PO sends the task back to `[READY FOR DEV]` with concrete findings.
-11. When PO accepts the implementation, the PR is merged to `main` and the issue becomes `[AWAITING LIVE VERIFY]`.
-12. `.github/workflows/work-live-verification.yml` runs read-only Playwright against the live Orderfly environment and records evidence on the issue.
-13. PO marks `[DONE]` only when the approved change is live and all issue-specific live acceptance criteria are satisfied. A green generic smoke test is evidence, not automatic permission for Work to close the issue.
+- `npm run ci`: the full local CI. `npm run ci -- --list` lists the steps, `--from <n>` resumes after a fix (a merge still needs one full run on the final head), `--only <text>` runs matching steps while developing.
+- Optional post-deploy checks Work may run when the change touches them: `node scripts/qr-retention-readiness.mjs` (QR retention checkpoint, read only) and the Esmeralda mobile Lighthouse measurement in `docs/storefront/esmeralda-v2-thumbnails.md`.
 
-Only issue comments from repository owners/members/collaborators and `github-actions[bot]` are included in coding/review context. This prevents arbitrary comments from becoming agent instructions while preserving CI and review feedback.
-
-## Required repository configuration
-
-### Secret
-
-`OPENAI_API_KEY`
-
-Used by the official OpenAI Codex GitHub Action for Work implementation and independent review. Never place the value in files, issues, pull requests or logs.
-
-### Optional live URL variable
-
-`ORDERFLY_LIVE_URL`
-
-If present, post-merge live verification uses this URL. Otherwise the workflow defaults to `https://orderfly.dk`.
-
-## Test gates
-
-Before `[READY FOR PO]`:
-
-- TypeScript typecheck in the Work implementation run
-- Existing Orderfly Playwright workflow on the Work branch
-- Independent code review against `main`
-- Required documentation changes
-
-Before `[DONE]`:
-
-- PO acceptance, or the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy)
-- Merge to `main`
-- Deployment evidence for the approved change
-- Read-only Playwright live verification
-- Any additional controlled live scenario explicitly required by the issue
+The environment needs Node, Java 21 (Firestore emulator) and network access once to `cdn.playwright.dev` for the project's Playwright Chromium; `npm run ci` installs the pinned `firebase-tools` into `.cache/`.
 
 ## Failure handling
 
-- **Implementation failure:** `[BLOCKED]` with Actions run link.
-- **Playwright failure:** return to `[READY FOR DEV]` with failed evidence and automatic repair dispatch, capped after repeated failures.
-- **Code-review failure:** return to `[READY FOR DEV]` with findings and automatic repair dispatch, capped after repeated failures.
-- **Missing OpenAI secret:** `[BLOCKED]`.
-- **PO rejection:** `[READY FOR DEV]` with PO findings.
-- **Live verification failure after merge:** `[BLOCKED]`; the issue is not Done until live verification is green.
-
-Work never weakens tests or acceptance criteria to escape a failure.
-
-Issue #126 has explicit customer authorization for merge/deploy after engineering gates. Its bounded `Feedback Code Review` validates independent GitHub Codex review after the current `Orderfly CI` on the exact candidate head and publishes a clean verdict only with verified evidence; changed heads require a new review. Coordinated release details are in `deployment-flow.md`.
+- **`npm run ci` fails:** fix the root cause and run it again; never skip, loosen or delete a test to get green, and never use `[skip ci]` on code.
+- **Blocking review finding:** fix and re-review the new head.
+- **Deployment or live verification fails after merge:** revert PR at once, then fix forward.
+- **External blocker** (credentials, a third-party outage): report it on the issue with what is needed.

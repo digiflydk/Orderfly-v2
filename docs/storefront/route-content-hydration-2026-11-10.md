@@ -39,7 +39,7 @@ Run:
 CART_CHROMIUM_PATH=/opt/pw-browsers/chromium node --test tests/unit/storefront-route-hydration-browser.cjs
 ```
 
-It also runs in the "Esmeralda V2 menu, products, combos and checkout browser checks" step of `ui-tests.yml`.
+It also runs in the "Esmeralda V2 menu, products, combos and checkout browser checks" step of `npm run ci` (`scripts/ci/steps.mjs`).
 
 ## Local verification
 These checks ran against a local production build with the QA0 Firestore emulator:

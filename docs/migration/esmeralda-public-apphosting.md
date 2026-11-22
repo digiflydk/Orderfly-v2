@@ -38,7 +38,7 @@ Omnisend account configuration was independently read and confirms the existing 
 
 ## Website tests in CI (2026-11-10)
 
-The website tests now run in Orderfly CI (`.github/workflows/ui-tests.yml`) instead of only locally. They had drifted red on `main` unnoticed until PR #903:
+The website tests run in the full CI (`npm run ci`, formerly `.github/workflows/ui-tests.yml`). They had drifted red on `main` unnoticed until PR #903:
 
 - **Esmeralda website payload, policy and consent regressions:** host/CSP policy, preview isolation, consent adapter, payload pins and every pinned repair baseline, the Python preview patch tests and `scripts/test-mpanel-host.cjs`.
 - **Esmeralda website browser regressions:** consent controls, footer label, homepage delivery, menu filter, performance and review rotation. All provider requests are intercepted.

@@ -155,7 +155,8 @@ test('V2 retains restaurant information, delivery context and searchable menu',a
  assert.equal(await popup.locator('[data-today]').count(),1,'today is marked');
  await page.waitForTimeout(500);await page.screenshot({path:path.join(dir,'v2-info-390.png')});
  await page.setViewportSize({width:1280,height:900});await page.waitForTimeout(150);await page.screenshot({path:path.join(dir,'v2-info-1280.png')});await page.setViewportSize({width:390,height:900});
- assert.equal(await popup.getByText('Mandag',{exact:true}).count(),1);assert.equal(await popup.getByText('Søndag',{exact:true}).count(),1);
+ // The day labels carry an "I dag" badge on the current weekday, so match the label row, not the exact text.
+ for(const day of ['Mandag','Søndag'])assert.equal(await popup.locator('dt').filter({hasText:new RegExp('^'+day)}).count(),1,day);
  assert.equal(await popup.getByRole('link',{name:'+45 12 34 56 78'}).getAttribute('href'),'tel:+4512345678');
  assert.equal(await popup.getByRole('link',{name:'amager@example.test'}).getAttribute('href'),'mailto:amager@example.test');
  await page.keyboard.press('Escape');await popup.waitFor({state:'hidden'});

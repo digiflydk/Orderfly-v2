@@ -25,6 +25,7 @@
 
 - Run `npm run typecheck` for TypeScript changes.
 - Run the relevant Playwright tests for changed user flows.
+- Run `npm run ci` before merging (see the automatic merge rule); GitHub Actions does not run tests.
 - Keep browser tests meaningful. Do not skip, loosen or delete assertions merely to make CI green.
 - A changed critical business flow needs both successful behavior and important rejection/edge-case coverage.
 - Post-merge live verification is read-only unless an issue defines an explicitly controlled and reversible write test.
@@ -37,23 +38,23 @@
 
 ## Work agent boundary
 
-The Work implementation agent may edit the checked-out repository, add tests and update documentation. It must not change GitHub secrets or mutate production data. It must not merge its own pull request or deploy production, except under the automatic merge rule below. Independent CI/code review, PO acceptance (or the automatic merge rule) and live verification are separate gates.
+The Work implementation agent may edit the checked-out repository, add tests and update documentation. It must not change GitHub secrets or write production data directly. Production data changes reach production only as reviewed, merged Firestore rules, indexes or migrations that the deployment workflows apply. It must not merge its own pull request or deploy production, except under the automatic merge rule below. Local CI (`npm run ci`), independent code review, the automatic merge rule (or PO acceptance) and live verification are separate gates.
 
 ## Automatic merge and deploy
 
-Approved by PO/PM on 2026-10-18; review fallback approved by PO on 2026-11-20 so that development does not stop when Codex is unavailable. Work may merge its own pull request into `main` without separate PO/PM acceptance when all of the following are true on the PR's current head commit:
+Approved by PO/PM on 2026-10-18; review fallback approved on 2026-11-20; tests moved out of GitHub Actions and Firestore deployment automated on 2026-11-22 (#934) so that development never waits for a person. GitHub Actions is used **only for deployment**, never to run tests. Work may merge its own pull request into `main` without separate PO/PM acceptance when all of the following are true on the PR's current head commit:
 
-1. Every CI check is completed and green. None is failing, pending or cancelled.
+1. `npm run ci` has passed in full on that exact head commit with a clean working tree. It runs every test step the former test workflows ran (`scripts/ci/steps.mjs`) and stops at the first failure. Work posts its summary (`.cache/ci-summary.md`: commit, steps, result) on the PR. A later commit needs a new full run. Do not add `[skip ci]` to code changes, and never merge on a failed run.
 2. An independent code review has completed on the head commit with no unresolved **blocking** findings, and every review thread is resolved:
    - normally the Codex code review;
-   - when Codex is unavailable on that head (it reports a usage limit or a failed review, or has posted no result 30 minutes after CI turned green), an independent review by a separate Claude review agent that Work starts on the exact head SHA. Work posts the agent's report on the PR, with each finding labelled `BLOCKING` (acceptance, security, tenant/privacy, data correctness, regression) or `NON_BLOCKING`.
+   - when Codex is unavailable on that head (it reports a usage limit or a failed review, or has posted no result 30 minutes after the PR was opened or updated), an independent review by a separate Claude review agent that Work starts on the exact head SHA. Work posts the agent's report on the PR, with each finding labelled `BLOCKING` (acceptance, security, tenant/privacy, data correctness, regression) or `NON_BLOCKING`.
    - `NON_BLOCKING` findings do not stop the merge; Work states in the PR which ones it fixed and which it left. A later commit needs a new review of the new head.
 3. No human reviewer has requested changes or asked to hold the PR.
-4. The PR branch contains the current `main`. If `main` has moved since CI and the review ran, Work updates the branch and waits for every gate to pass again on the new head before merging. Work merges with the head SHA it verified, so a later push cannot slip in. The merge API cannot pin the base, so right after merging Work checks that the merge commit's parent is the `main` it verified. If `main` moved in between, Work waits for CI on the new `main` before live verification and reverts at once if it fails. Enabling "Require branches to be up to date before merging" in branch protection closes this window entirely.
-5. Work has run the typecheck and the relevant tests itself, and the documentation is updated.
+4. The PR branch contains the current `main`. If `main` has moved since `npm run ci` and the review ran, Work merges `main` into the branch and runs both again on the new head before merging. Work merges with the head SHA it verified, so a later push cannot slip in. Right after merging Work checks that the merge commit's parent is the `main` it verified; if `main` moved in between, Work runs `npm run ci` on the new `main` before live verification and reverts at once if it fails.
+5. The documentation is updated.
 
-The rule applies when Work has merge access, for example a Claude Code session. The GitHub Actions pipeline (`work-developer.yml` and `work-quality-gate.yml`) does not merge automatically; there a clean review still ends in `[READY FOR PO]`.
+**Firestore rules, indexes and data migrations** are merged under the same rule and deployed automatically by their GitHub workflows after the merge (`firestore-rules.yml`, `firestore-indexes.yml`, `firestore-migration.yml`, see `docs/firestore-operations.md`). Merging is deploying: a rules PR publishes the whole `firestore.access.rules` file, so it must state that the complete file is ready to be live and be covered by the emulator tests in `tests/firestore`; a migration must follow `scripts/migrations/README.md` (idempotent, scoped, tested against a fake database).
 
-The rule does not cover a PR that changes this rule, GitHub secrets or workflow permissions, or that requires a production data write (Firestore rules, indexes or data migrations through the `production` environment). Those still need PO acceptance.
+Only a PR that changes this rule or GitHub secrets still needs explicit PO/PM acceptance. An explicit PO/PM instruction to merge is that acceptance.
 
-After the merge, Firebase App Hosting deploys `main`. Work waits until CI on the merge commit is green and `/api/health` reports the merge commit (or a later `main` that contains it) as `release`, then performs the issue's live verification (read-only, or the controlled and reversible scenario the issue defines) and reports the result. If live verification fails, Work opens a revert PR at once and reports it. The merge commit states that it was merged under this rule.
+After the merge, Firebase App Hosting deploys `main`. Work waits until `/api/health` reports the merge commit (or a later `main` that contains it) as `release`, and until any Firestore deployment workflow the merge started has succeeded, then performs the issue's live verification (read-only, or the controlled and reversible scenario the issue defines) and reports the result. If a deployment or the live verification fails, Work opens a revert PR at once and reports it. The merge commit states that it was merged under this rule.

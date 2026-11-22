@@ -70,7 +70,7 @@ test('invalid state or clock fails closed before retention; a database failure i
   assert.deepEqual(await runQrRetentionWorker(()=>{throw Error('secret DB configuration');},{enabled:true,now:()=>now}),{state:'failed'});
 });
 
-function heartbeat(qrWorker,counters){return loadTs('src/app/api/internal/feedback/send/route.ts',{
+function heartbeat(qrWorker,counters){return loadTs('src/app/api/internal/feedback/send/route.ts',{...require('../helpers/payment-recovery-mocks.cjs'),
   '@/lib/feedback/dully-worker':{runDullyFeedbackWorker:async()=>{counters.dully++;return {accepted:3};}},
   '@/lib/delivery/booking/dispatcher':{runDeliveryDispatchWorker:async()=>{counters.delivery++;return {state:'idle'};}},
   '@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{counters.feedback++;return {sent:1};}},

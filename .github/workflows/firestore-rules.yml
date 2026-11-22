@@ -1,32 +1,36 @@
 name: Firestore rules
 
-# Manually started. Publishes the rules file named in firebase.access.json (firestore.access.rules)
-# to orderfly-39325. preview changes nothing and prints the live hash and a diff. apply runs only
-# from main, only after approval in the "production" environment, and only while the live rules
-# still have the reviewed hash. See docs/firestore-operations.md.
+# Deployment only (#934): GitHub Actions does not run tests; Work runs `npm run ci` before merging.
+# After a merge to main that changes the rules file named in firebase.access.json
+# (firestore.access.rules), publishes it to orderfly-39325 automatically: `auto` reads the live
+# rules, publishes the candidate on top of exactly those and verifies the published hash. Nothing
+# is published when the candidate is already live. A manual run can preview (read only) or
+# publish. See docs/firestore-operations.md.
 on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.access.rules
+      - firebase.access.json
   workflow_dispatch:
     inputs:
       mode:
-        description: "preview (read only) or apply (publish after approval)"
+        description: "preview (read only) or auto (publish now)"
         type: choice
-        options: [preview, apply]
+        options: [preview, auto]
         default: preview
-      expected_live_sha256:
-        description: "apply only: the live rules hash printed by the reviewed preview"
-        required: false
-        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: firestore-production-writes
+  # Each run publishes the complete current rules file, so a replaced pending run loses nothing.
+  group: firestore-rules
   cancel-in-progress: false
 
 jobs:
-  preview:
-    if: inputs.mode == 'preview'
+  release:
+    if: github.ref == 'refs/heads/main' || inputs.mode == 'preview'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -36,35 +40,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - name: Compare live and candidate rules
+      - name: Publish the merged rules
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-        run: node scripts/firestore-rules-release.mjs preview
-
-  apply:
-    if: inputs.mode == 'apply'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    environment: production
-    permissions:
-      contents: read
-      actions: read
-    steps:
-      - name: Require main and an approval-protected environment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            if (context.ref !== 'refs/heads/main') throw new Error('apply runs only from main.');
-            const {data} = await github.request('GET /repos/{owner}/{repo}/environments/{name}', {...context.repo, name: 'production'});
-            if (!(data.protection_rules || []).some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length)) throw new Error('The production environment has no required reviewers; refusing to publish.');
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - name: Publish reviewed rules
-        env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          EXPECTED_LIVE_SHA256: ${{ inputs.expected_live_sha256 }}
-        run: node scripts/firestore-rules-release.mjs apply
+          MODE: ${{ inputs.mode || 'auto' }}
+        run: node scripts/firestore-rules-release.mjs "$MODE"

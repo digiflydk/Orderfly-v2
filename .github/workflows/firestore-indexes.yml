@@ -1,8 +1,14 @@
 name: Firestore indexes
 
-# Manually started. Creates the composite indexes listed in the chosen docs/*-firestore-indexes.json
-# files in orderfly-39325. Additive only: existing indexes are kept and nothing is deleted.
+# Deployment only (#934): GitHub Actions does not run tests; Work runs `npm run ci` before merging.
+# After a merge to main that adds or changes docs/*-firestore-indexes.json, creates the composite
+# indexes listed in exactly those files in orderfly-39325 and waits until they are READY.
+# Additive only: existing indexes are kept and nothing is deleted. A manual run takes files.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/*-firestore-indexes.json'
   workflow_dispatch:
     inputs:
       files:
@@ -12,26 +18,48 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
+  # One group per workflow, so a deployment of one kind never replaces a pending one of another.
   group: firestore-indexes
   cancel-in-progress: false
 
 jobs:
   indexes:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Select the index files
+        id: files
+        env:
+          MANUAL: ${{ inputs.files }}
+          BEFORE: ${{ github.event.before }}
+          GH_TOKEN: ${{ github.token }}
+          AFTER: ${{ github.sha }}
+        run: |
+          # Changes since the last successful automatic run, not only this push: GitHub keeps one pending
+          # run per concurrency group and cancels older pending ones, and a failed run must be retried.
+          BASE=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/firestore-indexes.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty' || true)
+          if [ -z "$BASE" ] || ! git merge-base --is-ancestor "$BASE" "$AFTER" 2>/dev/null; then BASE="$BEFORE"; fi
+          # The first push of a branch has no "before" commit; compare with the parent instead.
+          case "$BASE" in ""|0000000000000000000000000000000000000000) BASE="$AFTER~1";; esac
+          if [ -n "$MANUAL" ]; then files="$MANUAL"
+          else files=$(git diff --name-only --diff-filter=AM "$BASE" "$AFTER" -- 'docs/*-firestore-indexes.json' | tr '\n' ' '); fi
+          for f in $files; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
+          echo "list=$files" >> "$GITHUB_OUTPUT"
       - name: Create missing indexes and wait until READY
+        if: steps.files.outputs.list != ''
         env:
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          FILES: ${{ inputs.files }}
-        run: |
-          for f in $FILES; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
-          node scripts/firestore-indexes.mjs $FILES
+          FILES: ${{ steps.files.outputs.list }}
+        run: node scripts/firestore-indexes.mjs $FILES
