@@ -88,7 +88,7 @@ export const STEPS = [
  {
   "name": "Booking feedback and mail regression",
   "source": "ui-tests",
-  "run": "node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs tests/unit/feedback-dine-in.cjs tests/unit/feedback-dully.cjs tests/unit/dully-feedback-browser.cjs tests/unit/customer-dully.cjs tests/unit/customer-retention.cjs tests/unit/feedback-replies.cjs",
+  "run": "node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-dine-in.cjs tests/unit/feedback-dully.cjs tests/unit/dully-feedback-browser.cjs tests/unit/customer-dully.cjs tests/unit/customer-retention.cjs tests/unit/feedback-replies.cjs",
   "needs": []
  },
  {

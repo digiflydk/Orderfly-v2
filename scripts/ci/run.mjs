@@ -48,7 +48,9 @@ function provisionQaTools() {
   const java = execFileSync('bash', ['-c', 'command -v java'], { encoding: 'utf8' }).trim();
   const version = spawnSync(java, ['-version'], { encoding: 'utf8' }).stderr || '';
   if (!/version "21/.test(version)) throw new Error(`Java 21 is required for the emulator proofs (found: ${version.split('\n')[0] || 'none'}).`);
-  const qaEnv = { ...env, QA0_FIREBASE_BIN: bin, QA0_JAVA_BIN: java, FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
+  // As the former QR workflow did: the native QR proof needs the project's Chromium as an explicit path.
+  const chromium = env.CART_CHROMIUM_PATH || execFileSync(process.execPath, ['-p', 'require("@playwright/test").chromium.executablePath()'], { cwd: root, encoding: 'utf8' }).trim();
+  const qaEnv = { ...env, CART_CHROMIUM_PATH: chromium, QA0_FIREBASE_BIN: bin, QA0_JAVA_BIN: java, FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
   if (sh(`"${bin}" setup:emulators:firestore`, qaEnv).status !== 0) throw new Error('Could not set up the Firestore emulator');
   return qaEnv;
 }
