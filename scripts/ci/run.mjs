@@ -28,7 +28,12 @@ if (!selected.length) { console.error('No steps selected.'); process.exit(2); }
 
 const env = { ...process.env, CI: 'true', PLAYWRIGHT_BASE_URL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:3000' };
 // As the former workflow did: the project's own Playwright Chromium, installed before any browser test.
-if (!args.includes('--list') && sh('npx playwright install chromium', env).status !== 0) {
+// The isolated emulator proofs start browsers with a minimal environment, so they look in Playwright's
+// default cache; install there too when this machine points PLAYWRIGHT_BROWSERS_PATH elsewhere.
+const installBrowsers = env.PLAYWRIGHT_BROWSERS_PATH
+  ? 'npx playwright install chromium && env -u PLAYWRIGHT_BROWSERS_PATH npx playwright install chromium'
+  : 'npx playwright install chromium';
+if (!args.includes('--list') && sh(installBrowsers, env).status !== 0) {
   console.error('Could not install the Playwright Chromium for this project version (network access to cdn.playwright.dev is needed once).');
   process.exit(1);
 }
