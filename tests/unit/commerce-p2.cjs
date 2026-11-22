@@ -102,7 +102,9 @@ test('public option reads deduplicate requests, separate restaurant scopes and r
 });
 test('unresolved option reads time out and the next click starts a fresh request',async()=>{
  const old=global.fetch;let calls=0;
- try {global.fetch=()=>{calls++;return new Promise(()=>{});};const {publicRead}=loadTs('src/lib/public-read.ts');await assert.rejects(publicRead('/slow',10),/timed out/);await assert.rejects(publicRead('/slow',10),/timed out/);assert.equal(calls,2);}finally{global.fetch=old;}
+ try {global.fetch=()=>{calls++;return new Promise(()=>{});};const {publicRead}=loadTs('src/lib/public-read.ts');
+  // A timeout rejects with the generic public read error (since 683cb40); each click starts a fresh request.
+  await assert.rejects(publicRead('/slow',10),/Public data unavailable/);await assert.rejects(publicRead('/slow',10),/Public data unavailable/);assert.equal(calls,2);}finally{global.fetch=old;}
 });
 test('one integer-øre contract rounds item offers before quantity, including the half-øre boundary',()=>{
  assert.equal(money(1.005),1.01);assert.equal(discountedUnit(79.95,'percentage',25),59.96);

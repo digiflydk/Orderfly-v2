@@ -50,6 +50,9 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
    }).prepareCapacitySettlement(tx,order,paid),
   },
   'next/server':{}, stripe:{default:Stripe},
+  // Legacy (unpinned, unmanaged) Stripe orders: the pinned and managed verifiers do not apply.
+  '@/lib/payments/stripe-order':{verifyPinnedStripeWebhook:async()=>{throw Error('not a pinned order');},stripeForOrder:async()=>new Stripe()},
+  '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('not a managed order');}},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test',getActiveStripeWebhookSecret:async()=> 'test'},
   'next/headers':{headers:async()=>({get:()=> 'signature'})}, '@/lib/firebase':{db:{}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{}},
@@ -174,6 +177,9 @@ test('cancel requires capability, confirms expiration before release and tolerat
  const api=load('src/app/checkout/cancel-actions.ts',{
   'node:crypto':crypto, stripe:{default:Stripe}, '@/lib/firebase':{db:{}},
   'firebase/firestore':{doc:()=> 'order',getDoc:async()=>({exists:()=>true,data:()=>({brandId:'b',locationId:'l',psp:{checkoutSessionId:'s'},cancelTokenHash:crypto.createHash('sha256').update(token).digest('hex')})})},
+  // Legacy (unpinned, unmanaged) Stripe orders: the pinned and managed verifiers do not apply.
+  '@/lib/payments/stripe-order':{verifyPinnedStripeWebhook:async()=>{throw Error('not a pinned order');},stripeForOrder:async()=>new Stripe()},
+  '@/lib/delivery/payments/stripe-authority':{verifyManagedStripeWebhook:async()=>{throw Error('not a managed order');}},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test'},
   '@/lib/discount-reservations':{releaseDiscount:async()=>{assert.equal(status,'expired');releases++;}},
  });
