@@ -18,10 +18,15 @@ const brands = [{ id: 'a', name: 'Nord' }, { id: 'b', name: 'Syd' }];
 const locations = [{ id: 'la', name: 'Nord Station', brandId: 'a' }, { id: 'lb', name: 'Syd Torv', brandId: 'b' }];
 
 async function compareApprovedVisual(name, screenshot) {
-  // Approved from the browser artifact of CI run 36242305336. Downsampling
+  // Approved with the bundled Inter webfont (#934); refresh only after reviewing the screenshots,
+  // with UPDATE_VISUAL_BASELINES=1. Downsampling
   // tolerates small glyph differences while detecting palette and layout drift.
   const baseline = JSON.parse(fs.readFileSync(path.join(root, 'tests/visual-baselines', `admin-overview-${name}.json`), 'utf8'));
   const { data, info } = await sharp(screenshot).resize({ width: 96 }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (process.env.UPDATE_VISUAL_BASELINES === '1') {
+    fs.writeFileSync(path.join(root, 'tests/visual-baselines', `admin-overview-${name}.json`), JSON.stringify({ ...baseline, source: 'Approved locally with the bundled Inter webfont (#934)', width: info.width, height: info.height, rgbDeflate: zlib.deflateSync(data).toString('base64') }) + '\n');
+    return;
+  }
   assert.equal(info.width, baseline.width, `${name} visual width`);
   assert.equal(info.height, baseline.height, `${name} visual height`);
   const approved = zlib.inflateSync(Buffer.from(baseline.rgbDeflate, 'base64'));
@@ -64,10 +69,14 @@ before(async () => {
     module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /(?:admin-visual-|orderfly-admin-visual-).*\.js$/, use: [loader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
-  const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/admin-ui.css'), 'utf8');
+  // The admin uses the "Inter" family. Load the production webfont, so the rendering is the same on
+  // every machine instead of falling back to whatever sans-serif font happens to be installed.
+  const styles = "@font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:block;src:url('/fonts/inter/inter-latin-wght-normal.woff2') format('woff2')}\n"
+    + fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/admin-ui.css'), 'utf8');
   server = http.createServer((req, res) => {
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
+    if (req.url === '/fonts/inter/inter-latin-wght-normal.woff2') { res.setHeader('content-type', 'font/woff2'); return res.end(fs.readFileSync(path.join(root, 'public/fonts/inter/inter-latin-wght-normal.woff2'))); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
     res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body>' + (req.url.split('?')[0] === '/shell' ? '<div id="root"></div>' : '<main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main>') + '<script src="/bundle.js"></script></body></html>');
   });
@@ -92,6 +101,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.locator('.admin-shell')).toHaveCSS('color', 'rgb(23, 35, 46)');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.evaluate(async () => { await document.fonts.load("400 16px Inter"); await document.fonts.ready; });
     const screenshot = await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
     await compareApprovedVisual(name, screenshot);
     // Radix mounts dialog/select/menu content under body, outside .admin-shell.
