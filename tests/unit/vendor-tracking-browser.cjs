@@ -26,7 +26,7 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
     if(url.origin===origin)return route.fulfill({contentType:url.pathname==='/bundle.js'?'application/javascript':'text/html',body:url.pathname==='/bundle.js'?bundle:url.pathname==='/tracking/frame'?frameHtml:'<!doctype html><script src="/bundle.js"></script>'});
     // Allow only library/config JavaScript. Never allow a collect/pixel request out.
     if(req.resourceType()==='script'&&((url.hostname==='www.googletagmanager.com'&&/^\/(gtag\/js|gtag\/destination|gtm\.js)$/.test(url.pathname))||(url.hostname==='connect.facebook.net'&&(/\.js$/.test(url.pathname)||/^\/signals\/config\/(?:\d+|global_config)$/.test(url.pathname))))){libraries.push(url.hostname+url.pathname);return route.continue();}
-    requests.push({host:url.hostname,path:url.pathname,event:url.searchParams.get('en')||url.searchParams.get('ev'),body:req.postData(),location:url.searchParams.get('dl'),referrer:url.searchParams.get('rl')||url.searchParams.get('dr'),referrerHost:url.searchParams.get('cd[referrer_host]')});
+    requests.push({host:url.hostname,path:url.pathname,event:url.searchParams.get('en')||url.searchParams.get('ev'),body:req.postData(),location:url.searchParams.get('dl'),referrer:url.searchParams.get('rl')||url.searchParams.get('dr'),referrerHost:url.searchParams.get('cd[referrer_host]'),tid:url.searchParams.get('tid')});
     return route.fulfill({status:200,body:''});
    });
    await page.goto(origin+'/esmeralda?utm_source=vendor_fixture&fbclid=fixture_click&receipt_token=private_fixture_token',{referer:'https://campaign.example/private_referrer_path?token=private_referrer_token'});
@@ -51,13 +51,21 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
     return {queue:fbq.queue.length,prepared:window.metaPrepared,
      botBlocked:instance.optIns.isOptedIn(pixel,'BotBlocking')&&engine.shouldBlockUserAgent(navigator.userAgent)&&fbq.getFbeventsModules('SignalsFBEventsGuardrail').eval('bot_blocking_client_side_block_enabled',pixel)};
    });
-   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries};
+   results[mode]={metaState,google:requests.filter(x=>/(?:^|\.)(?:google-analytics\.com|analytics\.google\.com)$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries};
    await context.close();
   }
   console.log(JSON.stringify(results));
   for(const mode of ['http','gtm-http']){
    assert.ok(results[mode].google.some(x=>x.event==='page_view'||x.body?.includes('en=page_view')),mode+' must generate initial Google page_view');
-   assert.ok(results[mode].google.every(x=>x.referrer==='https://campaign.example/'),'Google must retain the external referring origin including initial page_view');
+   // The Orderfly property must keep the external referring origin. GTM-PK4J8ZFD also carries the website's
+   // GA4 property (G-F9XCDW2586, PO decision 2026-11-26), whose extra page_view may name the storefront page;
+   // its URL is still checked below for sanitized context.
+   const orderflyGoogle=results[mode].google.filter(x=>x.tid==='G-551JD0H72K');
+   assert.ok(orderflyGoogle.length&&orderflyGoogle.every(x=>x.referrer==='https://campaign.example/'),'Orderfly GA4 must retain the external referring origin including initial page_view');
+   assert.ok(orderflyGoogle.some(x=>x.event==='page_view'||x.body?.includes('en=page_view')),mode+' Orderfly GA4 must send the initial page_view');
+   assert.ok(orderflyGoogle.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' Orderfly GA4 must send add_to_cart');
+   assert.deepEqual([...new Set(results[mode].google.map(x=>x.tid))].filter(t=>!['G-551JD0H72K','G-F9XCDW2586'].includes(t)),[],mode+' only the Orderfly and website GA4 properties may collect');
+   assert.ok(results[mode].google.filter(x=>x.tid==='G-F9XCDW2586').every(x=>x.referrer==='https://campaign.example/'||x.referrer?.startsWith(origin+'/')),'website GA4 referrer must be the external origin or the storefront');
    assert.ok(results[mode].google.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' must generate Google add_to_cart');
    assert.ok([...results[mode].google,...results[mode].meta].filter(x=>x.event==='add_to_cart'||x.event==='AddToCart').every(x=>x.location?.includes('utm_source=vendor_fixture')),mode+' commerce URL must retain campaign parameters');
    assert.doesNotMatch(JSON.stringify([...results[mode].google,...results[mode].meta]),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/,'vendor URL must use sanitized storefront context');
