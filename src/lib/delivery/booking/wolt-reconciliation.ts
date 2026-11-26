@@ -10,21 +10,25 @@ const indexSchema=z.object({version:z.literal(1),brandId:deliveryIdSchema,locati
 type Callback={brandId:string;locationId:string;merchantId:string;venueId:string;environment:'sandbox'|'production';bindingRevision:number};
 /** Internal inbox hook after signature verification and current native callback/binding authorization.
  * A webhook supplies the native order reference, never the distinct provider delivery ID.
+ * Wolt's merchant_order_reference_id is the Orderfly order ID (orders/{orderId}). It is only a lookup hint:
+ * the internal attempt reference is derived from the verified callback's brand/location plus that order ID,
+ * so a reference from another tenant resolves no index and every stored scope is still rechecked.
  * Retain scoped review evidence without manufacturing acceptance or retrying creation.
  */
 export async function retainUnmappedWoltReconciliation(tx:FirebaseFirestore.Transaction,input:{eventId:string;inboxRef:FirebaseFirestore.DocumentReference;callback:Callback;event:NormalizedWoltEvent}):Promise<'pending'|'reconciliation_required'>{
  const {callback,event,inboxRef,eventId}=input;digest.parse(eventId);
- if(!event.merchantOrderReference||!digest.safeParse(event.merchantOrderReference).success)return 'pending';
- const db=getAdminDb(),indexDoc=await tx.get(db.collection('deliveryAttemptReferences').doc(event.merchantOrderReference));
+ const orderId=deliveryIdSchema.safeParse(event.merchantOrderReference);
+ if(!orderId.success)return 'pending';
+ const attemptRef=createHash('sha256').update(JSON.stringify(['delivery-original-v1',callback.brandId,callback.locationId,orderId.data])).digest('hex');
+ const db=getAdminDb(),indexDoc=await tx.get(db.collection('deliveryAttemptReferences').doc(attemptRef));
  if(!indexDoc.exists)return 'pending';
  const index=indexSchema.parse(indexDoc.data());
- if(index.brandId!==callback.brandId||index.locationId!==callback.locationId||index.environment!==callback.environment||index.attemptRef!==event.merchantOrderReference||event.nativeVenueId!==null&&event.nativeVenueId!==callback.venueId)throw Error('delivery_reconciliation_scope');
+ if(index.brandId!==callback.brandId||index.locationId!==callback.locationId||index.orderId!==orderId.data||index.environment!==callback.environment||index.attemptRef!==attemptRef||event.nativeVenueId!==null&&event.nativeVenueId!==callback.venueId)throw Error('delivery_reconciliation_scope');
  const orderRef=db.collection('orders').doc(index.orderId),reviewRef=orderRef.collection('deliveryReconciliation').doc('original');
  const [orderDoc,attemptDoc,claimDoc,resultDoc,reviewDoc]=await Promise.all([tx.get(orderRef),tx.get(orderRef.collection('deliveryAttempts').doc('original')),tx.get(orderRef.collection('deliveryDispatch').doc('original')),tx.get(orderRef.collection('deliveryDispatchResults').doc('original')),tx.get(reviewRef)]);
  const order=orderDoc.data(),attempt=bookingIntentSchema.parse(attemptDoc.data()),claim=claimDoc.data(),result=resultDoc.data(),prior=reviewDoc.data();
- const expected=createHash('sha256').update(JSON.stringify(['delivery-original-v1',index.brandId,index.locationId,index.orderId])).digest('hex');
  if(!order||order.brandId!==index.brandId||order.locationId!==index.locationId||order.deliveryType!=='Delivery'||order.managedDelivery?.providerId!=='wolt'||order.managedDelivery.requestDigest!==index.requestDigest
- ||attempt.scope.brandId!==index.brandId||attempt.scope.locationId!==index.locationId||attempt.scope.orderId!==index.orderId||attempt.provider!=='wolt'||attempt.reference!==expected||attempt.reference!==index.attemptRef||attempt.intentId!==index.attemptRef||attempt.requestDigest!==index.requestDigest
+ ||attempt.scope.brandId!==index.brandId||attempt.scope.locationId!==index.locationId||attempt.scope.orderId!==index.orderId||attempt.provider!=='wolt'||attempt.reference!==attemptRef||attempt.reference!==index.attemptRef||attempt.intentId!==index.attemptRef||attempt.requestDigest!==index.requestDigest
  ||!claim||claim.claimId!==index.claimId||claim.attemptRef!==index.attemptRef||claim.requestDigest!==index.requestDigest||claim.environment!==index.environment||claim.scope?.brandId!==index.brandId||claim.scope?.locationId!==index.locationId||claim.scope?.orderId!==index.orderId
  ||claim.binding?.merchantId!==callback.merchantId||claim.binding?.venueId!==callback.venueId||Number(claim.binding?.bindingRevision)!==callback.bindingRevision
  ||!Number.isSafeInteger(claim.networkStartedAtMs)||claim.networkStartedAtMs<0)throw Error('delivery_reconciliation_scope');
