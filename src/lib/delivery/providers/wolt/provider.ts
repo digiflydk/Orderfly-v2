@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { deliveryQuoteRequestSchema, deliveryCreateRequestSchema, deliveryCancelRequestSchema, deliveryReconcileRequestSchema,
   type DeliveryProvider, type DeliveryQuoteRequest, type DeliveryQuoteResult, type DeliveryCreateRequest,
-  type DeliveryCreateResult, type DeliveryCancelResult, type DeliveryReconcileResult, type DeliveryScope, type DeliveryMoney, type ProviderCapabilities } from '../../provider-contract';
+  type DeliveryCreateResult, type DeliveryCancelResult, type DeliveryReconcileResult, type DeliveryScope, type DeliveryMoney, type DeliveryItem, type ProviderCapabilities } from '../../provider-contract';
 import { resolveWoltBinding, type WoltBinding, type WoltBindingDependencies } from './binding';
 import { resolveWoltConfig, type WoltEnvironment, type WoltSecretResolver } from './config';
 import { createWoltHttpClient } from './http';
@@ -47,6 +47,16 @@ const sameMoney = (a: DeliveryMoney, b: DeliveryMoney) => a.amountMinor === b.am
 const nativeFulfillmentValid = (request: DeliveryQuoteRequest) => /^\+[1-9]\d{6,14}$/.test(request.dropoffContact.phone)
   && request.items.every(item => item.quantity <= 100)
   && [request.dropoff.unit, request.instructions].filter(Boolean).join('\n').length <= 500;
+// Wolt parcels have no options field: options are listed in the description,
+// capped to Wolt's 500-character description limit (create.ts parcel schema).
+const WOLT_PARCEL_DESCRIPTION_MAX = 500;
+export function woltParcelDescription(item: DeliveryItem): string {
+  const full = item.options?.length ? `${item.name} (${item.options.join(', ')})` : item.name;
+  return full.length <= WOLT_PARCEL_DESCRIPTION_MAX ? full : `${full.slice(0, WOLT_PARCEL_DESCRIPTION_MAX - 1).trimEnd()}…`;
+}
+// Parcel price is the declared goods value of ONE unit (Wolt multiplies by count).
+// Managed delivery checkout only runs for DKK brands (customer-controller).
+const woltParcelPrice = (item: DeliveryItem) => item.unitPriceMinor === undefined ? {} : { price: { amount: item.unitPriceMinor, currency: 'DKK' } };
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
@@ -86,7 +96,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
       quote: { ...fulfillment.scope, venueId: quote.venueId, promiseId: quote.native.promiseId, validUntil: quote.native.validUntil,
         fetchedAt: quote.native.fetchedAt, isBinding: true, dropoff: quote.native.dropoff, scheduledDropoffTime: quote.native.scheduledDropoffTime },
       merchantOrderReferenceId: reference, recipient: { name: fulfillment.dropoffContact.name, phoneNumber: fulfillment.dropoffContact.phone },
-      parcels: fulfillment.items.map((item, index) => ({ count: item.quantity, description: item.name, identifier: `${orderRef.slice(0, 180)}-${index}` })),
+      parcels: fulfillment.items.map((item, index) => ({ count: item.quantity, description: woltParcelDescription(item), identifier: `${orderRef.slice(0, 180)}-${index}`, ...woltParcelPrice(item) })),
       dropoffComment: [fulfillment.dropoff.unit, fulfillment.instructions].filter(Boolean).join('\n'),
       ...(fulfillment.bagCount === null ? {} : { bagCount: fulfillment.bagCount }),
     };
@@ -113,7 +123,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
           address: { street: request.dropoff.street, building: request.dropoff.building, city: request.dropoff.city, postCode: request.dropoff.postcode,
             coordinates: { lat: request.dropoff.coordinates.latitude, lon: request.dropoff.coordinates.longitude } },
           preparationMinutes, ...(request.desiredDelivery.kind === 'scheduled' ? { scheduledDropoffTime: request.desiredDelivery.interval.earliest } : {}),
-          parcels: request.items.map(item => ({ count: item.quantity })),
+          parcels: request.items.map(item => ({ count: item.quantity, ...woltParcelPrice(item) })),
         }, at);
         if (result.status === 'error') return { kind: 'error', error: { ...error(result.error.code, result.error.retryClass), nativeCode: result.error.nativeCode ?? null } };
         if (result.status === 'unavailable') {
