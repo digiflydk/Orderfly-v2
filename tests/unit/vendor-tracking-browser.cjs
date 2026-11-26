@@ -62,6 +62,10 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    // its URL is still checked below for sanitized context.
    const orderflyGoogle=results[mode].google.filter(x=>x.tid==='G-551JD0H72K');
    assert.ok(orderflyGoogle.length&&orderflyGoogle.every(x=>x.referrer==='https://campaign.example/'),'Orderfly GA4 must retain the external referring origin including initial page_view');
+   assert.ok(orderflyGoogle.some(x=>x.event==='page_view'||x.body?.includes('en=page_view')),mode+' Orderfly GA4 must send the initial page_view');
+   assert.ok(orderflyGoogle.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' Orderfly GA4 must send add_to_cart');
+   assert.deepEqual([...new Set(results[mode].google.map(x=>x.tid))].filter(t=>!['G-551JD0H72K','G-F9XCDW2586'].includes(t)),[],mode+' only the Orderfly and website GA4 properties may collect');
+   assert.ok(results[mode].google.filter(x=>x.tid==='G-F9XCDW2586').every(x=>x.referrer==='https://campaign.example/'||x.referrer?.startsWith(origin+'/')),'website GA4 referrer must be the external origin or the storefront');
    assert.ok(results[mode].google.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' must generate Google add_to_cart');
    assert.ok([...results[mode].google,...results[mode].meta].filter(x=>x.event==='add_to_cart'||x.event==='AddToCart').every(x=>x.location?.includes('utm_source=vendor_fixture')),mode+' commerce URL must retain campaign parameters');
    assert.doesNotMatch(JSON.stringify([...results[mode].google,...results[mode].meta]),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/,'vendor URL must use sanitized storefront context');
