@@ -185,6 +185,7 @@ test('real signed callback after unknown create retains scoped operator evidence
  const f=await fixture({lostResponse:true});const originalFetch=global.fetch;global.fetch=f.fetch;t.after(()=>global.fetch=originalFetch);
  assert.equal((await f.dispatcher.dispatchManagedDelivery(f.scope)).state,'unknown');
  const nativeReference=f.network[0].body.merchant_order_reference_id;
+ assert.equal(nativeReference,f.orderId);
  const event=f.request(nativeReference),duplicate=event.clone();
  assert.equal((await f.inbox.receiveNativeWoltCallback(event,f.key)).status,200);
  assert.equal((await f.inbox.receiveNativeWoltCallback(duplicate,f.key)).status,200);

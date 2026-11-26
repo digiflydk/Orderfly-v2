@@ -107,6 +107,12 @@ test('refunded rejected delivery receipt never claims paid or confirmed',async t
  await page.addInitScript(()=>{window.__receipt={id:'order-a',brandId:'brand-a',locationId:'location-a',customerName:'Test kunde',customerContact:'test@example.test',customerDetails:{id:'customer-a',address:'Testvej 1'},createdAt:'2026-10-26T12:00:00Z',deliveryType:'Delivery',status:'Canceled',paymentStatus:'Paid',paymentMethod:'Stripe',totalAmount:135,productItems:[],paymentDetails:{subtotal:100,deliveryFee:35},managedDeliveryTracking:{orderId:'order-a',bookingState:'rejected',deliveryStatus:null,paymentStatus:'refunded',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}};});
  await page.goto(origin+'/confirmation');await expect(page.getByRole('heading',{name:'Din betaling er refunderet'})).toBeVisible();await expect(page.getByText(/er annulleret, og betalingen er refunderet/)).toBeVisible();await expect(page.getByText('Betaling: Refunderet')).toBeVisible();await expect(page.getByText(/er betalt. Leveringen/)).toHaveCount(0);
 });
+test('customer rejected tracking never shows merchant failure reasons or support codes',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.goto(origin);
+ await page.evaluate(()=>window.setTracking({orderId:'order-a',bookingState:'rejected',bookingFailureCode:'authentication',deliveryStatus:null,paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}));
+ await expect(page.getByText('Leveringen kunne ikke bestilles.')).toBeVisible();await expect(page.getByText(/Kontakt restauranten, hvis du har brug for hjælp/)).toBeVisible();
+ await expect(page.getByText(/Kurérbestillingen blev afvist|Fejlkode|authentication|adgangsnøgle|afhentning/)).toHaveCount(0);
+});
 test('persisted cancellation separates payment, hides stale ETA and preserves uncertain delivery state',async t=>{
  const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();await page.goto(origin);
  const data={orderId:'order-a',bookingState:'accepted',cancellationState:'cancelled',deliveryStatus:'cancelled',paymentStatus:'paid',trackingUrl:'https://tracking.example/order',deliveryInterval:{earliest:'2026-10-26T12:00:00Z',latest:'2026-10-26T12:10:00Z'},pickupInterval:null,pickupReliable:false,updatedAt:null};

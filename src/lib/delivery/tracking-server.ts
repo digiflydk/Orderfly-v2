@@ -1,14 +1,15 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { deliveryIdSchema } from './provider-contract';
-import { projectCustomerDeliveryTracking } from './tracking';
-/** Internal transaction projection. Caller has already authorized this exact native order snapshot. */
-export async function loadAuthorizedDeliveryTracking(tx:FirebaseFirestore.Transaction,orderId:string,order:Record<string,any>){
+import { projectCustomerDeliveryTracking, projectMerchantDeliveryTracking } from './tracking';
+/** Internal transaction projection. Caller has already authorized this exact native order snapshot.
+ * `merchant` adds the allowlisted booking rejection code and is only for staff-authorized reads. */
+export async function loadAuthorizedDeliveryTracking(tx:FirebaseFirestore.Transaction,orderId:string,order:Record<string,any>,audience:'customer'|'merchant'='customer'){
  if(!order.managedDelivery)return null;
  deliveryIdSchema.parse(orderId);
  const ref=getAdminDb().collection('orders').doc(orderId);
  const [attempt,result,state,estimates,cancellation]=await Promise.all([tx.get(ref.collection('deliveryAttempts').doc('original')),tx.get(ref.collection('deliveryDispatchResults').doc('original')),tx.get(ref.collection('deliveryState').doc('current')),tx.get(ref.collection('deliveryEstimates').doc('current')),tx.get(ref.collection('deliveryCancellation').doc('original'))]);
- return projectCustomerDeliveryTracking(orderId,order,attempt.data(),result.data(),state.data(),estimates.data(),cancellation.data());
+ return (audience==='merchant'?projectMerchantDeliveryTracking:projectCustomerDeliveryTracking)(orderId,order,attempt.data(),result.data(),state.data(),estimates.data(),cancellation.data());
 }
 /** Receipt-only helper, never a server action. Receipt proof was checked by readGuestReceipt. */
 export async function readReceiptDeliveryTracking(verifiedOrder:Record<string,any>){

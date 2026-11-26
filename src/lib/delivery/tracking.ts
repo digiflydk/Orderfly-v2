@@ -1,6 +1,7 @@
 import { managedDeliveryBindingSchema, deliveryCreateResultSchema, deliveryIntervalSchema } from './provider-contract';
 import { projectCancellation, type CancellationState } from './cancellation/projection';
 import { bookingIntentSchema } from './booking/state';
+import { projectBookingFailureCode, type BookingFailureCode } from './booking-failure';
 export type CustomerDeliveryTracking = {
  orderId:string; cancellationState?:CancellationState|null; bookingState:'pending'|'submitting'|'accepted'|'rejected'|'unknown';
  deliveryStatus:'booked'|'courier_assigned'|'courier_to_pickup'|'picked_up'|'delivered'|'cancelled'|'failed'|null;
@@ -31,4 +32,16 @@ export function projectCustomerDeliveryTracking(orderId:string,rawOrder:unknown,
  paymentStatus:order.paymentStatus==='Refunded'||typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'refunded':order.paymentStatus==='Paid'?'paid':order.paymentStatus==='Failed'?'failed':'pending',
  trackingUrl:cancelled?null:accepted?.trackingUrl??null,deliveryInterval:cancelled?null:eta??accepted?.deliveryInterval??null,pickupInterval:cancelled?null:pickup??accepted?.pickupInterval??null,
  pickupReliable:!cancelled&&!!pickup&&estimates.pickupReliable===true,updatedAt:updated>0&&Number.isFinite(new Date(updated).getTime())?new Date(updated).toISOString():null};
+}
+/** Staff terminal only: adds the allowlisted rejection code. Never send this DTO to customers. */
+export type MerchantDeliveryTracking=CustomerDeliveryTracking&{bookingFailureCode?:BookingFailureCode|null};
+export function projectMerchantDeliveryTracking(orderId:string,rawOrder:unknown,rawAttempt:unknown,rawResult:unknown,rawState:unknown,rawEstimates:unknown=null,rawCancellation:unknown=null):MerchantDeliveryTracking|null{
+ const tracking=projectCustomerDeliveryTracking(orderId,rawOrder,rawAttempt,rawResult,rawState,rawEstimates,rawCancellation);
+ if(!tracking)return null;
+ if(tracking.bookingState!=='rejected')return {...tracking,bookingFailureCode:null};
+ // bookingState 'rejected' already proves the attempt is bound to this order; the result must be bound too.
+ const order=row(rawOrder),managed=managedDeliveryBindingSchema.parse(order.managedDelivery),attempt=bookingIntentSchema.parse(rawAttempt),record=row(rawResult),result=deliveryCreateResultSchema.safeParse(record.result);
+ const rejected=result.success&&result.data.kind==='rejected'&&record.scope?.brandId===order.brandId&&record.scope?.locationId===order.locationId&&record.scope?.orderId===orderId
+  &&record.providerId===managed.providerId&&record.requestDigest===managed.requestDigest&&record.attemptRef===attempt.reference?result.data:null;
+ return {...tracking,bookingFailureCode:rejected?projectBookingFailureCode(rejected.error.code):null};
 }

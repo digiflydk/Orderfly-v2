@@ -128,3 +128,10 @@ test('restaurant inheritance ignores sparse legacy rows and binds Friday pickup 
   f.input.deliveryTime='2026-10-30T21:15:00.000Z';assert.equal((await f.actions.requestManagedDeliveryQuoteAction(f.input)).ok,false);
  }finally{mock.timers.setTime(baseline);}
 });
+
+test('persisted fulfillment parcel items use the server-validated catalog name and per-unit price, never browser labels',async()=>{
+ const f=await fixture();f.input.cartItems=[{id:'p',name:'Browser label',quantity:2,unitPrice:100,totalPrice:200}];
+ const q=await f.actions.requestManagedDeliveryQuoteAction(f.input);assert.equal(q.ok,true,JSON.stringify(q));
+ assert.deepEqual(f.records.get(`deliveryQuotes/${q.quoteId}`).fulfillment.items,[{name:'Pizza',quantity:2,unitPriceMinor:10000}]);
+ assert.equal((await pay(f,q)).success,true);
+});

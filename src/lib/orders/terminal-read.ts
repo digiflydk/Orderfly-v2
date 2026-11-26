@@ -183,7 +183,7 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
               if(!fresh||fresh.brandId!==selected.brandId||fresh.locationId!==selected.locationId)throw new AuthorityError('forbidden');
               if(actor)await authorizeOrderTerminalTransaction(tx,actor,{brandId:selected.brandId,locationId:selected.locationId});
               else await authorizeTransaction(tx,identity!,fresh,'orderfly.orders:view','location');
-              return loadAuthorizedDeliveryTracking(tx,doc.id,fresh);
+              return loadAuthorizedDeliveryTracking(tx,doc.id,fresh,'merchant');
             },{readOnly:true});
             if(tracking)order.managedDeliveryTracking=tracking;
           }

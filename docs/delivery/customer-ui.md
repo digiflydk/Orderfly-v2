@@ -10,7 +10,7 @@ Changing quote-bound inputs immediately makes the previous quote unusable. While
 
 The final payment request still carries the exact displayed quote tuple and in-memory draft capability. The server revalidates the token, expiry, scope, cart fingerprint, revision, currency and total before consuming the quote. Removing a separate checkbox does not remove these checks or authorize payment from a background price refresh.
 
-Tracking requires a matching order identity from an ownership-authorized server projection. Unknown booking is never presented as confirmed delivery even when payment is paid. HTTPS tracking links reject userinfo and unsafe schemes. Refresh is injected; no unauthenticated order endpoint is invented.
+Tracking requires a matching order identity from an ownership-authorized server projection. Unknown booking is never presented as confirmed delivery even when payment is paid. Every delivery time shown to customers is an estimate ("Forventet levering: ca. …"); a rejected booking tells the customer to contact the restaurant and never shows the merchant-only failure reason or support code. HTTPS tracking links reject userinfo and unsafe schemes. Refresh is injected; no unauthenticated order endpoint is invented.
 
 Internal browser acceptance for this UX must cover automatic pricing after valid input, no request for incomplete input, immediate invalidation on edits, stale-response rejection, expiry, visible updated totals before submission, stable capability, preserved form/cart and the absence of extra quote controls. Tracking retains foreign-identity and unsafe-link rejection coverage. Component fixtures do not prove live provider or payment behavior.
 
