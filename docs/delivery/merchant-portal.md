@@ -52,3 +52,28 @@ Only one environment may be active for new orders at a location. Already-created
 The current canonical Wolt registry still permits one venue/location per Wolt merchant and environment. Competing bindings are rejected rather than overwritten. API authentication checks do not validate the pickup venue/address; check those with the provider before activating. API and signing credentials cannot be changed in place after native provisioning without a recovery-safe rotation workflow.
 
 A callback registration creates durable intent before the provider write. If the result is unknown, subsequent reconciliation lists the existing subscriptions rather than issuing another blind create. An existing foreign subscription must not be overwritten. Credentials and callback ownership remain available for historical recovery after merchant archival.
+
+## Rejected courier bookings and estimates (Wolt Drive certification)
+
+When a courier booking is definitively rejected, the operator order detail (**Levering → Leveringer/Log**) and the merchant terminal order detail show a red "Kurérbestillingen blev afvist" box with a short Danish explanation and action, the refund state and a small "Fejlkode til support" line. Terminal board cards carry a "Kurérbestilling afvist" badge. Messages live in `src/lib/delivery/booking-failure.ts`; only its allowlisted codes reach the browser (any other code becomes `booking_rejected`, which shows the generic text). Native codes and provider text are never shown.
+
+| Code | Merchant message (short) |
+| --- | --- |
+| `quote_expired` | Delivery price expired before the booking was sent to Wolt |
+| `quote_changed` | Quote no longer matched the order; booking not sent |
+| `quote_changed_or_expired` | Wolt price expired or changed at booking time |
+| `settings_changed` | Delivery settings changed after the customer ordered; check settings |
+| `binding_changed_before_dispatch` | Wolt connection changed just before booking; check Wolt setup |
+| `invalid_create_payload` | Delivery details could not be sent to Wolt |
+| `invalid_request` | Wolt rejected address/phone/time; contact the customer about pickup |
+| `authentication` | Wolt rejected the access key; contact support before more courier orders |
+| `configuration` | Wolt venue/merchant setup missing; contact Wolt or support |
+| `unavailable` | Wolt cannot deliver to the address/time; contact the customer about pickup |
+| `rate_limited` / `provider_error` | Wolt overload / technical error; contact support if repeated |
+| `booking_rejected` (any other) | Generic: contact support with the code |
+
+Every definitive rejection starts the automatic full refund (`booking/dispatcher.ts` → `payments/refund-worker.ts`). The UI says "Kunden er refunderet automatisk" only once the projected payment status is refunded; while it is still paid it says the refund is started automatically and to contact support if it does not complete. The terminal reads this code through `loadAuthorizedDeliveryTracking(..., 'merchant')`; customer projections never carry it.
+
+Courier pickup times on the terminal are estimates: "Forventet afhentning (estimeret): ca. … – …". Nothing in the merchant views says a pickup or delivery time is confirmed.
+
+The Wolt drop-off comment is labelled ("Etage/dør: …" and "Besked: …"). It stays within Wolt's 500-character limit: the unit is never cut, only the customer message is shortened with "…".

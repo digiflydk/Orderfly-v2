@@ -53,3 +53,27 @@ test('persisted cancellation is bound to original accepted booking, preserves un
  assert.equal(projectSaved({...saved,result:null}).cancellationState,'unknown');
  for(const secret of ['private reason','private actor','providerDeliveryId','attemptRef'])assert.equal(JSON.stringify(good).includes(secret),false);
 });
+test('booking failure codes map to actionable Danish merchant text; unknown codes are generic',()=>{
+ const m=loadTs('src/lib/delivery/booking-failure.ts');
+ const seen=new Set();
+ for(const code of m.BOOKING_FAILURE_CODES){const text=m.bookingFailureMessage(code);assert.equal(m.projectBookingFailureCode(code),code);assert.ok(text.length>20&&text.length<=200,code);assert.doesNotMatch(text,/[a-z]+_[a-z_]+/,code);assert.ok(!seen.has(text),code);seen.add(text);}
+ const generic=m.bookingFailureMessage('booking_rejected');assert.match(generic,/Kontakt Orderfly-support og oplys fejlkoden/);
+ for(const unknown of ['PRIVATE_NATIVE','',null,undefined,'__proto__','toString']){assert.equal(m.bookingFailureMessage(unknown),generic);assert.equal(m.projectBookingFailureCode(unknown),'booking_rejected');}
+ assert.match(m.bookingFailureMessage('quote_expired'),/Leveringsprisen udløb/);assert.match(m.bookingFailureMessage('settings_changed'),/Kontrollér leveringsindstillingerne/);
+ // Only a projected refund is stated as done; a paid order only says the refund starts automatically.
+ assert.match(m.bookingFailureRefundNote('Refunded'),/Kunden er refunderet automatisk/);assert.match(m.bookingFailureRefundNote('refunded'),/Kunden er refunderet automatisk/);
+ assert.match(m.bookingFailureRefundNote('Paid'),/startes automatisk/);assert.doesNotMatch(m.bookingFailureRefundNote('paid'),/er refunderet/);
+ assert.equal(m.bookingFailureRefundNote(null),'Ingen kurér er bestilt.');
+});
+test('merchant projection adds only an allowlisted, bound rejection code; customer projection never carries it',()=>{
+ const {projectMerchantDeliveryTracking:merchant}=loadTs('src/lib/delivery/tracking.ts');
+ const {order,attempt,result}=fixture();const rejectedAttempt={...attempt,state:'rejected',providerDeliveryId:null};
+ const rejected=code=>({...result,result:{kind:'rejected',error:{code,messageKey:'private',retry:'never',nativeCode:'SECRET_NATIVE'}}});
+ const view=merchant('order',order,rejectedAttempt,rejected('quote_expired'),null);assert.equal(view.bookingState,'rejected');assert.equal(view.bookingFailureCode,'quote_expired');
+ assert.equal(JSON.stringify(view).includes('SECRET_NATIVE'),false);assert.equal(JSON.stringify(view).includes('private'),false);
+ assert.equal(merchant('order',order,rejectedAttempt,rejected('PRIVATE_UNKNOWN'),null).bookingFailureCode,'booking_rejected');
+ for(const patch of [{scope:{...scope,brandId:'foreign'}},{providerId:'other'},{requestDigest:'b'.repeat(64)},{attemptRef:'other'}])assert.equal(merchant('order',order,rejectedAttempt,{...rejected('quote_expired'),...patch},null).bookingFailureCode,null);
+ assert.equal(merchant('order',order,attempt,result,null).bookingFailureCode,null);assert.equal(merchant('order',order,{...rejectedAttempt,scope:{...scope,brandId:'foreign'}},rejected('quote_expired'),null).bookingFailureCode,null);
+ assert.equal(merchant('order',{...order,managedDelivery:null},rejectedAttempt,rejected('quote_expired'),null),null);
+ assert.equal('bookingFailureCode' in project('order',order,rejectedAttempt,rejected('quote_expired'),null),false);
+});

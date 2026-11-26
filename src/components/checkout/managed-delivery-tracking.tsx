@@ -3,9 +3,12 @@ import { useId } from 'react';
 import { Button } from '@/components/ui/button';
 import type { CustomerDeliveryTracking } from '@/lib/delivery/tracking';
 import { customerDeliveryEstimate } from '@/lib/delivery/customer-eta';
-export type ManagedDeliveryTrackingView=CustomerDeliveryTracking;
+import { bookingFailureMessage, bookingFailureRefundNote, projectBookingFailureCode } from '@/lib/delivery/booking-failure';
+/** `bookingFailureCode` is only present in the staff terminal projection. */
+export type ManagedDeliveryTrackingView=CustomerDeliveryTracking&{bookingFailureCode?:string|null};
 const states:Record<NonNullable<ManagedDeliveryTrackingView['deliveryStatus']>,string>={booked:'Leveringen er bestilt',courier_assigned:'En kurér er tildelt',courier_to_pickup:'Kurér på vej til restauranten',picked_up:'Kurér har afhentet din ordre',delivered:'Din ordre er leveret',cancelled:'Leveringen er annulleret',failed:'Leveringen kunne ikke gennemføres'};
 const format=(s:string)=>new Intl.DateTimeFormat('da-DK',{dateStyle:'short',timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(s));
+const clock=(s:string)=>new Intl.DateTimeFormat('da-DK',{timeStyle:'short',timeZone:'Europe/Copenhagen'}).format(new Date(s));
 const isTime=(s:unknown):s is string=>typeof s==='string'&&Number.isFinite(Date.parse(s));
 function safeTracking(value:string|null){try{if(!value)return null;const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:null;}catch{return null;}}
 /** Display only authenticated, ownership-checked server projection. The parent
@@ -34,9 +37,10 @@ export function ManagedDeliveryTracking({enabled,orderId,data,loading=false,erro
  <p>Betaling: {data!.paymentStatus==='paid'?'Betalt':data!.paymentStatus==='refunded'?'Refunderet':data!.paymentStatus==='failed'?'Mislykket':'Afventer'}</p>
  {eta&&<p>{providerEta?'Forventet levering:':'Foreløbigt forventet levering:'} {eta}.</p>}
  <p className="text-sm text-muted-foreground">{data!.updatedAt?`Senest opdateret: ${format(data!.updatedAt)}.`:'Opdateringstidspunktet er ikke oplyst.'}</p>
- {variant==='merchant'&&!cancelled&&<p>{data!.pickupReliable&&data!.pickupInterval&&isTime(data!.pickupInterval.earliest)&&isTime(data!.pickupInterval.latest)?`Bekræftet afhentningsinterval: ${format(data!.pickupInterval.earliest)} – ${format(data!.pickupInterval.latest)}.`:'Kurérens afhentningstid er endnu ikke bekræftet.'}</p>}
+ {variant==='merchant'&&!cancelled&&data!.bookingState!=='rejected'&&<p>{data!.pickupReliable&&data!.pickupInterval&&isTime(data!.pickupInterval.earliest)&&isTime(data!.pickupInterval.latest)?`Forventet afhentning (estimeret): ca. ${format(data!.pickupInterval.earliest)} – ${clock(data!.pickupInterval.latest)}.`:'Kurérens forventede afhentningstid er endnu ikke kendt.'}</p>}
  {tracking&&data!.bookingState==='accepted'&&<a href={tracking} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded border px-4 underline focus-visible:outline">Åbn kurérens tracking (nyt vindue)</a>}
- {(data!.bookingState==='unknown'||data!.bookingState==='rejected'||data!.deliveryStatus==='failed')&&<p>Kontakt restauranten, hvis du har brug for hjælp. En betaling alene bekræfter ikke, at en kurér er bestilt.</p>}
+ {variant==='merchant'&&data!.bookingState==='rejected'&&<div role="alert" className="space-y-1 rounded border border-red-300 bg-red-50 p-3 text-red-950"><p className="font-semibold">Kurérbestillingen blev afvist</p><p>{bookingFailureMessage(data!.bookingFailureCode)}</p><p>{bookingFailureRefundNote(data!.paymentStatus)}</p>{data!.bookingFailureCode&&<p className="text-xs">Fejlkode til support: {projectBookingFailureCode(data!.bookingFailureCode)}</p>}</div>}
+ {variant==='customer'&&(data!.bookingState==='unknown'||data!.bookingState==='rejected'||data!.deliveryStatus==='failed')&&<p>Kontakt restauranten, hvis du har brug for hjælp. En betaling alene bekræfter ikke, at en kurér er bestilt.</p>}
  </>}
  <Button type="button" variant="outline" className="min-h-11" disabled={loading} onClick={onRefresh}>Opdater leveringsstatus</Button>
  </section>;
