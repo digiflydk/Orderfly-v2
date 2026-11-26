@@ -20,7 +20,7 @@ function fixture() {
     validateClaimedAttempt: async () => true, loadCancellation: async () => null,
     fetchImpl: async (url, options) => {
       if (url.endsWith('/shipment-promises')) { bodies.quote.push(JSON.parse(options.body)); return Response.json({ id: 'promise-A', created_at: new Date(start).toISOString(), valid_until: new Date(start + 120000).toISOString(), is_binding: true, price: { amount: 4900, currency: 'DKK' }, pickup: { venue_id: 'venue-A', eta_minutes: 20 }, dropoff: { eta_minutes: 30, location: { coordinates: { lat: 55.68, lon: 12.58 }, formatted_address: 'Borgergade 10' } } }, { status: 201 }); }
-      if (url.endsWith('/deliveries')) { bodies.create.push(JSON.parse(options.body)); return Response.json({ id: 'delivery-A', wolt_order_reference_id: 'wolt-A', merchant_order_reference_id: 'attempt-A', status: 'INFO_RECEIVED' }, { status: 201 }); }
+      if (url.endsWith('/deliveries')) { bodies.create.push(JSON.parse(options.body)); return Response.json({ id: 'delivery-A', wolt_order_reference_id: 'wolt-A', merchant_order_reference_id: 'order-A', status: 'INFO_RECEIVED' }, { status: 201 }); }
       return Response.json({ status: 'REJECTED' });
     },
   };
