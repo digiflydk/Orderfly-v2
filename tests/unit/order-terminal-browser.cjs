@@ -370,6 +370,24 @@ test('managed ready delivery shows courier state and cannot be manually complete
 });
 
 
+test('managed rejected booking is flagged on the board and explained in detail with support code',async t=>{
+ const managed=order('ORD-REJECTED',{deliveryType:'Delivery',status:'Received',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-REJECTED',bookingState:'rejected',bookingFailureCode:'unavailable',deliveryStatus:null,paymentStatus:'refunded',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+ const {page}=await fixture(t,768,1024,{orders:[managed]});
+ await expect(page.getByText('Kurérbestilling afvist – åbn ordren for årsag',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'Åbn ordre ORD-REJECTED',exact:true}).click();
+ const alert=page.getByRole('alert').filter({hasText:'Kurérbestillingen blev afvist'});
+ await expect(alert).toContainText('Wolt kunne ikke levere til adressen eller tidspunktet');await expect(alert).toContainText('Kunden er refunderet automatisk');
+ await expect(alert.getByText('Fejlkode til support: unavailable',{exact:true})).toBeVisible();
+ await expect(page.getByText(/Kontakt restauranten/)).toHaveCount(0);await expect(page.getByText(/afhentningstid er endnu ikke kendt/)).toHaveCount(0);
+});
+test('managed courier pickup interval is shown as an estimate, never as confirmed',async t=>{
+ const managed=order('ORD-ETA',{deliveryType:'Delivery',status:'In Progress',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-ETA',bookingState:'accepted',deliveryStatus:'courier_assigned',paymentStatus:'paid',trackingUrl:null,deliveryInterval:{earliest:'2026-10-26T11:20:00Z',latest:'2026-10-26T11:40:00Z'},pickupInterval:{earliest:'2026-10-26T11:00:00Z',latest:'2026-10-26T11:10:00Z'},pickupReliable:true,updatedAt:null}});
+ const {page}=await fixture(t,768,1024,{orders:[managed]});await page.getByRole('button',{name:'Åbn ordre ORD-ETA',exact:true}).click();
+ await expect(page.getByText(/^Forventet afhentning \(estimeret\): ca\. .*12\.00 – 12\.10\.$/)).toBeVisible();
+ await expect(page.getByText(/Forventet levering: ca\. .*12\.40/)).toBeVisible();await expect(page.getByText(/Bekræftet/)).toHaveCount(0);
+ await expect(page.getByText('Kurérbestilling afvist – åbn ordren for årsag')).toHaveCount(0);
+});
+
 test('managed delivered refresh removes ready card while history remains accessible',async t=>{
  const managed=order('ORD-DONE',{deliveryType:'Delivery',status:'Ready',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-DONE',bookingState:'accepted',deliveryStatus:'picked_up',paymentStatus:'paid',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
  const {page,state,calls,errors}=await fixture(t,768,1024,{orders:[managed],emptyPage:true});

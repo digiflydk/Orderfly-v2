@@ -168,7 +168,7 @@ test('scheduled managed delivery stays in preorder queue until target Copenhagen
 
 test('delivered-only scan page retains cursor and reaches following active order while history includes all',async()=>{
  const rows=Array.from({length:51},(_,i)=>order(`o${String(i).padStart(3,'0')}`,{status:'Ready',deliveryType:'Delivery',managedDelivery:{version:1}}));
- const f=fixture({rows,tracking:async(tx,id)=>({orderId:id,deliveryStatus:id==='o050'?'picked_up':'delivered'})});
+ const audiences=new Set();const f=fixture({rows,tracking:async(tx,id,fresh,audience)=>{audiences.add(audience);return {orderId:id,deliveryStatus:id==='o050'?'picked_up':'delivered'};}});
  const first=await f.readTerminalOrders({view:'board'},now);
  assert.deepEqual(first.orders,[]);assert.equal(first.hasMore,true);assert.ok(first.nextCursor);
  const next=await f.readTerminalOrders({view:'board',cursor:first.nextCursor},now);
@@ -176,6 +176,8 @@ test('delivered-only scan page retains cursor and reaches following active order
  const history=await f.readTerminalOrders({view:'history'},now);
  assert.equal(history.orders.length,50);assert.equal(history.hasMore,true);
  assert.ok(history.orders.every(o=>o.status==='Ready'&&o.managedDeliveryTracking.deliveryStatus==='delivered'));
+ // Staff terminal reads request the merchant projection (allowlisted rejection code), never a wider DTO.
+ assert.deepEqual([...audiences],['merchant']);
 });
 test('server-resolved KDS scope skips global grants and still rejects foreign query scope',async()=>{
  const f=fixture({denyView:true,rows:[order('a')]});

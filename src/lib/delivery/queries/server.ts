@@ -11,6 +11,7 @@ import { AuthorityError } from '@/lib/access/authority';
 import { managedDeliveryBindingSchema, verifiedDeliveryEventSchema, deliveryCreateResultSchema } from '../provider-contract';
 import { cancellationAvailability } from '../cancellation/server';
 import { bookingIntentSchema } from '../booking/state';
+import { projectBookingFailureCode } from '../booking-failure';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const querySchema = z.object({ brandId: id, locationId: id, orderId: id.optional(), cursor: z.string().max(2048).optional(), eventCursor: z.string().max(2048).optional() }).strict()
   .refine(q => q.orderId ? !q.cursor : !q.eventCursor);
@@ -41,8 +42,7 @@ export async function readDeliveryOrders(raw: unknown) {
     const resultRecord=resultDoc?.data(), result=deliveryCreateResultSchema.safeParse(resultRecord?.result);
     const boundResult=boundAttempt&&result.success&&resultRecord?.scope?.brandId===q.brandId&&resultRecord?.scope?.locationId===q.locationId&&resultRecord?.scope?.orderId===doc.id&&resultRecord?.providerId===managed.data.providerId&&resultRecord?.requestDigest===managed.data.requestDigest&&attempt.data.requestDigest===managed.data.requestDigest&&resultRecord?.attemptRef===attempt.data.reference;
     const cancellationState=boundResult&&attempt.data.state==='booked'&&result.data.kind==='accepted'&&attempt.data.providerDeliveryId===result.data.providerDeliveryId?projectCancellation(cancellationDoc.data(),{brandId:q.brandId,locationId:q.locationId,orderId:doc.id,attemptRef:attempt.data.reference,providerDeliveryId:result.data.providerDeliveryId},boundState?state.status:null,order.status):null;
-    const allowedCodes=['quote_expired','quote_changed','settings_changed','quote_changed_or_expired','binding_changed_before_dispatch','invalid_create_payload','invalid_request','authentication','configuration','unavailable','rate_limited','provider_error'];
-    const bookingFailureCode=q.orderId&&boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?(allowedCodes.includes(result.data.error.code)?result.data.error.code:'booking_rejected'):null;
+    const bookingFailureCode=q.orderId&&boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?projectBookingFailureCode(result.data.error.code):null;
     return {cancellationState,bookingFailureCode,id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:cancellationState==='cancelled'?'cancelled':boundState?state.status:null,
       paymentStatus:typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'Refunded':['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
       kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true||cancellationState==='unknown'};

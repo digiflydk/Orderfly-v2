@@ -104,6 +104,30 @@ test('quote rejects native comment/quantity overflow before available quote or p
   assert.equal((await provider.create(createRequest(result, fulfillment))).kind, 'accepted'); assert.equal(f.creates, 1);
 });
 
+test('drop-off comment labels unit and message and shortens only the message to the 500-char limit', async () => {
+  const { woltDropoffComment } = loadTs('src/lib/delivery/providers/wolt/provider.ts', { 'server-only': {} });
+  assert.equal(woltDropoffComment('3. th', 'Ring på'), 'Etage/dør: 3. th\nBesked: Ring på');
+  assert.equal(woltDropoffComment(null, ' Ring på '), 'Besked: Ring på');
+  assert.equal(woltDropoffComment('3. th', '  '), 'Etage/dør: 3. th');
+  assert.equal(woltDropoffComment(null, ''), '');
+  const unit = 'u'.repeat(60), long = woltDropoffComment(unit, 'x'.repeat(1000));
+  assert.ok(long.length <= 500); assert.ok(long.startsWith(`Etage/dør: ${unit}\nBesked: x`)); assert.ok(long.endsWith('…'));
+  const emoji = woltDropoffComment(null, '😀'.repeat(400));
+  assert.ok(emoji.length <= 500); assert.doesNotThrow(() => encodeURIComponent(emoji));
+  const exact = woltDropoffComment(null, 'y'.repeat(492)); assert.equal(exact.length, 500); assert.ok(!exact.endsWith('…'));
+  // The real create body carries the labelled comment within Wolt's limit.
+  for (const [unitValue, instructions] of [['4. tv', 'Bagdøren'], ['A', 'x'.repeat(499 - 'A'.length)]]) {
+    const f = fixture(), bodies = [], original = f.deps.fetchImpl;
+    f.deps.fetchImpl = async (url, options) => { if (url.endsWith('/deliveries')) bodies.push(JSON.parse(options.body)); return original(url, options); };
+    const provider = createWoltProvider(f.deps), fulfillment = { ...request(), instructions, dropoff: { ...address, unit: unitValue } };
+    const quote = await provider.quote(fulfillment); assert.equal(quote.kind, 'available');
+    assert.equal((await provider.create(createRequest(quote, fulfillment))).kind, 'accepted');
+    const comment = bodies[0].dropoff.comment;
+    assert.ok(comment.length <= 500); assert.ok(comment.startsWith(`Etage/dør: ${unitValue}\nBesked: `));
+    if (instructions.length < 100) assert.equal(comment, `Etage/dør: ${unitValue}\nBesked: ${instructions}`); else assert.ok(comment.endsWith('…'));
+  }
+});
+
 test('create rejects unsupported native bounds definitively without any provider request', async () => {
   for (const fulfillment of [
     { ...request(), instructions: 'x'.repeat(501) },

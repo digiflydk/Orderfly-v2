@@ -57,6 +57,19 @@ export function woltParcelDescription(item: DeliveryItem): string {
 // Parcel price is the declared goods value of ONE unit (Wolt multiplies by count).
 // Managed delivery checkout only runs for DKK brands (customer-controller).
 const woltParcelPrice = (item: DeliveryItem) => item.unitPriceMinor === undefined ? {} : { price: { amount: item.unitPriceMinor, currency: 'DKK' } };
+const WOLT_COMMENT_MAX = 500; // create.ts dropoffComment limit
+/** Labelled courier note. The unit is kept whole; only the free-text message is shortened. */
+export function woltDropoffComment(unit: string | null, instructions: string): string {
+  const floor = unit?.trim() ? `Etage/dør: ${unit.trim()}` : '';
+  const message = instructions.trim();
+  if (!message) return floor;
+  const prefix = `${floor ? `${floor}\n` : ''}Besked: `, budget = WOLT_COMMENT_MAX - prefix.length;
+  if (message.length <= budget) return prefix + message;
+  // Cut on code points so a surrogate pair (emoji) is never split.
+  let cut = '';
+  for (const char of message) { if (cut.length + char.length > budget - 1) break; cut += char; }
+  return `${prefix}${cut.trimEnd()}…`;
+}
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
   if (value && typeof value === 'object') return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical((value as Record<string, unknown>)[key])}`).join(',')}}`;
@@ -97,7 +110,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         fetchedAt: quote.native.fetchedAt, isBinding: true, dropoff: quote.native.dropoff, scheduledDropoffTime: quote.native.scheduledDropoffTime },
       merchantOrderReferenceId: reference, recipient: { name: fulfillment.dropoffContact.name, phoneNumber: fulfillment.dropoffContact.phone },
       parcels: fulfillment.items.map((item, index) => ({ count: item.quantity, description: woltParcelDescription(item), identifier: `${orderRef.slice(0, 180)}-${index}`, ...woltParcelPrice(item) })),
-      dropoffComment: [fulfillment.dropoff.unit, fulfillment.instructions].filter(Boolean).join('\n'),
+      dropoffComment: woltDropoffComment(fulfillment.dropoff.unit, fulfillment.instructions),
       ...(fulfillment.bagCount === null ? {} : { bagCount: fulfillment.bagCount }),
     };
   }
