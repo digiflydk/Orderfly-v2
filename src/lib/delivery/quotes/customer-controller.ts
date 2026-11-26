@@ -18,6 +18,7 @@ import {persistCustomerQuoteClaim,reserveCustomerQuoteRate,saveAuthoritativeCust
 import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDeliveryRuntimeEnvironment} from './runtime';
 import {restaurantFingerprint} from './restaurant-snapshot';
 import { measureQuoteStep } from './performance';
+import {deliveryFulfillmentItems} from './fulfillment-items';
 export type NativeManagedPricing={routeReceipt?:string;brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
@@ -69,7 +70,7 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
    freshnessMs:300000,maxRouteAgeMs:60000,routeProfile:'car',fulfillment:{version:1,scope:{brandId:input.brand.id,locationId:input.location.id},checkoutRef:draft.binding.checkoutReference,providerId:draft.binding.providerId,
     pickup:native.pickup,dropoff:native.dropoff,pickupContact:runtime.pickupContact,dropoffContact:{name:input.customer.name,phone:normalizeDeliveryPhone(input.customer.phone)},instructions:input.customer.deliveryInstructions||'',readyAt:draft.binding.fulfillmentAt,
     ...(input.deliverySelection&&input.deliverySelection!=='asap'?{preparationMinutes:native.preparationMinutes}:{}),
-    desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:input.cartItems.map(item=>({name:item.name,quantity:item.quantity})),bagCount:null,requirements:[]}},
+    desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:deliveryFulfillmentItems(input.cartItems),bagCount:null,requirements:[]}},
    {routing:runtime.routing,provider:runtime.provider,now:()=>new Date(),areaAllows:()=>true});
   if(!result.ok){trace('quote',result.diagnostic??result.reason);return customerQuoteFailure(result.reason);}
   if(result.quote.providerQuote.expiresAt===null)trace('quote','quote_missing_expiry');

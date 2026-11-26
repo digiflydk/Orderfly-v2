@@ -26,13 +26,22 @@ export const providerCapabilitiesSchema = z.object({
 const error = z.object({ code: text(80), messageKey: text(120), retry: z.enum(['never', 'read_only', 'after_reconciliation']), nativeCode: text(100).nullable() }).strict();
 const tracking = z.string().url().max(2048).refine(v => { const u = new URL(v); return u.protocol === 'https:' && !u.username && !u.password; }, 'HTTPS tracking URL required').nullable();
 export const pickupEstimateProvenanceSchema=z.object({source:text(100),reliability:z.enum(['preliminary','verified_update']),observedAt:instant}).strict();
+export const DELIVERY_ITEM_MAX_OPTIONS = 100;
+export const DELIVERY_ITEM_OPTION_MAX_LENGTH = 150;
+export const deliveryItemSchema = z.object({
+  name: text(150), quantity: z.number().int().min(1).max(1000),
+  options: z.array(text(DELIVERY_ITEM_OPTION_MAX_LENGTH)).max(DELIVERY_ITEM_MAX_OPTIONS).optional(),
+  unitPriceMinor: integer.optional(),
+}).strict();
 export const deliveryQuoteRequestSchema = z.object({
   version: z.literal(1), scope: deliveryScopeSchema, checkoutRef: deliveryIdSchema, providerId: deliveryIdSchema,
   pickup: deliveryAddressSchema, dropoff: deliveryAddressSchema, pickupContact: contact, dropoffContact: contact,
   instructions: z.string().max(1000), readyAt: instant,
   preparationMinutes: z.number().int().min(0).max(240).optional(),
   desiredDelivery: z.discriminatedUnion('kind', [z.object({kind:z.literal('asap')}).strict(), z.object({kind:z.literal('scheduled'), interval:deliveryIntervalSchema}).strict()]),
-  items: z.array(z.object({ name: text(150), quantity: z.number().int().min(1).max(1000) }).strict()).min(1).max(100),
+  // options/unitPriceMinor are optional so quotes stored before they existed still parse.
+  // unitPriceMinor is the declared goods value of ONE unit (incl. its options), not the line total.
+  items: z.array(deliveryItemSchema).min(1).max(100),
   bagCount: z.number().int().min(1).max(100).nullable(), requirements: z.array(text(100)).max(20),
 }).strict();
 export const deliveryQuoteResultSchema = z.discriminatedUnion('kind', [
@@ -78,6 +87,7 @@ export type DeliveryMoney = z.infer<typeof deliveryMoneySchema>;
 export type RouteDistance = z.infer<typeof routeDistanceSchema>;
 export type ProviderCapabilities = z.infer<typeof providerCapabilitiesSchema>;
 export type DeliveryQuoteRequest = z.infer<typeof deliveryQuoteRequestSchema>;
+export type DeliveryItem = z.infer<typeof deliveryItemSchema>;
 export type DeliveryQuoteResult = z.infer<typeof deliveryQuoteResultSchema>;
 export type DeliveryCreateRequest = z.infer<typeof deliveryCreateRequestSchema>;
 export type DeliveryCreateResult = z.infer<typeof deliveryCreateResultSchema>;
