@@ -148,7 +148,7 @@ export function createWoltProvider(dependencies: WoltProviderDependencies): Deli
         if (!await bindingStillCurrent(binding)) return { kind: 'rejected', error: error('binding_changed_before_dispatch') };
         // Recheck after claim verification: that I/O can outlive the quote's validity.
         if (!validQuote(quote, request, binding, now())) return { kind: 'rejected', error: error('quote_changed_or_expired') };
-        const payload = nativeInput(request.fulfillment, quote, request.attemptRef, request.orderRef);
+        const payload = nativeInput(request.fulfillment, quote, request.orderRef, request.orderRef);
         // All local validation failures are definitive non-dispatch. Only an attempted provider write can be ambiguous.
         const dispatchAt = new Date(now());
         try { buildWoltCreateRequest(payload, dispatchAt); }

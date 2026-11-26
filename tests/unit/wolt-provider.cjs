@@ -10,7 +10,7 @@ const request = () => ({ version: 1, scope, checkoutRef: 'checkout-A', providerI
   pickupContact: { name: 'Shop', phone: '+4511111111' }, dropoffContact: { name: 'Test', phone: '+4522222222' },
   instructions: '', readyAt: '2026-10-25T10:20:00Z', desiredDelivery: { kind: 'asap' }, items: [{ name: 'Pizza', quantity: 1 }], bagCount: 1, requirements: [] });
 function fixture() {
-  let time = start, stored, creates = 0, calls = 0, claimed = true;
+  let time = start, stored, creates = 0, calls = 0, claimed = true, createBody;
   const binding = { ...scope, provider: 'wolt', active: true, revision: '1', environment: 'sandbox', merchantId: 'merchant-A', venueId: 'venue-A', secretRef: 'sandbox/merchant-A' };
   const deps = { environment: 'sandbox', now: () => time, authorizeScope: async () => true, resolveBinding: async () => binding,
     resolveSecret: async () => 'synthetic_fake_credential', saveQuote: async q => { stored = q; }, loadQuote: async () => stored,
@@ -19,11 +19,11 @@ function fixture() {
     fetchImpl: async (url, options) => {
       calls++;
       if (url.endsWith('/shipment-promises')) return Response.json({ id: 'promise-A', created_at: new Date(start).toISOString(), valid_until: new Date(start + 120000).toISOString(), is_binding: true, price: { amount: 4900, currency: 'DKK' }, pickup: { venue_id: 'venue-A', eta_minutes: 20 }, dropoff: { eta_minutes: 30, location: { coordinates: { lat: 55.68, lon: 12.58 }, formatted_address: 'Borgergade 10' } } }, { status: 201 });
-      if (url.endsWith('/deliveries')) { creates++; return Response.json({ id: 'delivery-A', wolt_order_reference_id: 'wolt-A', merchant_order_reference_id: 'attempt-A', status: 'INFO_RECEIVED', price: { amount: 4900, currency: 'DKK' } }, { status: 201 }); }
+      if (url.endsWith('/deliveries')) { creates++; createBody = JSON.parse(options.body); return Response.json({ id: 'delivery-A', wolt_order_reference_id: 'wolt-A', merchant_order_reference_id: 'order-A', status: 'INFO_RECEIVED', price: { amount: 4900, currency: 'DKK' } }, { status: 201 }); }
       return Response.json({ status: 'REJECTED' });
     },
   };
-  return { deps, binding, get stored() { return stored; }, set stored(v) { stored = v; }, setTime: v => { time = v; }, setClaim: v => { claimed = v; }, get creates() { return creates; }, get calls() { return calls; } };
+  return { deps, binding, get stored() { return stored; }, set stored(v) { stored = v; }, setTime: v => { time = v; }, setClaim: v => { claimed = v; }, get creates() { return creates; }, get createBody() { return createBody; }, get calls() { return calls; } };
 }
 const createRequest = (quote, fulfillment = request()) => ({ version: 1, scope, providerId: 'wolt', orderRef: 'order-A', attemptRef: 'attempt-A', quoteRef: quote.quoteRef, requestDigest: 'a'.repeat(64), readyAt: fulfillment.readyAt, deliveryInterval: null, quotedCost: quote.cost, fulfillment });
 
@@ -34,6 +34,8 @@ test('real shared schema accepts mapped quote/create/cancel; native snapshot sta
   assert.equal('native' in quote, false); assert.equal(quote.cost.amountMinor, 4900);
   const created = await provider.create(createRequest(quote));
   assert.equal(created.kind, 'accepted'); assert.equal(contract.deliveryCreateResultSchema.safeParse(created).success, true); assert.equal(f.creates, 1);
+  // Wolt certification: the partner order ID (orders/{orderId}) is the merchant reference, never the internal attempt digest.
+  assert.equal(f.createBody.merchant_order_reference_id, 'order-A'); assert.notEqual(f.createBody.merchant_order_reference_id, 'attempt-A');
   const cancelled = await provider.cancel({ scope, providerDeliveryId: 'delivery-A', attemptRef: 'attempt-A', operatorReason: 'Customer request', acceptedFee: null, feeQuoteRef: null, feeQuoteRevision: null });
   assert.deepEqual(cancelled, { kind: 'cancelled', fee: null });
 });
@@ -200,4 +202,13 @@ test('binding rotation during cancellation lookup prevents request using old cre
   f.deps.loadCancellation = async () => { const saved = await load(); f.binding.revision = '2'; return saved; };
   const result = await createWoltProvider(f.deps).cancel({ scope, providerDeliveryId: 'delivery-A', attemptRef: 'attempt-A', operatorReason: 'Customer request', acceptedFee: null, feeQuoteRef: null, feeQuoteRevision: null });
   assert.equal(result.kind, 'unknown'); assert.equal(result.error.code, 'binding_changed_before_cancellation'); assert.equal(f.calls, 0);
+});
+
+test('create sends the human order ID as merchant_order_reference_id; a foreign echoed reference stays unknown', async () => {
+  const f = fixture(), provider = createWoltProvider(f.deps);
+  const quote = await provider.quote(request());
+  const created = await provider.create({ ...createRequest(quote), orderRef: 'ORD-292972' });
+  // The mock echoes 'order-A', so a mismatched echo must not be accepted as this order's booking.
+  assert.equal(f.createBody.merchant_order_reference_id, 'ORD-292972'); assert.equal(f.creates, 1);
+  assert.deepEqual(created, { kind: 'unknown', attemptRef: 'attempt-A', error: { code: 'REFERENCE_MISMATCH', messageKey: 'delivery.wolt.REFERENCE_MISMATCH', retry: 'after_reconciliation', nativeCode: null } });
 });
