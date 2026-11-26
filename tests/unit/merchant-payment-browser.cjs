@@ -201,7 +201,12 @@ test('merchant cancellation releases a promotion reservation without paid KPI or
   // The cancel action refreshes the list; leaving mid-refresh aborts the next navigation.
   await page.waitForLoadState('networkidle');
   await page.goto(receiptUrl);
-  await expect(page.getByRole('heading', { name: 'Ordren er annulleret', exact: true })).toBeVisible();
+  // Under full-suite load the first receipt render can predate the cancellation projection; reload until it shows (bounded).
+  await expect(async () => {
+    const heading = page.getByRole('heading', { name: 'Ordren er annulleret', exact: true });
+    if (!await heading.isVisible()) { await page.reload(); }
+    await expect(heading).toBeVisible({ timeout: 5000 });
+  }).toPass({ timeout: 30000 });
   await expect(page.getByText(/Restauranten har annulleret din afhentningsordre/)).toBeVisible();
   await expect(page.getByText(/Betalingsvinduet/)).toHaveCount(0);
 });

@@ -104,3 +104,10 @@ test('long option lists are capped to the Wolt description limit and still book'
   assert.equal((await provider.create(createRequest(quote, fulfillment))).kind, 'accepted');
   assert.equal(f.bodies.create[0].parcels[0].description, description);
 });
+
+test('a long description is cut on code points and never splits an emoji', () => {
+  const name = `${'P'.repeat(498)}🍕🍕`;
+  const description = woltParcelDescription({ name, quantity: 1 });
+  assert.ok(description.length <= 500); assert.ok(description.endsWith('…'));
+  assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(description), 'no lone surrogate');
+});

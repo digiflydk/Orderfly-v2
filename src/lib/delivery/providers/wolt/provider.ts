@@ -52,7 +52,11 @@ const nativeFulfillmentValid = (request: DeliveryQuoteRequest) => /^\+[1-9]\d{6,
 const WOLT_PARCEL_DESCRIPTION_MAX = 500;
 export function woltParcelDescription(item: DeliveryItem): string {
   const full = item.options?.length ? `${item.name} (${item.options.join(', ')})` : item.name;
-  return full.length <= WOLT_PARCEL_DESCRIPTION_MAX ? full : `${full.slice(0, WOLT_PARCEL_DESCRIPTION_MAX - 1).trimEnd()}…`;
+  if (full.length <= WOLT_PARCEL_DESCRIPTION_MAX) return full;
+  // Cut on code points so a surrogate pair (emoji) is never split.
+  let cut = '';
+  for (const char of full) { if (cut.length + char.length > WOLT_PARCEL_DESCRIPTION_MAX - 1) break; cut += char; }
+  return `${cut.trimEnd()}…`;
 }
 // Parcel price is the declared goods value of ONE unit (Wolt multiplies by count).
 // Managed delivery checkout only runs for DKK brands (customer-controller).

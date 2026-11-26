@@ -27,7 +27,7 @@ const MESSAGES: Record<BookingFailureCode, string> = {
   settings_changed: 'Leveringsindstillingerne (pris, åbningstid eller afhentningstid) blev ændret efter kundens bestilling. Kontrollér leveringsindstillingerne.',
   binding_changed_before_dispatch: 'Wolt-forbindelsen for restauranten blev ændret lige før kurérbestillingen. Kontrollér Wolt-opsætningen under Levering.',
   invalid_create_payload: `Ordrens leveringsoplysninger kunne ikke sendes til Wolt. ${SUPPORT}`,
-  invalid_request: 'Wolt afviste ordrens leveringsoplysninger (fx adresse, telefonnummer eller tidspunkt). Kontakt kunden, hvis ordren skal afhentes i stedet.',
+  invalid_request: 'Ordrens leveringsoplysninger blev afvist (fx adresse, telefonnummer eller tidspunkt). Kontakt kunden, hvis ordren skal afhentes i stedet.',
   authentication: 'Wolt afviste restaurantens adgangsnøgle. Kontakt Orderfly-support, før flere kurérordrer modtages.',
   configuration: 'Restauranten mangler opsætning hos Wolt (fx venue eller betalingsaftale). Kontakt Wolt eller Orderfly-support.',
   unavailable: 'Wolt kunne ikke levere til adressen eller tidspunktet (fx uden for leveringsområdet eller lukket). Kontakt kunden, hvis ordren skal afhentes i stedet.',
