@@ -32,8 +32,8 @@ No step waits for a person unless the issue needs a product decision.
 The process lives on `main`: `AGENTS.md`, `CLAUDE.md` (which imports `AGENTS.md`), this file, `docs/deployment-flow.md` and `.claude/`. A process change takes effect when it is merged to `main`; nobody has to copy it into running chats.
 
 - **New sessions** clone `main` and load `CLAUDE.md` and `AGENTS.md` at start.
-- **Sessions on older feature branches:** the `.claude/hooks/process-sync.sh` hook (SessionStart and UserPromptSubmit in `.claude/settings.json`) fetches `origin/main` at start, resume and compaction, and at most every 15 minutes during a session. When `main` has process changes the branch does not have, it injects `AGENTS.md` and the diff from `main` into the session. The version on `main` then applies, and Work merges `origin/main` into the branch before the next commit or PR update.
-- The hook only reads; it never blocks a session. `PROCESS_SYNC_INTERVAL` (seconds) changes the mid-session interval.
+- **Sessions on older feature branches:** the `.claude/hooks/process-sync.sh` hook (SessionStart and UserPromptSubmit in `.claude/settings.json`) fetches `origin/main` at start, resume and compaction, and during a session when a prompt is submitted (at most every 15 minutes). When `main` has process changes the branch does not have, it injects `AGENTS.md` and the diff from `main` into the session. The version on `main` then applies, and Work merges `origin/main` into the branch before the next commit or PR update.
+- The hook only runs `git fetch` and never changes the working tree or blocks a session. The mid-session check runs when a prompt is submitted, at most every `PROCESS_SYNC_INTERVAL` seconds (default 900).
 - A process change is written to the files above, not only in a chat or an issue comment, so the hook can carry it.
 
 ## Commands

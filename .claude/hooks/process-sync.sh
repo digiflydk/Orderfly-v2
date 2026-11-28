@@ -12,7 +12,9 @@
 #   process-sync.sh prompt    UserPromptSubmit: re-checks at most every
 #                             PROCESS_SYNC_INTERVAL seconds (default 900)
 #
-# It never blocks the session: every failure exits 0 silently.
+# It never changes the working tree (only `git fetch`) and never blocks the
+# session: every failure exits 0 silently. The mid-session check runs when a
+# prompt is submitted.
 
 set -u
 MODE="${1:-session}"
@@ -31,11 +33,13 @@ if [ "$MODE" = "prompt" ] && [ -f "$STAMP" ]; then
   [ $((now - last)) -lt "$INTERVAL" ] && exit 0
 fi
 
-timeout 20 git fetch --quiet origin main >/dev/null 2>&1 || exit 0
+# Stamp before fetching, so an offline session does not pay the fetch timeout on every prompt.
 echo "$now" > "$STAMP" 2>/dev/null
+if command -v timeout >/dev/null 2>&1; then timeout 20 git fetch --quiet origin main >/dev/null 2>&1 || exit 0
+else git fetch --quiet origin main >/dev/null 2>&1 || exit 0; fi
 git rev-parse --verify --quiet origin/main >/dev/null || exit 0
 
-existing=()
+existing=()  # AGENTS.md always exists, so the list is never empty
 for f in "${FILES[@]}"; do
   if git cat-file -e "origin/main:$f" 2>/dev/null || [ -e "$f" ]; then existing+=("$f"); fi
 done
@@ -70,16 +74,11 @@ echo "from this branch. Follow it from now on, also for work already in progress
 echo "Before the next commit, push or PR update, merge origin/main into this branch"
 echo "(git merge --no-edit origin/main) so the branch carries the current process."
 echo
-if echo "$changed" | grep -qx "AGENTS.md"; then
-  echo "===== AGENTS.md on origin/main (authoritative) ====="
-  git show "origin/main:AGENTS.md" 2>/dev/null
-  echo "===== end AGENTS.md ====="
-  echo
-fi
-others="$(echo "$changed" | grep -vx "AGENTS.md")"
-if [ -n "$others" ]; then
-  echo "===== Process changes on main since this branch was cut (truncated at 300 lines) ====="
-  git diff "$base" origin/main -- $others 2>/dev/null | head -300
-  echo "===== end diff ====="
-fi
+echo "Read each changed file in full from main now, e.g. git show origin/main:AGENTS.md"
+echo
+# Hook context is limited, so show the changes, not whole files.
+echo "===== Process changes on main since this branch was cut (truncated) ====="
+git diff "$base" origin/main -- $changed 2>/dev/null | head -c 8000
+echo
+echo "===== end diff ====="
 exit 0
