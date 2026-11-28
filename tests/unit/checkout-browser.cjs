@@ -620,6 +620,23 @@ test('managed discount change automatically reprices before another payment',asy
 test('managed instructions change revokes the previous price until automatic requote',async t=>{
  const page=await setup(t,'managed-instructions');const input=page.getByLabel('Leveringsinstruktioner (valgfrit)',{exact:true});await input.fill('Ring på ved bagdøren.');await fillDeliveryAddress(page);await quoted(page);assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryInstructions),'Ring på ved bagdøren.');await input.fill('Ring på ved hoveddøren.');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryInstructions)).toBe('Ring på ved hoveddøren.');await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-instructions')[0][1].deliveryInstructions,'Ring på ved hoveddøren.');
 });
+test('managed Etage/dør is a separate labelled address field, requotes on change and reaches payment apart from instructions',async t=>{
+ const page=await setup(t,'managed-unit');const unit=page.getByLabel('Etage/dør (valgfrit)',{exact:true}),instructions=page.getByLabel('Leveringsinstruktioner (valgfrit)',{exact:true});
+ await expect(unit).toBeVisible();assert.equal(await unit.getAttribute('autocomplete'),'address-line2');assert.equal(await unit.getAttribute('maxlength'),'60');
+ // The floor/door field sits in the address group, before postcode, and is not the instructions textarea.
+ assert.equal(await page.evaluate(()=>{const [street,unit,zip]=['Adresse','Etage/dør (valgfrit)','Postnummer'].map(name=>[...document.querySelectorAll('label')].find(l=>l.textContent===name)?.control);return !!street&&!!unit&&!!zip&&!!(street.compareDocumentPosition(unit)&Node.DOCUMENT_POSITION_FOLLOWING)&&!!(unit.compareDocumentPosition(zip)&Node.DOCUMENT_POSITION_FOLLOWING)&&unit.tagName==='INPUT';}),true);
+ await unit.fill(' 2. th. ');await instructions.fill('Ring på hos Jensen');await fillDeliveryAddress(page);await quoted(page);
+ let info=await page.evaluate(()=>window.quoteInputs.at(-1).customerInfo);assert.equal(info.deliveryUnit,'2. th.');assert.equal(info.deliveryInstructions,'Ring på hos Jensen');assert.equal(info.street,'Testvej 1');
+ const count=await page.evaluate(()=>window.quoteInputs.length);await unit.fill('3. tv.');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await expect.poll(()=>page.evaluate(()=>window.quoteInputs.length)).toBe(count+1);await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryUnit)).toBe('3. tv.');await quoted(page);
+ // Clearing the field omits it, so the comma fallback in the street line applies server-side.
+ await unit.fill('');await expect.poll(()=>page.evaluate(()=>'deliveryUnit' in window.quoteInputs.at(-1).customerInfo)).toBe(false);await quoted(page);
+ await unit.fill('3. tv.');await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryUnit)).toBe('3. tv.');await quoted(page);
+ await pay(page);await page.waitForURL('**/stripe?*');info=requests.get('managed-unit')[0][1];assert.equal(info.deliveryUnit,'3. tv.');assert.equal(info.deliveryInstructions,'Ring på hos Jensen');
+});
+test('checkout without managed delivery shows no Etage/dør field',async t=>{
+ const page=await setup(t,'success');await expect(page.getByLabel('Etage/dør (valgfrit)',{exact:true})).toHaveCount(0);
+});
 test('closed kitchen sends the displayed next-day slot to automatic quote and payment',async t=>{
  const page=await setup(t,'managed-future');await expect(page.getByText('Forventet levering ca. ons. 28. okt. 12:40',{exact:true})).toBeVisible();await fillDeliveryAddress(page);await quoted(page);const selection=await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime);assert.equal(selection,'2026-10-28T11:40:00.000Z');await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-future')[0][9],selection);
 });

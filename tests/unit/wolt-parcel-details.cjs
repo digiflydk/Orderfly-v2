@@ -111,3 +111,22 @@ test('a long description is cut on code points and never splits an emoji', () =>
   assert.ok(description.length <= 500); assert.ok(description.endsWith('…'));
   assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?:^|[^\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(description), 'no lone surrogate');
 });
+
+test('checkout Etage/dør reaches the Wolt drop-off comment apart from the message and is bound by the fingerprint', async () => {
+  const { normalizeDanishDeliveryAddress } = loadTs('src/lib/delivery/quotes/address.ts');
+  const normalized = normalizeDanishDeliveryAddress({ street: 'Borgergade 10, 4. tv.', postcode: '1300', city: 'Copenhagen', country: 'DK', unit: ' 2. th. ' });
+  const dropoff = { ...normalized, coordinates: address.coordinates };
+  const fulfillment = { ...request(), dropoff, instructions: 'Ring på hos Jensen' };
+  const f = fixture(), provider = createWoltProvider(f.deps), quote = await provider.quote(fulfillment);
+  assert.equal(quote.kind, 'available');
+  assert.equal(JSON.stringify(f.bodies.quote[0]).includes('2. th.'), false, 'floor/door is not part of the priced address');
+  assert.equal((await provider.create(createRequest(quote, fulfillment))).kind, 'accepted');
+  assert.equal(f.bodies.create[0].dropoff.comment, 'Etage/dør: 2. th.\nBesked: Ring på hos Jensen');
+  // A changed or removed unit after quoting cannot dispatch the old quote, exactly like a changed address or message.
+  for (const changed of [{ dropoff: { ...dropoff, unit: '3. th.' } }, { dropoff: { ...dropoff, unit: null } }, { instructions: 'Ring på hos Hansen' }]) {
+    const g = fixture(), other = createWoltProvider(g.deps), q = await other.quote(fulfillment);
+    assert.notEqual(woltFulfillmentFingerprint({ ...fulfillment, ...changed }), woltFulfillmentFingerprint(fulfillment));
+    const result = await other.create(createRequest(q, { ...fulfillment, ...changed }));
+    assert.equal(result.kind, 'rejected'); assert.equal(result.error.code, 'quote_changed_or_expired'); assert.equal(g.bodies.create.length, 0);
+  }
+});

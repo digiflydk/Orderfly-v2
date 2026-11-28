@@ -8,6 +8,7 @@ import type {QuoteTimings} from '@/lib/delivery/quotes/performance-schema';
 import {quoteDiagnosticCode,type QuoteDiagnostic,type QuoteTrace} from '@/lib/delivery/quotes/diagnostic-schema';
 import {customerQuoteFailure} from '@/lib/delivery/quotes/customer-failure';
 import {normalizeDeliveryPhone,deliveryPhoneMessage} from '@/lib/delivery/quotes/phone';
+import {deliveryAddressLine} from '@/lib/delivery/quotes/address';
 import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
 import { getClubSignupDiscountEligibility, validateClubCheckoutSignup, prepareClubCheckoutSignup } from '@/lib/loyalty/stamp-card/club-signup';
 
@@ -945,7 +946,8 @@ export async function createStripeCheckoutSessionAction(
             // Do not resolve a mutable customer profile when rendering old orders.
             phone: customerInfo.phone,
             ...(managedQuote ? {deliveryInstructions:customerInfo.deliveryInstructions||''} : {}),
-            address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
+            // Managed delivery shows the quoted floor/door ("Etage/dør") wherever the address is shown.
+            address: deliveryType === 'delivery' ? deliveryAddressLine({street:customerInfo.street||'',zipCode:customerInfo.zipCode||'',city:customerInfo.city||'',unit:managedQuote?.fulfillment.dropoff?.unit??null}) : 'For Pickup',
         },
         ...(nativeFree?{freeCheckout:{version:1,kind:'discount_card'}}:{}),
         ...(paymentMethod === 'online' && !nativeFree ? { psp: { provider: agreement?.provider || 'stripe' }, ...(agreement ? {paymentAgreement:agreement.provider==='stripe'?agreement.binding:worldlineBindingSchema.parse({provider:'worldline',mode:agreement.mode,owner:agreement.owner,reference:agreement.reference,merchantNumber:agreement.merchantNumber,revision:agreement.revision})} : {}) } : {}),

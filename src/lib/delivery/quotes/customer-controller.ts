@@ -37,7 +37,9 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const readyAt=preservedReadyAt??(scheduled?new Date(Date.parse(resolveManagedFulfillmentTime(location,'delivery',input.deliverySelection!,now,result.settings))-MANAGED_DELIVERY_TRANSPORT_MINUTES*60000).toISOString():resolveDeliveryKitchenReadyTime(location,now,result.settings.preparationMinutes));
  if(!deliveryScheduleAt(result.settings,new Date(readyAt)).open)throw Error('delivery_kitchen_closed');
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
- const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
+ // The explicit floor/door wins over a comma suffix in the street line. As part of the dropoff it is bound
+ // by normalizedAddress (requestDigest) and the provider fulfillment fingerprint, exactly like the address.
+ const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country,unit:customer.deliveryUnit});
  const key=checkoutKeyHash(input.checkoutKey);
  if(!runtimeEnvironment)throw Error('delivery_environment_unconfigured');
  if(expectedEnvironment!==undefined&&runtimeEnvironment!==expectedEnvironment)throw Error('delivery_environment_changed');

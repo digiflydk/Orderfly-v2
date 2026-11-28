@@ -18,6 +18,14 @@ Internal browser acceptance for this UX must cover automatic pricing after valid
 
 `CheckoutClient.managedDeliveryEnabled` defaults false and is supplied only by the server page. Managed delivery uses `requestManagedDeliveryQuoteAction`, invalidates quotes for contact/address/cart/time/discount changes, displays authoritative quote fee/total in both summary layouts and the payment button, and appends the exact accepted proof plus in-memory draft key as the final checkout argument. Pending quote prices are shown as pending, never as zero. Legacy pickup sends the original eleven arguments. Quote retrieval requires contact/address fields but does not require purchase terms acceptance; final checkout still does.
 
+### Etage/dør (floor/door)
+
+Managed delivery shows an optional single-line **Etage/dør (valgfrit)** input in the address group, between *Adresse* and *Postnummer* (`autocomplete="address-line2"`, max 60 characters, placeholder “Fx 2. th.”). It is separate from the *Leveringsinstruktioner* textarea (max 400). Legacy delivery and pickup do not show it, and a hidden value is never sent. The browser trims the value and omits it when empty; the server schema (`checkout-schema.ts`, `deliveryUnit`) trims again, caps it at 60 characters and rejects control/format characters.
+
+`normalizeDanishDeliveryAddress` (`src/lib/delivery/quotes/address.ts`) turns it into the fulfillment's `dropoff.unit` (NFKC, collapsed whitespace). If the field is empty, the earlier fallback still applies: text after a comma in the street line (“Store Kongensgade 50, 2. th.”) becomes the unit. If both are given, the explicit field wins. The unit is not part of the routed/priced address. It is part of the quote-bound inputs: changing it revokes the displayed price and requotes, exactly like the address and the instructions. The server also rejects an accepted quote whose unit no longer matches (see `docs/wolt-drive-booking.md`).
+
+The order's display address (`customerDetails.address`, used by the receipt, Merchant terminal, kitchen print and invoice) is built by `deliveryAddressLine` from the quoted unit, e.g. `Store Kongensgade 50, 2. th., 1264 København K`. An explicit unit replaces a comma suffix in the street line, so the receipt shows the same unit the courier receives. The customer profile address is unchanged. Browser coverage: `tests/unit/checkout-browser.cjs` (“managed Etage/dør …”).
+
 Earlier Chromium runs covered the previous explicit quote controls and are historical evidence, not acceptance of the automatic-pricing UX. Current-head regression must verify the actual CheckoutClient, exact proof/fee submission and unavailable-price payment blocking. Existing live sandbox milestones are recorded in `native-browser-qa.md`; this UI change does not establish full courier lifecycle or production activation acceptance.
 
 ## Existing secure surfaces
