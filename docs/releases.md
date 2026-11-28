@@ -6,4 +6,4 @@ Every release bumps `version` in `package.json` (semver: minor for features, pat
 |---|---|---|---|
 | 1.1.0 | 2026-11-28 | PR #942 | Release number shown in the admin portals; new development process for every task. |
 
-Releases before 1.1.0 were not numbered; see `CHANGELOG-SUMMARY.md` and the merged pull requests.
+Releases before 1.1.0 were not numbered; see `docs/CHANGELOG-SUMMARY.md` and the merged pull requests.
