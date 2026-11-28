@@ -92,3 +92,24 @@ test('admin order list says an unpaid order is not paid instead of an unknown da
   assert.equal(formatPaidAt('not a date', 'Paid'), 'Ukendt dato');
   assert.match(formatPaidAt('2026-10-18T12:40:00Z', 'Paid'), /18\. okt\. 2026.*14\.40/);
 });
+
+test('refunds are projected from refund markers; stored paymentStatus stays Paid', () => {
+  const { fullyRefunded, projectedPaymentStatus, terminalPaymentLabel } = loadTs('src/lib/orders/presentation.ts');
+  const paid = { paymentStatus: 'Paid', totalAmount: 201, refundedAmountOre: 0 };
+  assert.equal(projectedPaymentStatus(paid), 'Paid');
+  assert.equal(projectedPaymentStatus({ ...paid, refundedAmountOre: 20100 }), 'Refunded');
+  assert.equal(projectedPaymentStatus({ ...paid, refundedAmountOre: 20099 }), 'Paid', 'a partial refund is still paid');
+  assert.equal(projectedPaymentStatus({ ...paid, refundedAmountOre: '20100' }), 'Paid', 'malformed markers are not a refund');
+  assert.equal(projectedPaymentStatus({ ...paid, totalAmount: 0, refundedAmountOre: 0 }), 'Paid', 'a free order is not refunded');
+  assert.equal(projectedPaymentStatus({ paymentStatus: 'Refunded' }), 'Refunded');
+  assert.equal(projectedPaymentStatus({ paymentStatus: 'Pending' }), 'Pending');
+  assert.equal(projectedPaymentStatus({}), null);
+  assert.equal(fullyRefunded({ totalAmount: 99.995, refundedAmountOre: 10000 }), true);
+  assert.equal(terminalPaymentLabel({ ...paid, refundedAmountOre: 20100 }), 'Refunderet');
+  assert.equal(terminalPaymentLabel({ ...paid, refundedAmountOre: 20100 }, 'Betaling mangler'), 'Refunderet');
+  assert.equal(terminalPaymentLabel(paid, 'Betaling mangler'), 'Betalt');
+  assert.equal(terminalPaymentLabel({ paymentStatus: 'Pending' }, 'Betaling mangler'), 'Betaling mangler');
+  assert.equal(terminalPaymentLabel({ paymentStatus: 'Failed' }, 'Ikke betalt', 'Betaling fejlet'), 'Betaling fejlet');
+  assert.equal(terminalPaymentLabel({ paymentStatus: 'Failed' }, 'Betaling mangler'), 'Betaling mangler');
+  assert.equal(require('../../src/app/merchant/orders/kds-english.json').Refunderet, 'Refunded');
+});

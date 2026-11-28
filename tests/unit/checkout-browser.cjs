@@ -66,7 +66,7 @@ before(async()=>{
  export const newsletterSyncAvailableAction=async()=>true;
  export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:scenario.includes('consent-layout')?'Medlemskab af Fixture Club kræver tilmelding til vores nyhedsbrev. Læs mere om, hvordan vi behandler dine oplysninger, i vores privatlivspolitik (https://www.esmeraldapizza.dk/privatlivspolitik).':'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
- export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);if(window.holdQuote)await new Promise(resolve=>{window.releaseQuote=resolve;});return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:scenario==='managed-eta'?{earliest:'2026-10-30T12:40:00Z',latest:'2026-10-30T12:50:00Z'}:null,expiresAtMs:Date.now()+120000};}
+ export async function requestManagedDeliveryQuoteAction(input){window.quoteInputs=window.quoteInputs||[];window.quoteInputs.push(input);if(window.holdQuote)await new Promise(resolve=>{window.releaseQuote=resolve;});return scenario==='managed-unavailable'?{ok:false,code:'delivery_unavailable'}:scenario==='managed-preview-unsupported'?{ok:false,code:'unsupported_schedule'}:{ok:true,quoteId:'quote-fixture',quoteToken:'a'.repeat(64),checkoutFingerprint:'b'.repeat(64),customerFeeMinor:3500,checkoutTotalMinor:13500,currency:'DKK',deliveryInterval:scenario==='managed-eta'?{earliest:'2026-10-30T12:40:00Z',latest:'2026-10-30T12:50:00Z'}:null,expiresAtMs:Date.now()+120000};}
  export async function validateDiscountAction(){if(scenario==='managed-discount')return {success:true,discount:{id:'code-discount',applicationType:'code',discountType:'percentage',discountValue:10,code:'TEST10',isActive:true}};throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -102,7 +102,7 @@ before(async()=>{
  const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location,managedDeliveryEnabled:new URLSearchParams(window.location.search).get('case')?.startsWith('managed-')});
  const scenario=new URLSearchParams(window.location.search).get('case')||'';
  const v2=scenario.startsWith('v2-')||new URLSearchParams(window.location.search).get('v2')==='1';
- const schedule=scenario.startsWith('managed-schedule-')?{...(scenario==='managed-schedule-inherited'?{}:{scheduleMode:'manual'}),enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(scenario!=='managed-schedule-valid'?3:5)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[]}:null;
+ const schedule=scenario.startsWith('managed-schedule-')?{...(scenario==='managed-schedule-inherited'?{}:{scheduleMode:'manual'}),enabled:true,paused:false,timezone:'Europe/Copenhagen',preparationMinutes:20,weeklyHours:Array.from({length:7},(_,day)=>({day,intervals:day===(['managed-schedule-valid','managed-schedule-wolt'].includes(scenario)?5:3)?[{startMinute:660,endMinute:1260}]:[]})),exceptions:[],...(scenario==='managed-schedule-wolt'?{scheduledLead:{minMinutes:60,maxMinutes:10080}}:{})}:null;
  const scheduledSurface=React.createElement(DeliveryPriceProvider,{managed:scenario.startsWith('managed-'),schedule},surface);
  const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},scheduledSurface):scheduledSurface;
  createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(StorefrontV2Provider,{enabled:v2},v2?React.createElement('div',{'data-commerce-root':true,'data-brand-slug':'esmeralda','data-storefront-version':'2'},React.createElement('div',{className:'container mx-auto py-8 flex-1 max-w-[1140px] px-4'},content)):content))));
@@ -178,7 +178,7 @@ async function setup(t,scenario,email='test@example.test',options={}){
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
  if(scenario==='telemetry')await page.addInitScript(()=>{window.telemetryUnavailable=true;});
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
- if(scenario.startsWith('managed-schedule-'))await page.clock.setFixedTime(new Date('2026-10-30T08:45:00.000Z'));
+ if(scenario.startsWith('managed-schedule-'))await page.clock.setFixedTime(new Date(scenario==='managed-schedule-wolt'?'2026-10-30T10:43:00.000Z':'2026-10-30T08:45:00.000Z'));
  if(scenario==='managed-future')await page.clock.setFixedTime(new Date('2026-10-27T22:00:00.000Z'));
  await page.goto(origin+'/?case='+scenario+(options.v2?'&v2=1':''));
  await page.getByPlaceholder(v2?'Indtast dit navn':'John Doe',{exact:true}).waitFor().catch(async error=>{
@@ -620,6 +620,30 @@ test('managed discount change automatically reprices before another payment',asy
 test('managed instructions change revokes the previous price until automatic requote',async t=>{
  const page=await setup(t,'managed-instructions');const input=page.getByLabel('Leveringsinstruktioner (valgfrit)',{exact:true});await input.fill('Ring på ved bagdøren.');await fillDeliveryAddress(page);await quoted(page);assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryInstructions),'Ring på ved bagdøren.');await input.fill('Ring på ved hoveddøren.');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryInstructions)).toBe('Ring på ved hoveddøren.');await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-instructions')[0][1].deliveryInstructions,'Ring på ved hoveddøren.');
 });
+test('managed Etage/dør is a separate labelled address field, requotes on change and reaches payment apart from instructions',async t=>{
+ const page=await setup(t,'managed-unit');const unit=page.getByLabel('Etage/dør (valgfrit)',{exact:true}),instructions=page.getByLabel('Leveringsinstruktioner (valgfrit)',{exact:true});
+ await expect(unit).toBeVisible();assert.equal(await unit.getAttribute('autocomplete'),'address-line2');assert.equal(await unit.getAttribute('maxlength'),'60');
+ // The floor/door field sits in the address group, before postcode, and is not the instructions textarea.
+ assert.equal(await page.evaluate(()=>{const [street,unit,zip]=['Adresse','Etage/dør (valgfrit)','Postnummer'].map(name=>[...document.querySelectorAll('label')].find(l=>l.textContent===name)?.control);return !!street&&!!unit&&!!zip&&!!(street.compareDocumentPosition(unit)&Node.DOCUMENT_POSITION_FOLLOWING)&&!!(unit.compareDocumentPosition(zip)&Node.DOCUMENT_POSITION_FOLLOWING)&&unit.tagName==='INPUT';}),true);
+ await unit.fill(' 2. th. ');await instructions.fill('Ring på hos Jensen');await fillDeliveryAddress(page);await quoted(page);
+ let info=await page.evaluate(()=>window.quoteInputs.at(-1).customerInfo);assert.equal(info.deliveryUnit,'2. th.');assert.equal(info.deliveryInstructions,'Ring på hos Jensen');assert.equal(info.street,'Testvej 1');
+ const count=await page.evaluate(()=>window.quoteInputs.length);await unit.fill('3. tv.');await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await expect.poll(()=>page.evaluate(()=>window.quoteInputs.length)).toBe(count+1);await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryUnit)).toBe('3. tv.');await quoted(page);
+ // Clearing the field omits it, so the comma fallback in the street line applies server-side.
+ await unit.fill('');await expect.poll(()=>page.evaluate(()=>'deliveryUnit' in window.quoteInputs.at(-1).customerInfo)).toBe(false);await quoted(page);
+ await unit.fill('3. tv.');await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryUnit)).toBe('3. tv.');await quoted(page);
+ await pay(page);await page.waitForURL('**/stripe?*');info=requests.get('managed-unit')[0][1];assert.equal(info.deliveryUnit,'3. tv.');assert.equal(info.deliveryInstructions,'Ring på hos Jensen');
+});
+test('managed Etage/dør with an invisible character shows a visible message instead of silently blocking the quote',async t=>{
+ const page=await setup(t,'managed-unit');const unit=page.getByLabel('Etage/dør (valgfrit)',{exact:true});
+ await unit.fill('2.\u00adth.');await fillDeliveryAddress(page);await unit.focus();await unit.blur();
+ await expect(page.getByText('Etage/dør må kun indeholde almindelige tegn',{exact:false}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await unit.fill('2. th.');await expect(page.getByText('Etage/dør må kun indeholde almindelige tegn',{exact:false})).toHaveCount(0);await quoted(page);
+});
+test('checkout without managed delivery shows no Etage/dør field',async t=>{
+ const page=await setup(t,'success');await expect(page.getByLabel('Etage/dør (valgfrit)',{exact:true})).toHaveCount(0);
+});
 test('closed kitchen sends the displayed next-day slot to automatic quote and payment',async t=>{
  const page=await setup(t,'managed-future');await expect(page.getByText('Forventet levering ca. ons. 28. okt. 12:40',{exact:true})).toBeVisible();await fillDeliveryAddress(page);await quoted(page);const selection=await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime);assert.equal(selection,'2026-10-28T11:40:00.000Z');await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('managed-future')[0][9],selection);
 });
@@ -731,6 +755,30 @@ test('before opening actual picker changes valid Friday 11:50 to 12:05 and autom
  await page.evaluate(()=>{window.holdQuote=false;window.releaseQuote();});
  await quoted(page);await pay(page);await page.waitForURL('**/stripe?*');
  assert.equal(requests.get('managed-schedule-valid')[0][9],'2026-10-30T11:05:00.000Z');
+});
+
+test('Wolt Drive picker keeps ASAP but offers no scheduled arrival under the 60-minute minimum plus margin',async t=>{
+ // Rehearsal regression: at 11:43 the picker offered 12:35, 12:40 … next to ASAP; Wolt refuses drop-offs under 60 min.
+ const page=await setup(t,'managed-schedule-wolt');
+ await page.getByRole('button',{name:'Ændre tidspunkt',exact:true}).click();
+ const dialog=page.getByRole('dialog');await dialog.getByRole('combobox',{name:'Tidspunkt'}).click();
+ await expect(page.getByRole('option',{name:/^Hurtigst muligt \(/})).toBeEnabled();
+ for(const early of ['12:35','12:40','12:45','12:55'])await expect(page.getByRole('option',{name:`fre. 30. okt. ${early}`,exact:true})).toHaveCount(0);
+ await page.getByRole('option',{name:'fre. 30. okt. 13:00',exact:true}).click();
+ await dialog.getByRole('button',{name:'Gem tidspunkt'}).click();
+ await fillDeliveryAddress(page);await quoted(page);
+ assert.equal(await page.evaluate(()=>window.quoteInputs.at(-1).deliveryTime),'2026-10-30T12:00:00.000Z');
+});
+test('failed courier confirmation after a price preview clears success text and stale price, and blocks payment',async t=>{
+ const page=await setup(t,'managed-preview-unsupported');await fillDeliveryAddress(page);
+ await expect(page.getByRole('alert').filter({hasText:'Vælg et senere leveringstidspunkt'})).toBeVisible();
+ await expect(page.getByText('Leveringsprisen er beregnet. Vi bekræfter nu leveringen, før du kan betale.')).toHaveCount(0);
+ await expect(page.getByText('Vi kan ikke beregne leveringsprisen lige nu. Prøv igen.')).toHaveCount(0);
+ await expect(page.getByText('35,00 kr.',{exact:true}).filter({visible:true})).toHaveCount(0);
+ await expect(page.getByText('135,00',{exact:false}).filter({visible:true})).toHaveCount(0);
+ await expect(page.getByText('Ikke beregnet',{exact:true}).filter({visible:true}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await page.locator('form').evaluate(form=>form.requestSubmit());await page.waitForTimeout(200);assert.equal(requests.get('managed-preview-unsupported')?.length||0,0);
 });
 
 test('valid provider ETA replaces default in the single checkout time field before payment',async t=>{

@@ -66,6 +66,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/delivery/quotes/request-context':loadTs('src/lib/delivery/quotes/request-context.ts',{'server-only':{}}),
   '@/lib/delivery/quotes/restaurant-cache':loadTs('src/lib/delivery/quotes/restaurant-cache.ts',{'server-only':{},'next/cache':{unstable_cache:fn=>fn,revalidateTag:()=>{}},'@/lib/firebase-admin':{getAdminDb:()=>marketingDb}}),
   '@/lib/delivery/quotes/phone':loadTs('src/lib/delivery/quotes/phone.ts'),
+  '@/lib/delivery/quotes/address':loadTs('src/lib/delivery/quotes/address.ts'),
   '@/lib/delivery/quotes/diagnostics':{recordQuoteDiagnostic:async()=>{}},
   '@/lib/delivery/quotes/diagnostic-schema':loadTs('src/lib/delivery/quotes/diagnostic-schema.ts'),
   '@/lib/delivery/quotes/customer-failure':loadTs('src/lib/delivery/quotes/customer-failure.ts'),

@@ -19,6 +19,7 @@ import {resolveManagedDeliveryRuntime,managedDeliveryRuntimeAvailable,managedDel
 import {restaurantFingerprint} from './restaurant-snapshot';
 import { measureQuoteStep } from './performance';
 import {deliveryFulfillmentItems} from './fulfillment-items';
+import type {CheckoutLineOptions} from '@/lib/checkout-items';
 export type NativeManagedPricing={routeReceipt?:string;brand:Brand;location:Location;customer:CustomerInfo;cartItems:MinimalCartItem[];payment:Omit<PaymentDetails,'paymentRefId'>;subtotalAfterDiscount:number;checkoutKey:string;deliverySelection:string|null;freeDeliveryCampaignIds:string[]};
 export async function prepareNativeManagedDraft(input:NativeManagedPricing,preservedReadyAt?:string,expectedEnvironment?:'sandbox'|'production'){
  const {brand,location,customer}=input;if(location.brandId!==brand.id||!location.isActive||!location.deliveryTypes.includes('delivery')||brand.currency.toUpperCase()!=='DKK')throw Error('delivery_scope_invalid');
@@ -37,7 +38,9 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
  const readyAt=preservedReadyAt??(scheduled?new Date(Date.parse(resolveManagedFulfillmentTime(location,'delivery',input.deliverySelection!,now,result.settings))-MANAGED_DELIVERY_TRANSPORT_MINUTES*60000).toISOString():resolveDeliveryKitchenReadyTime(location,now,result.settings.preparationMinutes));
  if(!deliveryScheduleAt(result.settings,new Date(readyAt)).open)throw Error('delivery_kitchen_closed');
  const pickup=normalizeDanishDeliveryAddress({street:location.street,postcode:location.zipCode,city:location.city,country:location.country});
- const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country});
+ // The explicit floor/door wins over a comma suffix in the street line. As part of the dropoff it is bound
+ // by normalizedAddress (requestDigest) and the provider fulfillment fingerprint, exactly like the address.
+ const dropoff=normalizeDanishDeliveryAddress({street:customer.street||'',postcode:customer.zipCode||'',city:customer.city||'',country:location.country,unit:customer.deliveryUnit});
  const key=checkoutKeyHash(input.checkoutKey);
  if(!runtimeEnvironment)throw Error('delivery_environment_unconfigured');
  if(expectedEnvironment!==undefined&&runtimeEnvironment!==expectedEnvironment)throw Error('delivery_environment_changed');
@@ -52,7 +55,7 @@ export async function prepareNativeManagedDraft(input:NativeManagedPricing,prese
 
  return {draft,settings,pickup,dropoff,preparationMinutes,runtimeEnvironment};
 }
-export async function createNativeManagedCustomerQuote(input:NativeManagedPricing,trace:QuoteTrace=()=>{}){
+export async function createNativeManagedCustomerQuote(input:NativeManagedPricing&{cartOptions:readonly CheckoutLineOptions[]},trace:QuoteTrace=()=>{}){
  const scope={brandId:input.brand.id,locationId:input.location.id};
  // Preserve the configuration/retention gate before persisting customer drafts.
  // The action does not repeat this probe; the resolver rechecks after persistence.
@@ -70,7 +73,7 @@ export async function createNativeManagedCustomerQuote(input:NativeManagedPricin
    freshnessMs:300000,maxRouteAgeMs:60000,routeProfile:'car',fulfillment:{version:1,scope:{brandId:input.brand.id,locationId:input.location.id},checkoutRef:draft.binding.checkoutReference,providerId:draft.binding.providerId,
     pickup:native.pickup,dropoff:native.dropoff,pickupContact:runtime.pickupContact,dropoffContact:{name:input.customer.name,phone:normalizeDeliveryPhone(input.customer.phone)},instructions:input.customer.deliveryInstructions||'',readyAt:draft.binding.fulfillmentAt,
     ...(input.deliverySelection&&input.deliverySelection!=='asap'?{preparationMinutes:native.preparationMinutes}:{}),
-    desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:deliveryFulfillmentItems(input.cartItems),bagCount:null,requirements:[]}},
+    desiredDelivery:input.deliverySelection&&input.deliverySelection!=='asap'?{kind:'scheduled',interval:{earliest:input.deliverySelection,latest:input.deliverySelection}}:{kind:'asap'},items:deliveryFulfillmentItems(input.cartItems,input.cartOptions),bagCount:null,requirements:[]}},
    {routing:runtime.routing,provider:runtime.provider,now:()=>new Date(),areaAllows:()=>true});
   if(!result.ok){trace('quote',result.diagnostic??result.reason);return customerQuoteFailure(result.reason);}
   if(result.quote.providerQuote.expiresAt===null)trace('quote','quote_missing_expiry');

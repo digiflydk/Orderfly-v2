@@ -1,7 +1,45 @@
 import { ore, money, sumMoney, lineMoney } from './money';
-import type { CartItem, MinimalCartItem } from '@/types';
+import type { CartItem, CartItemTopping, MinimalCartItem, Product } from '@/types';
 import type { RestoreCatalog } from './cart-restore';
 import { restoreCartItems } from './cart-restore';
+import { resolveComboProductModifiers } from './combo-modifiers';
+import { resolveToppingOptions, type EffectiveTopping, type OptionScope } from './topping-options';
+
+/** A chosen option label and whether it is the catalog's free, unchanged default. */
+export type CheckoutOption = { label: string; includedDefault: boolean };
+/** Structured options of one validated line: combo components with their own modifiers, or product toppings. */
+export type CheckoutLineOptions = { components: { name: string; modifiers: CheckoutOption[] }[]; toppings: CheckoutOption[] };
+
+/**
+ * Included default: an addition the catalog pre-selects (isDefault, incl. the
+ * product override) at its default quantity and at no extra cost, e.g. the
+ * standard base of a required group. Anything charged, changed or removed is not.
+ */
+function includedDefault(option: EffectiveTopping | undefined, quantity: number): boolean {
+  return !!option && option.kind !== 'removal' && option.isDefault === true && quantity === option.defaultQuantity && option.price === 0;
+}
+function describeOptions(product: Product, toppings: CartItemTopping[], catalog: RestoreCatalog, scope: OptionScope): CheckoutOption[] {
+  const groups = catalog.groups.filter(g => product.toppingGroupIds?.includes(g.id) && g.locationIds.includes(scope.locationId));
+  const options = resolveToppingOptions(product, groups, catalog.toppings, catalog.products, scope);
+  return toppings.map(topping => {
+    const matches = options.filter(option => option.id === topping.id);
+    return { label: topping.name, includedDefault: matches.length === 1 && includedDefault(matches[0], topping.quantity ?? 1) };
+  });
+}
+function lineOptions(line: CartItem, catalog: RestoreCatalog, scope: OptionScope): CheckoutLineOptions {
+  if (line.itemType !== 'combo') {
+    const product = catalog.products.find(p => p.id === line.id);
+    return { components: [], toppings: product ? describeOptions(product, line.toppings, catalog, scope) : line.toppings.map(t => ({ label: t.name, includedDefault: false })) };
+  }
+  const components = (line.comboSelections ?? []).flatMap(group => group.products.map(selected => {
+    const product = catalog.products.find(p => p.id === selected.id);
+    // restoreCartItems already validated these modifiers; resolve them again for their unprefixed labels.
+    const modifiers = product && selected.modifiers?.length ? resolveComboProductModifiers(product, selected.modifiers, catalog, scope) : [];
+    if (modifiers === null) throw new Error('A product, combo or option is no longer available. Please review your basket.');
+    return { name: selected.name, modifiers: product ? describeOptions(product, modifiers, catalog, scope) : [] };
+  }));
+  return { components, toppings: [] };
+}
 
 export function checkoutItems(items: CartItem[]): MinimalCartItem[] {
   return items.map(item => ({
@@ -52,5 +90,8 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
       ...(line.comboSelections ? { comboSelections: line.comboSelections } : {}),
     };
   });
-  return { items: validated, subtotal };
+  const optionScope = { brandId: scope.brandId, locationId: scope.locationId, deliveryType: scope.deliveryType };
+  // Parallel to items. Not persisted on the order; used for courier parcel descriptions.
+  const options = restored.items.map(line => lineOptions(line, catalog, optionScope));
+  return { items: validated, subtotal, options };
 }

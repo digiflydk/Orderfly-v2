@@ -4,7 +4,7 @@ import { useKdsLanguage } from './kds-language';
 import { CalendarDays, Eye, Printer } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
-import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
+import { ORDER_STATUS_LABELS, terminalPaymentLabel } from '@/lib/orders/presentation';
 import { formatPrice } from '@/lib/storefront-format';
 import { EMPTY_HISTORY_FILTERS, historyFilterError, terminalDateTime, terminalDateHeading, terminalDay, type TerminalHistoryFilters } from './terminal-filters';
 
@@ -63,7 +63,7 @@ export function TerminalHistory({ mobileLayout = false, orders, filters, onFilte
           <td className="p-4 align-top">{terminalDateTime(order.createdAt, language)}</td>
           <td className="p-4 align-top"><span className="font-semibold">{order.id.replace(/^ORD[-\s]*/i, '')}</span> / {order.customerName || t("Kunde")}</td>
           <td className="p-4 align-top font-semibold">{formatPrice(order.totalAmount)}{order.refundedAmountOre>0 && <span className="ml-2 text-xs font-normal">{' '}{t("Refunderet:")}{' '}{formatPrice(order.refundedAmountOre/100)}</span>}</td>
-          <td className="p-4 align-top"><span>{t(ORDER_STATUS_LABELS[order.status])}</span> / <span>{order.paymentStatus==='Paid'?t("Betalt"):order.paymentStatus==='Failed'?t("Betaling fejlet"):t("Ikke betalt")}</span></td>
+          <td className="p-4 align-top"><span>{t(ORDER_STATUS_LABELS[order.status])}</span> / <span>{t(terminalPaymentLabel(order, 'Ikke betalt', 'Betaling fejlet'))}</span></td>
           <td className="p-4 align-top"><div className="flex gap-2"><button type="button" aria-label={`${t("Vis ordre")} ${order.id}`} title={t("Vis ordre")} className="min-h-12 min-w-12 rounded-lg border p-3" onClick={()=>onSelectOrder(order)}><Eye aria-hidden="true" className="h-5 w-5" /></button>{renderReprint ? renderReprint(order) : onReprint && <button type="button" aria-label={`${t("Genprint ordre")} ${order.id}`} title={t("Genprint")} disabled={loading||!!error} className="min-h-12 min-w-12 rounded-lg border p-3 disabled:opacity-50" onClick={()=>onReprint(order)}><Printer aria-hidden="true" className="h-5 w-5" /></button>}</div></td>
         </tr>)}</tbody>
       </table>
@@ -74,7 +74,7 @@ export function TerminalHistory({ mobileLayout = false, orders, filters, onFilte
         <button type="button" aria-label={`${t('Vis ordre')} ${order.id}`} onClick={() => onSelectOrder(order)} className="block min-h-20 w-full text-left">
           <span className="flex items-center justify-between gap-3"><strong className="rounded-xl bg-slate-100 px-3 py-2 text-lg">#{order.id.replace(/^ORD[-\s]*/i, '')}</strong><strong className="shrink-0 text-lg">{formatPrice(order.totalAmount)}</strong></span>
           <span className="mt-2 block break-words text-lg font-semibold">{order.customerName || t('Kunde')}</span>
-          <span className="mt-1 block text-sm text-slate-500">{terminalDateTime(order.createdAt, language)} · {t(ORDER_STATUS_LABELS[order.status])} / {order.paymentStatus === 'Paid' ? t('Betalt') : order.paymentStatus === 'Failed' ? t('Betaling fejlet') : t('Ikke betalt')}</span>
+          <span className="mt-1 block text-sm text-slate-500">{terminalDateTime(order.createdAt, language)} · {t(ORDER_STATUS_LABELS[order.status])} / {t(terminalPaymentLabel(order, 'Ikke betalt', 'Betaling fejlet'))}</span>
         </button>
         {order.refundedAmountOre > 0 && <p className="mt-2 text-sm">{t('Refunderet:')} {formatPrice(order.refundedAmountOre/100)}</p>}
         {renderReprint ? renderReprint(order) : onReprint && <button type="button" disabled={loading || !!error} aria-label={`${t('Genprint ordre')} ${order.id}`} onClick={() => onReprint(order)} className="mt-2 flex min-h-12 items-center gap-2 rounded-full bg-slate-100 px-4 text-sm font-semibold disabled:opacity-50"><Printer aria-hidden="true" className="h-4 w-4" />{t('Genprint')}</button>}

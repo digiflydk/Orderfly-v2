@@ -4,7 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { deliveryAdoptionKey } from './quotes/adoption';
 import { deliveryId } from './settings/schema';
 import { loadDeliverySettingsInTransaction } from './settings/server';
-import { unavailableManagedDeliverySchedule, type ManagedDeliverySchedule } from './public-schedule';
+import { managedScheduledLead, unavailableManagedDeliverySchedule, type ManagedDeliverySchedule } from './public-schedule';
 
 const scopeSchema = z.object({ brandId: deliveryId, locationId: deliveryId }).strict();
 const adoptionSchema = scopeSchema.extend({ version: z.literal(1), mode: z.literal('managed') }).strict();
@@ -21,8 +21,9 @@ export async function readPublicManagedDeliverySchedule(scope: { brandId: string
       const adoption = adoptionSchema.parse(marker.data());
       if (adoption.brandId !== parsed.brandId || adoption.locationId !== parsed.locationId) throw Error('delivery_scope_invalid');
       const { result } = await loadDeliverySettingsInTransaction(tx, parsed.brandId, parsed.locationId);
-      const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes } = result.settings;
-      return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes };
+      const { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes, providerId } = result.settings;
+      // Only the provider's public scheduling limits are projected, never the provider binding itself.
+      return { enabled, paused, timezone, weeklyHours, exceptions, preparationMinutes, scheduleMode, pickupOpeningOffsetMinutes, pickupClosingOffsetMinutes, scheduledLead: managedScheduledLead(providerId) };
     });
   } catch { return unavailableManagedDeliverySchedule(); }
 }

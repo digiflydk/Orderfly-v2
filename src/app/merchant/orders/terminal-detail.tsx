@@ -9,7 +9,7 @@ import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import type { OrderStatus } from '@/types';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatPrice } from '@/lib/storefront-format';
-import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
+import { ORDER_STATUS_LABELS, fullyRefunded, terminalPaymentLabel } from '@/lib/orders/presentation';
 import { registerPickupPayment } from './actions';
 import { terminalTime } from './terminal-board';
 
@@ -105,7 +105,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
     {order.managedDelivery&&order.status==='Ready'&&<p className="rounded border p-3">{' '}{t("Ordren er klar i køkkenet. Afhentning og levering opdateres fra kuréren.")}{' '}</p>}
     <ul className="divide-y">{order.items.map((item, index) => <li key={index} className="flex justify-between gap-4 py-3"><div className="min-w-0"><p className="break-words font-semibold">{item.quantity}× {item.name}</p>{item.modifiers.map((modifier, i) => <p className="mt-1 break-words text-sm text-slate-600" key={i}>{modifier}</p>)}</div><span className="shrink-0">{formatPrice(item.totalPrice)}</span></li>)}</ul>
     {order.notes && <div className="rounded-xl bg-amber-50 p-4"><p className="font-semibold">{' '}{t("Bemærkning til ordren")}{' '}</p><p className="whitespace-pre-wrap break-words">{order.notes}</p></div>}
-    <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>{' '}{t("I alt")}{' '}{formatPrice(order.totalAmount)}</strong><span className={order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? t("Betalt") : t("Betaling mangler")}</span></div>
+    <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><strong>{' '}{t("I alt")}{' '}{formatPrice(order.totalAmount)}</strong><span className={fullyRefunded(order) ? 'font-semibold text-slate-700' : order.paymentStatus === 'Paid' ? 'font-semibold text-emerald-800' : 'font-semibold text-amber-900'}>{t(terminalPaymentLabel(order, 'Betaling mangler'))}</span></div>
     </>}
     {canEdit && order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && ['Received', 'In Progress', 'Ready'].includes(order.status) && <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
       <p className="font-semibold">{' '}{t("Modtag")}{' '}{formatPrice(order.totalAmount)} ved afhentning</p>

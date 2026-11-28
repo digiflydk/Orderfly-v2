@@ -13,6 +13,8 @@ const analyticsAttribution = z.object({
 }).strict().optional();
 const customerBase = z.object({
   deliveryInstructions: z.string().regex(/^[^\p{Cf}\p{Cs}\u0000-\u0008\u000b-\u001f\u007f]*$/u, 'Delivery instructions contain unsupported control characters').trim().max(400).optional(),
+  // "Etage/dør" for managed delivery: one line, sent to the courier as the dropoff unit (address.ts).
+  deliveryUnit: z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}]*$/u, 'Floor/door contains unsupported control characters').trim().max(60).optional(),
   paymentMethod: z.enum(['online', 'pay_at_pickup']).optional(),
   analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(), analyticsAttribution,
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
