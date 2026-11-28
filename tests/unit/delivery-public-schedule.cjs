@@ -83,3 +83,36 @@ test('overnight inherited pickup produces next-day customer arrival and validate
  assert.equal(slots.at(-1),'2026-10-31T01:10:00.000Z');
  assert.equal(resolveManagedFulfillmentTime(overnight,'delivery',slots.at(-1),now,s),slots.at(-1));
 });
+test('Wolt lead: scheduled slots start at 60 min plus margin, ASAP stays courier-now, explicit early times are refused',()=>{
+ // Rehearsal regression: Friday 11:43 Copenhagen offered 12:35, 12:40 … which Wolt refuses (< 60 min ahead).
+ const at=new Date('2026-10-30T10:43:00Z'),s={...schedule([5]),scheduledLead:{minMinutes:60,maxMinutes:10080}};
+ const slots=managedFulfillmentSlots(location,'delivery','2026-10-30',at,s);
+ assert.equal(slots[0],'2026-10-30T12:00:00.000Z'); // 13:00 local: first slot >= 11:43 + 60 + 15
+ assert.ok(slots.every(slot=>Date.parse(slot)-at.getTime()>=75*60000));
+ assert.ok(managedFulfillmentSlots(location,'delivery','2026-10-30',at,schedule([5])).includes('2026-10-30T11:35:00.000Z'),'without a lead the early slot exists');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',at,s),'asap');
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','asap',at,s),resolveManagedFulfillmentTime(location,'delivery','asap',at,schedule([5])));
+ for(const early of ['2026-10-30T11:35:00.000Z','2026-10-30T11:45:00.000Z'])assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery',early,at,s),/unsupported_schedule/);
+ // An offered slot stays acceptable for eight minutes (accept margin 7 min, above the 5-min quote freshness), then is refused as too early.
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:53:00Z'),s),'2026-10-30T12:00:00.000Z');
+ assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:54:00Z'),s),/unsupported_schedule/);
+ // Server callers pass full settings: the Wolt provider id alone applies the limit.
+ assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T11:35:00.000Z',at,{...schedule([5]),providerId:'wolt'}),/unsupported_schedule/);
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','2026-10-30T11:35:00.000Z',at,{...schedule([5]),providerId:'test'}),'2026-10-30T11:35:00.000Z');
+ // Unknown slots keep the generic unavailable-time error.
+ assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T11:37:00.000Z',at,s),err=>!/unsupported_schedule/.test(err.message));
+});
+test('Wolt lead: closed-kitchen ASAP becomes the first slot that satisfies the lead, and the 7-day limit trims the last day',()=>{
+ const s={...schedule([5]),scheduledLead:{minMinutes:60,maxMinutes:10080}};
+ // Friday 10:50 Copenhagen, kitchen opens 11:00: raw first arrival 11:50 is exactly 60 min ahead, so a later one is used.
+ const closed=new Date('2026-10-30T09:50:00Z');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',closed,schedule([5])),'2026-10-30T10:50:00.000Z');
+ assert.equal(managedDeliverySelectionForSchedule(location,'asap',closed,s),'2026-10-30T11:05:00.000Z');
+ // Friday 16:00 Copenhagen: next Friday's arrivals after 15:45 local (7 days minus margin) are not offered.
+ const late=new Date('2026-10-30T15:00:00Z');
+ const nextFriday=managedFulfillmentSlots(location,'delivery','2026-11-06',late,s);
+ assert.equal(nextFriday[0],'2026-11-06T10:50:00.000Z');
+ assert.equal(nextFriday.at(-1),'2026-11-06T14:45:00.000Z');
+ assert.ok(managedFulfillmentSlots(location,'delivery','2026-11-06',late,schedule([5])).includes('2026-11-06T15:05:00.000Z'));
+ assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-11-06T15:05:00.000Z',late,s),/unsupported_schedule/);
+});

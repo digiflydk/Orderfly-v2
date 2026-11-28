@@ -14,7 +14,7 @@ import type { OrderDetail } from '@/types';
 import { ArrowLeft, CreditCard, Hash, Link as LinkIcon, Mail, MapPin, Phone, ShoppingCart, Truck, User, MessageSquare } from 'lucide-react';
 import Link from '@/components/superadmin/admin-link';
 import { formatPrice } from '@/lib/storefront-format';
-import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
+import { ORDER_STATUS_LABELS, projectedPaymentStatus } from '@/lib/orders/presentation';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
@@ -42,6 +42,7 @@ const statusVariantMap: Record<string, 'default' | 'secondary' | 'destructive' |
 	'Canceled': 'destructive',
 	'Error': 'destructive',
 	'Failed': 'destructive',
+	'Refunded': 'outline',
 };
 
 function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) {
@@ -70,6 +71,8 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 		notFound();
 	}
 	const stripeUrl = stripeDashboardUrl(order.psp);
+	// Stored paymentStatus stays Paid after a refund; show the projected Refunded like operator queries.
+	const paymentStatus = projectedPaymentStatus(order) ?? '';
 
 
 	return (
@@ -191,7 +194,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 					<Card>
 						<CardHeader><CardTitle>Betaling</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
-							<InfoItem icon={CreditCard} label="Betalingsstatus"><Badge variant={statusVariantMap[order.paymentStatus]}>{PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}</Badge></InfoItem>
+							<InfoItem icon={CreditCard} label="Betalingsstatus"><Badge variant={statusVariantMap[paymentStatus]}>{PAYMENT_STATUS_LABELS[paymentStatus] ?? paymentStatus}</Badge></InfoItem>
 							<InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
 							{order.paymentCollection && <p>Betaling modtaget {danishTime(order.paymentCollection.receivedAt)} af {order.paymentCollection.employeeName || order.paymentCollection.employeeId}.</p>}
 							<OrderPaymentActions orderId={order.id} paymentMethod={order.paymentMethod} paymentStatus={order.paymentStatus} status={order.status} canEdit={access.superuser || access.permissions.includes('orderfly.orders:edit')} />

@@ -104,6 +104,8 @@ export type Role = {
  */
 export interface CustomerInfo {
     deliveryInstructions?: string;
+    /** Managed delivery floor/door ("Etage/dør"); becomes the courier dropoff unit. */
+    deliveryUnit?: string;
   paymentMethod?: 'online' | 'pay_at_pickup';
     newsletterConsentId?: string;
     newsletterConsentVersion?: string;

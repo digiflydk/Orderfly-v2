@@ -14,7 +14,7 @@ before(async()=>{
  const record=(kind,value)=>window.__calls.push({kind,value});window.__calls=[];
  function App(){const params=new URLSearchParams(location.search),view=params.get('view'),empty=params.has('empty'),error=params.has('error'),loading=params.has('loading');
  const[filters,setFilters]=React.useState({search:'',dateFrom:'',dateTo:''});
- const orders=empty?[]:[{...base,id:'ORD-LATER',fulfillmentAt:'2026-10-27T18:00:00Z'},{...base,id:'ORD-FIRST',fulfillmentAt:'2026-10-26T17:00:00Z'}];
+ const orders=empty?[]:params.has('refunds')?[{...base,id:'ORD-REFUNDED',status:'Canceled',totalAmount:201,refundedAmountOre:20100,fulfillmentAt:'2026-10-27T18:00:00Z'},{...base,id:'ORD-PARTIAL',refundedAmountOre:5000,fulfillmentAt:'2026-10-26T17:00:00Z'}]:[{...base,id:'ORD-LATER',fulfillmentAt:'2026-10-27T18:00:00Z'},{...base,id:'ORD-FIRST',fulfillmentAt:'2026-10-26T17:00:00Z'}];
  const props={orders,loading,error:error?'Forbindelsen blev afbrudt.':null,onRetry:()=>record('retry'),onSelectOrder:o=>record('detail',o.id),onReprint:params.has('readonly')?undefined:o=>record('reprint',o.id),hasMore:params.has('more'),onLoadMore:()=>record('more')};
  return React.createElement(view==='preorders'?TerminalPreorders:TerminalHistory,{...props,filters,onFiltersChange:f=>{record('filter',f);setFilters(f);}});}
  createRoot(document.getElementById('root')).render(React.createElement(App));`);
@@ -74,5 +74,16 @@ for(const view of ['history','preorders'])test(`${view}: empty scanned page stil
  await page.goto(origin+'?view='+view+'&loading');await page.getByRole('status').waitFor();
  assert.equal(await page.getByRole('button',{name:'Genprint ordre ORD-FIRST'}).isDisabled(),true);
  await page.goto(origin+'?view='+view+'&readonly');assert.equal(await page.getByRole('button',{name:/Genprint/}).count(),0);
+ }finally{await page.close();}
+});
+for(const view of ['history','preorders'])test(`${view}: a fully refunded order reads Refunderet although its stored payment status is Paid`,async()=>{
+ const page=await browser.newPage();try{
+ await page.goto(origin+'?view='+view+'&refunds');
+ // Rows show the order number without its ORD- prefix.
+ const row=id=>page.getByRole('row').filter({hasText:new RegExp(`${id.replace('ORD-','')} /|${id}`)}).first();
+ await row('ORD-REFUNDED').waitFor();
+ assert.match(await row('ORD-REFUNDED').innerText(),/Refunderet/);assert.doesNotMatch(await row('ORD-REFUNDED').innerText(),/Betalt/);
+ // A partial refund keeps the paid label; its refunded amount is shown separately.
+ assert.match(await row('ORD-PARTIAL').innerText(),/Betalt/);
  }finally{await page.close();}
 });

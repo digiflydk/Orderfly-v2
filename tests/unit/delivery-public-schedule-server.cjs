@@ -11,7 +11,8 @@ function fixture(options={}){
 }
 test('public schedule resolves scoped managed settings and exposes only availability fields',async()=>{
  const f=fixture(),result=await f.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'});
- assert.deepEqual(Object.keys(result).sort(),['enabled','exceptions','paused','pickupClosingOffsetMinutes','pickupOpeningOffsetMinutes','preparationMinutes','scheduleMode','timezone','weeklyHours']);
+ assert.deepEqual(Object.keys(result).sort(),['enabled','exceptions','paused','pickupClosingOffsetMinutes','pickupOpeningOffsetMinutes','preparationMinutes','scheduleMode','scheduledLead','timezone','weeklyHours']);
+ assert.deepEqual(result.scheduledLead,{minMinutes:60,maxMinutes:10080});
  assert.deepEqual(result.weeklyHours,f.settings.weeklyHours);
  assert.deepEqual(f.reads,['locations/l','deliveryAdoptions/b:l']);
  assert.deepEqual(f.settingsReads,[{brandId:'b',locationId:'l'}]);
@@ -27,4 +28,11 @@ test('foreign location, malformed adoption, missing location and read errors fai
  for(const mutate of cases){const f=fixture();mutate(f);const result=await f.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'});assert.equal(result.enabled,false);assert.deepEqual(f.settingsReads,[]);}
  const f=fixture({failure:true});assert.equal((await f.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'})).enabled,false);
  const invalid=fixture();assert.equal((await invalid.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'../l'})).enabled,false);assert.deepEqual(invalid.reads,[]);
+});
+test('scheduled lead is projected only for Wolt Drive, never as a provider binding',async()=>{
+ for(const [providerId,lead] of [['wolt',{minMinutes:60,maxMinutes:10080}],['test',null],[null,null]]){
+  const f=fixture();f.settings.providerId=providerId;const result=await f.api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'});
+  assert.deepEqual(result.scheduledLead,lead);assert.equal('providerId' in result,false);
+ }
+ assert.equal((await fixture({failure:true}).api.readPublicManagedDeliverySchedule({brandId:'b',locationId:'l'})).scheduledLead,null);
 });

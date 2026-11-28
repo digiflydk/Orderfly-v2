@@ -1,6 +1,6 @@
 # PM / PO / Work development workflow
 
-Last reviewed: 2026-11-22 (#934)
+Last reviewed: 2026-11-28 (owner process decision; see AGENTS.md "Work process")
 
 ## Principle
 
@@ -18,14 +18,23 @@ GitHub issues, pull requests, CI evidence and repository documentation are the o
 
 No step waits for a person unless the issue needs a product decision.
 
-1. PO creates an issue with scope and acceptance criteria. Work proposes a plan when the issue needs one and starts once it is approved.
-2. Work implements on a feature branch, adds or updates tests and documentation, and opens one PR into `main`.
+1. PO creates an issue with scope and acceptance criteria. Work proposes a plan when the issue needs one and starts once it is approved. The plan states whether parallel agents will build independent parts, and related work is bundled into one release.
+2. Work implements on a feature branch, adds or updates tests and documentation, and opens one PR into `main`. It bumps the release number in `package.json` and adds the release to `docs/releases.md` (AGENTS.md "Work process", rule 8).
 3. **Tests run in Work's environment, not in GitHub Actions.** Work runs `npm run ci` on the exact head commit. It runs every test step in `scripts/ci/steps.mjs` (typecheck, unit, browser and HTTP regressions, isolated Firestore emulator proofs, Firestore rules tests and the build) and stops at the first failure. Work posts the summary on the PR.
 4. Independent code review: Codex, or a separate Claude review agent when Codex is unavailable. Blocking findings are fixed; a new commit needs a new `npm run ci` run and a new review.
 5. Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
 6. **Deployment is automatic.** Firebase App Hosting deploys `main`; the Firestore deployment workflows publish merged rules, indexes and migrations (`docs/firestore-operations.md`). GitHub Actions is used only for these deployments.
-7. Work waits for `/api/health` to report the merge commit and for any Firestore deployment run to succeed, then performs the issue's live verification (read-only unless the issue defines a controlled, reversible scenario). A failure leads to an immediate revert PR.
-8. The issue is Done when the change is live and its live acceptance criteria are met.
+7. Work waits for `/api/health` to report the merge commit and the new release `version` and for any Firestore deployment run to succeed, then performs the issue's live verification (read-only unless the issue defines a controlled, reversible scenario). A failure leads to an immediate revert PR.
+8. The issue is Done when the change is live and its live acceptance criteria are met. Work then emails the short, non-technical release note to the owner (AGENTS.md "Work process", rule 4).
+
+## Process updates reach every session
+
+The process lives on `main`: `AGENTS.md`, `CLAUDE.md` (which imports `AGENTS.md`), this file, `docs/deployment-flow.md` and `.claude/`. A process change takes effect when it is merged to `main`; nobody has to copy it into running chats.
+
+- **New sessions** clone `main` and load `CLAUDE.md` and `AGENTS.md` at start.
+- **Sessions on older feature branches:** the `.claude/hooks/process-sync.sh` hook (SessionStart and UserPromptSubmit in `.claude/settings.json`) fetches `origin/main` at start, resume and compaction, and during a session when a prompt is submitted (at most every 15 minutes). When `main` has process changes the branch does not have, it injects `AGENTS.md` and the diff from `main` into the session. The version on `main` then applies, and Work merges `origin/main` into the branch before the next commit or PR update.
+- The hook only runs `git fetch` and never changes the working tree or blocks a session. The mid-session check runs when a prompt is submitted, at most every `PROCESS_SYNC_INTERVAL` seconds (default 900).
+- A process change is written to the files above, not only in a chat or an issue comment, so the hook can carry it.
 
 ## Commands
 

@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { OrderFlyLogo } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '../ui/button';
+import { ReleaseVersion } from '@/components/common/release-version';
 
 const menuItems = [
   { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -75,6 +76,7 @@ export function AdminSidebar() {
             <span className="text-xs text-muted-foreground">admin@example.com</span>
           </div>
         </div>
+        <ReleaseVersion className="px-2 text-muted-foreground" />
       </SidebarFooter>
     </>
   );

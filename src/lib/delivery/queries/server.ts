@@ -1,4 +1,5 @@
 import 'server-only';
+import { projectedPaymentStatus } from '@/lib/orders/presentation';
 import { projectCancellation, type CancellationState } from '../cancellation/projection';
 import {quoteDiagnosticSchema} from '../quotes/diagnostic-schema';
 import {quoteDiagnosticId} from '../quotes/diagnostics';
@@ -44,7 +45,7 @@ export async function readDeliveryOrders(raw: unknown) {
     const cancellationState=boundResult&&attempt.data.state==='booked'&&result.data.kind==='accepted'&&attempt.data.providerDeliveryId===result.data.providerDeliveryId?projectCancellation(cancellationDoc.data(),{brandId:q.brandId,locationId:q.locationId,orderId:doc.id,attemptRef:attempt.data.reference,providerDeliveryId:result.data.providerDeliveryId},boundState?state.status:null,order.status):null;
     const bookingFailureCode=q.orderId&&boundResult&&attempt.data.state==='rejected'&&result.data.kind==='rejected'?projectBookingFailureCode(result.data.error.code):null;
     return {cancellationState,bookingFailureCode,id:doc.id,providerId:managed.data.providerId,bookingState:boundAttempt?attempt.data.state:null,deliveryStatus:cancellationState==='cancelled'?'cancelled':boundState?state.status:null,
-      paymentStatus:typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'Refunded':['Pending','Paid','Failed','Refunded'].includes(order.paymentStatus)?order.paymentStatus:null,
+      paymentStatus:(status=>status&&['Pending','Paid','Failed','Refunded'].includes(status)?status:null)(projectedPaymentStatus(order)),
       kitchenStatus:['Pending','Received','In Progress','Ready','Completed','Delivered','Canceled','Error'].includes(order.status)?order.status:null,trackingUrl:null,costReviewRequired:order.deliveryCostException?.requiresReview===true,deliveryReconciliationRequired:order.deliveryReconciliationRequired===true||cancellationState==='unknown'};
   }
   if(q.orderId){
