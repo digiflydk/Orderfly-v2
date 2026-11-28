@@ -703,7 +703,7 @@ async function resolveAuthoritativeCheckoutPricing(input: {
     return {productId:item.id,upsellId:campaign.id,step:campaign.afterUpsellId?2:1,quantity:item.quantity,
       amount:money(item.totalPrice),itemDiscount:money(Math.max(0,catalogPrice-item.unitPrice)*item.quantity)};
   });
-  return {cartItems,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,resolvedCustomer,
+  return {cartItems,cartOptions:validated.options,discountCard,discountCardInput,clubSignupInput,selectedDiscount,verifiedUpsellIds,upsellMeasurement,resolvedCustomer,
     appliedDiscountIdForOrder,cartDiscountTotal,serverPaymentDetails,totalAmount,subtotalAfterDiscount,
     freeDeliveryCampaignIds:activeStandardDiscounts.filter(d=>d.discountType==='free_delivery'&&subtotalAfterDiscount>=(d.minOrderValue||0)).map(d=>d.id).sort()};
 }
@@ -745,7 +745,7 @@ async function executeManagedDeliveryQuote(input: {
     trace('time');
     // Managed customer arrival is validated against the authoritative courier
     // pickup schedule by the controller, including arrivals after kitchen close.
-    const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,payment:priced.serverPaymentDetails,
+    const result=await createNativeManagedCustomerQuote({brand,location,customer:input.customerInfo,cartItems:priced.cartItems,cartOptions:priced.cartOptions,payment:priced.serverPaymentDetails,
       routeReceipt:input.routeReceipt,subtotalAfterDiscount:priced.subtotalAfterDiscount,freeDeliveryCampaignIds:priced.freeDeliveryCampaignIds,checkoutKey:input.checkoutKey,deliverySelection:input.deliveryTime||'asap'},trace);
     if(!result.ok){if(diagnostic.code==='unclassified')trace(diagnostic.stage,result.code);await report();}
     return result;

@@ -40,24 +40,81 @@ test('contract: options and unit price are optional, bounded and validated', () 
   assert.deepEqual(contract.deliveryQuoteRequestSchema.parse(request([{ ...margherita, options: [' Ekstra ost '] }])).items[0].options, ['Ekstra ost']);
 });
 
-test('server-validated cart maps toppings, combo selections and per-unit price', () => {
-  const items = deliveryFulfillmentItems([
-    { id: 'p1', itemType: 'product', name: 'Margherita', quantity: 2, unitPrice: 75, totalPrice: 170, toppings: ['Ekstra ost', ' Uden løg ', ''] },
-    { id: 'c1', itemType: 'combo', name: 'Burgermenu', quantity: 1, unitPrice: 119, totalPrice: 129, toppings: ['Burger: Bacon'],
-      comboSelections: [{ groupId: 'g1', groupName: 'Burger', products: [{ id: 'b', name: 'Cheeseburger' }] }, { groupId: 'g2', groupName: 'Drik', products: [{ id: 'd', name: 'Cola' }] }] },
-    { id: 'p2', name: 'Cola', quantity: 3, unitPrice: 25, totalPrice: 75 },
-    { id: 'p3', name: 'Odd', quantity: 3, unitPrice: 0.33, totalPrice: 1 },
+// Catalog shaped like the rehearsal's: a required base group whose free default is
+// "Almindelig bund", paid extras, and a pizza menu whose pizza carries modifiers.
+const { validateCheckoutItems } = loadTs('src/lib/checkout-items.ts', { 'server-only': {} });
+const product = (id, productName, price, toppingGroupIds) => ({ id, brandId: 'b', locationIds: ['l'], isActive: true, productName, price, ...(toppingGroupIds ? { toppingGroupIds } : {}) });
+const topping = (id, groupId, toppingName, price, extra = {}) => ({ id, groupId, locationIds: ['l'], isActive: true, toppingName, price, ...extra });
+const catalog = {
+  products: [product('marg', '1. Margherita (V)', 75, ['base', 'extra']), product('pep', '4. Pepperoni', 85, ['base', 'extra']), product('pepsi', 'Pepsi Max 0,33 l', 20), product('dip', 'Hvidløgsbæger', 10)],
+  combos: [{ id: 'menu', brandId: 'b', locationIds: ['l'], isActive: true, comboName: 'Pizzamenu', pickupPrice: 129, deliveryPrice: 129, orderTypes: ['pickup', 'delivery'], activeDays: [], activeTimeSlots: [],
+    productGroups: [{ id: 'g-pizza', groupName: 'Pizza', productIds: ['pep', 'marg'], minSelection: 1, maxSelection: 1 }, { id: 'g-drink', groupName: 'Drik', productIds: ['pepsi'], minSelection: 1, maxSelection: 1 }, { id: 'g-dip', groupName: 'Dip', productIds: ['dip'], minSelection: 1, maxSelection: 1 }] }],
+  groups: [{ id: 'base', groupName: 'Bund', locationIds: ['l'], minSelection: 1, maxSelection: 1, selectionMode: 'single' }, { id: 'extra', groupName: 'Ekstra', locationIds: ['l'], minSelection: 0, maxSelection: 0 }],
+  toppings: [topping('almindelig', 'base', 'Almindelig bund', 0, { isDefault: true }), topping('fuldkorn', 'base', 'Fuldkornsbund', 10),
+    topping('svampe', 'extra', 'Svampe', 10), topping('kylling', 'extra', 'Kylling', 15), topping('rucola', 'extra', 'Rucola', 0), topping('ost', 'extra', 'Ekstra ost', 5, { isDefault: true }),
+    topping('dobbelt', 'extra', 'Dobbelt kylling', 0, { isDefault: true, maxQuantity: 2 })],
+  discounts: [], upsells: [],
+};
+const checkoutScope = { brandId: 'b', locationId: 'l', deliveryType: 'delivery', now: new Date('2026-10-25T10:00:00Z') };
+const pizza = (toppingIds, quantities, totalPrice) => ({ id: 'marg', itemType: 'product', name: 'browser label', quantity: 1, unitPrice: 75, totalPrice, toppings: toppingIds.map(() => 'browser label'), toppingIds, toppingQuantities: quantities ?? toppingIds.map(() => 1) });
+const menu = (modifiers, totalPrice = 129) => ({ id: 'menu', itemType: 'combo', name: 'browser label', quantity: 1, unitPrice: 129, totalPrice, toppings: [],
+  comboSelections: [{ groupId: 'g-pizza', groupName: 'Pizza', products: [{ id: 'pep', name: 'x', ...(modifiers ? { modifiers } : {}) }] }, { groupId: 'g-drink', groupName: 'Drik', products: [{ id: 'pepsi', name: 'x' }] }, { groupId: 'g-dip', groupName: 'Dip', products: [{ id: 'dip', name: 'x' }] }] });
+const parcels = cart => { const validated = validateCheckoutItems(cart, catalog, checkoutScope); return deliveryFulfillmentItems(validated.items, validated.options); };
+
+test('rehearsal cart: included defaults are left out and combo modifiers sit under their selection', () => {
+  const items = parcels([pizza(['svampe', 'kylling', 'almindelig'], null, 100), menu([{ id: 'almindelig', quantity: 1 }, { id: 'rucola', quantity: 1 }])]);
+  assert.deepEqual(items, [
+    { name: '1. Margherita (V)', quantity: 1, options: ['Svampe', 'Kylling'], unitPriceMinor: 10000 },
+    { name: 'Pizzamenu', quantity: 1, options: ['4. Pepperoni: Rucola', 'Pepsi Max 0,33 l', 'Hvidløgsbæger'], unitPriceMinor: 12900 },
   ]);
+  assert.equal(woltParcelDescription(items[0]), '1. Margherita (V) (Svampe, Kylling)');
+  assert.equal(woltParcelDescription(items[1]), 'Pizzamenu (4. Pepperoni: Rucola, Pepsi Max 0,33 l, Hvidløgsbæger)');
+  assert.equal(contract.deliveryQuoteRequestSchema.safeParse(request(items)).success, true);
+});
+
+test('only free, unchanged defaults are hidden; chosen, charged, changed-quantity and non-default choices stay', () => {
+  // Non-default base, a charged default and a default at a changed quantity are all listed.
+  const [line] = parcels([pizza(['fuldkorn', 'ost', 'dobbelt'], [1, 1, 2], 90)]);
+  assert.deepEqual(line.options, ['Fuldkornsbund', 'Ekstra ost', '2 × Dobbelt kylling']);
+  // A product override can make an option a default (or remove its default status).
+  const overridden = structuredClone(catalog);
+  overridden.products[0].toppingOverrides = { svampe: { isDefault: true, price: 0 }, almindelig: { isDefault: false } };
+  const validated = validateCheckoutItems([pizza(['svampe', 'almindelig'], null, 75)], overridden, checkoutScope);
+  assert.deepEqual(deliveryFulfillmentItems(validated.items, validated.options)[0].options, ['Almindelig bund']);
+  // Only defaults: the parcel carries just the name.
+  const [plain] = parcels([pizza(['almindelig'], null, 75)]);
+  assert.deepEqual(plain, { name: '1. Margherita (V)', quantity: 1, unitPriceMinor: 7500 });
+  assert.equal(woltParcelDescription(plain), '1. Margherita (V)');
+});
+
+test('combo components: several modifiers join under one selection, plain and legacy components list just the product', () => {
+  assert.deepEqual(parcels([menu([{ id: 'almindelig', quantity: 1 }, { id: 'rucola', quantity: 1 }, { id: 'kylling', quantity: 1 }], 144)])[0].options,
+    ['4. Pepperoni: Rucola + Kylling', 'Pepsi Max 0,33 l', 'Hvidløgsbæger']);
+  assert.deepEqual(parcels([menu([{ id: 'almindelig', quantity: 1 }])])[0].options, ['4. Pepperoni', 'Pepsi Max 0,33 l', 'Hvidløgsbæger']);
+  assert.deepEqual(parcels([menu()])[0].options, ['4. Pepperoni', 'Pepsi Max 0,33 l', 'Hvidløgsbæger']);
+  // Options never repeat the menu name or a component prefix.
+  const [line] = parcels([menu([{ id: 'almindelig', quantity: 1 }, { id: 'rucola', quantity: 1 }])]);
+  assert.ok(line.options.every(option => !option.includes('Pizzamenu')));
+  assert.equal(line.options.filter(option => option.includes('4. Pepperoni')).length, 1);
+});
+
+test('fulfillment mapping keeps per-unit price, option bounds and requires the parallel option list', () => {
+  const none = { components: [], toppings: [] };
+  const items = deliveryFulfillmentItems([
+    { name: 'Margherita', quantity: 2, unitPrice: 75, totalPrice: 170 },
+    { name: 'Cola', quantity: 3, unitPrice: 25, totalPrice: 75 },
+    { name: 'Odd', quantity: 3, unitPrice: 0.33, totalPrice: 1 },
+  ], [{ components: [], toppings: [{ label: 'Ekstra ost', includedDefault: false }, { label: ' Uden løg ', includedDefault: false }, { label: '', includedDefault: false }] }, none, none]);
   assert.deepEqual(items, [
     { name: 'Margherita', quantity: 2, options: ['Ekstra ost', 'Uden løg'], unitPriceMinor: 8500 },
-    { name: 'Burgermenu', quantity: 1, options: ['Cheeseburger', 'Cola', 'Burger: Bacon'], unitPriceMinor: 12900 },
     { name: 'Cola', quantity: 3, unitPriceMinor: 2500 },
     { name: 'Odd', quantity: 3 },
   ]);
-  assert.equal(contract.deliveryQuoteRequestSchema.safeParse(request(items)).success, true);
-  const many = deliveryFulfillmentItems([{ name: 'Big', quantity: 1, unitPrice: 1, totalPrice: 1, toppings: Array.from({ length: 150 }, (_, i) => `${'t'.repeat(200)}${i}`) }]);
+  const many = deliveryFulfillmentItems([{ name: 'Big', quantity: 1, unitPrice: 1, totalPrice: 1 }],
+    [{ components: [{ name: 'C'.repeat(140), modifiers: [{ label: 'm'.repeat(40), includedDefault: false }] }], toppings: Array.from({ length: 150 }, (_, i) => ({ label: `${'t'.repeat(200)}${i}`, includedDefault: false })) }]);
   assert.equal(many[0].options.length, 100); assert.ok(many[0].options.every(o => o.length <= 150));
   assert.equal(contract.deliveryQuoteRequestSchema.safeParse(request(many)).success, true);
+  assert.throws(() => deliveryFulfillmentItems([{ name: 'A', quantity: 1, unitPrice: 1, totalPrice: 1 }], []), /delivery_items_options_mismatch/);
 });
 
 test('Wolt quote and create send options in description and per-unit price with count', async () => {
