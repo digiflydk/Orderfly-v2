@@ -102,7 +102,7 @@ const checkoutSchema = z.object({
   zipCode: z.string().optional(),
   city: z.string().optional(),
   deliveryInstructions: z.string().max(400, 'Leveringsinstruktioner må højst være 400 tegn.').optional(),
-  deliveryUnit: z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}]*$/u, 'Etage/dør må kun indeholde almindelige tegn (fx ingen emoji eller skjulte tegn).').max(DELIVERY_UNIT_MAX, `Etage/dør må højst være ${DELIVERY_UNIT_MAX} tegn.`).optional(),
+  deliveryUnit: z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}]*$/u, 'Etage/dør må kun indeholde almindelige tegn (ingen skjulte tegn eller styretegn).').max(DELIVERY_UNIT_MAX, `Etage/dør må højst være ${DELIVERY_UNIT_MAX} tegn.`).optional(),
   subscribeToNewsletter: z.boolean().default(false),
   clubTermsAccepted: z.boolean().default(false),
   useClubDiscount: z.boolean().default(false),
