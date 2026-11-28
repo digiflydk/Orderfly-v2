@@ -188,7 +188,7 @@ function BagFeeRow() {
   );
 }
 
-function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuote=null}:{discountCardOffer:{name:string;percentage:number}|null;managedDelivery?:boolean;managedQuote?:Pick<ManagedDeliveryQuoteView,'customerFeeMinor'|'checkoutTotalMinor'|'currency'>|null}) {
+function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuote=null,managedFailed=false}:{discountCardOffer:{name:string;percentage:number}|null;managedDelivery?:boolean;managedQuote?:Pick<ManagedDeliveryQuoteView,'customerFeeMinor'|'checkoutTotalMinor'|'currency'>|null;managedFailed?:boolean}) {
   const cart = useCart();
   const {cartItems,brand,deliveryType} = cart;
   const {subtotal,checkoutTotal,itemDiscount,automaticCartDiscount:cartDiscount,voucherDiscount,
@@ -301,7 +301,7 @@ function OrderSummaryContent({discountCardOffer,managedDelivery=false,managedQuo
         {deliveryType === 'delivery' && (
           <div className="flex justify-between">
             <span>Levering</span>
-            {managedDelivery ? <span>{managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.customerFeeMinor/100):'Beregnes'}</span> : freeDeliveryDiscountApplied ? (
+            {managedDelivery ? <span>{managedQuote?new Intl.NumberFormat('da-DK',{style:'currency',currency:managedQuote.currency}).format(managedQuote.customerFeeMinor/100):managedFailed?'Ikke beregnet':'Beregnes'}</span> : freeDeliveryDiscountApplied ? (
               <span className="font-semibold text-green-600">Gratis</span>
             ) : (
               <span>{formatPrice(deliveryFee)}</span>
@@ -717,7 +717,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const preview=pricePreview.preview;
   const previewFee=preview?(freeDeliveryDiscountApplied||preview.freeMinimumMinor!==null&&Math.round((subtotal-(itemDiscount||0)-((voucherDiscount??cartDiscount)?.amount||0))*100)>=preview.freeMinimumMinor?0:preview.baseFeeMinor):null;
   const previewDisplay=preview&&previewFee!==null?{customerFeeMinor:previewFee,checkoutTotalMinor:Math.round((checkoutTotal-(freeDeliveryDiscountApplied?0:deliveryFee))*100)+previewFee,currency:preview.currency}:null;
-  const displayManagedPrice=managedQuote??previewDisplay;
+  // A failed confirmation invalidates the preview: never show its price or "calculated" text next to the failure.
+  const managedFailed=managed.state.kind==='unavailable';
+  const displayManagedPrice=managedQuote??(managedFailed?null:previewDisplay);
   const managedDeliveryTimeLabel = customerDeliveryEstimate(managedQuote?.deliveryInterval) ?? `ca. ${localizeTime(displayTime)}`;
   const managedConsent=managed.paymentProof&&managed.checkoutKey?{...managed.paymentProof,checkoutKey:managed.checkoutKey}:null;
   const managedTotal=displayManagedPrice?new Intl.NumberFormat('da-DK',{style:'currency',currency:displayManagedPrice.currency}).format(displayManagedPrice.checkoutTotalMinor/100):'Afventer leveringspris';
@@ -1122,9 +1124,9 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                   )}
                   {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
                   {managedActive&&addressReady&&!contactReady&&<p role="status" className="text-sm text-muted-foreground">Udfyld navn, e-mail og mobilnummer for at bekræfte leveringen.</p>}
-                  {previewDisplay&&!managedQuote&&<p role="status">Leveringsprisen er beregnet. Vi bekræfter nu leveringen, før du kan betale.</p>}
+                  {previewDisplay&&!managedQuote&&!managedFailed&&<p role="status">Leveringsprisen er beregnet. Vi bekræfter nu leveringen, før du kan betale.</p>}
                   {managedQuote&&previewFee!==null&&managedQuote.customerFeeMinor!==previewFee&&<p role="status">Leveringsprisen er ændret efter bekræftelse af levering. Kontrollér det samlede beløb før betaling.</p>}
-                  <ManagedDeliveryQuote previewRoutingSource={preview?.routingSource} priceShown={!!previewDisplay} showDeliveryTime={false} showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
+                  <ManagedDeliveryQuote previewRoutingSource={preview?.routingSource} priceShown={!!displayManagedPrice} showDeliveryTime={false} showPrices={!isV2} enabled={managedActive} state={managed.state} checkoutFingerprint={managedQuote?.checkoutFingerprint||''} previousFeeMinor={managed.previousFeeMinor} onRequest={requestDeliveryPrice} locked={isFormLocked}/>
                   {isV2 && <p className="v2-guest-note">Du kan bestille uden at oprette en konto.</p>}
                   <Separator className="!mt-6" />
                   {signupConfig.mode === 'newsletter' && <FormField
@@ -1258,7 +1260,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={displayManagedPrice} />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={displayManagedPrice} managedFailed={managedFailed} />
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -1276,7 +1278,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                   </CardHeader>
                   <CardContent className="min-h-0 flex-1 overflow-y-auto pr-4">
                     <fieldset className="min-w-0" disabled={isFormLocked}>
-                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={displayManagedPrice} />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} managedDelivery={managedActive} managedQuote={displayManagedPrice} managedFailed={managedFailed} />
                     </fieldset>
                   </CardContent>
                 </Card>

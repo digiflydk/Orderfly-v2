@@ -19,7 +19,7 @@ Stier er relative til `src/` medmindre andet står.
 | Tider vises som estimater | OK / Rettes | `lib/delivery/customer-eta.ts` ("ca."/"Forventet"); teksten "Bekræftet afhentningsinterval" ændres til estimat-ordlyd | Scenarie 2 og 7: kunde- og kassevisning viser kun estimater |
 | Drop-off-kommentarer adskilt | Rettes | Drop-off-kommentar mærkes separat som enhed (fx etage/dør) og instruktioner | Scenarie 4: se felterne i Wolt-sandbox |
 | Fejlet levering → klar fejl til afsender, kunden får ikke forkert info | OK / Rettes | `lib/delivery/providers/wolt/create.ts`; kunde: besked + automatisk refusion (se native-browser-qa.md, ORD-292972); merchant får danske fejltekster i stedet for rå koder | Scenarie 6 |
-| Forudbestilling med leveringstid ≥ 60 min | OK | `lib/delivery/providers/wolt/schedule.ts` `woltTiming` (60 min – 7 dage) | Scenarie 3 |
+| Forudbestilling med leveringstid ≥ 60 min | OK | `lib/delivery/providers/wolt/schedule.ts` `woltTiming` (60 min – 7 dage, grænser i `schedule-limits.ts`); tidsvælgeren tilbyder kun planlagte tider ≥ 60 + 15 min og ≤ 7 dage − 15 min frem (`lib/delivery/public-schedule.ts`), serveren afviser tider < 60 + 5 min med `unsupported_schedule`; Hurtigst muligt er fortsat tilgængelig | Scenarie 3 |
 
 ### Pakkedetaljer (parcels)
 
@@ -68,7 +68,7 @@ Wolt delivery-ID for hvert scenarie.
    Gyldig adresse i København K, ASAP, betal.
    Forventet: pris fra shipment-promise før betaling; booking oprettes; kunden ser "ca."/"Forventet"-tider, aldrig en bekræftet tid.
 3. **Forudbestilling**
-   a) Vælg leveringstid < 60 min frem. Forventet: tiden afvises (`unsupported_schedule`), ingen booking.
+   a) Åbn tidsvælgeren. Forventet: ingen planlagte tider under 60 min (+ margin) frem, kun Hurtigst muligt og senere tider. Hvis en for tidlig tid alligevel sendes, afvises den (`unsupported_schedule`, kunden ser "Vælg et senere leveringstidspunkt…"), ingen pris vises, ingen booking.
    b) Vælg leveringstid ≥ 60 min frem (≤ 7 dage). Forventet: accepteres; booking med planlagt tid hos Wolt.
 4. **Ordre med tilvalg**
    Bestil varer med tilvalg og drop-off-kommentar (enhed + instruktion).

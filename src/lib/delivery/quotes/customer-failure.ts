@@ -8,7 +8,10 @@ export function customerQuoteFailure(reason:unknown):CustomerQuoteFailure {
   const identityMessage=checkoutCustomerIdentityMessage(reason);
   if(identityMessage)return {ok:false,code:'customer_identity_conflict',message:identityMessage};
   if(reason instanceof Error)reason=reason.message;
-  const aliases:Record<string,PublicReason>={[unavailableTime]:'closed',delivery_kitchen_closed:'closed',ambiguous_delivery_address:'invalid_address',ambiguous_address:'invalid_address',routing_unavailable:'route_unavailable',routing_unconfigured:'route_unavailable',no_route:'route_unavailable'};
+  const aliases:Record<string,PublicReason>={[unavailableTime]:'closed',delivery_kitchen_closed:'closed',ambiguous_delivery_address:'invalid_address',ambiguous_address:'invalid_address',routing_unavailable:'route_unavailable',routing_unconfigured:'route_unavailable',no_route:'route_unavailable',
+    // Provider "unavailable" reasons arrive prefixed (quotes/service.ts: provider_<reason>); map the customer-actionable ones.
+    // provider_capacity and provider_unsupported_requirements have no customer action and stay delivery_unavailable.
+    provider_unsupported_schedule:'unsupported_schedule',provider_closed:'closed',provider_outside_area:'outside_area',provider_invalid_address:'invalid_address'};
   const code=typeof reason==='string'?(Object.hasOwn(aliases,reason)?aliases[reason]:(publicReasons.includes(reason as PublicReason)?reason as PublicReason:'delivery_unavailable')):'delivery_unavailable';
   return {ok:false,code,message:'Levering kunne ikke bekræftes. Kontrollér adresse og tidspunkt, eller vælg afhentning.'};
 }

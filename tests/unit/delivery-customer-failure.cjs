@@ -16,3 +16,9 @@ test('failure mapping only exposes allowlisted codes, never upstream error text'
  const result=customerQuoteFailure(reason);assert.equal(result.code,code);assert.equal(result.ok,false);assert.doesNotMatch(JSON.stringify(result),/SECRET|private/);
  }
 });
+test('provider-prefixed unavailable reasons map to their customer-actionable public codes',()=>{
+ // Rehearsal regression: provider_unsupported_schedule was shown as delivery_unavailable ("Prøv igen").
+ for(const [reason,code] of [['provider_unsupported_schedule','unsupported_schedule'],['provider_closed','closed'],['provider_outside_area','outside_area'],['provider_invalid_address','invalid_address'],['provider_capacity','delivery_unavailable'],['provider_unsupported_requirements','delivery_unavailable'],[new Error('unsupported_schedule'),'unsupported_schedule']]){
+  const result=customerQuoteFailure(reason);assert.equal(result.code,code,String(reason));assert.equal(result.ok,false);
+ }
+});
