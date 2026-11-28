@@ -16,5 +16,29 @@
       "The owner has authorized the Esmeralda release flow: changing issue titles to the next release state, posting DEPLOYMENT_CONFIRMED comments, and enqueueing synthetic notification test mails.",
       "The owner has authorized pushing feature branches and opening pull requests in digiflydk/orderfly-v2 and digiflydk/esmeralda-restaurant-operations."
     ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/process-sync.sh\" session 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/process-sync.sh\" prompt 2>/dev/null || true",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
   }
 }
