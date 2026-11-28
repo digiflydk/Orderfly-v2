@@ -28,7 +28,6 @@ const MODE = process.argv[2] || 'preview';
     console.log('orders', orders.length, 'rows', rows.length, 'skipped', JSON.stringify(skipped));
     if (MODE !== 'import') return;
     const page = await c.dullyAdmin(browser);
-    const messages = [];
     for (let i = 0; i < rows.length; i += 100) {
       const batch = rows.slice(i, i + 100);
       // The page shows only the latest result message, so start each batch from a fresh page.
@@ -39,8 +38,8 @@ const MODE = process.argv[2] || 'preview';
       await page.waitForFunction(() => /Import behandlet:|kunne ikke gennemføres/.test(document.body.innerText), null, { timeout: 180000 });
       const text = await page.locator('body').innerText();
       if (/kunne ikke gennemføres/.test(text)) throw new Error('Import failed: ' + c.mask(text.match(/[^\n]*kunne ikke gennemføres[^\n]*/)[0]));
-      const all = text.match(/Import behandlet:[^\n]*/g); messages.push(all[all.length - 1]);
-      console.log('batch', i / 100 + 1, messages[messages.length - 1]);
+      const all = text.match(/Import behandlet:[^\n]*/g);
+      console.log('batch', i / 100 + 1, all[all.length - 1]);
     }
     await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(3000);
     console.log('counts', JSON.stringify(await c.counts(page)));
