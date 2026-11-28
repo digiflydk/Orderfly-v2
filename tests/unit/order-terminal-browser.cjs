@@ -371,10 +371,14 @@ test('managed ready delivery shows courier state and cannot be manually complete
 
 
 test('managed rejected booking is flagged on the board and explained in detail with support code',async t=>{
- const managed=order('ORD-REJECTED',{deliveryType:'Delivery',status:'Received',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-REJECTED',bookingState:'rejected',bookingFailureCode:'unavailable',deliveryStatus:null,paymentStatus:'refunded',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null}});
+ const managed=order('ORD-REJECTED',{deliveryType:'Delivery',status:'Received',managedDelivery:true,managedDeliveryTracking:{orderId:'ORD-REJECTED',bookingState:'rejected',bookingFailureCode:'unavailable',deliveryStatus:null,paymentStatus:'refunded',trackingUrl:null,deliveryInterval:null,pickupInterval:null,pickupReliable:false,updatedAt:null},refundedAmountOre:12900});
  const {page}=await fixture(t,768,1024,{orders:[managed]});
  await expect(page.getByText('Kurérbestilling afvist – åbn ordren for årsag',{exact:true})).toBeVisible();
- await page.getByRole('button',{name:'Åbn ordre ORD-REJECTED',exact:true}).click();
+ // Stored paymentStatus stays Paid; the full refund marker is shown as Refunderet on the card and in detail.
+ const card=page.getByRole('button',{name:'Åbn ordre ORD-REJECTED',exact:true});
+ await expect(card).toContainText('Refunderet');await expect(card).not.toContainText('Betalt');
+ await card.click();
+ await expect(page.getByText('Refunderet',{exact:true})).toHaveCount(2);await expect(page.getByText('Refunderet',{exact:true}).last()).toBeVisible();
  const alert=page.getByRole('alert').filter({hasText:'Kurérbestillingen blev afvist'});
  await expect(alert).toContainText('Wolt kunne ikke levere til adressen eller tidspunktet');await expect(alert).toContainText('Kunden er refunderet automatisk');
  await expect(alert.getByText('Fejlkode til support: unavailable',{exact:true})).toBeVisible();
