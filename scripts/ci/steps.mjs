@@ -52,7 +52,7 @@ export const STEPS = [
  {
   "name": "Platform administration and brand-reference regression",
   "source": "ui-tests",
-  "run": "node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs tests/unit/loyalty-admin.cjs tests/unit/loyalty-portal-pages.cjs tests/unit/loyalty-order-history.cjs tests/unit/loyalty-stamp-card-texts.cjs",
+  "run": "node --test tests/unit/release-version.cjs tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs tests/unit/loyalty-admin.cjs tests/unit/loyalty-portal-pages.cjs tests/unit/loyalty-order-history.cjs tests/unit/loyalty-stamp-card-texts.cjs",
   "needs": []
  },
  {

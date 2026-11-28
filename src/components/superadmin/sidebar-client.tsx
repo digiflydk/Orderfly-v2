@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import type { PlatformBrandingSettings } from '@/types'
+import { ReleaseVersion } from '@/components/common/release-version'
 import {
   Home,
   ShoppingCart,
@@ -334,11 +335,10 @@ export function SuperAdminSidebarClient({
           )
         })}
       </SidebarContent>
-      {access && (
-        <SidebarFooter className="border-t border-white/20 bg-[#142634] p-3 group-data-[collapsible=icon]:p-1">
-          <LogoutButton inSidebar />
-        </SidebarFooter>
-      )}
+      <SidebarFooter className="border-t border-white/20 bg-[#142634] p-3 group-data-[collapsible=icon]:p-1">
+        {access && <LogoutButton inSidebar />}
+        <ReleaseVersion className="text-white/60" />
+      </SidebarFooter>
     </Sidebar>
   )
 }

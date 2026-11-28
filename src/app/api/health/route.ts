@@ -12,6 +12,8 @@ export async function GET() {
     service: "orderfly",
     // The deployed commit, so post-merge verification can wait for the right build.
     release: process.env.NEXT_PUBLIC_RELEASE_SHA || "unknown",
+    // The release number shown in the admin portals (docs/releases.md).
+    version: process.env.NEXT_PUBLIC_RELEASE_VERSION || "unknown",
     time: new Date().toISOString(),
   });
 }
