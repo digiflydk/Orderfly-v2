@@ -10,7 +10,7 @@ import { customerDeliveryEstimate } from '@/lib/delivery/customer-eta';
 import {useDeliveryPricePreview} from './use-delivery-price-preview';
 import { useManagedDeliveryQuote, managedQuotePaymentWindowMs } from './use-managed-delivery-quote';
 import { normalizeDeliveryPhone } from '@/lib/delivery/quotes/phone';
-import { normalizeDanishDeliveryAddress } from '@/lib/delivery/quotes/address';
+import { normalizeDanishDeliveryAddress, DELIVERY_UNIT_MAX } from '@/lib/delivery/quotes/address';
 import { requestManagedDeliveryQuoteAction } from '@/app/checkout/actions';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
@@ -102,6 +102,7 @@ const checkoutSchema = z.object({
   zipCode: z.string().optional(),
   city: z.string().optional(),
   deliveryInstructions: z.string().max(400, 'Leveringsinstruktioner må højst være 400 tegn.').optional(),
+  deliveryUnit: z.string().max(DELIVERY_UNIT_MAX, `Etage/dør må højst være ${DELIVERY_UNIT_MAX} tegn.`).optional(),
   subscribeToNewsletter: z.boolean().default(false),
   clubTermsAccepted: z.boolean().default(false),
   useClubDiscount: z.boolean().default(false),
@@ -119,6 +120,7 @@ interface CheckoutFormValues {
   zipCode?: string;
   city?: string;
   deliveryInstructions?: string;
+  deliveryUnit?: string;
   subscribeToNewsletter?: boolean;
   clubTermsAccepted?: boolean;
   useClubDiscount?: boolean;
@@ -692,7 +694,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
 
   const quoteForm=form.watch();
   const quoteJoiningClub=clubSignupShown&&!!quoteForm.subscribeToNewsletter&&!!quoteForm.clubTermsAccepted;
-  const quoteCustomer:CustomerInfo & {acceptTerms:boolean;deliveryInstructions?:string}={name:quoteForm.name,email:quoteForm.email,phone:quoteForm.phone,street:quoteForm.street,zipCode:quoteForm.zipCode,city:quoteForm.city,...(managedActive&&quoteForm.deliveryInstructions?.trim()?{deliveryInstructions:quoteForm.deliveryInstructions.trim()}:{}),acceptTerms:quoteForm.acceptTerms,
+  const quoteCustomer:CustomerInfo & {acceptTerms:boolean;deliveryInstructions?:string}={name:quoteForm.name,email:quoteForm.email,phone:quoteForm.phone,street:quoteForm.street,zipCode:quoteForm.zipCode,city:quoteForm.city,...(managedActive&&quoteForm.deliveryUnit?.trim()?{deliveryUnit:quoteForm.deliveryUnit.trim()}:{}),...(managedActive&&quoteForm.deliveryInstructions?.trim()?{deliveryInstructions:quoteForm.deliveryInstructions.trim()}:{}),acceptTerms:quoteForm.acceptTerms,
     paymentMethod:paymentMethod||'online',subscribeToNewsletter:quoteJoiningClub||signupConfig.mode==='newsletter'&&!!quoteForm.subscribeToNewsletter,
     ...(quoteJoiningClub&&signupConfig.clubProgram?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion}:{})};
   const quoteInput=brand&&location?{cartItems:checkoutItems(cartItems),customerInfo:quoteCustomer,brandId:brand.id,locationId:location.id,
@@ -703,13 +705,13 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
   const quoteIdentityRef=useRef(quoteIdentity);quoteIdentityRef.current=quoteIdentity;
   const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
   let addressReady=true;
-  try { normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country}); } catch { addressReady=false; }
+  try { normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country,unit:managedActive?quoteForm.deliveryUnit:null}); } catch { addressReady=false; }
   let contactReady=checkoutSchema.pick({name:true,email:true,phone:true}).safeParse(quoteForm).success;
   try { normalizeDeliveryPhone(quoteForm.phone); } catch { contactReady=false; }
   let quoteReady=!!quoteInput&&cartItems.length>0&&isOrderTimeValid&&checkoutSchema.omit({acceptTerms:true}).safeParse(quoteForm).success;
   try {
     normalizeDeliveryPhone(quoteForm.phone);
-    normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country});
+    normalizeDanishDeliveryAddress({street:quoteForm.street||'',postcode:quoteForm.zipCode||'',city:quoteForm.city||'',country:location.country,unit:managedActive?quoteForm.deliveryUnit:null});
   } catch { quoteReady=false; }
   const pricePreview=useDeliveryPricePreview(managedActive,{brandId:brand?.id||'',locationId:location.id,street:quoteForm.street||'',zipCode:quoteForm.zipCode||'',city:quoteForm.city||''});
   const managed=useManagedDeliveryQuote({enabled:managedActive,requestIdentity:quoteIdentity,input:quoteInput?{...quoteInput,routeReceipt:pricePreview.preview?.routeReceipt}:null,requestQuote:requestManagedDeliveryQuoteAction,autoRequestReady:quoteReady&&pricePreview.done,locked:isFormLocked});
@@ -787,9 +789,10 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
       // The server receives an explicit consent boolean and stable retry identity.
       const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
       // Hidden Club fields must never survive a previous opt-in or refetch.
-      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, deliveryInstructions: _deliveryInstructions, ...contactValues} = formValues;
+      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, deliveryInstructions: _deliveryInstructions, deliveryUnit: _deliveryUnit, ...contactValues} = formValues;
       const customerInfo: CustomerInfo = {
         ...contactValues,
+        ...(managedActive&&formValues.deliveryUnit?.trim()?{deliveryUnit:formValues.deliveryUnit.trim()}:{}),
         ...(managedActive&&formValues.deliveryInstructions?.trim()?{deliveryInstructions:formValues.deliveryInstructions.trim()}:{}),
         paymentMethod: paymentMethod || 'online',
         subscribeToNewsletter: newsletterConsent,
@@ -846,7 +849,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
       setCheckoutError('Udfyld leveringsadressen.');
       return;
     }
-    const quotedFields=(values:CheckoutFormValues)=>JSON.stringify([values.name,values.email,values.phone,values.street||'',values.zipCode||'',values.city||'',values.deliveryInstructions||'',!!values.subscribeToNewsletter,!!values.clubTermsAccepted,!!values.useClubDiscount]);
+    const quotedFields=(values:CheckoutFormValues)=>JSON.stringify([values.name,values.email,values.phone,values.street||'',values.zipCode||'',values.city||'',values.deliveryUnit||'',values.deliveryInstructions||'',!!values.subscribeToNewsletter,!!values.clubTermsAccepted,!!values.useClubDiscount]);
     if(managedActive&&(!managedConsent||isValidatingDiscount||quoteIdentityRef.current!==quoteIdentity||quotedFields(formValues)!==quotedFields(quoteForm))){setCheckoutError('Vent på leveringsprisen, før du går til betaling.');return;}
     // This click accepts the displayed immutable price. Never refresh and pay silently.
     const deliveryConsent=managedConsent?{...managedConsent}:null;
@@ -1092,6 +1095,21 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                           </FormItem>
                         )}
                       />
+                      {managedActive && (
+                        <FormField
+                          control={form.control}
+                          name="deliveryUnit"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Etage/dør (valgfrit)</FormLabel>
+                              <FormControl>
+                                <Input autoComplete="address-line2" enterKeyHint="next" maxLength={DELIVERY_UNIT_MAX} placeholder="Fx 2. th." {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      )}
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
@@ -1122,7 +1140,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                       </div>
                     </>
                   )}
-                  {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx etage, dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
+                  {managedActive&&<FormField control={form.control} name="deliveryInstructions" render={({field})=><FormItem><FormLabel>Leveringsinstruktioner (valgfrit)</FormLabel><FormControl><Textarea maxLength={400} placeholder="Fx dørtelefon eller hvor kuréren skal ringe på" {...field}/></FormControl><FormDescription>Højst 400 tegn. Del kun oplysninger, som kuréren behøver for at levere ordren.</FormDescription><FormMessage/></FormItem>}/>}
                   {managedActive&&addressReady&&!contactReady&&<p role="status" className="text-sm text-muted-foreground">Udfyld navn, e-mail og mobilnummer for at bekræfte leveringen.</p>}
                   {previewDisplay&&!managedQuote&&!managedFailed&&<p role="status">Leveringsprisen er beregnet. Vi bekræfter nu leveringen, før du kan betale.</p>}
                   {managedQuote&&previewFee!==null&&managedQuote.customerFeeMinor!==previewFee&&<p role="status">Leveringsprisen er ændret efter bekræftelse af levering. Kontrollér det samlede beløb før betaling.</p>}
@@ -1334,6 +1352,7 @@ export function CheckoutClient({ brand, location, managedDeliveryEnabled=false }
       zipCode: '',
       city: '',
       deliveryInstructions: '',
+      deliveryUnit: '',
       subscribeToNewsletter: false,
       clubTermsAccepted: false,
       useClubDiscount: false,

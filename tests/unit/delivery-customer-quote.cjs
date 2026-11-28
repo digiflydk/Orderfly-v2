@@ -21,3 +21,27 @@ test('quote-stage terms may remain unchecked; final purchase still requires acce
 test('delivery instructions reject control characters before digest or printing',()=>{const {deliveryQuoteRequestSchema}=require('../helpers/load-ts.cjs').loadTs('src/lib/checkout-schema.ts');const input=[[{id:'p',name:'P',quantity:1,unitPrice:10,totalPrice:10}],{name:'Test',email:'test@example.test',phone:'12345678',street:'Test 1',zipCode:'2300',city:'City',subscribeToNewsletter:false,acceptTerms:false},'delivery','b','l',{subtotal:10,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location','asap',undefined];for(const text of ['Hello\u0000world','Hello\u200bworld','Hello\rworld','Hello\ud800world']){input[1].deliveryInstructions=text;assert.equal(deliveryQuoteRequestSchema.safeParse(input).success,false);}input[1].deliveryInstructions='Ring på døren\nEtage\t2';assert.equal(deliveryQuoteRequestSchema.safeParse(input).success,true);});
 
 test('customer attribution source comes from validated stored route evidence',async()=>{const {now,quote,draft}=fixture('geoapify');let persisted;const result=await boundary.issueCustomerQuote(draft,{reserveRate:async()=>true,createQuote:async()=>quote,commitIfCurrent:async claim=>{persisted=claim;return true;},now:()=>now});assert.equal(result.ok,true);assert.equal(result.routingSource,'geoapify');assert.equal(result.routingSource,persisted.quote.economics.route.source);assert.equal('pickup' in result,false);assert.equal('providerQuote' in result,false);});
+test('Etage/dør: explicit field wins, comma suffix is the fallback, and both are trimmed and bounded',()=>{
+ const {normalizeDanishDeliveryAddress,normalizeDeliveryUnit,deliveryAddressLine}=loadTs('src/lib/delivery/quotes/address.ts');
+ const base={street:'Store Kongensgade 50',postcode:'1264',city:'København K',country:'DK'};
+ assert.deepEqual(normalizeDanishDeliveryAddress(base),{country:'DK',postcode:'1264',city:'København K',street:'Store Kongensgade',building:'50',unit:null});
+ assert.equal(normalizeDanishDeliveryAddress({...base,street:'Store Kongensgade 50, 2. th.'}).unit,'2. th.');
+ assert.equal(normalizeDanishDeliveryAddress({...base,unit:'  2.   th. '}).unit,'2. th.');
+ const both=normalizeDanishDeliveryAddress({...base,street:'Store Kongensgade 50, 4. tv.',unit:'2. th.'});assert.equal(both.unit,'2. th.');assert.equal(both.street,'Store Kongensgade');assert.equal(both.building,'50');
+ for(const empty of ['',' \t ',null,undefined])assert.equal(normalizeDanishDeliveryAddress({...base,street:'Store Kongensgade 50, 4. tv.',unit:empty}).unit,'4. tv.');
+ assert.equal(normalizeDanishDeliveryAddress({...base,unit:'u'.repeat(60)}).unit,'u'.repeat(60));
+ for(const bad of ['u'.repeat(61),'2.\u0000th','2.​th','2.\ud800th'])assert.throws(()=>normalizeDanishDeliveryAddress({...base,unit:bad}),/ambiguous_delivery_address/);
+ assert.equal(normalizeDeliveryUnit('２. ｔｈ.'),'2. th.');
+ assert.equal(deliveryAddressLine({street:'Store Kongensgade 50',zipCode:'1264',city:'København K'}),'Store Kongensgade 50, 1264 København K');
+ assert.equal(deliveryAddressLine({street:'Store Kongensgade 50, 2. th.',zipCode:'1264',city:'København K',unit:null}),'Store Kongensgade 50, 2. th., 1264 København K');
+ assert.equal(deliveryAddressLine({street:'Store Kongensgade 50, 4. tv.',zipCode:'1264',city:'København K',unit:' 2. th. '}),'Store Kongensgade 50, 2. th., 1264 København K');
+});
+test('checkout schemas trim the Etage/dør field and reject overlong or control-character values',()=>{
+ const schema=loadTs('src/lib/checkout-schema.ts');
+ const args=unit=>[[{id:'p',name:'P',quantity:1,unitPrice:10,totalPrice:10}],{name:'Test',email:'test@example.test',phone:'12345678',street:'Test 1',zipCode:'2300',city:'City',deliveryUnit:unit,subscribeToNewsletter:false,acceptTerms:false},'delivery','b','l',{subtotal:10,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location','asap',undefined];
+ const parsed=schema.deliveryQuoteRequestSchema.safeParse(args('  2. th. '));assert.equal(parsed.success,true);assert.equal(parsed.data[1].deliveryUnit,'2. th.');
+ assert.equal(schema.deliveryQuoteRequestSchema.safeParse(args(undefined)).success,true);
+ assert.equal(schema.deliveryQuoteRequestSchema.safeParse(args('u'.repeat(60))).success,true);
+ for(const bad of ['u'.repeat(61),'2.\nth','2.\tth','2.\u0000th','2.​th','2.\ud800th',42])assert.equal(schema.deliveryQuoteRequestSchema.safeParse(args(bad)).success,false,JSON.stringify(bad));
+ const final=args(' 3. tv ');final[1].acceptTerms=true;const accepted=schema.checkoutRequestSchema.safeParse(final);assert.equal(accepted.success,true);assert.equal(accepted.data[1].deliveryUnit,'3. tv');
+});
