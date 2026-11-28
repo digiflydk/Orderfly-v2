@@ -1,3 +1,4 @@
+import { projectedPaymentStatus } from '@/lib/orders/presentation';
 import { managedDeliveryBindingSchema, deliveryCreateResultSchema, deliveryIntervalSchema } from './provider-contract';
 import { projectCancellation, type CancellationState } from './cancellation/projection';
 import { bookingIntentSchema } from './booking/state';
@@ -29,7 +30,7 @@ export function projectCustomerDeliveryTracking(orderId:string,rawOrder:unknown,
  
  const updated=Math.max(bound?attempt.data.updatedAt:0,boundEstimates&&Number.isSafeInteger(estimates.dispatchedAtMs)&&estimates.dispatchedAtMs>=0?estimates.dispatchedAtMs:0);
  return {orderId,cancellationState,bookingState:bound?(attempt.data.state==='booked'?'accepted':attempt.data.state):rawAttempt?'unknown':'pending',deliveryStatus:cancelled?'cancelled':nativeStatus,
- paymentStatus:order.paymentStatus==='Refunded'||typeof order.totalAmount==='number'&&order.totalAmount>0&&Number.isSafeInteger(order.refundedAmountOre)&&order.refundedAmountOre>=Math.round(order.totalAmount*100)?'refunded':order.paymentStatus==='Paid'?'paid':order.paymentStatus==='Failed'?'failed':'pending',
+ paymentStatus:projectedPaymentStatus(order)==='Refunded'?'refunded':order.paymentStatus==='Paid'?'paid':order.paymentStatus==='Failed'?'failed':'pending',
  trackingUrl:cancelled?null:accepted?.trackingUrl??null,deliveryInterval:cancelled?null:eta??accepted?.deliveryInterval??null,pickupInterval:cancelled?null:pickup??accepted?.pickupInterval??null,
  pickupReliable:!cancelled&&!!pickup&&estimates.pickupReliable===true,updatedAt:updated>0&&Number.isFinite(new Date(updated).getTime())?new Date(updated).toISOString():null};
 }
