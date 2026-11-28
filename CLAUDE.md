@@ -1,6 +1,10 @@
 # CLAUDE.md
 
-Følg altid `AGENTS.md` (engineering-regler for Orderfly Work).
+Følg altid `AGENTS.md` (engineering-regler for Orderfly Work). Den indlæses her:
+
+@AGENTS.md
+
+Udviklingsprocessen står i `docs/development-workflow.md`. Processen på `main` gælder altid: hooket `.claude/hooks/process-sync.sh` viser ved sessionstart (og højst hvert 15. minut under sessionen) de procesændringer på `main`, som din branch mangler. Når det melder en procesopdatering, følger du versionen fra `main` og merger `origin/main` ind i branchen før næste commit eller PR.
 
 ## Stempelkort (Esmeralda Club)
 

@@ -11,7 +11,8 @@ const nextConfig = {
   htmlLimitedBots: /.*/, 
   serverExternalPackages: ['@resvg/resvg-js'],
   outputFileTracingIncludes: { '/*': ['./public/fonts/orderfly/*.ttf', './public/fonts/inter/*', './public/images/esmeralda-v2/menu/*.webp', './public/images/esmeralda-v2/logo.png', './preview/esmeralda/payload.json.gz.part-*', './preview/esmeralda/variants/*.avif', './preview/esmeralda/adapters/website-reviews.js', './preview/esmeralda/adapters/website-booking.js', './mpanel/esmeralda/**/*'] },
-  env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
+  // The release number (package.json, bumped every release) is shown in the admin portals.
+  env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha, NEXT_PUBLIC_RELEASE_VERSION: require('./package.json').version},
   async headers() {
     return [
       { source: '/club/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },
