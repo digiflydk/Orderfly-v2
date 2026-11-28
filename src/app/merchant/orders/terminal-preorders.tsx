@@ -3,7 +3,7 @@ import { useKdsLanguage } from './kds-language';
 
 import { Eye, Printer } from 'lucide-react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
-import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
+import { ORDER_STATUS_LABELS, terminalPaymentLabel } from '@/lib/orders/presentation';
 import { formatPrice } from '@/lib/storefront-format';
 import { sortTerminalPreorders, terminalDateHeading, terminalDateTime, terminalDay } from './terminal-filters';
 
@@ -41,7 +41,7 @@ export function TerminalPreorders({ orders, loading = false, error, onRetry, onS
           <td className="p-4"><span className="font-semibold">{order.id.replace(/^ORD[-\s]*/i, '')}</span> / {order.customerName || t("Kunde")}</td>
           <td className="p-4">{order.deliveryType === 'Pickup' ? t("Afhentning") : t("Levering")}</td>
           <td className="p-4 font-semibold">{formatPrice(order.totalAmount)}</td>
-          <td className="p-4">{t(ORDER_STATUS_LABELS[order.status])} / {order.paymentStatus === 'Paid' ? t("Betalt") : order.paymentStatus === 'Failed' ? t("Betaling fejlet") : t("Ikke betalt")}</td>
+          <td className="p-4">{t(ORDER_STATUS_LABELS[order.status])} / {t(terminalPaymentLabel(order, 'Ikke betalt', 'Betaling fejlet'))}</td>
           <td className="p-4"><div className="flex gap-2"><button type="button" onClick={() => onSelectOrder(order)} aria-label={`${t("Vis ordre")} ${order.id}`} title={t("Vis ordre")} className="min-h-12 min-w-12 rounded-lg border p-3"><Eye aria-hidden="true" className="h-5 w-5" /></button>{onReprint && <button type="button" disabled={loading || !!error} onClick={() => onReprint(order)} aria-label={`${t("Genprint ordre")} ${order.id}`} title={t("Genprint")} className="min-h-12 min-w-12 rounded-lg border p-3 disabled:opacity-50"><Printer aria-hidden="true" className="h-5 w-5" /></button>}</div></td>
         </tr>)}</tbody>
       </table></div>

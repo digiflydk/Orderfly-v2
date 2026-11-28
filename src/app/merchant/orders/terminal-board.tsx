@@ -3,6 +3,7 @@ import { useKdsLanguage } from './kds-language';
 import type { ReactNode } from 'react';
 import type { TerminalOrder } from '@/lib/orders/terminal-types';
 import { formatPrice } from '@/lib/storefront-format';
+import { fullyRefunded, terminalPaymentLabel } from '@/lib/orders/presentation';
 
 export function terminalTime(order: TerminalOrder) {
   const date = order.fulfillmentAt ? new Date(order.fulfillmentAt) : null;
@@ -30,7 +31,7 @@ export function TerminalBoard({ orders, onSelectOrder, loading, hasMore, onLoadM
           <ul className="my-3 space-y-1 border-y py-3 text-sm">{order.items.slice(0, 4).map((item, index) => <li key={index} className="flex gap-2"><strong className="min-w-5">{item.quantity}×</strong><span className="break-words">{item.name}{item.modifiers.length > 0 && <span className="block text-slate-600">{item.modifiers.join(' · ')}</span>}</span></li>)}{order.items.length > 4 && <li className="text-slate-600">+ {order.items.length - 4} flere varelinjer</li>}</ul>
           {order.managedDelivery && order.managedDeliveryTracking?.bookingState === 'rejected' && <p className="mb-3 rounded-lg border border-red-300 bg-red-50 p-2 text-sm font-semibold text-red-950">{t("Kurérbestilling afvist – åbn ordren for årsag")}</p>}
           {order.notes && <p className="mb-3 rounded-lg bg-amber-50 p-2 text-sm font-medium">{' '}{t("Bemærkning:")}{' '}{order.notes}</p>}
-          <div className="flex flex-wrap justify-between gap-2 text-sm"><span className={order.paymentStatus === 'Paid' ? 'text-emerald-800' : 'font-semibold text-amber-900'}>{order.paymentStatus === 'Paid' ? t("Betalt") : t("Betaling mangler")}</span><strong>{formatPrice(order.totalAmount)}</strong></div>
+          <div className="flex flex-wrap justify-between gap-2 text-sm"><span className={fullyRefunded(order) ? 'text-slate-700' : order.paymentStatus === 'Paid' ? 'text-emerald-800' : 'font-semibold text-amber-900'}>{t(terminalPaymentLabel(order, 'Betaling mangler'))}</span><strong>{formatPrice(order.totalAmount)}</strong></div>
           <span className="mt-3 block text-sm font-semibold text-blue-700">{' '}{t("Se ordre og handlinger →")}{' '}</span>
         </button>)}</div>
         {!rows.length && <p className="py-12 text-center text-sm text-slate-500">{loading ? t("Henter ordrer…") : column.empty}</p>}

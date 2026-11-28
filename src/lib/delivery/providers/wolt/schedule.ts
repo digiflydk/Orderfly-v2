@@ -1,4 +1,5 @@
 import 'server-only';
+import { WOLT_SCHEDULED_MAX_LEAD_MINUTES, WOLT_SCHEDULED_MIN_LEAD_MINUTES } from './schedule-limits';
 
 /** Accept explicit offset instants only; caller converts local Copenhagen wall time with DST disambiguation. */
 export function woltInstant(value: string): number {
@@ -18,7 +19,7 @@ export function woltTiming(input: { preparationMinutes: number; scheduledDropoff
   if (!input.scheduledDropoffTime) return { min_preparation_time_minutes: input.preparationMinutes };
   const scheduled = woltInstant(input.scheduledDropoffTime);
   const delta = scheduled - nowMs;
-  if (delta < 60 * 60_000 || delta > 168 * 60 * 60_000) throw new Error('Scheduled delivery must be between one hour and seven days away');
+  if (delta < WOLT_SCHEDULED_MIN_LEAD_MINUTES * 60_000 || delta > WOLT_SCHEDULED_MAX_LEAD_MINUTES * 60_000) throw new Error('Scheduled delivery must be between one hour and seven days away');
   return { min_preparation_time_minutes: input.preparationMinutes, scheduled_dropoff_time: new Date(scheduled).toISOString() };
 }
 export function isWoltQuoteFresh(quote: { fetchedAt: string; validUntil: string | null }, nowMs: number, maxAgeMs: number): boolean {

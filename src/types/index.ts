@@ -101,6 +101,8 @@ export type Role = {
  */
 export interface CustomerInfo {
     deliveryInstructions?: string;
+    /** Managed delivery floor/door ("Etage/dør"); becomes the courier dropoff unit. */
+    deliveryUnit?: string;
     newsletterConsentId?: string;
     newsletterConsentVersion?: string;
     analyticsSessionId?: string;
