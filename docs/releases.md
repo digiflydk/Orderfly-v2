@@ -4,6 +4,7 @@ Every release bumps `version` in `package.json` (semver: minor for features, pat
 
 | Release | Date | Issue/PR | What changed |
 |---|---|---|---|
+| 1.1.1 | 2026-11-28 | PR #941 | The daily Dully import handles more than 100 orders (several batches) without timing out. |
 | 1.1.0 | 2026-11-28 | PR #942 | Release number shown in the admin portals; new development process for every task. |
 
 Releases before 1.1.0 were not numbered; see `docs/CHANGELOG-SUMMARY.md` and the merged pull requests.

@@ -36,14 +36,16 @@ const ONLY = process.env.ONLY_ORDER || '';
     if (MODE !== 'import') return;
     const page = await c.dullyAdmin(browser);
     const sum = { customers: 0, linked: 0, created: 0, updated: 0, unchanged: 0, conflicts: 0 };
-    for (let i = 0, seen = 0; i < rows.length; i += BATCH) {
+    for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH);
+      // The page shows only the latest result message, so start each batch from a fresh page.
+      if (i > 0) { await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(2500); }
       await page.locator('#dully-customers-json').fill(JSON.stringify(batch));
       await page.getByRole('button', { name: new RegExp('^Importér ' + batch.length + ' kundekøb$') }).click();
-      await page.waitForFunction(n => (document.body.innerText.match(/Kundeimport behandlet:[^\n]*/g) || []).length > n || /kunne ikke gennemføres/.test(document.body.innerText), seen, { timeout: 300000 });
+      await page.waitForFunction(() => /Kundeimport behandlet:|kunne ikke gennemføres/.test(document.body.innerText), null, { timeout: 300000 });
       const text = await page.locator('body').innerText();
       if (/kunne ikke gennemføres/.test(text)) throw new Error('Customer import failed in batch ' + (i / BATCH + 1));
-      const all = text.match(/Kundeimport behandlet:[^\n]*/g), msg = all[all.length - 1]; seen = all.length;
+      const all = text.match(/Kundeimport behandlet:[^\n]*/g), msg = all[all.length - 1];
       const n = msg.match(/(\d+) nye kunder, (\d+) køb koblet til eksisterende kunder, (\d+) nye, (\d+) opdaterede og (\d+) uændrede køb\. (\d+) køb afventer/);
       if (n) ['customers', 'linked', 'created', 'updated', 'unchanged', 'conflicts'].forEach((k, j) => { sum[k] += Number(n[j + 1]); });
       console.log('batch', i / BATCH + 1, new Date().toISOString().slice(11, 19), msg);
