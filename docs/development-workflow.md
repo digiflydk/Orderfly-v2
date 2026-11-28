@@ -1,6 +1,6 @@
 # PM / PO / Work development workflow
 
-Last reviewed: 2026-11-22 (#934)
+Last reviewed: 2026-11-28 (owner process decision; see AGENTS.md "Work process")
 
 ## Principle
 
@@ -18,14 +18,14 @@ GitHub issues, pull requests, CI evidence and repository documentation are the o
 
 No step waits for a person unless the issue needs a product decision.
 
-1. PO creates an issue with scope and acceptance criteria. Work proposes a plan when the issue needs one and starts once it is approved.
+1. PO creates an issue with scope and acceptance criteria. Work proposes a plan when the issue needs one and starts once it is approved. The plan states whether parallel agents will build independent parts, and related work is bundled into one release.
 2. Work implements on a feature branch, adds or updates tests and documentation, and opens one PR into `main`.
 3. **Tests run in Work's environment, not in GitHub Actions.** Work runs `npm run ci` on the exact head commit. It runs every test step in `scripts/ci/steps.mjs` (typecheck, unit, browser and HTTP regressions, isolated Firestore emulator proofs, Firestore rules tests and the build) and stops at the first failure. Work posts the summary on the PR.
 4. Independent code review: Codex, or a separate Claude review agent when Codex is unavailable. Blocking findings are fixed; a new commit needs a new `npm run ci` run and a new review.
 5. Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
 6. **Deployment is automatic.** Firebase App Hosting deploys `main`; the Firestore deployment workflows publish merged rules, indexes and migrations (`docs/firestore-operations.md`). GitHub Actions is used only for these deployments.
 7. Work waits for `/api/health` to report the merge commit and for any Firestore deployment run to succeed, then performs the issue's live verification (read-only unless the issue defines a controlled, reversible scenario). A failure leads to an immediate revert PR.
-8. The issue is Done when the change is live and its live acceptance criteria are met.
+8. The issue is Done when the change is live and its live acceptance criteria are met. Work then emails the short, non-technical release note to the owner (AGENTS.md "Work process", rule 4).
 
 ## Process updates reach every session
 

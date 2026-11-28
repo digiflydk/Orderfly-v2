@@ -1,9 +1,21 @@
 # Orderfly Work engineering rules
 
+## Work process (owner decision 2026-11-28, applies to every task)
+
+These rules apply to every task in this repository and override older wording elsewhere.
+
+1. **Local tests; GitHub Actions only deploys.** Work runs every test in its own environment (`npm run ci`). GitHub Actions is used only for deployment, never to run tests or to gate a merge.
+2. **Automatic merge and deploy.** When the local tests are green on the exact head and the independent review has no unresolved blocking finding, Work merges, deploys and verifies live itself. Nobody approves a green release.
+3. **Database changes without manual approval.** Supabase schema and data changes ship as reviewed migrations (or idempotent scripts) in a release and are applied automatically after the merge with the PO's standing Supabase API token. The token is a network secret for `api.supabase.com` on the Claude cloud environment and never goes into GitHub, files, PR/issue text, logs or chat. No change needs a manual approval. Production data is not changed outside a release: a one-off data fix is a reviewed script in a release.
+4. **Release note to the owner.** When a task is live and verified, Work emails a short, non-technical release note to okh@digifly.dk. Subject `Release: <short title>`; 3–6 plain-language lines on what customers, staff or the business can now do, what changed for them and anything they must do. No code, file names, commit SHAs or test jargon. Send it with the Microsoft 365 mail connector (`outlook_send_mail`). If the session has no mail connector, post the note on the issue and tell the owner in chat that the mail was not sent.
+5. **Parallel agents when they make the task faster.** At the start of every task Work assesses, and states in its plan, whether independent parts (for example backend and UI, or separate modules) can be built by parallel agents (subagents or worktrees). Use them when the parts are independent and the task is big enough to gain; work alone when the task is small or the parts depend on each other. Parallel work lands in one branch and one candidate.
+6. **As few releases as possible.** Bundle a task, and related tasks queued at the same time, into one release so the full test run, review, deployment and live verification run once. Do not release sub-parts separately unless a part is urgent or blocks other work. While developing, run only the relevant tests; the full run is for the final head.
+7. **Lean code.** Every change is optimized before review: no unnecessary code, no duplicated helpers or logic, no dead paths (a replaced path is deleted in the same change), no new libraries without need and no speculative work outside the issue. Reuse existing helpers. Review treats duplication and dead code as findings to fix before merge.
+
 ## Repository and release boundaries
 
 - GitHub is the source of truth.
-- Work feature branches start from `main` and open pull requests into `main`, matching the Esmeralda development process.
+- Work feature branches start from `main` and open pull requests into `main`.
 - Work must never merge its own pull request or bypass PO acceptance, except under the automatic merge rule below.
 - Production deployment is a separate post-merge step and must be followed by live verification before an issue is Done.
 
