@@ -15,10 +15,10 @@ Stier er relative til `src/` medmindre andet står.
 | Krav | Status | Hvor i koden | Demonstration |
 |---|---|---|---|
 | Leveringsmulighed valideres før ordren afgives | OK | `lib/delivery/providers/wolt/quote.ts` (shipment-promises), `lib/delivery/quotes/service.ts` | Scenarie 1–2: pris/tilgængelighed hentes før betaling; ingen pris → betaling blokeres |
-| Tider vises som estimater | OK | `lib/delivery/customer-eta.ts` ("ca."/"Forventet"); teksten "Bekræftet afhentningsinterval" ændres til estimat-ordlyd | Scenarie 2 og 7: kunde- og kassevisning viser kun estimater |
+| Tider vises som estimater | OK | `lib/delivery/customer-eta.ts` ("ca."/"Forventet"); kassevisningen viser "Forventet afhentning (estimeret)" i stedet for "Bekræftet afhentningsinterval" | Scenarie 2 og 7: kunde- og kassevisning viser kun estimater |
 | Drop-off-kommentarer adskilt | OK | Kassen har et separat felt "Etage/dør (valgfrit)" (`components/checkout/checkout-client.tsx`) adskilt fra leveringsinstruktionerne; det valideres på serveren (`lib/checkout-schema.ts`, maks. 60 tegn) og bliver `dropoff.unit` (`lib/delivery/quotes/address.ts`; tekst efter komma i adressen er kun reserve). `woltDropoffComment` (`lib/delivery/providers/wolt/provider.ts`) sender `Etage/dør: …` og `Besked: …` på hver sin linje | Scenarie 4: udfyld Etage/dør og instruktioner, og se begge felter adskilt i Wolt-sandbox |
 | Fejlet levering → klar fejl til afsender, kunden får ikke forkert info | OK | `lib/delivery/providers/wolt/create.ts`; kunde: besked + automatisk refusion (se native-browser-qa.md, ORD-292972); merchant får danske fejltekster i stedet for rå koder | Scenarie 6 |
-| Forudbestilling med leveringstid ≥ 60 min | OK | `lib/delivery/providers/wolt/schedule.ts` `woltTiming` (60 min – 7 dage, grænser i `schedule-limits.ts`); tidsvælgeren tilbyder kun planlagte tider ≥ 60 + 15 min og ≤ 7 dage − 15 min frem (`lib/delivery/public-schedule.ts`), serveren afviser tider < 60 + 5 min med `unsupported_schedule`; Hurtigst muligt er fortsat tilgængelig | Scenarie 3 |
+| Forudbestilling med leveringstid ≥ 60 min | OK | `lib/delivery/providers/wolt/schedule.ts` `woltTiming` (60 min – 7 dage, grænser i `schedule-limits.ts`); tidsvælgeren tilbyder kun planlagte tider ≥ 60 + 15 min og ≤ 7 dage − 15 min frem (`lib/delivery/public-schedule.ts`), serveren afviser tider < 60 + 7 min med `unsupported_schedule`; Hurtigst muligt er fortsat tilgængelig | Scenarie 3 |
 
 ### Pakkedetaljer (parcels)
 
@@ -53,7 +53,7 @@ Stier er relative til `src/` medmindre andet står.
 |---|---|---|---|
 | Wolt-trackingside vises | OK | `components/checkout/managed-delivery-tracking.tsx` (`trackingUrl`) | Scenarie 7 |
 | Fejlhåndtering ved API-fejl | OK | `lib/delivery/providers/wolt/http.ts`, `create.ts`: ukendt udfald → afstemning via verificeret webhook/manuelt, ingen dobbeltbooking | Scenarie 6 |
-| Alle påkrævede funktioner på plads | Delvist | Alle rettelser er live (#940 + denne release); afventer svar på spørgsmål 1–3 | Hele drejebogen |
+| Alle påkrævede funktioner på plads | Delvist | Rettelser fra #940 er live og prøvet i generalprøven; rettelserne efter generalprøven (afsnit 5) skal verificeres live efter deploy; afventer svar på spørgsmål 1–3 | Hele drejebogen |
 
 ## 2. Drejebog til testmødet (sandbox)
 
@@ -96,7 +96,7 @@ Wolt delivery-ID for hvert scenarie.
 - Webhook registreret hos Wolt mod `/api/delivery/webhooks/wolt/[callbackKey]` med separat signeringsnøgle, og `ORDERFLY_DELIVERY_CALLBACK_ENABLED=true` (se [wolt-callback.md](wolt-callback.md)).
 - Levering/routing aktiveret for sandbox (se [customer-quote-boundary.md](customer-quote-boundary.md)); Geoapify-kvote ikke opbrugt.
 - Testtelefon (kundens telefonnummer til Wolt og visning af trackinglink) og en gyldig dansk leveringsadresse nær Borgergade 10.
-- Alle rettelser merget og verificeret live før mødet (generalprøve 2026-11-27, se afsnit 5).
+- Alle rettelser merget og verificeret live før mødet. #940 blev prøvet i generalprøven 2026-11-27; rettelserne derefter (afsnit 5) skal prøves live efter deploy.
 - Annullering i sandbox kræver eksplicit godkendelse (mulig annulleringsgebyr skal accepteres).
 
 ## 5. Generalprøve i sandbox (2026-11-27)

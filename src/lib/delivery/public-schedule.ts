@@ -21,8 +21,9 @@ function preparedLocation(location: Location, schedule: ManagedDeliverySchedule)
 
 /** Margin when offering a slot: covers quoting, payment and the clock moving while the customer decides. */
 export const MANAGED_SCHEDULED_OFFER_MARGIN_MINUTES = 15;
-/** Smaller margin when accepting an already offered slot, so a slot picked a few minutes ago stays valid. */
-export const MANAGED_SCHEDULED_ACCEPT_MARGIN_MINUTES = 5;
+/** Smaller margin when accepting an already offered slot, so a slot picked a few minutes ago stays valid.
+ * Larger than the 5-minute quote freshness window, so the slot is still ≥ the provider minimum at booking. */
+export const MANAGED_SCHEDULED_ACCEPT_MARGIN_MINUTES = 7;
 
 /** Scheduled-arrival limits for the configured provider; only Wolt Drive has them today. */
 export function managedScheduledLead(providerId: string | null | undefined): ManagedScheduledLead | null {

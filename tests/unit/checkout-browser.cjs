@@ -634,6 +634,13 @@ test('managed Etage/dør is a separate labelled address field, requotes on chang
  await unit.fill('3. tv.');await expect.poll(()=>page.evaluate(()=>window.quoteInputs.at(-1).customerInfo.deliveryUnit)).toBe('3. tv.');await quoted(page);
  await pay(page);await page.waitForURL('**/stripe?*');info=requests.get('managed-unit')[0][1];assert.equal(info.deliveryUnit,'3. tv.');assert.equal(info.deliveryInstructions,'Ring på hos Jensen');
 });
+test('managed Etage/dør with an invisible character shows a visible message instead of silently blocking the quote',async t=>{
+ const page=await setup(t,'managed-unit');const unit=page.getByLabel('Etage/dør (valgfrit)',{exact:true});
+ await unit.fill('2.\u00adth.');await fillDeliveryAddress(page);await unit.focus();await unit.blur();
+ await expect(page.getByText('Etage/dør må kun indeholde almindelige tegn',{exact:false}).first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/Gå til betaling/}).first()).toBeDisabled();
+ await unit.fill('2. th.');await expect(page.getByText('Etage/dør må kun indeholde almindelige tegn',{exact:false})).toHaveCount(0);await quoted(page);
+});
 test('checkout without managed delivery shows no Etage/dør field',async t=>{
  const page=await setup(t,'success');await expect(page.getByLabel('Etage/dør (valgfrit)',{exact:true})).toHaveCount(0);
 });

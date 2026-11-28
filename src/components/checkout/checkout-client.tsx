@@ -102,7 +102,7 @@ const checkoutSchema = z.object({
   zipCode: z.string().optional(),
   city: z.string().optional(),
   deliveryInstructions: z.string().max(400, 'Leveringsinstruktioner må højst være 400 tegn.').optional(),
-  deliveryUnit: z.string().max(DELIVERY_UNIT_MAX, `Etage/dør må højst være ${DELIVERY_UNIT_MAX} tegn.`).optional(),
+  deliveryUnit: z.string().regex(/^[^\p{Cc}\p{Cf}\p{Cs}]*$/u, 'Etage/dør må kun indeholde almindelige tegn (fx ingen emoji eller skjulte tegn).').max(DELIVERY_UNIT_MAX, `Etage/dør må højst være ${DELIVERY_UNIT_MAX} tegn.`).optional(),
   subscribeToNewsletter: z.boolean().default(false),
   clubTermsAccepted: z.boolean().default(false),
   useClubDiscount: z.boolean().default(false),
@@ -680,10 +680,22 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
     return text || "Currently unavailable";
   }, [timeSlots, deliveryType, deliverySchedule, location]);
 
+  // A scheduled ASAP (kitchen not yet open) stays on the instant first shown while the server would still
+  // accept it, so the time and price do not step to a later slot on every schedule refresh.
+  const pinnedAsap = useRef<string | null>(null);
   const effectiveTime = useMemo(() => {
-    if (!managedActive) return selectedTime;
-    try { return managedDeliverySelectionForSchedule(location,selectedTime,new Date(),deliverySchedule); }
-    catch { return selectedTime; }
+    if (!managedActive) { pinnedAsap.current = null; return selectedTime; }
+    try {
+      const next = managedDeliverySelectionForSchedule(location,selectedTime,new Date(),deliverySchedule);
+      if (selectedTime !== 'asap' || next === 'asap') { pinnedAsap.current = null; return next; }
+      const pinned = pinnedAsap.current;
+      if (pinned && pinned <= next) {
+        try { resolveManagedFulfillmentTime(location,'delivery',pinned,new Date(),deliverySchedule); return pinned; } catch { /* no longer accepted */ }
+      }
+      pinnedAsap.current = next;
+      return next;
+    }
+    catch { pinnedAsap.current = null; return selectedTime; }
   }, [managedActive,location,selectedTime,timeSlots,deliverySchedule]);
   const displayTime = effectiveTime === 'asap' ? asapText : displayFulfillmentTime(effectiveTime);
 
@@ -1103,7 +1115,7 @@ function CheckoutForm({ location, managedDeliveryEnabled=false, form }: { locati
                             <FormItem>
                               <FormLabel>Etage/dør (valgfrit)</FormLabel>
                               <FormControl>
-                                <Input autoComplete="address-line2" enterKeyHint="next" maxLength={DELIVERY_UNIT_MAX} placeholder="Fx 2. th." {...field} />
+                                <Input autoComplete="address-line2" enterKeyHint="next" maxLength={DELIVERY_UNIT_MAX} placeholder="Fx 2. th." {...field} onBlur={() => { field.onBlur(); void form.trigger("deliveryUnit"); }} onChange={(event) => { field.onChange(event); if (form.getFieldState("deliveryUnit").error) void form.trigger("deliveryUnit"); }} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>

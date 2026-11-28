@@ -93,9 +93,9 @@ test('Wolt lead: scheduled slots start at 60 min plus margin, ASAP stays courier
  assert.equal(managedDeliverySelectionForSchedule(location,'asap',at,s),'asap');
  assert.equal(resolveManagedFulfillmentTime(location,'delivery','asap',at,s),resolveManagedFulfillmentTime(location,'delivery','asap',at,schedule([5])));
  for(const early of ['2026-10-30T11:35:00.000Z','2026-10-30T11:45:00.000Z'])assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery',early,at,s),/unsupported_schedule/);
- // An offered slot stays acceptable for ten minutes (accept margin 5 min), then is refused as too early.
- assert.equal(resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:55:00Z'),s),'2026-10-30T12:00:00.000Z');
- assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:56:00Z'),s),/unsupported_schedule/);
+ // An offered slot stays acceptable for eight minutes (accept margin 7 min, above the 5-min quote freshness), then is refused as too early.
+ assert.equal(resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:53:00Z'),s),'2026-10-30T12:00:00.000Z');
+ assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T12:00:00.000Z',new Date('2026-10-30T10:54:00Z'),s),/unsupported_schedule/);
  // Server callers pass full settings: the Wolt provider id alone applies the limit.
  assert.throws(()=>resolveManagedFulfillmentTime(location,'delivery','2026-10-30T11:35:00.000Z',at,{...schedule([5]),providerId:'wolt'}),/unsupported_schedule/);
  assert.equal(resolveManagedFulfillmentTime(location,'delivery','2026-10-30T11:35:00.000Z',at,{...schedule([5]),providerId:'test'}),'2026-10-30T11:35:00.000Z');
